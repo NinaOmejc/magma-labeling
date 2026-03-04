@@ -1,0 +1,17 @@
+*.asv
+*.fig
+*.png
+*.jpg
+*.pdf
+*.mat
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary
+*.log
+
+# Data folders
+data/
+results/
