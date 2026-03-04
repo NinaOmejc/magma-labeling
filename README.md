@@ -110,7 +110,7 @@ Multiple diagnostic figures may be created per recording (example):
 - `*_sigh`
 ---
 
-## Event struct format
+### Event struct format
 
 Each event contains:
 
