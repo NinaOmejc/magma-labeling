@@ -55,6 +55,7 @@ for isub = 1:length(subjects)
         results.mask   = label_mask;
         results.baseline = baseline;
         results.config = config;
-        save(fullfile(config.sub_results_path,'labels_results.mat'), '-struct', 'results');
+        fname = ['Sub' num2str(config.subject) '_Cond' num2str(config.condition) '_labels_results.mat'];
+        save(fullfile(config.sub_results_path, fname), '-struct', 'results');
     end
 end
