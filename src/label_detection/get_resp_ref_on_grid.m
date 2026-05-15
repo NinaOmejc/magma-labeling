@@ -4,9 +4,9 @@ switch belt
     case 'lungs'
         static_ref = baseline.lungs_amp_ref;
         rolling_field = 'lungs_amp_ref';
-    case 'diap'
-        static_ref = baseline.diap_amp_ref;
-        rolling_field = 'diap_amp_ref';
+    case 'diaph'
+        static_ref = baseline.diaph_amp_ref;
+        rolling_field = 'diaph_amp_ref';
     otherwise
         error('Unknown belt: %s', belt);
 end

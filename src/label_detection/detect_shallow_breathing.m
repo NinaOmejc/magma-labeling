@@ -15,7 +15,7 @@ function shallow_events = detect_shallow_breathing(data, baseline, breaths_lungs
 
     % ---- shallow condition on grid  ----
     ref_lungs = get_resp_ref_on_grid(baseline, 'lungs', t_grid);
-    ref_diap = get_resp_ref_on_grid(baseline, 'diap', t_grid);
+    ref_diaph = get_resp_ref_on_grid(baseline, 'diaph', t_grid);
 
     shallow_mask_lungs = compute_shallow_breathing_mask( ...
         breaths_lungs, t_grid, config.ShB.min_dur_sec, ...
@@ -23,7 +23,7 @@ function shallow_events = detect_shallow_breathing(data, baseline, breaths_lungs
 
     shallow_mask_diaph = compute_shallow_breathing_mask( ...
         breaths_diaph, t_grid, config.ShB.min_dur_sec, ...
-        ref_diap, config.ShB.amp_ratio_low, config.ShB.amp_ratio_high);
+        ref_diaph, config.ShB.amp_ratio_low, config.ShB.amp_ratio_high);
 
     % ---- no-desaturation condition on grid ----
     no_desat = no_desat_from_events_on_grid(spo2_feat.desat_events, t_grid);
@@ -36,8 +36,8 @@ function shallow_events = detect_shallow_breathing(data, baseline, breaths_lungs
     shallow_ev_grid_lungs = runs_to_events(shallow_mask_lungs_final, 1/config.grid_step_sec, config.ShB.min_dur_sec, 'shallow_breathing_lungs');
     shallow_events_lungs = grid_events_to_sample_events(shallow_ev_grid_lungs, config.fs, N);
 
-    shallow_ev_grid_diaph = runs_to_events(shallow_mask_diaph_final, 1/config.grid_step_sec, config.ShB.min_dur_sec, 'shallow_breathing_diaph');
-    shallow_events_diaph = grid_events_to_sample_events(shallow_ev_grid_diaph, config.fs, N);
+    shallow_events_on_grid_diaph = runs_to_events(shallow_mask_diaph_final, 1/config.grid_step_sec, config.ShB.min_dur_sec, 'shallow_breathing_diaph');
+    shallow_events_diaph = grid_events_to_sample_events(shallow_events_on_grid_diaph, config.fs, N);
     
     shallow_events = merge_events({shallow_events_lungs, shallow_events_diaph});
     % shallow_mask = events_to_sample_mask(events, N, config.fs);

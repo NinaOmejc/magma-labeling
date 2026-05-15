@@ -20,9 +20,9 @@ baseline.rolling.lungs_amp_ref = rolling_amp_ref( ...
     breaths_lungs, t_grid, win_sec, lag_sec, min_breaths, ...
     method, baseline.lungs_amp_ref);
 
-baseline.rolling.diap_amp_ref = rolling_amp_ref( ...
+baseline.rolling.diaph_amp_ref = rolling_amp_ref( ...
     breaths_diaph, t_grid, win_sec, lag_sec, min_breaths, ...
-    method, baseline.diap_amp_ref);
+    method, baseline.diaph_amp_ref);
 
 
 %%%%%%%%%%%%%
@@ -85,8 +85,8 @@ if config.rolling_baseline.do_plot
             'Units', 'normalized', 'HorizontalAlignment', 'center');
     end
     
-    plot(t_roll, baseline.rolling.diap_amp_ref, 'LineWidth', 1.5);
-    yline(baseline.diap_amp_ref, '--', 'LineWidth', 1.2);
+    plot(t_roll, baseline.rolling.diaph_amp_ref, 'LineWidth', 1.5);
+    yline(baseline.diaph_amp_ref, '--', 'LineWidth', 1.2);
     
     xlabel(sprintf('Time [s] — %s', x_label_extra));
     ylabel('Diaphragm amplitude');

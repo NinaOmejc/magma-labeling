@@ -1,4 +1,4 @@
-function events_Sig = detect_sigh(data, breaths_lungs, breaths_diaph, config)
+function events = detect_sigh(data, breaths_lungs, breaths_diaph, config)
 % detect_sigh
 % Label 8 – Sigh
 %
@@ -14,9 +14,9 @@ function events_Sig = detect_sigh(data, breaths_lungs, breaths_diaph, config)
 %   Frequency >= 7–10 sighs per 30 minutes (does not change per-breath detection here).
 %
 % Usage:
-%   events_Sig = detect_sigh(data, baseline, breaths_lungs, breaths_diaph, config);
+%   events = detect_sigh(data, baseline, breaths_lungs, breaths_diaph, config);
 
-    events_Sig = empty_events();
+    events = empty_events();
 
     N = size(data,1);
     fs = config.fs;
@@ -63,17 +63,17 @@ function events_Sig = detect_sigh(data, breaths_lungs, breaths_diaph, config)
     events_D = sigh_flags_to_events(breaths_diaph.peak_t, sigh_diaph, N, fs);
     
     if use_either_belt
-        events_Sig = merge_events([events_L; events_D], 0.5);  % merge overlaps; 0.5s tolerance
+        events = merge_events([events_L; events_D], 0.5);  % merge overlaps; 0.5s tolerance
     else
         % "AND across belts": keep only events that overlap between belts
-        events_Sig = intersect_events(events_L, events_D);
+        events = intersect_events(events_L, events_D);
     end
 
     % ----------------------------
     % Optional: frequency summary per 30 min (does not affect event list)
     % ----------------------------
-    if ~isempty(events_Sig)
-        sigh_times = arrayfun(@(e) 0.5*(e.start_t + e.end_t), events_Sig);
+    if ~isempty(events)
+        sigh_times = arrayfun(@(e) 0.5*(e.start_t + e.end_t), events);
 
         % Sliding count in [t - freq_win_sec, t]
         t_end = (N-1)/fs;
@@ -99,7 +99,7 @@ function events_Sig = detect_sigh(data, breaths_lungs, breaths_diaph, config)
     % ----------------------------
     if do_plot
         idx_lungs = find(strcmp(config.data_columns, 'Resp-Lungs'), 1);
-        idx_diap  = find(strcmp(config.data_columns, 'Resp-Diaphragm'), 1);
+        idx_diaph  = find(strcmp(config.data_columns, 'Resp-Diaphragm'), 1);
 
         t_raw = (0:N-1)/fs;
 
@@ -118,8 +118,8 @@ function events_Sig = detect_sigh(data, breaths_lungs, breaths_diaph, config)
         hold off
 
         subplot(2,1,2); hold on
-        if ~isempty(idx_diap)
-            plot(t_raw, data(:,idx_diap), 'k')
+        if ~isempty(idx_diaph)
+            plot(t_raw, data(:,idx_diaph), 'k')
         end
 
         % Diaphragm breath times may differ slightly; plot on its own axis
