@@ -117,17 +117,14 @@ function config = get_config()
     config.Sig = struct();
     config.Sig.method = 'global_ratio_outlier'; % default: nonparametric global outliers in amplitude/baseline ratio
     config.Sig.ratio_prctile = 95;              % top 2% normalized breaths are sigh candidates
+    config.Sig.do_plot = true;
+    config.Sig.manual_control = true;      % allow click-to-add/remove sigh markers in GUI
+    config.Sig.manual_window_sec = 300;     % visible time span for manual GUI scrolling
 
     % Legacy option: previous 60 s thresholding
     config.Sig.legacy_prev_win_sec = 60;
     config.Sig.legacy_amp_ratio_thr = 1.5;
     config.Sig.legacy_min_prev_breaths = 3;
-
-    config.Sig.do_plot = true;
-    config.Sig.manual_control = false;      % allow click-to-add/remove sigh markers in GUI
-    config.Sig.manual_window_sec = 300;     % visible time span for manual GUI scrolling
-
-
 end
 
 
