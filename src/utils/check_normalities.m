@@ -50,7 +50,7 @@ function [signals_normality, normality_stats] = check_normalities(sigs, config)
     % Optional figure
     % -----------------------------
     if do_plot
-        figure('Units', 'pixels', 'Position', [100 100 1400 800], 'Visible', config.make_figs_visible);
+        figure('Units', 'pixels', 'Position', near_fullscreen_figure_position(), 'Visible', config.make_figs_visible);
         tiledlayout(2, 3, 'TileSpacing', 'compact', 'Padding', 'compact');
     end
 

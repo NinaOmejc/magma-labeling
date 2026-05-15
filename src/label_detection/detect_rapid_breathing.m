@@ -4,106 +4,81 @@ function events = detect_rapid_breathing(data, baseline, breaths_lungs, breaths_
 %
 % Criteria:
 %   - Mean RR >= 20 breaths/min sustained for >= 30 s.
-%   - 60-second windows analyzed.
+%   - 30-second windows analyzed by default.
 %   - Computed separately for lungs and diaphragm; positive if either is positive.
 %
 % Notes:
-%   1) Distinguish "fast+deep" vs "fast+shallow" using amplitude ratio (as in ShB).
-%   2) If SpO2 drop >=3% accompanies rapid breathing -> append "_desat"
-%      (optional SpO2 delay handled via expanding desat events).
+%   1) rapid_shallow = rapid breathing + shallow amplitude band.
+%   2) rapid_deep    = rapid breathing + 20-35% amplitude increase from baseline.
+%   3) rapid_desat   = rapid breathing + SpO2 desaturation, allowing delayed SpO2.
+%   4) rapid         = rapid breathing without shallow/deep/desat subtype evidence.
 
     events = empty_events();
 
     N = size(data,1);
     t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';  % seconds
 
-    if isempty(breaths_lungs) || isempty(breaths_diaph) || ...
-       ~isfield(breaths_lungs, 'peak_t') || ~isfield(breaths_diaph, 'peak_t')
+    lungs_broken = isfield(config,'problems') && isfield(config.problems,'subjects_with_broken_lung_belt') && ...
+        any(config.subject == config.problems.subjects_with_broken_lung_belt);
+    lungs_valid = is_valid_breath_signal(breaths_lungs, false) && ~lungs_broken;
+    diaph_valid = is_valid_breath_signal(breaths_diaph, false);
+    lungs_amp_valid = lungs_valid && is_valid_breath_signal(breaths_lungs, true);
+    diaph_amp_valid = diaph_valid && is_valid_breath_signal(breaths_diaph, true);
+
+    if ~lungs_valid && ~diaph_valid
         return;
     end
 
-    % ----------------------------
-    % Config defaults
-    % ----------------------------
-    analysis_win_sec = 60;
-    rr_thr_bpm       = 20;
-    min_dur_sec      = 30;
+    analysis_win_sec = get_config_value(config, 'RaB', 'analysis_win_sec', 30);
+    rr_thr_bpm = get_config_value(config, 'RaB', 'rr_thr_bpm', 20);
+    min_dur_sec = get_config_value(config, 'RaB', 'min_dur_sec', 30);
+    classify_depth = get_config_value(config, 'RaB', 'classify_depth', true);
+    shallow_lo_ratio = get_config_value(config, 'RaB', 'shallow_lo_ratio', get_config_value(config, 'ShB', 'amp_ratio_low', 0.65));
+    shallow_hi_ratio = get_config_value(config, 'RaB', 'shallow_hi_ratio', get_config_value(config, 'ShB', 'amp_ratio_high', 0.80));
+    deep_lo_ratio = get_config_value(config, 'RaB', 'deep_lo_ratio', 1.20);
+    deep_hi_ratio = get_config_value(config, 'RaB', 'deep_hi_ratio', 1.35);
+    amp_win_sec = get_config_value(config, 'ShB', 'min_dur_sec', min_dur_sec);
+    subtype_min_overlap_frac = get_config_value(config, 'RaB', 'subtype_min_overlap_frac', 0.5);
+    mark_desat = get_config_value(config, 'RaB', 'mark_desat', true);
+    desat_delay_sec = get_config_value(config, 'RaB', 'desat_delay_sec', 20);
 
-    classify_depth   = true;     % fast+shallow vs fast+deep
-    shallow_lo_ratio = 0.20;
-    shallow_hi_ratio = 0.35;
-
-    mark_desat      = true;
-    desat_delay_sec = 20;        % allow SpO2 lag by expanding desat events by +/- this many sec
-
-    if isfield(config, 'RaB')
-        if isfield(config.RaB, 'analysis_win_sec'), analysis_win_sec = config.RaB.analysis_win_sec; end
-        if isfield(config.RaB, 'rr_thr_bpm'),       rr_thr_bpm       = config.RaB.rr_thr_bpm; end
-        if isfield(config.RaB, 'min_dur_sec'),      min_dur_sec      = config.RaB.min_dur_sec; end
-
-        if isfield(config.RaB, 'classify_depth'),   classify_depth   = config.RaB.classify_depth; end
-        if isfield(config.RaB, 'shallow_lo_ratio'), shallow_lo_ratio = config.RaB.shallow_lo_ratio; end
-        if isfield(config.RaB, 'shallow_hi_ratio'), shallow_hi_ratio = config.RaB.shallow_hi_ratio; end
-
-        if isfield(config.RaB, 'mark_desat'),       mark_desat       = config.RaB.mark_desat; end
-        if isfield(config.RaB, 'desat_delay_sec'),  desat_delay_sec  = config.RaB.desat_delay_sec; end
+    rapid_lungs = false(size(t_grid));
+    if lungs_valid
+        rapid_lungs = compute_breath_rate_mask(breaths_lungs.peak_t, t_grid, analysis_win_sec, rr_thr_bpm, '>=', true);
     end
 
-    % ----------------------------
-    % Rapid RR condition on grid (lungs/diaph)
-    % ----------------------------
-    rapid_lungs = rr_geq_condition_on_grid_from_peaks( ...
-        breaths_lungs.peak_t, t_grid, analysis_win_sec, rr_thr_bpm);
-
-    rapid_diaph = rr_geq_condition_on_grid_from_peaks( ...
-        breaths_diaph.peak_t, t_grid, analysis_win_sec, rr_thr_bpm);
-
+    rapid_diaph = false(size(t_grid));
+    if diaph_valid
+        rapid_diaph = compute_breath_rate_mask(breaths_diaph.peak_t, t_grid, analysis_win_sec, rr_thr_bpm, '>=', true);
+    end
     rapid_any = rapid_lungs | rapid_diaph;
 
-    % Sustain >= 30 s -> events
-    ev_grid = runs_to_events(rapid_any, 1/config.grid_step_sec, min_dur_sec, 'rapid_breathing');
-    events  = grid_events_to_sample_events(ev_grid, config.fs, N);
+    ev_grid = runs_to_events(rapid_any, 1/config.grid_step_sec, min_dur_sec, 'rapid');
+    rapid_events = grid_events_to_sample_events(ev_grid, config.fs, N);
+    if isempty(rapid_events)
+        return;
+    end
 
-    % ----------------------------
-    % Optional: classify fast+shallow vs fast+deep using amplitude ratio
-    % ----------------------------
-    if classify_depth
-
+    shallow_amp = false(size(t_grid));
+    deep_amp = false(size(t_grid));
+    if classify_depth && (lungs_amp_valid || diaph_amp_valid)
         ref_lungs = get_resp_ref_on_grid(baseline, 'lungs', t_grid);
         ref_diaph = get_resp_ref_on_grid(baseline, 'diaph', t_grid);
-
-        amp_shallow = shallow_amp_condition_on_grid( ...
-            breaths_lungs, breaths_diaph, t_grid, analysis_win_sec, ...
-            ref_lungs, ref_diaph, shallow_lo_ratio, shallow_hi_ratio);
-
-        for e = 1:numel(events)
-            g0 = max(1, round(events(e).start_t / config.grid_step_sec) + 1);
-            g1 = min(numel(t_grid), round(events(e).end_t   / config.grid_step_sec) + 1);
-            if g0 <= g1
-                frac_shallow = mean(amp_shallow(g0:g1));
-                if frac_shallow >= 0.5
-                    events(e).type = 'rapid_breathing_shallow';
-                else
-                    events(e).type = 'rapid_breathing_deep';
-                end
-            end
-        end
+        shallow_amp = compute_amplitude_band_mask( ...
+            breaths_lungs, lungs_amp_valid, breaths_diaph, diaph_amp_valid, ...
+            t_grid, amp_win_sec, ref_lungs, ref_diaph, shallow_lo_ratio, shallow_hi_ratio);
+        deep_amp = compute_amplitude_band_mask( ...
+            breaths_lungs, lungs_amp_valid, breaths_diaph, diaph_amp_valid, ...
+            t_grid, amp_win_sec, ref_lungs, ref_diaph, deep_lo_ratio, deep_hi_ratio);
     end
 
-    % ----------------------------
-    % Optional: mark rapid breathing WITH desaturation
-    % ----------------------------
+    desat_events = empty_events();
     if mark_desat && exist('spo2_feat','var') && ~isempty(spo2_feat) && isfield(spo2_feat,'desat_events')
-
-        desat_events = spo2_feat.desat_events;
-        desat_events = expand_events_time(desat_events, desat_delay_sec, (N-1)/config.fs);
-
-        for e = 1:numel(events)
-            if events_overlap_any(events(e), desat_events)
-                events(e).type = [events(e).type '_desat'];
-            end
-        end
+        desat_events = expand_events_for_delayed_overlap(spo2_feat.desat_events, desat_delay_sec);
     end
+
+    events = tag_rapid_events(rapid_events, shallow_amp, deep_amp, desat_events, ...
+        t_grid, config.grid_step_sec, subtype_min_overlap_frac);
 
     % ----------------------------
     % Optional debug plot (raw + shaded rapid mask)
@@ -113,7 +88,7 @@ function events = detect_rapid_breathing(data, baseline, breaths_lungs, breaths_
         idx_diaph  = find(strcmp(config.data_columns, 'Resp-Diaphragm'), 1);
         t_raw = (0:N-1)/config.fs;
 
-        figure('Units','pixels','Position',[100 100 1200 800], 'Visible', config.make_figs_visible); 
+        figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', config.make_figs_visible); 
         sgtitle(['RAPID BREATHING' newline 'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)])
 
         subplot(2,1,1); hold on
@@ -139,42 +114,31 @@ function events = detect_rapid_breathing(data, baseline, breaths_lungs, breaths_
     end
 end
 
-% =========================================================
-% Helpers
-% =========================================================
-function cond = rr_geq_condition_on_grid_from_peaks(peak_t, t_grid, win_sec, rr_thr_bpm)
-%RR_GEQ_CONDITION_ON_GRID_FROM_PEAKS
-% Rapid-breathing / tachypnea condition.
-%
-% At each grid time t:
-%   - take respiratory peaks in previous window: [t-win_sec, t)
-%   - estimate mean RR by breath count:
-%         rr_mean = n_breaths / win_sec * 60
-%   - cond(i) = true if rr_mean >= rr_thr_bpm
-%
-% Example for tachypnea:
-%   cond = rr_geq_condition_on_grid_from_peaks(peak_t, t_grid, 60, 20);
+function events = tag_rapid_events(rapid_events, shallow_amp, deep_amp, desat_events, t_grid, grid_step_sec, min_frac)
+    events = empty_events();
 
-    cond = false(size(t_grid));
+    for e = 1:numel(rapid_events)
+        g0 = max(1, floor(rapid_events(e).start_t / grid_step_sec) + 1);
+        g1 = min(numel(t_grid), ceil(rapid_events(e).end_t / grid_step_sec) + 1);
 
-    peak_t = peak_t(:);
-    peak_t = peak_t(isfinite(peak_t));
-
-    for i = 1:numel(t_grid)
-        t = t_grid(i);
-        lb = t - win_sec;
-
-        % Need full backward-looking window
-        if lb < 0
-            continue;
+        labels = {};
+        if g0 <= g1 && mean(shallow_amp(g0:g1)) >= min_frac
+            labels{end+1} = 'rapid_shallow'; %#ok<AGROW>
+        end
+        if g0 <= g1 && mean(deep_amp(g0:g1)) >= min_frac
+            labels{end+1} = 'rapid_deep'; %#ok<AGROW>
+        end
+        if ~isempty(desat_events) && events_overlap_any(rapid_events(e), desat_events)
+            labels{end+1} = 'rapid_desat'; %#ok<AGROW>
+        end
+        if isempty(labels)
+            labels = {'rapid'};
         end
 
-        % Count breaths in [t-win_sec, t)
-        n_breaths = sum(peak_t >= lb & peak_t < t);
-
-        % Convert to breaths/min
-        rr_mean = n_breaths / win_sec * 60;
-
-        cond(i) = isfinite(rr_mean) && rr_mean >= rr_thr_bpm;
+        for k = 1:numel(labels)
+            ev = rapid_events(e);
+            ev.type = labels{k};
+            events(end+1,1) = ev; %#ok<AGROW>
+        end
     end
 end

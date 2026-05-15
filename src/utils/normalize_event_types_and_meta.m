@@ -1,18 +1,20 @@
 function events = normalize_event_types_and_meta(events)
 % normalize_event_types_and_meta
-% Convert detector-specific event.type strings into 8 canonical labels:
+% Convert detector-specific event.type strings into the 8 canonical labels:
 %   ShB, IrB, SlB, RaB, ReA, Des, Apn, Sig
-% and extract common modifiers into events(e).meta:
-%   meta.desat  (true/false)
-%   meta.depth  ('shallow'/'deep'/'' )
+% and extract common modifiers:
+%   events(e).subtype  ('shallow'/'deep'/'desat'/'' )
+%   events(e).desat    (true/false)
+%   events(e).depth    ('shallow'/'deep'/'' )
 %
-% This lets you keep get_labels() unchanged (8 labels) while still retaining
-% subtype info for debugging/plots/analysis.
+% This keeps the sample mask on the main 8 label columns while retaining
+% subtype detail in the event table/struct.
 %
 % Example conversions:
-%   'slow_breathing_shallow_desat' -> type='SlB', meta.depth='shallow', meta.desat=true
-%   'rapid_breathing_deep'         -> type='RaB', meta.depth='deep'
-%   'apnea_desat'                  -> type='Apn', meta.desat=true
+%   'slow_breathing_shallow_desat' -> type='SlB', subtype='shallow', desat=true
+%   'rapid_deep'                   -> type='RaB', subtype='deep'
+%   'rapid_desat'                  -> type='RaB', subtype='desat', desat=true
+%   'apnea_desat'                  -> type='Apn', subtype='', desat=true
 %   'desaturation'                 -> type='Des'
 %   'sigh'                         -> type='Sig'
 %
@@ -40,8 +42,10 @@ function events = normalize_event_types_and_meta(events)
         s = strrep(s, ' ', '_');     % handle "Rapid Breathing" etc
         s = strrep(s, '-', '_');
 
-        % ---- modifiers ----
-        events(e).desat = contains(s, 'desat');   % *_desat
+        base = map_type_to_base_label(s);
+
+        events(e).subtype = map_subtype(s, base);
+        events(e).desat = contains(s, 'desat');
         if contains(s, 'shallow')
             events(e).depth = 'shallow';
         elseif contains(s, 'deep')
@@ -49,9 +53,6 @@ function events = normalize_event_types_and_meta(events)
         else
             events(e).depth = '';
         end
-
-        % ---- canonical base label ----
-        base = map_type_to_base_label(s);
 
         events(e).type = base;
     end
@@ -80,7 +81,9 @@ function base = map_type_to_base_label(s)
     end
 
     % Rapid breathing (tachypnea)
-    if startsWith(s,'rapid_breathing') || strcmp(s,'rab') || contains(s,'rapidbreathing') || contains(s,'tachypnea')
+    if strcmp(s,'rapid') || strcmp(s,'rab') || strcmp(s,'rapid_breathing') || ...
+            contains(s,'rapidbreathing') || contains(s,'tachypnea') || startsWith(s,'rapid_breathing') || ...
+            startsWith(s,'rapid_')
         base = 'RaB';
         return;
     end
@@ -111,4 +114,21 @@ function base = map_type_to_base_label(s)
 
     % Fallback: keep original (but ideally you never hit this)
     base = s;
+end
+
+function subtype = map_subtype(s, base)
+    subtype = '';
+
+    switch base
+        case {'RaB', 'SlB'}
+            if contains(s, 'shallow')
+                subtype = 'shallow';
+            elseif contains(s, 'deep')
+                subtype = 'deep';
+            elseif strcmp(base, 'RaB') && contains(s, 'desat')
+                subtype = 'desat';
+            end
+        otherwise
+            subtype = '';
+    end
 end

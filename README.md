@@ -90,8 +90,8 @@ A typical saved struct contains:
 ```matlab
 results.subject   = config.subject;    % Subject identifier (e.g., 42)
 results.condition = config.condition;  % Experimental condition identifier (1: pre, 2: post)
-results.events    = sub_events;        % *Struct array of detected events* (type + timing)
-results.mask      = label_mask;        % Sample-level logical mask [N x L] (samples × labels); useful for ML applications
+results.events    = sub_events;        % *Struct array of detected events* (type + subtype + timing)
+results.mask      = label_mask;        % Sample-level logical mask [N x 8] for the main labels; useful for ML applications
 results.baseline  = baseline;          % Baseline reference values (e.g., SpO₂, respiratory amplitudes)
 results.config    = config;            % Full configuration used for this run (for reproducibility)
 ```
@@ -114,9 +114,14 @@ Multiple diagnostic figures may be created per recording (example):
 
 Each event contains:
 
-- `type`
+- `type` (one of the main labels: `ShB`, `IrB`, `SlB`, `RaB`, `ReA`, `Des`, `Apn`, `Sig`)
+- `subtype` (optional modifier; for example rapid breathing can use `shallow`, `deep`, or `desat`)
+- `desat` (true when the event is associated with desaturation)
+- `depth` (`shallow`, `deep`, or empty when not applicable)
 - `start_idx`, `end_idx` (sample indices)
 - `start_t`, `end_t` (seconds)
+
+Rapid breathing remains `type = 'RaB'` in the main mask. Its variants are stored in `subtype`, so a rapid-deep episode is represented as `type = 'RaB'`, `subtype = 'deep'`.
 
 ---
 

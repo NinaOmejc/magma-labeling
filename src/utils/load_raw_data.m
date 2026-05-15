@@ -3,6 +3,7 @@ function [data, config, do_analysis] = load_raw_data(config)
     % PREPARE OUTPUT FOLDER
     config.sub_results_path = [config.path_results_out filesep 'Sub' num2str(config.subject) '_M' num2str(config.measure)];
     config.sub_results_filename = ['Sub' num2str(config.subject) '_M' num2str(config.measure) '_labels.mat'];
+    config.sub_features_filename = ['Sub' num2str(config.subject) '_M' num2str(config.measure) '_features.mat'];
 
     do_analysis = true;
     if isfolder(config.sub_results_path) && exist([config.sub_results_path filesep config.sub_results_filename] , 'file')

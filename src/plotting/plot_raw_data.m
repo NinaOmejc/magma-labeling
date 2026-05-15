@@ -17,7 +17,7 @@ function [fig, ax, ph] = plot_raw_data(data, config)
         return;
     end
 
-    fig = figure('Units','pixels','Position',[100 100 1200 800], 'Visible', config.make_figs_visible); 
+    fig = figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', config.make_figs_visible); 
     tl = tiledlayout(6,1);
 
     ax = gobjects(6,1);

@@ -100,7 +100,7 @@ function data_modified = modify_data_to_test(data, fs, columns, trange_min, modi
     % Optional plotting
     % -----------------------------
     if to_plot
-        figure('Units', 'pixels', 'Position', [100 100 1200 300*numel(columns)]);
+        figure('Units', 'pixels', 'Position', near_fullscreen_figure_position());
 
         for i = 1:numel(columns)
             c = columns(i);

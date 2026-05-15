@@ -41,7 +41,7 @@ function events_Des = detect_desaturation(data, baseline, spo2_feat, config)
         if isfield(config.spo2,'drop_thr'),   drop_thr  = config.spo2.drop_thr; end
     end
 
-    figure('Units','pixels','Position',[100 100 1200 800], 'Visible', config.make_figs_visible); 
+    figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', config.make_figs_visible); 
     sgtitle(['Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure) ' | Label 6 – Desaturation (Hypoxia)'])
 
     hold on

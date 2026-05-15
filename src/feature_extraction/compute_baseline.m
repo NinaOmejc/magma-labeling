@@ -20,10 +20,10 @@ function baseline = compute_baseline(data, config)
         d0 = data(end-n0+1:end, :);
     elseif strcmp(config.baseline_location, '5/20')
         if config.measure == 1 || config.measure == 3
-            d0 = data(3*n0+1:6*n0, :);
+            d0 = data(5*n0+1:6*n0, :);
         else
             n2 = min(23*n0, size(data,1));
-            n1 = n2 - 3*n0 + 1;
+            n1 = n2 - 1*n0 + 1;
             d0 = data(n1:n2, :);
         end
     else

@@ -12,14 +12,15 @@ function config = get_config()
     config.save_plots = true;
     config.plot_format     = 'png';      % future-proof
     config.plot_dpi        = 150;        % resolution
-    config.make_figs_visible = 'off';
+    config.make_figs_visible = 'on';
     config.overwrite_results = true;
 
     %---- PREPROCESSING ----
     config.detrend.method = 'hpfilter'; % 'hpfilter': Butterworth high-pass filter with filtfilt or 'moving_detrend', moving-average trend subtraction
     config.detrend.signals = {'Resp-Lungs', 'Resp-Diaphragm'};
     config.detrend.highpass_cutoff = 0.01;
-    config.detrend.window_length = 90;
+    config.detrend.hp_edge_pad_sec = 100;   % reflection padding before filtfilt to reduce edge artifacts
+    config.detrend.window_length = 60;
     config.detrend.do_plot = false;
     
     % PROBLEMS
@@ -39,13 +40,25 @@ function config = get_config()
 
     %---- RESPIRATION / BREATHING AMPLITUDE EXTRACTION SETTINGS ----
     config.resp.min_peak_dist_sec = 1.0;   % Peak selection; min time between breaths (tune if needed)
-    config.resp.min_peak_prom     = 0.3;   % Peak selection; key knob: increase to reduce extra peaks
+    config.resp.min_peak_prom     = 0.2;   % Peak selection; key knob: increase to reduce extra peaks
     config.resp.min_peak_height   = -1.0;   % all peaks should be on the positive side
     config.resp.min_num_peaks     = 3;    
     config.resp.smooth_sec       = 0.25;   % Pre-processing; light smoothing (seconds); set 0 to disable
     config.resp.trough_method = 'min';     % Trough selection; 'prctile' (robust) or 'min'
     config.resp.trough_prct   = 5;         % Trough selection; 5th percentile trough
     config.resp.do_plot         = true;
+    config.resp.manual_control = true;      % allow click-to-add/remove breath peaks before label detection
+    config.resp.manual_window_sec = 300;    % visible time span for manual breath GUI scrolling
+    config.resp.manual_peak_search_sec = 1.0; % add peak at local maximum within this window around the click
+    config.resp.qc.enabled = true;          % conservative automatic removal of likely artefact peaks before manual review
+    config.resp.qc.min_amp_ratio = 0.25;    % candidate artefact if breath amp is below this fraction of local median
+    config.resp.qc.min_prom_ratio = 0.35;   % require prominence to stay above this fraction of local median prominence
+    config.resp.qc.min_ibi_sec = 1.0;       % hard physiologic lower bound for inter-breath interval
+    config.resp.qc.short_ibi_ratio = 0.65;  % also flag peaks that are much too close relative to local rhythm
+    config.resp.qc.rhythm_merge_tol = 0.35; % if two short adjacent intervals merge back to one normal interval, treat as split-breath artefact
+    config.resp.qc.noise_window_sec = 8.0;  % local window used to estimate signal noise around a candidate peak
+    config.resp.qc.noise_prom_mult = 3.0;   % prominence must clear this multiple of local noise
+    config.resp.qc.local_window_breaths = 7;
     
     %---- SPO2 / DESATURATION FEATURE EXTRACTION
     config.spo2.spo2_floor  = 90;   % absolute threshold (%)
@@ -85,14 +98,17 @@ function config = get_config()
 
     %---- LABEL 4: RaB 
     config.RaB = struct();
-    config.RaB.analysis_win_sec = 60;
+    config.RaB.analysis_win_sec = 30;    % mean RR window; 20 bpm sustained for >=30 s
     config.RaB.rr_thr_bpm       = 20;    % mean RR >= 20 bpm
     config.RaB.min_dur_sec      = 30;    % sustained >= 30 s
-    config.RaB.classify_depth   = false; % Depth classification (fast+deep vs fast+shallow) ----
-    config.RaB.shallow_lo_ratio = 0.20;  % 20% of baseline (Same amplitude band logic as ShB)
-    config.RaB.shallow_hi_ratio = 0.35;  % 35% of baseline (Same amplitude band logic as ShB)
-    config.RaB.mark_desat      = true;   % Desaturation association ; append "_desat" if overlapping
-    config.RaB.desat_delay_sec = 20;     % Desaturation association ; allow SpO2 delay (lag buffer)
+    config.RaB.classify_depth   = true;  % detect rapid shallow/deep subtype modifiers
+    config.RaB.shallow_lo_ratio = config.ShB.amp_ratio_low;   % same amplitude band as ShB
+    config.RaB.shallow_hi_ratio = config.ShB.amp_ratio_high;  % same amplitude band as ShB
+    config.RaB.deep_lo_ratio    = 1.20;  % 20% above baseline
+    config.RaB.deep_hi_ratio    = 1.35;  % 35% above baseline
+    config.RaB.subtype_min_overlap_frac = 0.5; % majority of rapid event must match depth subtype
+    config.RaB.mark_desat      = true;   % mark rapid subtype as desat if desaturation is associated
+    config.RaB.desat_delay_sec = 20;     % allow delayed SpO2 drop after rapid breathing
     config.RaB.do_plot         = true;
 
     %---- LABEL 5: Respiratory Asynchrony
@@ -105,21 +121,25 @@ function config = get_config()
 
     %---- LABEL 7: Apnea
     config.Apn = struct();
-    config.Apn.analysis_win_sec = 10;    % rolling window for amplitude ratio estimate
     config.Apn.amp_ratio_thr    = 0.10;  % <=10% of baseline in BOTH belts
     config.Apn.min_dur_sec      = 10;    % >=10 s
-    config.Apn.mark_desat        = true;     % append "_desat" if associated
-    config.Apn.desat_lag_sec    = 45;       % look for desat within 30–60 s after apnea
+    config.Apn.mark_desat       = true;     % append "_desat" if associated
+    config.Apn.desat_lag_min_sec = 30;      % lower bound for desat association after apnea end
+    config.Apn.desat_lag_max_sec = 60;      % upper bound for desat association after apnea end
+    config.Apn.desat_lag_sec     = 45;      % backward-compatible alias for upper bound
     config.Apn.desat_pad_sec    = 0;        % optional extra expansion of desat events
     config.Apn.do_plot = true;
 
     %---- LABEL 8: Sigh
     config.Sig = struct();
     config.Sig.method = 'global_ratio_outlier'; % default: nonparametric global outliers in amplitude/baseline ratio
-    config.Sig.ratio_prctile = 95;              % top 2% normalized breaths are sigh candidates
+    config.Sig.ratio_prctile = 98;              % top 2% normalized breaths are sigh candidates
     config.Sig.do_plot = true;
     config.Sig.manual_control = true;      % allow click-to-add/remove sigh markers in GUI
-    config.Sig.manual_window_sec = 300;     % visible time span for manual GUI scrolling
+    config.Sig.manual_window_sec = 1000;     % visible time span for manual GUI scrolling
+    config.Sig.min_abs_ratio = 2.0;
+    config.Sig.iqr_k = 3.5;
+    config.Sig.min_gap_sec = 20;
 
     % Legacy option: previous 60 s thresholding
     config.Sig.legacy_prev_win_sec = 60;

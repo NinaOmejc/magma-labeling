@@ -22,8 +22,12 @@ function irregular_events = detect_irregular_breathing(data, breaths_lungs, brea
     N = size(data,1);
     t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';  % seconds
 
-    if isempty(breaths_lungs) || isempty(breaths_diaph) || ...
-       ~isfield(breaths_lungs, 'peak_t') || ~isfield(breaths_diaph, 'peak_t')
+    lungs_broken = isfield(config,'problems') && isfield(config.problems,'subjects_with_broken_lung_belt') && ...
+        any(config.subject == config.problems.subjects_with_broken_lung_belt);
+    lungs_valid = is_valid_breath_signal(breaths_lungs, false) && ~lungs_broken;
+    diaph_valid = is_valid_breath_signal(breaths_diaph, false);
+
+    if ~lungs_valid && ~diaph_valid
         return;
     end
 
@@ -44,11 +48,17 @@ function irregular_events = detect_irregular_breathing(data, breaths_lungs, brea
         if isfield(config.IrB, 'do_plot'), do_plot = config.IrB.do_plot; end
     end
 
-    irregular_mask_lungs = compute_irregular_breathing_mask( ...
-        breaths_lungs, t_grid, analysis_win_sec, cov_thr, rmssd_thr, pause_thr);
+    irregular_mask_lungs = false(size(t_grid));
+    if lungs_valid
+        irregular_mask_lungs = compute_irregular_breathing_mask( ...
+            breaths_lungs, t_grid, analysis_win_sec, cov_thr, rmssd_thr, pause_thr);
+    end
 
-    irregular_mask_diaph = compute_irregular_breathing_mask( ...
-        breaths_diaph, t_grid, analysis_win_sec, cov_thr, rmssd_thr, pause_thr);
+    irregular_mask_diaph = false(size(t_grid));
+    if diaph_valid
+        irregular_mask_diaph = compute_irregular_breathing_mask( ...
+            breaths_diaph, t_grid, analysis_win_sec, cov_thr, rmssd_thr, pause_thr);
+    end
 
     % Convert mask -> events.
     irregular_ev_grid_lungs = runs_to_events(irregular_mask_lungs, 1/config.grid_step_sec, min_dur_sec, 'irregular_breathing_lungs');
@@ -65,7 +75,7 @@ function irregular_events = detect_irregular_breathing(data, breaths_lungs, brea
         idx_lungs = find(strcmp(config.data_columns, 'Resp-Lungs'), 1);
         idx_diaph  = find(strcmp(config.data_columns, 'Resp-Diaphragm'), 1);
         
-        figure('Units','pixels','Position',[100 100 1200 800], 'Visible', config.make_figs_visible); 
+        figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', config.make_figs_visible); 
         sgtitle(['IRREGULAR BREATHING' newline 'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)])
 
         % =========================

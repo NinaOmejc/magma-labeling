@@ -10,6 +10,7 @@ function [output, trend] = detrend_flow_flexible(t_series, config)
     sampl_freq = 200;
     highpass_cutoff = 0.01;   % Hz
     filter_order    = 4;
+    hp_edge_pad_sec = [];
     window_l        = 90;     % seconds
     do_plot         = false;
     signals = {'Resp-Lungs', 'Resp-Diaphragm'};
@@ -20,6 +21,7 @@ function [output, trend] = detrend_flow_flexible(t_series, config)
         if isfield(config.detrend, 'method'), method = config.detrend.method; end
         if isfield(config.detrend, 'signals'), signals = config.detrend.signals; end
         if isfield(config.detrend, 'highpass_cutoff'), highpass_cutoff = config.detrend.highpass_cutoff; end
+        if isfield(config.detrend, 'hp_edge_pad_sec'), hp_edge_pad_sec = config.detrend.hp_edge_pad_sec; end
         if isfield(config.detrend, 'window_length'), window_l = config.detrend.window_length; end
         if isfield(config.detrend, 'do_plot'), do_plot = config.detrend.do_plot; end
     end
@@ -69,8 +71,9 @@ function [output, trend] = detrend_flow_flexible(t_series, config)
                     output_data(:, c) = x;
                     trend_data(:, c)  = x;
                 else
-                    output_data(:, c) = filtfilt(b, a, x);
-                    trend_data(:, c)  = x - output_data(:, c);
+                    y = highpass_with_reflect_padding(x, b, a, sampl_freq, highpass_cutoff, hp_edge_pad_sec);
+                    output_data(:, c) = y;
+                    trend_data(:, c)  = x - y;
                 end
             end
 
@@ -118,7 +121,7 @@ function [output, trend] = detrend_flow_flexible(t_series, config)
             t = time;
         end
 
-        figure('Visible', config.make_figs_visible);
+        figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', config.make_figs_visible);
 
         for c = 1:n_signals
             original_col_idx = signal_cols(c);
@@ -145,7 +148,7 @@ function [output, trend] = detrend_flow_flexible(t_series, config)
         end
         save_figure(config, 'data_detrend_comparison_in_time')
 
-        figure('Visible', config.make_figs_visible);
+        figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', config.make_figs_visible);
 
         for c = 1:n_signals
             original_col_idx = signal_cols(c);
@@ -170,4 +173,46 @@ function [output, trend] = detrend_flow_flexible(t_series, config)
         save_figure(config, 'data_detrend_comparison_in_amplitude')
         
     end
+end
+
+function y = highpass_with_reflect_padding(x, b, a, fs, cutoff_hz, pad_sec_cfg)
+% Apply zero-phase high-pass filtering with reflected edge padding.
+% This reduces endpoint ringing artifacts from filtfilt.
+
+    x = x(:);
+    n = numel(x);
+    y = nan(size(x));
+
+    valid = isfinite(x);
+    if nnz(valid) < 3
+        return;
+    end
+
+    % Fill NaNs temporarily so filtfilt can run.
+    xv = fillmissing(x, 'linear', 'EndValues', 'nearest');
+
+    if isempty(pad_sec_cfg) || ~isfinite(pad_sec_cfg) || pad_sec_cfg <= 0
+        % Roughly one cutoff period by default (bounded).
+        pad_sec = min(120, max(10, 1 / max(cutoff_hz, eps)));
+    else
+        pad_sec = pad_sec_cfg;
+    end
+
+    base_guard = 3 * (max(numel(a), numel(b)) - 1);
+    pad_len = max(base_guard, round(pad_sec * fs));
+    pad_len = min(pad_len, floor((n - 1) / 2));
+
+    if pad_len < 1
+        y = filtfilt(b, a, xv);
+        y(~valid) = NaN;
+        return;
+    end
+
+    left_pad = xv(pad_len+1:-1:2);
+    right_pad = xv(end-1:-1:end-pad_len);
+    xp = [left_pad; xv; right_pad];
+
+    yp = filtfilt(b, a, xp);
+    y = yp(pad_len+1:pad_len+n);
+    y(~valid) = NaN;
 end

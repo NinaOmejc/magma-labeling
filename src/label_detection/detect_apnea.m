@@ -17,34 +17,39 @@ function events = detect_apnea(data, baseline, breaths_lungs, breaths_diaph, spo
     N = size(data,1);
     t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';  % seconds
 
-    if isempty(breaths_lungs) || isempty(breaths_diaph) || ...
-       ~isfield(breaths_lungs, 'peak_t') || ~isfield(breaths_diaph, 'peak_t')
-        return;
-    end
-
-    if ~isfield(baseline, 'lungs_amp_ref') || ~isfinite(baseline.lungs_amp_ref) || baseline.lungs_amp_ref <= 0 || ...
-       ~isfield(baseline, 'diaph_amp_ref')  || ~isfinite(baseline.diaph_amp_ref)  || baseline.diaph_amp_ref  <= 0
+    lungs_broken = isfield(config,'problems') && isfield(config.problems,'subjects_with_broken_lung_belt') && ...
+        any(config.subject == config.problems.subjects_with_broken_lung_belt);
+    lungs_valid = is_valid_breath_signal(breaths_lungs, true) && ~lungs_broken;
+    diaph_valid = is_valid_breath_signal(breaths_diaph, true);
+    if ~(lungs_valid || diaph_valid)
         return;
     end
 
     % ----------------------------
     % Config defaults
     % ----------------------------
-    analysis_win_sec = 30;      % for amplitude estimate during apnea (shorter than 60 is OK)
-    amp_ratio_thr    = 0.10;    % <=10% of reference
+    amp_ratio_thr    = 0.10;    % <=10% of reference for both belts
     min_dur_sec      = 10;      % apnea duration
-
     mark_desat       = true;    % optional certainty tagging
-    desat_lag_sec    = 45;      % allow SpO2 lag (use 30–60 s; pick 45 default)
+    desat_lag_min_sec = 30;     % expected SpO2 lag lower bound after apnea end
+    desat_lag_max_sec = 60;     % expected SpO2 lag upper bound after apnea end
     desat_pad_sec    = 0;       % optional extra padding (usually not needed)
 
     if isfield(config, 'Apn')
-        if isfield(config.Apn, 'analysis_win_sec'), analysis_win_sec = config.Apn.analysis_win_sec; end
         if isfield(config.Apn, 'amp_ratio_thr'),    amp_ratio_thr    = config.Apn.amp_ratio_thr; end
         if isfield(config.Apn, 'min_dur_sec'),      min_dur_sec      = config.Apn.min_dur_sec; end
         if isfield(config.Apn, 'mark_desat'),       mark_desat       = config.Apn.mark_desat; end
-        if isfield(config.Apn, 'desat_lag_sec'),    desat_lag_sec    = config.Apn.desat_lag_sec; end
+        if isfield(config.Apn, 'desat_lag_min_sec'), desat_lag_min_sec = config.Apn.desat_lag_min_sec; end
+        if isfield(config.Apn, 'desat_lag_max_sec'), desat_lag_max_sec = config.Apn.desat_lag_max_sec; end
+        if isfield(config.Apn, 'desat_lag_sec') && ~isfield(config.Apn, 'desat_lag_max_sec')
+            desat_lag_max_sec = config.Apn.desat_lag_sec;
+        end
         if isfield(config.Apn, 'desat_pad_sec'),    desat_pad_sec    = config.Apn.desat_pad_sec; end
+    end
+    if desat_lag_max_sec < desat_lag_min_sec
+        tmp = desat_lag_min_sec;
+        desat_lag_min_sec = desat_lag_max_sec;
+        desat_lag_max_sec = tmp;
     end
 
     % ----------------------------
@@ -53,9 +58,19 @@ function events = detect_apnea(data, baseline, breaths_lungs, breaths_diaph, spo
     ref_lungs = get_resp_ref_on_grid(baseline, 'lungs', t_grid);
     ref_diaph = get_resp_ref_on_grid(baseline, 'diaph', t_grid);
 
+    if lungs_valid
+        lungs_valid = any(isfinite(ref_lungs) & ref_lungs > 0);
+    end
+    if diaph_valid
+        diaph_valid = any(isfinite(ref_diaph) & ref_diaph > 0);
+    end
+    if ~(lungs_valid || diaph_valid)
+        return;
+    end
+
     apnea_amp = apnea_amp_condition_on_grid( ...
-        breaths_lungs, breaths_diaph, t_grid, analysis_win_sec, ...
-        ref_lungs, ref_diaph, amp_ratio_thr);
+        breaths_lungs, breaths_diaph, t_grid, min_dur_sec, ...
+        ref_lungs, ref_diaph, amp_ratio_thr, lungs_valid, diaph_valid);
 
     % Convert to events (>=10 s)
     ev_grid = runs_to_events(apnea_amp, 1/config.grid_step_sec, min_dur_sec, 'apnea');
@@ -63,7 +78,7 @@ function events = detect_apnea(data, baseline, breaths_lungs, breaths_diaph, spo
 
     % ----------------------------
     % Optional: mark apnea with desaturation (diagnostic certainty)
-    % We associate apnea with a desat event occurring within [start, end + lag]
+    % We associate apnea with a desat event occurring within [end+lag_min, end+lag_max]
     % (and optionally expand desat events a bit).
     % ----------------------------
     if mark_desat && exist('spo2_feat','var') && ~isempty(spo2_feat) && isfield(spo2_feat,'desat_events')
@@ -74,8 +89,10 @@ function events = detect_apnea(data, baseline, breaths_lungs, breaths_diaph, spo
         end
 
         for e = 1:numel(events)
-            % Build a lagged association window after apnea end
-            assoc = struct('start_t', events(e).start_t, 'end_t', events(e).end_t + desat_lag_sec);
+            % Build a lagged association window after apnea end.
+            assoc = struct( ...
+                'start_t', events(e).end_t + desat_lag_min_sec, ...
+                'end_t',   events(e).end_t + desat_lag_max_sec);
 
             if events_overlap_any(assoc, desat_events)
                 events(e).type = [events(e).type '_desat'];
@@ -91,7 +108,7 @@ function events = detect_apnea(data, baseline, breaths_lungs, breaths_diaph, spo
         idx_diaph  = find(strcmp(config.data_columns, 'Resp-Diaphragm'), 1);
         t_raw = (0:N-1)/config.fs;
 
-        figure('Units','pixels','Position',[100 100 1200 800], 'Visible', config.make_figs_visible); 
+        figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', config.make_figs_visible); 
         sgtitle(['APNEA | Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)])
 
         subplot(3,1,1); hold on
@@ -111,8 +128,14 @@ function events = detect_apnea(data, baseline, breaths_lungs, breaths_diaph, spo
 
         subplot(3,1,3); hold on
         % Show amplitude ratios as traces for intuition (computed on grid)
-        lungs_ratio = amp_ratio_on_grid(breaths_lungs, t_grid, analysis_win_sec, ref_lungs);
-        diaph_ratio  = amp_ratio_on_grid(breaths_diaph, t_grid, analysis_win_sec, ref_diaph);
+        lungs_ratio = nan(size(t_grid));
+        if lungs_valid
+            lungs_ratio = amp_ratio_on_grid(breaths_lungs, t_grid, min_dur_sec, ref_lungs);
+        end
+        diaph_ratio  = nan(size(t_grid));
+        if diaph_valid
+            diaph_ratio = amp_ratio_on_grid(breaths_diaph, t_grid, min_dur_sec, ref_diaph);
+        end
         plot(t_grid, lungs_ratio, 'k')
         plot(t_grid, diaph_ratio,  'b')
         yline(amp_ratio_thr, 'r--')
@@ -138,8 +161,9 @@ end
 % Helpers
 % =========================================================
 
-function cond = apnea_amp_condition_on_grid(b_l, b_d, t_grid, win_sec, ref_l, ref_d, amp_ratio_thr)
-% True if BOTH belts have median amplitude ratio <= amp_ratio_thr in [t-win_sec, t]
+function cond = apnea_amp_condition_on_grid(b_l, b_d, t_grid, win_sec, ref_l, ref_d, amp_ratio_thr, use_lungs, use_diaph)
+% If both belts are valid: require BOTH <= threshold.
+% If only one belt is valid: use that belt alone.
     cond = false(size(t_grid));
 
     if isscalar(ref_l)
@@ -156,21 +180,33 @@ function cond = apnea_amp_condition_on_grid(b_l, b_d, t_grid, win_sec, ref_l, re
         if lb < 0
             continue;
         end
-        a_l = b_l.amp(b_l.peak_t <= t & b_l.peak_t >= lb);
-        a_d = b_d.amp(b_d.peak_t <= t & b_d.peak_t >= lb);
+        lung_ok = false;
+        diaph_ok = false;
 
-        if numel(a_l) < 2 || numel(a_d) < 2
-            continue;
+        if use_lungs && isfinite(ref_l(i)) && ref_l(i) > 0
+            a_l = b_l.amp(b_l.peak_t <= t & b_l.peak_t >= lb);
+            if numel(a_l) >= 2
+                med_l = median(a_l, 'omitnan');
+                rl = med_l / ref_l(i);
+                lung_ok = isfinite(rl) && rl <= amp_ratio_thr;
+            end
         end
 
-        med_l = median(a_l, 'omitnan');
-        med_d = median(a_d, 'omitnan');
+        if use_diaph && isfinite(ref_d(i)) && ref_d(i) > 0
+            a_d = b_d.amp(b_d.peak_t <= t & b_d.peak_t >= lb);
+            if numel(a_d) >= 2
+                med_d = median(a_d, 'omitnan');
+                rd = med_d / ref_d(i);
+                diaph_ok = isfinite(rd) && rd <= amp_ratio_thr;
+            end
+        end
 
-        rl = med_l / ref_l(i); % relative = current amplitude / reference amp
-        rd = med_d / ref_d(i);
-
-        if isfinite(rl) && isfinite(rd) && rl <= amp_ratio_thr && rd <= amp_ratio_thr
-            cond(i) = true;
+        if use_lungs && use_diaph
+            cond(i) = lung_ok && diaph_ok;
+        elseif use_lungs
+            cond(i) = lung_ok;
+        elseif use_diaph
+            cond(i) = diaph_ok;
         end
     end
 end
@@ -188,26 +224,6 @@ function ratio = amp_ratio_on_grid(b, t_grid, win_sec, ref_amp)
             ratio(i) = med_a / ref_amp;
         else
             ratio(i) = med_a / ref_amp(i);
-        end
-    end
-end
-
-function ev = expand_events_time(ev, pad_sec, t_max)
-% Expand each event by +/- pad_sec seconds (clipped to [0, t_max]).
-    for i = 1:numel(ev)
-        ev(i).start_t = max(0, ev(i).start_t - pad_sec);
-        ev(i).end_t   = min(t_max, ev(i).end_t + pad_sec);
-    end
-end
-
-function tf = events_overlap_any(e, ev_list)
-% True if interval e overlaps any event in ev_list.
-% e must contain fields start_t and end_t.
-    tf = false;
-    for k = 1:numel(ev_list)
-        if ~(e.end_t < ev_list(k).start_t || e.start_t > ev_list(k).end_t)
-            tf = true;
-            return;
         end
     end
 end

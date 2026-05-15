@@ -13,10 +13,19 @@ function [mask, labelNames] = events_to_time_mask(events, N, config)
 %   mask        : [N x L] logical
 %   labelNames  : label names used (ordering)
 
-    if isempty(events)
-        labelNames = {};
-    else
-        labelNames = unique({events.type}, 'stable');
+    labelNames = {};
+    if nargin >= 3 && isfield(config, 'labels') && isfield(config.labels, 'short')
+        labelNames = {config.labels.short};
+    end
+
+    if ~isempty(events)
+        eventLabelNames = unique({events.type}, 'stable');
+        if isempty(labelNames)
+            labelNames = eventLabelNames;
+        else
+            extraLabelNames = setdiff(eventLabelNames, labelNames, 'stable');
+            labelNames = [labelNames, extraLabelNames];
+        end
     end
     L = numel(labelNames);
 

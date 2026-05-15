@@ -32,7 +32,7 @@ if config.rolling_baseline.do_plot
     t_roll = baseline.rolling.t_grid;
     x_label_extra = 'Rolling baseline shown at detector time';
     
-    figure('Visible', config.make_figs_visible, 'Color', 'w');
+    figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', config.make_figs_visible, 'Color', 'w');
     
     tiledlayout(2, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
     

@@ -9,20 +9,6 @@ function save_figure(config, base_name, save_matfig)
     if nargin < 3 || isempty(save_matfig)
         save_matfig = false;
     end
-    
-    if ~isfield(config,'save_plots') || ~config.save_plots
-        return;   % leave figure open
-    end
-
-    if ~isfield(config,'sub_results_path') || isempty(config.sub_results_path)
-        warning('No results_path defined. Plot not saved.');
-        return;
-    end
-
-    % Ensure folder exists
-    if ~isfolder(config.sub_results_path)
-        mkdir(config.sub_results_path);
-    end
 
     % Resize figure BEFORE saving
     fig = gcf;
@@ -55,6 +41,27 @@ function save_figure(config, base_name, save_matfig)
     allLeg = findall(fig, 'Type', 'legend');
     set(allLeg, 'FontSize', fontsize);
 
+    % Make dashed traces easier to see everywhere.
+    dashed_width = 1.6;
+    if isfield(config, 'plot_dashed_line_width') && ~isempty(config.plot_dashed_line_width)
+        dashed_width = config.plot_dashed_line_width;
+    end
+    strengthen_dashed_lines(fig, dashed_width);
+
+    if ~isfield(config,'save_plots') || ~config.save_plots
+        return;   % leave figure open (style adjustments already applied)
+    end
+
+    if ~isfield(config,'sub_results_path') || isempty(config.sub_results_path)
+        warning('No results_path defined. Plot not saved.');
+        return;
+    end
+
+    % Ensure folder exists
+    if ~isfolder(config.sub_results_path)
+        mkdir(config.sub_results_path);
+    end
+
     % Build filename
     fname = sprintf('Sub%d_M%d_%s.png', ...
         config.subject, ...
@@ -76,4 +83,31 @@ function save_figure(config, base_name, save_matfig)
 
     % Close figure after saving
     close(fig);
+end
+
+function strengthen_dashed_lines(fig, target_width)
+    if nargin < 2 || isempty(target_width) || ~isfinite(target_width) || target_width <= 0
+        target_width = 1.6;
+    end
+
+    candidates = findall(fig, '-property', 'LineStyle');
+    for i = 1:numel(candidates)
+        h = candidates(i);
+        try
+            ls = get(h, 'LineStyle');
+            if ischar(ls) || isstring(ls)
+                ls = char(ls);
+                if strcmp(ls, '--') || strcmp(ls, '-.')
+                    if isprop(h, 'LineWidth')
+                        lw = get(h, 'LineWidth');
+                        if isempty(lw) || ~isfinite(lw) || lw < target_width
+                            set(h, 'LineWidth', target_width);
+                        end
+                    end
+                end
+            end
+        catch
+            % Ignore handles that do not expose standard line style/width access.
+        end
+    end
 end

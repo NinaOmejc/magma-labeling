@@ -18,17 +18,26 @@ function events = detect_sigh(data, baseline, breaths_lungs, breaths_diaph, spo2
     fs = config.fs;
     t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';
 
-    if isempty(breaths_lungs) || isempty(breaths_diaph) || ...
-       ~isfield(breaths_lungs,'peak_t') || ~isfield(breaths_lungs,'amp') || ...
-       ~isfield(breaths_diaph,'peak_t') || ~isfield(breaths_diaph,'amp')
+    lungs_broken = isfield(config,'problems') && isfield(config.problems,'subjects_with_broken_lung_belt') && ...
+        any(config.subject == config.problems.subjects_with_broken_lung_belt);
+    lungs_valid = is_valid_breath_signal(breaths_lungs, true) && ~lungs_broken;
+    diaph_valid = is_valid_breath_signal(breaths_diaph, true);
+
+    if ~lungs_valid && ~diaph_valid
         return;
     end
-
+    
     method = 'global_ratio_outlier';
     ratio_prctile = 98;
+    
+    % New robust sigh criteria
+    min_abs_ratio = 1.8;      % sigh must be at least 1.8x local baseline
+    iqr_k = 3.5;              % robust outlier threshold: median + iqr_k*IQR
+    min_gap_sec = 20;         % avoid multiple nearby detections
+    
     do_plot = false;
-    manual_control = false;
-    manual_window_sec = 300;
+    manual_control = true;
+    manual_window_sec = 1000;
 
     % legacy
     legacy_prev_win_sec = 60;
@@ -41,6 +50,9 @@ function events = detect_sigh(data, baseline, breaths_lungs, breaths_diaph, spo2
         if isfield(config.Sig,'do_plot'), do_plot = config.Sig.do_plot; end
         if isfield(config.Sig,'manual_control'), manual_control = logical(config.Sig.manual_control); end
         if isfield(config.Sig,'manual_window_sec'), manual_window_sec = config.Sig.manual_window_sec; end
+        if isfield(config.Sig,'min_abs_ratio'), min_abs_ratio = config.Sig.min_abs_ratio; end
+        if isfield(config.Sig,'iqr_k'), iqr_k = config.Sig.iqr_k; end
+        if isfield(config.Sig,'min_gap_sec'), min_gap_sec = config.Sig.min_gap_sec; end
 
         if isfield(config.Sig,'legacy_prev_win_sec'), legacy_prev_win_sec = config.Sig.legacy_prev_win_sec; end
         if isfield(config.Sig,'legacy_amp_ratio_thr'), legacy_amp_ratio_thr = config.Sig.legacy_amp_ratio_thr; end
@@ -49,24 +61,37 @@ function events = detect_sigh(data, baseline, breaths_lungs, breaths_diaph, spo2
 
     switch lower(method)
         case 'legacy_60s'
-            sigh_lungs = sigh_flags_legacy_60s(breaths_lungs, legacy_prev_win_sec, legacy_amp_ratio_thr, legacy_min_prev_breaths);
-            sigh_diaph = sigh_flags_legacy_60s(breaths_diaph, legacy_prev_win_sec, legacy_amp_ratio_thr, legacy_min_prev_breaths);
+            sigh_lungs = false(size(breaths_lungs.peak_t(:)));
+            if lungs_valid
+                sigh_lungs = sigh_flags_legacy_60s(breaths_lungs, legacy_prev_win_sec, legacy_amp_ratio_thr, legacy_min_prev_breaths);
+            end
+            sigh_diaph = false(size(breaths_diaph.peak_t(:)));
+            if diaph_valid
+                sigh_diaph = sigh_flags_legacy_60s(breaths_diaph, legacy_prev_win_sec, legacy_amp_ratio_thr, legacy_min_prev_breaths);
+            end
         otherwise
-            sigh_lungs = sigh_flags_global_ratio_outlier( ...
-                breaths_lungs, baseline, config, 'lungs_amp_ref', ratio_prctile);
-            sigh_diaph = sigh_flags_global_ratio_outlier( ...
-                breaths_diaph, baseline, config, 'diaph_amp_ref', ratio_prctile);
+            sigh_lungs = false(size(breaths_lungs.peak_t(:)));
+            if lungs_valid
+                sigh_lungs = sigh_flags_global_ratio_outlier( ...
+                    breaths_lungs, baseline, config, 'lungs_amp_ref', ratio_prctile, ...
+                    min_abs_ratio, iqr_k, min_gap_sec);
+            end
+            
+            sigh_diaph = false(size(breaths_diaph.peak_t(:)));
+            if diaph_valid
+                sigh_diaph = sigh_flags_global_ratio_outlier( ...
+                    breaths_diaph, baseline, config, 'diaph_amp_ref', ratio_prctile, ...
+                    min_abs_ratio, iqr_k, min_gap_sec);
+            end
     end
 
     if manual_control
-        [sigh_lungs, sigh_diaph] = manual_edit_sigh_flags(data, breaths_lungs, breaths_diaph, sigh_lungs, sigh_diaph, config, manual_window_sec);
+        [sigh_lungs, sigh_diaph] = manual_edit_sigh_flags(data, breaths_lungs, breaths_diaph, sigh_lungs, sigh_diaph, spo2_feat, config, manual_window_sec);
     end
 
     events_L = sigh_flags_to_events(breaths_lungs.peak_t, sigh_lungs, N, fs, 'lungs');
     events_D = sigh_flags_to_events(breaths_diaph.peak_t, sigh_diaph, N, fs, 'diaph');
     events = merge_events({events_L, events_D});
-
-    desat_mask = get_desaturation_mask(spo2_feat.desat_events, t_grid);
 
     if do_plot
         idx_lungs = find(strcmp(config.data_columns, 'Resp-Lungs'), 1);
@@ -74,53 +99,35 @@ function events = detect_sigh(data, baseline, breaths_lungs, breaths_diaph, spo2
 
         t_raw = (0:N-1)/fs;
 
-        figure('Units','pixels','Position',[100 100 1500 800], 'Visible', config.make_figs_visible);
+        figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', config.make_figs_visible);
         sgtitle(['SIGH | Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)])
 
         ax1 = subplot(3,1,1); hold on
         if ~isempty(idx_lungs), plot(t_raw, data(:,idx_lungs), 'k'); end
-        [~, ~, lungs_ratio, lungs_ratio_thr] = sigh_flags_global_ratio_outlier( ...
-            breaths_lungs, baseline, config, 'lungs_amp_ref', ratio_prctile);
         if ~isempty(idx_lungs)
             y_lungs_mark = interp1(t_raw, data(:,idx_lungs), breaths_lungs.peak_t(sigh_lungs), 'linear', 'extrap');
         else
             y_lungs_mark = nan(sum(sigh_lungs),1);
         end
         plot(breaths_lungs.peak_t(sigh_lungs), y_lungs_mark, 'ro', 'MarkerFaceColor','r')
-        yyaxis right
-        plot(breaths_lungs.peak_t, lungs_ratio, 'b-')
-        if isfinite(lungs_ratio_thr)
-            yline(lungs_ratio_thr, 'b--', 'Ratio threshold')
-        end
-        ylabel('Amp ratio')
-        yyaxis left
         title('Sigh detection (lungs): red dots = sigh breaths')
-        xlabel('Time (s)'); ylabel('Resp-Lungs / amp'); grid on; hold off
+        xlabel('Time (s)'); ylabel('Resp-Lungs'); grid on; hold off
 
         ax2 = subplot(3,1,2); hold on
         if ~isempty(idx_diaph), plot(t_raw, data(:,idx_diaph), 'k'); end
-        [~, ~, diaph_ratio, diaph_ratio_thr] = sigh_flags_global_ratio_outlier( ...
-            breaths_diaph, baseline, config, 'diaph_amp_ref', ratio_prctile);
         if ~isempty(idx_diaph)
             y_diaph_mark = interp1(t_raw, data(:,idx_diaph), breaths_diaph.peak_t(sigh_diaph), 'linear', 'extrap');
         else
             y_diaph_mark = nan(sum(sigh_diaph),1);
         end
         plot(breaths_diaph.peak_t(sigh_diaph), y_diaph_mark, 'ro', 'MarkerFaceColor','r')
-        yyaxis right
-        plot(breaths_diaph.peak_t, diaph_ratio, 'b-')
-        if isfinite(diaph_ratio_thr)
-            yline(diaph_ratio_thr, 'b--', 'Ratio threshold')
-        end
-        ylabel('Amp ratio')
-        yyaxis left
         title('Sigh detection (diaphragm): red dots = sigh breaths')
-        xlabel('Time (s)'); ylabel('Resp-Diaphragm / amp'); grid on; hold off
+        xlabel('Time (s)'); ylabel('Resp-Diaphragm'); grid on; hold off
 
         % ----------------------
         % Subplot 3: SpO2 + no_desat mask
         % ----------------------
-        ax3 = subplot(3,1,3)
+        ax3 = subplot(3,1,3);
         hold on
     
         % SpO2 time series (sampled signal)
@@ -137,13 +144,6 @@ function events = detect_sigh(data, baseline, breaths_lungs, breaths_diaph, spo2
         if isfield(baseline,'SpO2_median') && isfinite(baseline.SpO2_median)
             yline(baseline.SpO2_median - drop_thr, 'g--')
         end
-    
-        % Plot no_desat as a binary trace near bottom (scaled)
-        spo2_min = min(spo2, [], 'omitnan');
-        spo2_max = max(spo2, [], 'omitnan');
-        y0 = spo2_min + 0.05*(spo2_max - spo2_min);
-        y1 = spo2_min + 0.20*(spo2_max - spo2_min);
-        % plot(t_grid, y0 + (y1-y0)*double(no_desat), 'b')
     
         % Optional: show desaturation event spans as shaded regions
         if isfield(spo2_feat,'desat_events') && ~isempty(spo2_feat.desat_events)
@@ -162,11 +162,13 @@ function events = detect_sigh(data, baseline, breaths_lungs, breaths_diaph, spo2
         grid on
         hold off
 
-        save_figure(config, 'sigh', true);
+        save_figure(config, 'sigh');
     end
 end
 
-function [sigh_flags, local_ref, ratio, ratio_thr] = sigh_flags_global_ratio_outlier(b, baseline, config, rolling_field, ratio_prctile)
+function [sigh_flags, local_ref, ratio, ratio_thr] = sigh_flags_global_ratio_outlier( ...
+    b, baseline, config, rolling_field, ratio_prctile, min_abs_ratio, iqr_k, min_gap_sec)
+    
     peak_t = b.peak_t(:);
     amp = b.amp(:);
 
@@ -202,8 +204,20 @@ function [sigh_flags, local_ref, ratio, ratio_thr] = sigh_flags_global_ratio_out
         return;
     end
 
-    ratio_thr = prctile(ratio(valid), ratio_prctile);
-    sigh_flags(valid) = ratio(valid) >= ratio_thr;
+    rv = ratio(valid);
+    
+    thr_pct = prctile(rv, ratio_prctile);
+    thr_iqr = median(rv, 'omitnan') + iqr_k * iqr(rv);
+    
+    % Final threshold: percentile alone is not enough.
+    % This prevents healthy controls from always getting the top 2% labeled.
+    ratio_thr = max([thr_pct, thr_iqr, min_abs_ratio]);
+    
+    candidate_flags = false(L,1);
+    candidate_flags(valid) = ratio(valid) >= ratio_thr;
+    
+    % Optional cleanup: keep only the strongest sigh within min_gap_sec.
+    sigh_flags = enforce_min_gap_by_strength(candidate_flags, peak_t, ratio, min_gap_sec);
 end
 
 
@@ -239,6 +253,20 @@ function events = sigh_flags_to_events(peak_t, flags, N, fs, belt)
     peak_t = peak_t(1:L);
     flags  = flags(1:L);
 
+    n_events = sum(flags);
+    if n_events == 0
+        return;
+    end
+    template = struct( ...
+        'type', '', ...
+        'start_idx', 0, ...
+        'end_idx', 0, ...
+        'start_t', 0, ...
+        'end_t', 0, ...
+        'duration', 0);
+    events = repmat(template, n_events, 1);
+    out = 0;
+
     for i = 1:L
         if ~flags(i), continue; end
 
@@ -266,8 +294,9 @@ function events = sigh_flags_to_events(peak_t, flags, N, fs, belt)
 
         start_t = (s-1)/fs;
         end_t   = (e-1)/fs;
-        
-        events(end+1,1) = struct( ...
+
+        out = out + 1;
+        events(out) = struct( ...
             'type', ['sigh_' belt], ...
             'start_idx', s, ...
             'end_idx', e, ...
@@ -276,63 +305,43 @@ function events = sigh_flags_to_events(peak_t, flags, N, fs, belt)
             'duration', end_t - start_t );
 
     end
+
+    events = events(1:out);
 end
 
+function flags_out = enforce_min_gap_by_strength(flags_in, peak_t, strength, min_gap_sec)
+    flags_in = logical(flags_in(:));
+    peak_t = peak_t(:);
+    strength = strength(:);
 
-function [flags_lungs, flags_diaph] = manual_edit_sigh_flags(data, bL, bD, flags_lungs, flags_diaph, config, window_sec)
-    idx_lungs = find(strcmp(config.data_columns, 'Resp-Lungs'), 1);
-    idx_diaph = find(strcmp(config.data_columns, 'Resp-Diaphragm'), 1);
-    if isempty(idx_lungs) || isempty(idx_diaph), return; end
+    flags_out = false(size(flags_in));
 
-    fs = config.fs;
-    N = size(data,1);
-    t_raw = (0:N-1)/fs;
-    window_sec = max(30, window_sec);
-
-    fh = figure('Units','pixels','Position',[100 100 1600 850], 'Visible', 'on');
-    ax1 = subplot(3,1,1); hold(ax1,'on');
-    p1 = plot(ax1, t_raw, data(:,idx_lungs), 'k');
-    m1 = plot(ax1, bL.peak_t(flags_lungs), interp1(t_raw, data(:,idx_lungs), bL.peak_t(flags_lungs), 'linear','extrap'), 'ro', 'MarkerFaceColor','r');
-    title(ax1, 'Sigh manual editing (lungs)'); ylabel(ax1, 'Resp-Lungs'); grid(ax1,'on');
-
-    ax2 = subplot(3,1,2); hold(ax2,'on');
-    p2 = plot(ax2, t_raw, data(:,idx_diaph), 'k');
-    m2 = plot(ax2, bD.peak_t(flags_diaph), interp1(t_raw, data(:,idx_diaph), bD.peak_t(flags_diaph), 'linear','extrap'), 'ro', 'MarkerFaceColor','r');
-    title(ax2, 'Sigh manual editing (diaphragm)'); ylabel(ax2, 'Resp-Diaphragm'); grid(ax2,'on');
-
-    ax3 = subplot(3,1,3);
-    plot(ax3, t_raw, zeros(size(t_raw)), 'w');
-    ylim(ax3, [-1 1]); xlim(ax3, [0 min(window_sec,t_raw(end))]);
-    title(ax3, 'Use slider to scroll. Click on lungs/diaphragm traces to add/remove nearest breath sigh.');
-    xlabel(ax3, 'Time (s)');
-
-    linkaxes([ax1 ax2 ax3],'x');
-    xlim(ax1, [0 min(window_sec,t_raw(end))]);
-
-    uicontrol(fh, 'Style','slider', 'Units','normalized', 'Position',[0.1 0.01 0.8 0.03], ...
-        'Min',0, 'Max',max(0,t_raw(end)-window_sec), 'Value',0, ...
-        'SliderStep',[min(1/max(1,t_raw(end)-window_sec),0.05) 0.2], ...
-        'Callback', @(src,~) set_xlim(src.Value));
-
-    set(p1, 'ButtonDownFcn', @(~,evt) toggle_flag(evt.IntersectionPoint(1), 'lungs'));
-    set(p2, 'ButtonDownFcn', @(~,evt) toggle_flag(evt.IntersectionPoint(1), 'diaph'));
-    uiwait(msgbox('Manual sigh control ON. Click the trace to toggle nearest breath marker. Close this message and then close figure when done.','Manual Control','modal'));
-    uiwait(fh);
-
-    function set_xlim(x0)
-        xlim(ax1, [x0 min(x0+window_sec, t_raw(end))]);
+    idx = find(flags_in);
+    if isempty(idx)
+        return;
     end
 
-    function toggle_flag(t_click, belt)
-        if strcmp(belt,'lungs')
-            [~,i] = min(abs(bL.peak_t - t_click));
-            flags_lungs(i) = ~flags_lungs(i);
-            set(m1, 'XData', bL.peak_t(flags_lungs), 'YData', interp1(t_raw, data(:,idx_lungs), bL.peak_t(flags_lungs), 'linear','extrap'));
-        else
-            [~,i] = min(abs(bD.peak_t - t_click));
-            flags_diaph(i) = ~flags_diaph(i);
-            set(m2, 'XData', bD.peak_t(flags_diaph), 'YData', interp1(t_raw, data(:,idx_diaph), bD.peak_t(flags_diaph), 'linear','extrap'));
+    % Sort candidates from strongest to weakest.
+    [~, order] = sort(strength(idx), 'descend', 'MissingPlacement', 'last');
+    idx_sorted = idx(order);
+
+    for k = 1:numel(idx_sorted)
+        i = idx_sorted(k);
+
+        if ~isfinite(peak_t(i)) || ~isfinite(strength(i))
+            continue;
         end
-        drawnow;
+
+        already_kept = find(flags_out);
+        if isempty(already_kept)
+            flags_out(i) = true;
+            continue;
+        end
+
+        too_close = any(abs(peak_t(already_kept) - peak_t(i)) < min_gap_sec);
+
+        if ~too_close
+            flags_out(i) = true;
+        end
     end
 end
