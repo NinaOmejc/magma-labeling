@@ -67,12 +67,14 @@ function events = detect_rapid_breathing(data, baseline, breaths_lungs, breaths_
     % ----------------------------
     % Optional: classify fast+shallow vs fast+deep using amplitude ratio
     % ----------------------------
-    if classify_depth && isfinite(baseline.lungs_amp_ref) && baseline.lungs_amp_ref > 0 && ...
-                        isfinite(baseline.diap_amp_ref)  && baseline.diap_amp_ref  > 0
+    if classify_depth
+
+        ref_lungs = get_resp_ref_on_grid(baseline, 'lungs', t_grid);
+        ref_diap = get_resp_ref_on_grid(baseline, 'diap', t_grid);
 
         amp_shallow = shallow_amp_condition_on_grid( ...
             breaths_lungs, breaths_diaph, t_grid, analysis_win_sec, ...
-            baseline.lungs_amp_ref, baseline.diap_amp_ref, shallow_lo_ratio, shallow_hi_ratio);
+            ref_lungs, ref_diap, shallow_lo_ratio, shallow_hi_ratio);
 
         for e = 1:numel(events)
             g0 = max(1, round(events(e).start_t / config.grid_step_sec) + 1);

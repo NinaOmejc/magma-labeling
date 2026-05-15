@@ -14,13 +14,16 @@ function shallow_events = detect_shallow_breathing(data, baseline, breaths_lungs
     t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';  % seconds
 
     % ---- shallow condition on grid  ----
+    ref_lungs = get_resp_ref_on_grid(baseline, 'lungs', t_grid);
+    ref_diap = get_resp_ref_on_grid(baseline, 'diap', t_grid);
+
     shallow_mask_lungs = compute_shallow_breathing_mask( ...
         breaths_lungs, t_grid, config.ShB.min_dur_sec, ...
-        baseline.lungs_amp_ref,config.ShB.amp_ratio_low, config.ShB.amp_ratio_high);
+        ref_lungs, config.ShB.amp_ratio_low, config.ShB.amp_ratio_high);
 
     shallow_mask_diaph = compute_shallow_breathing_mask( ...
         breaths_diaph, t_grid, config.ShB.min_dur_sec, ...
-        baseline.diap_amp_ref, config.ShB.amp_ratio_low, config.ShB.amp_ratio_high);
+        ref_diap, config.ShB.amp_ratio_low, config.ShB.amp_ratio_high);
 
     % ---- no-desaturation condition on grid ----
     no_desat = no_desat_from_events_on_grid(spo2_feat.desat_events, t_grid);
@@ -42,15 +45,16 @@ function shallow_events = detect_shallow_breathing(data, baseline, breaths_lungs
     % add a figure
     if config.ShB.do_plot
 
-        lungs_ref = baseline.lungs_amp_ref;
-        diag_ref  = baseline.diap_amp_ref;
         ratio_low  = config.ShB.amp_ratio_low;
         ratio_high = config.ShB.amp_ratio_high;
-        % Reference bounds
-        lungs_lower = ratio_low  * lungs_ref;
-        lungs_upper = ratio_high * lungs_ref;
-        diag_lower  = ratio_low  * diag_ref;
-        diag_upper  = ratio_high * diag_ref;
+        rb_enabled = isfield(config,'rolling_baseline') && isfield(config.rolling_baseline,'enabled') && config.rolling_baseline.enabled;
+        if rb_enabled
+            rb_win = config.rolling_baseline.win_sec;
+            rb_lag = config.rolling_baseline.lag_sec;
+            ref_txt = ['Rolling amp ref: win=' num2str(rb_win) 's, lag=' num2str(rb_lag) 's'];
+        else
+            ref_txt = 'Static amp ref';
+        end
         
         figure('Units','pixels','Position',[100 100 1200 800], 'Visible', config.make_figs_visible); 
         % ----------------------
@@ -60,13 +64,9 @@ function shallow_events = detect_shallow_breathing(data, baseline, breaths_lungs
         hold on
         scatter(breaths_lungs.peak_t, breaths_lungs.amp, 'k.')
         if ~isnan(breaths_lungs.peak_t)
-            yline(lungs_ref, '--', 'Baseline')
-            yline(lungs_lower, 'r--', '')
-            yline(lungs_upper, 'r--', '')
             ylim([0, mean(breaths_lungs.amp, 'omitnan') + 3*std(breaths_lungs.amp, 'omitnan')])
-            % xline(60, 'k--', 'ref');
             shade_events_on_axis(shallow_events_lungs);
-            legend('Amp','Baseline','Lower','Upper', 'Location','eastoutside')
+            legend('Amp','Detected events', 'Location','eastoutside')
         end
         title('Lungs Breath Amplitudes')
         xlabel('Time (s)')
@@ -80,16 +80,12 @@ function shallow_events = detect_shallow_breathing(data, baseline, breaths_lungs
         subplot(3,1,2)
         hold on
         scatter(breaths_diaph.peak_t, breaths_diaph.amp, 'k.')
-        yline(diag_ref, '--', 'Baseline')
-        yline(diag_lower, 'r--', '')
-        yline(diag_upper, 'r--', '')
-        % xline(60, 'k--', '');
         ylim([0, mean(breaths_diaph.amp, 'omitnan') + 3*std(breaths_diaph.amp, 'omitnan')])
         shade_events_on_axis(shallow_events_diaph);
         title('Diaphragm Breath Amplitudes')
         xlabel('Time (s)')
         ylabel('Amplitude')
-        legend('Amp','Baseline','Lower','Upper', 'Location','eastoutside')
+        legend('Amp','Detected events', 'Location','eastoutside')
         grid on
         hold off
 
@@ -136,7 +132,9 @@ function shallow_events = detect_shallow_breathing(data, baseline, breaths_lungs
         hold off
         
         sgtitle(['SHALLOW BREATHING | Subject: ' num2str(config.subject) ...
-            ' | Measurement: ' num2str(config.measure)])
+            ' | Measurement: ' num2str(config.measure) ...
+            ' | ' ref_txt ...
+            ' | shallow band=' num2str(100*(1-ratio_high)) '-' num2str(100*(1-ratio_low)) '% reduction'])
         
         ax = findall(gcf,'Type','axes');
         
