@@ -112,7 +112,7 @@ function events = detect_rapid_breathing(data, baseline, breaths_lungs, breaths_
         t_raw = (0:N-1)/config.fs;
 
         figure('Units','pixels','Position',[100 100 1200 800], 'Visible', config.make_figs_visible); 
-        sgtitle(['RAPID BREATHING' newline 'Subject: ' num2str(config.subject) ' | Condition: ' num2str(config.condition)])
+        sgtitle(['RAPID BREATHING' newline 'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)])
 
         subplot(2,1,1); hold on
         plot(t_raw, data(:, idx_lungs), 'k')
@@ -140,33 +140,39 @@ end
 % =========================================================
 % Helpers
 % =========================================================
-
 function cond = rr_geq_condition_on_grid_from_peaks(peak_t, t_grid, win_sec, rr_thr_bpm)
+%RR_GEQ_CONDITION_ON_GRID_FROM_PEAKS
+% Rapid-breathing / tachypnea condition.
+%
 % At each grid time t:
-%   - take peaks in [t-win_sec, t]
-%   - compute mean RR = 60 / mean(IBI)
-%   - cond true if RR >= rr_thr_bpm
+%   - take respiratory peaks in previous window: [t-win_sec, t)
+%   - estimate mean RR by breath count:
+%         rr_mean = n_breaths / win_sec * 60
+%   - cond(i) = true if rr_mean >= rr_thr_bpm
+%
+% Example for tachypnea:
+%   cond = rr_geq_condition_on_grid_from_peaks(peak_t, t_grid, 60, 20);
+
     cond = false(size(t_grid));
+
     peak_t = peak_t(:);
+    peak_t = peak_t(isfinite(peak_t));
 
     for i = 1:numel(t_grid)
         t = t_grid(i);
         lb = t - win_sec;
-        
-        if lb < 0 
+
+        % Need full backward-looking window
+        if lb < 0
             continue;
         end
 
-        idx = find(peak_t >= lb & peak_t <= t);
-        if numel(idx) < 3
-            continue; % need at least 2 IBIs
-        end
+        % Count breaths in [t-win_sec, t)
+        n_breaths = sum(peak_t >= lb & peak_t < t);
 
-        ibi = diff(peak_t(idx)); % seconds
-        rr_mean = 60 / mean(ibi, 'omitnan');
+        % Convert to breaths/min
+        rr_mean = n_breaths / win_sec * 60;
 
-        if isfinite(rr_mean) && rr_mean >= rr_thr_bpm
-            cond(i) = true;
-        end
+        cond(i) = isfinite(rr_mean) && rr_mean >= rr_thr_bpm;
     end
 end

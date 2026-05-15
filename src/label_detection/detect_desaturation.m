@@ -42,13 +42,14 @@ function events_Des = detect_desaturation(data, baseline, spo2_feat, config)
     end
 
     figure('Units','pixels','Position',[100 100 1200 800], 'Visible', config.make_figs_visible); 
-    sgtitle(['Subject: ' num2str(config.subject) ' | Condition: ' num2str(config.condition) ' | Label 6 – Desaturation (Hypoxia)'])
+    sgtitle(['Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure) ' | Label 6 – Desaturation (Hypoxia)'])
 
     hold on
     plot(t_spo2, spo2, 'k')
     grid on
     xlabel('Time (s)')
     ylabel('SpO_2 (%)')
+    ylim([89, 100])
 
     % Baseline line (median first 60s)
     if isfield(baseline,'SpO2_median') && isfinite(baseline.SpO2_median)

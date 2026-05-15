@@ -43,18 +43,18 @@ function save_figure(config, base_name)
     set(allLeg, 'FontSize', fontsize);
 
     % Build filename
-    fname = sprintf('Sub%d_Cond%d_%s.png', ...
+    fname = sprintf('Sub%d_M%d_%s.png', ...
         config.subject, ...
-        config.condition, ...
+        config.measure, ...
         base_name);
 
     fullpath = fullfile(config.sub_results_path, fname);
 
     % Save with high quality
     
-    if (contains(base_name, 'lungs') && ~contains(base_name, 'baseline')) || ...
-       (contains(base_name, 'diaph') && ~contains(base_name, 'baseline'))
-        set(fig, 'Visible', 'on')
+    if (contains(base_name, 'lungs') && ~contains(base_name, 'baseline') && ~contains(base_name, 'normality')) || ...
+       (contains(base_name, 'diaph') && ~contains(base_name, 'baseline') && ~contains(base_name, 'normality'))
+        set(fig, 'Visible', 'on') % needed so it can be opened afterwards
         savefig(fig, replace(fullpath, '.png', '.fig'))
     else
         exportgraphics(fig, fullpath, 'Resolution', config.plot_dpi);

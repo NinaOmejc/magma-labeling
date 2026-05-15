@@ -61,8 +61,13 @@ function events = detect_slow_breathing(data, baseline, breaths_lungs, breaths_d
     slow_any = slow_lungs | slow_diaph;
 
     % Sustain >= 30 s -> events
-    ev_grid = runs_to_events(slow_any, 1/config.grid_step_sec, min_dur_sec, 'slow_breathing');
-    events  = grid_events_to_sample_events(ev_grid, config.fs, N);
+    ev_grid_lungs = runs_to_events(slow_lungs, 1/config.grid_step_sec, min_dur_sec, 'slow_breathing_lungs');
+    events_lungs  = grid_events_to_sample_events(ev_grid_lungs, config.fs, N);
+
+    ev_grid_diaph = runs_to_events(slow_diaph, 1/config.grid_step_sec, min_dur_sec, 'slow_breathing_diaph');
+    events_diaph  = grid_events_to_sample_events(ev_grid_diaph, config.fs, N);
+
+    events = merge_events({events_lungs, events_diaph});
 
     % ----------------------------
     % Optional: classify slow+shallow vs slow+deep using amplitude ratio
@@ -72,16 +77,20 @@ function events = detect_slow_breathing(data, baseline, breaths_lungs, breaths_d
 
         % Build an amplitude "shallow-ish" mask on the same grid:
         % shallow-ish if median amp ratio in last 60s <= 0.35 (and >=0.20 if you want)
-        amp_shallow = shallow_amp_condition_on_grid( ...
-            breaths_lungs, breaths_diaph, t_grid, analysis_win_sec, ...
-            baseline.lungs_amp_ref, baseline.diap_amp_ref, shallow_lo_ratio, shallow_hi_ratio);
+        shallow_amp_lungs = shallow_amp_condition_on_grid( ...
+            breaths_lungs, t_grid, config.ShB.min_dur_sec, ...
+            baseline.lungs_amp_ref,config.ShB.amp_ratio_low, config.ShB.amp_ratio_high);
+    
+        shallow_amp_diaph = shallow_amp_condition_on_grid( ...
+            breaths_diaph, t_grid, config.ShB.min_dur_sec, ...
+            baseline.diap_amp_ref, config.ShB.amp_ratio_low, config.ShB.amp_ratio_high);
 
         % Rewrite event types based on majority overlap with amp_shallow
         for e = 1:numel(events)
             g0 = max(1, round(events(e).start_t / config.grid_step_sec) + 1);
             g1 = min(numel(t_grid), round(events(e).end_t   / config.grid_step_sec) + 1);
             if g0 <= g1
-                frac_shallow = mean(amp_shallow(g0:g1));
+                frac_shallow = mean(shallow_amp_lungs(g0:g1));
                 if frac_shallow >= 0.5
                     events(e).type = 'slow_breathing_shallow';
                 else
@@ -118,27 +127,20 @@ function events = detect_slow_breathing(data, baseline, breaths_lungs, breaths_d
         t_raw = (0:N-1)/config.fs;
 
         figure('Units','pixels','Position',[100 100 1200 800], 'Visible', config.make_figs_visible); 
-        sgtitle(['SLOW BREATHING' newline 'Subject: ' num2str(config.subject) ' | Condition: ' num2str(config.condition)])
+        sgtitle(['SLOW BREATHING' newline 'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)])
 
-        subplot(3,1,1); hold on
+        subplot(2,1,1); hold on
         plot(t_raw, data(:, idx_lungs), 'k')
         shade_mask_on_axis(t_grid, slow_lungs)
         title('Slow breathing (lungs) over raw signal')
         xlabel('Time (s)'); ylabel('Resp-Lungs'); grid on
         hold off
 
-        subplot(3,1,2); hold on
+        subplot(2,1,2); hold on
         plot(t_raw, data(:, idx_diap), 'k')
         shade_mask_on_axis(t_grid, slow_diaph)
         title('Slow breathing (diaphragm) over raw signal')
         xlabel('Time (s)'); ylabel('Resp-Diaphragm'); grid on
-        hold off
-
-        subplot(3,1,3); hold on
-        plot(t_raw, data(:, idx_lungs), 'k')
-        shade_mask_on_axis(t_grid, slow_any)
-        title('Slow breathing (either belt)')
-        xlabel('Time (s)'); ylabel('Resp-Lungs'); grid on
         hold off
 
         ax = findall(gcf,'Type','axes');
@@ -155,30 +157,38 @@ end
 % =========================================================
 
 function cond = rr_leq_condition_on_grid_from_peaks(peak_t, t_grid, win_sec, rr_thr_bpm)
+%RR_LEQ_CONDITION_ON_GRID_FROM_PEAKS
 % At each grid time t:
-%   - take peaks in [t-win_sec, t]
-%   - compute mean RR = 60 / mean(IBI)
-%   - cond true if RR <= rr_thr_bpm
+%   - take respiratory peaks in the previous window: [t-win_sec, t)
+%   - estimate mean RR by breath count:
+%         mean_RR = n_breaths / win_sec * 60
+%   - cond(i) = true if mean_RR <= rr_thr_bpm
+%
+% Example:
+%   cond = rr_leq_condition_on_grid_from_peaks(peak_t, t_grid, 60, 10);
+
     cond = false(size(t_grid));
+
     peak_t = peak_t(:);
+    peak_t = peak_t(isfinite(peak_t));
 
     for i = 1:numel(t_grid)
         t = t_grid(i);
         lb = t - win_sec;
+
+        % Need a full backward-looking window
         if lb < 0
-            continue;  % not enough history for a full 60 s window yet
-        end
-        idx = find(peak_t >= lb & peak_t <= t);
-        if numel(idx) < 3
-            continue; % need at least 2 IBIs
+            continue;
         end
 
-        ibi = diff(peak_t(idx)); % seconds
-        rr_mean = 60 / mean(ibi, 'omitnan');
+        % Count breaths in [t-win_sec, t)
+        % Use < t to avoid double-counting peaks exactly on boundaries
+        n_breaths = sum(peak_t >= lb & peak_t < t);
 
-        if isfinite(rr_mean) && rr_mean <= rr_thr_bpm
-            cond(i) = true;
-        end
+        % Convert count to breaths/min
+        mean_RR = n_breaths / win_sec * 60;
+
+        cond(i) = isfinite(mean_RR) && mean_RR <= rr_thr_bpm;
     end
 end
 

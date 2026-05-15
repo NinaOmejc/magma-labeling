@@ -1,4 +1,4 @@
-function events = detect_shallow_breathing(data, baseline, b_l, b_d, spo2_feats, config)
+function shallow_events = detect_shallow_breathing(data, baseline, breaths_lungs, breaths_diaph, spo2_feat, config)
 % detect_shallow_breathing
 % Event-based detection of shallow breathing episodes (Label 1).
 %
@@ -8,45 +8,35 @@ function events = detect_shallow_breathing(data, baseline, b_l, b_d, spo2_feats,
 %   - Amplitude reduction: 20–35% of reference amplitude (60 s analysis windows).
 %   - Duration: sustained >= 30 s.
 %   - No desaturation: SpO2 < 90 OR SpO2 drop >= 3–4% below baseline (baseline from first 30–60 s).
-%
-% This implementation is "timepoint-based" (evaluated on a time grid), then
-% converted to continuous events and filtered by duration >= 30 s.
-% Internally it uses a rolling 60 s reference window to estimate breath amplitude,
-% consistent with the "60 s analysis windows" requirement, but the output is
-% event intervals with arbitrary length.
-%
-% Usage:
-%   events = detect_shallow_breathing(data, fs, columns, baseline)
-%   events = detect_shallow_breathing(data, fs, columns, baseline, params)
-%
-% Required baseline fields:
-%   baseline.lungs_amp_ref
-%   baseline.diap_amp_ref
-%   baseline.spo2_median (or baseline.spo2_mean; see params)
-%
-% Output:
-%   events struct array with fields:
-%     type, start_idx, end_idx, start_t, end_t
 
     % ---- indices ---
     N = size(data,1);
     t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';  % seconds
 
-    % ---- shallow condition on grid (amp ratio in [0.2,0.35] for BOTH) ----
-    shallow_amp = shallow_amp_condition_on_grid( ...
-        b_l, b_d, t_grid, config.ShB.analysis_win_sec, ...
-        baseline.lungs_amp_ref, baseline.diap_amp_ref, ...
-        config.ShB.amp_ratio_low, config.ShB.amp_ratio_high);
+    % ---- shallow condition on grid  ----
+    shallow_mask_lungs = compute_shallow_breathing_mask( ...
+        breaths_lungs, t_grid, config.ShB.min_dur_sec, ...
+        baseline.lungs_amp_ref,config.ShB.amp_ratio_low, config.ShB.amp_ratio_high);
+
+    shallow_mask_diaph = compute_shallow_breathing_mask( ...
+        breaths_diaph, t_grid, config.ShB.min_dur_sec, ...
+        baseline.diap_amp_ref, config.ShB.amp_ratio_low, config.ShB.amp_ratio_high);
 
     % ---- no-desaturation condition on grid ----
-    no_desat = no_desat_from_events_on_grid(spo2_feats.desat_events, t_grid);
+    no_desat = no_desat_from_events_on_grid(spo2_feat.desat_events, t_grid);
 
     % final condition (grid)
-    cond_grid = shallow_amp & no_desat;
+    shallow_mask_lungs_final = shallow_mask_lungs & no_desat;
+    shallow_mask_diaph_final = shallow_mask_diaph & no_desat;
     
     % convert grid runs -> events (>=30 s)
-    ev_grid = runs_to_events(cond_grid, 1/config.grid_step_sec, config.ShB.min_dur_sec, 'shallow_breathing');
-    events = grid_events_to_sample_events(ev_grid, config.fs, N);
+    shallow_ev_grid_lungs = runs_to_events(shallow_mask_lungs_final, 1/config.grid_step_sec, config.ShB.min_dur_sec, 'shallow_breathing_lungs');
+    shallow_events_lungs = grid_events_to_sample_events(shallow_ev_grid_lungs, config.fs, N);
+
+    shallow_ev_grid_diaph = runs_to_events(shallow_mask_diaph_final, 1/config.grid_step_sec, config.ShB.min_dur_sec, 'shallow_breathing_diaph');
+    shallow_events_diaph = grid_events_to_sample_events(shallow_ev_grid_diaph, config.fs, N);
+    
+    shallow_events = merge_events({shallow_events_lungs, shallow_events_diaph});
     % shallow_mask = events_to_sample_mask(events, N, config.fs);
     
     % add a figure
@@ -68,17 +58,19 @@ function events = detect_shallow_breathing(data, baseline, b_l, b_d, spo2_feats,
         % ----------------------
         subplot(3,1,1)
         hold on
-        plot(b_l.peak_t, b_l.amp, 'k')
-        yline(lungs_ref, '--', 'Baseline')
-        yline(lungs_lower, 'r--', '')
-        yline(lungs_upper, 'r--', '')
-        ylim([0, mean(b_l.amp, 'omitnan') + 3*std(b_l.amp, 'omitnan')])
-        xline(60, 'k--', 'ref');
-        shade_events_on_axis(events);
+        scatter(breaths_lungs.peak_t, breaths_lungs.amp, 'k.')
+        if ~isnan(breaths_lungs.peak_t)
+            yline(lungs_ref, '--', 'Baseline')
+            yline(lungs_lower, 'r--', '')
+            yline(lungs_upper, 'r--', '')
+            ylim([0, mean(breaths_lungs.amp, 'omitnan') + 3*std(breaths_lungs.amp, 'omitnan')])
+            % xline(60, 'k--', 'ref');
+            shade_events_on_axis(shallow_events_lungs);
+            legend('Amp','Baseline','Lower','Upper', 'Location','eastoutside')
+        end
         title('Lungs Breath Amplitudes')
         xlabel('Time (s)')
         ylabel('Amplitude')
-        legend('Amp','Baseline','Lower','Upper', 'Location','eastoutside')
         grid on
         hold off
     
@@ -87,13 +79,13 @@ function events = detect_shallow_breathing(data, baseline, b_l, b_d, spo2_feats,
         % ----------------------
         subplot(3,1,2)
         hold on
-        plot(b_d.peak_t, b_d.amp, 'k')
+        scatter(breaths_diaph.peak_t, breaths_diaph.amp, 'k.')
         yline(diag_ref, '--', 'Baseline')
         yline(diag_lower, 'r--', '')
         yline(diag_upper, 'r--', '')
-        xline(60, 'k--', '');
-        ylim([0, mean(b_d.amp, 'omitnan') + 3*std(b_d.amp, 'omitnan')])
-        shade_events_on_axis(events);
+        % xline(60, 'k--', '');
+        ylim([0, mean(breaths_diaph.amp, 'omitnan') + 3*std(breaths_diaph.amp, 'omitnan')])
+        shade_events_on_axis(shallow_events_diaph);
         title('Diaphragm Breath Amplitudes')
         xlabel('Time (s)')
         ylabel('Amplitude')
@@ -108,11 +100,12 @@ function events = detect_shallow_breathing(data, baseline, b_l, b_d, spo2_feats,
         hold on
     
         % SpO2 time series (sampled signal)
-        spo2 = spo2_feats.spo2(:);
-        t_spo2 = spo2_feats.t_spo2(:);
+        spo2 = spo2_feat.spo2(:);
+        t_spo2 = spo2_feat.t_spo2(:);
     
         plot(t_spo2, spo2, 'k')
         yline(90, 'r--')
+        ylim([89 100])
         xlim([0 1800])
     
         % baseline - drop threshold (informational)
@@ -126,42 +119,57 @@ function events = detect_shallow_breathing(data, baseline, b_l, b_d, spo2_feats,
         spo2_max = max(spo2, [], 'omitnan');
         y0 = spo2_min + 0.05*(spo2_max - spo2_min);
         y1 = spo2_min + 0.20*(spo2_max - spo2_min);
-        plot(t_grid, y0 + (y1-y0)*double(no_desat), 'b')
+        % plot(t_grid, y0 + (y1-y0)*double(no_desat), 'b')
     
         % Optional: show desaturation event spans as shaded regions
-        if isfield(spo2_feats,'desat_events') && ~isempty(spo2_feats.desat_events)
-            shade_events_on_axis(spo2_feats.desat_events);
-            legend('SpO₂','90%','Baseline-drop','no desat','desat events', 'Location','eastoutside')
+        if isfield(spo2_feat,'desat_events') && ~isempty(spo2_feat.desat_events)
+            shade_events_on_axis(spo2_feat.desat_events);
+            legend('SpO₂','90%','Baseline-drop','desat events', 'Location','eastoutside')
         else
-            legend('SpO₂','90%','Baseline-drop','no desat', 'Location','eastoutside')
+            legend('SpO₂','90%','Baseline-drop', 'Location','eastoutside')
         end
     
-        title('SpO₂ and no\_desat mask (event-based)')
+        title('SpO₂')
         xlabel('Time (s)')
         ylabel('SpO₂ (%)')
-        sgtitle(['SHALLOW BREATHING' newline 'Subject: ' num2str(config.subject) ' | Condition: ' num2str(config.condition)])
         grid on
-
+        hold off
+        
+        sgtitle(['SHALLOW BREATHING | Subject: ' num2str(config.subject) ...
+            ' | Measurement: ' num2str(config.measure)])
+        
         ax = findall(gcf,'Type','axes');
-
-        % Keep only real axes (exclude legend axes if any)
+        
+        % exclude legend axes if present
         ax = ax(arrayfun(@(a) ~strcmp(a.Tag,'legend'), ax));
         
-        % Ensure order top->bottom (optional)
+        % order top-to-bottom
         ax = flipud(ax);
         
-        % Use the minimum width among axes and the maximum left margin
+        % horizontal alignment values
         left  = max(arrayfun(@(a) a.Position(1), ax));
         width = min(arrayfun(@(a) a.Position(3), ax));
         
+        top_margin = 0.02;
+        
         for k = 1:numel(ax)
             p = ax(k).Position;
+        
+            % align widths
             p(1) = left;
             p(3) = width;
+        
+            % only move/shrink the top subplot
+            if k == 1
+                p(2) = p(2) - top_margin;
+                p(4) = p(4) - top_margin;
+            end
+        
             ax(k).Position = p;
         end
-        linkaxes(ax,'x');          % tie x-zoom/pan
-        xlim(ax(1), [0 t_grid(end)]);     % or whatever common range you want
+        
+        linkaxes(ax,'x');
+        xlim(ax(1), [0 t_grid(end)]);
         save_figure(config, 'shallow_breathing');
     end    
 end

@@ -104,7 +104,7 @@ function events_Sig = detect_sigh(data, breaths_lungs, breaths_diaph, config)
         t_raw = (0:N-1)/fs;
 
         figure('Units','pixels','Position',[100 100 1200 800], 'Visible', config.make_figs_visible); 
-        sgtitle(['SIGH | Subject: ' num2str(config.subject) ' | Condition: ' num2str(config.condition)])
+        sgtitle(['SIGH | Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)])
 
         subplot(2,1,1); hold on
         if ~isempty(idx_lungs)
@@ -210,7 +210,17 @@ function events = sigh_flags_to_events(peak_t, flags, N, fs)
         s = max(1, min(N, round(start_t*fs) + 1));
         e = max(1, min(N, round(end_t*fs)   + 1));
 
-        events(end+1,1) = struct('type','sigh','start_idx',s,'end_idx',e,'start_t',(s-1)/fs,'end_t',(e-1)/fs);
+        start_t = (s-1)/fs;
+        end_t   = (e-1)/fs;
+        
+        events(end+1,1) = struct( ...
+            'type', 'sigh', ...
+            'start_idx', s, ...
+            'end_idx', e, ...
+            'start_t', start_t, ...
+            'end_t', end_t, ...
+            'duration', end_t - start_t );
+
     end
 end
 

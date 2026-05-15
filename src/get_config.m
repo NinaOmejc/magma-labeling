@@ -2,8 +2,8 @@ function config = get_config()
 
     %---- GENERAL SETTINGS ----
     config = struct;
-    config.path_data_in = 'D:\Projects\MAGMA\MAGMA-labeling\example_data';
-    config.path_results_out = 'D:\Projects\MAGMA\MAGMA-labeling\results';
+    config.path_data_in = 'D:\Projects\MAGMA\raw_data';
+    config.path_results_out = 'D:\Projects\MAGMA\data_analyis\disorder_classification';
     config.fs = 200;  
     config.data_columns = {'ECG1', 'ECG2', 'SpO₂', 'Resp-Lungs', 'Blood Pressure', 'Resp-Diaphragm'};
     config.labels = get_labels();
@@ -13,13 +13,26 @@ function config = get_config()
     config.plot_format     = 'png';      % future-proof
     config.plot_dpi        = 150;        % resolution
     config.make_figs_visible = 'off';
+    config.overwrite_results = true;
+
+    %---- PREPROCESSING ----
+    config.detrend.method = 'hpfilter'; % 'hpfilter': Butterworth high-pass filter with filtfilt or 'moving_detrend', moving-average trend subtraction
+    config.detrend.signals = {'Resp-Lungs', 'Resp-Diaphragm'};
+    config.detrend.highpass_cutoff = 0.01;
+    config.detrend.window_length = 90;
+    config.detrend.do_plot = false;
+    
+    % PROBLEMS
+    config.problems.subjects_with_broken_lung_belt = 1:25;
 
     %---- BASELINE SETTINGS ----
     config.baseline_sec = 60;
+    config.baseline_location = '5/20'; % It can either be 'first', 'second', '5/21' or 'last' minute of the data.
 
     %---- RESPIRATION / BREATHING AMPLITUDE EXTRACTION SETTINGS ----
-    config.resp.min_peak_dist_sec = 0.8;   % Peak selection; min time between breaths (tune if needed)
-    config.resp.min_peak_prom     = 0.2;   % Peak selection; key knob: increase to reduce extra peaks
+    config.resp.min_peak_dist_sec = 1.0;   % Peak selection; min time between breaths (tune if needed)
+    config.resp.min_peak_prom     = 0.3;   % Peak selection; key knob: increase to reduce extra peaks
+    config.resp.min_peak_height   = -1.0;   % all peaks should be on the positive side
     config.resp.min_num_peaks     = 3;    
     config.resp.smooth_sec       = 0.25;   % Pre-processing; light smoothing (seconds); set 0 to disable
     config.resp.trough_method = 'min';     % Trough selection; 'prctile' (robust) or 'min'
@@ -36,19 +49,17 @@ function config = get_config()
 
     %---- LABEL 1 - ShB - DETECTION SETTINGS 
     config.ShB = struct();
-    config.ShB.analysis_win_sec = 60;   % "60s analysis windows"
-    config.ShB.amp_ratio_low    = 0.20;
-    config.ShB.amp_ratio_high   = 0.35;
-    config.ShB.min_dur_sec       = 30;
+    config.ShB.amp_ratio_low    = 0.65;
+    config.ShB.amp_ratio_high   = 0.80;
+    config.ShB.min_dur_sec       = 30; % minimal duration / analysis window size in seconds
     config.ShB.exclude_desat     = true;
     config.ShB.do_plot           = true;
 
     %---- LABEL 2 - IrB - DETECTION SETTINGS 
     config.IrB = struct();
-    config.IrB.analysis_win_sec = 60;
+    config.IrB.analysis_win_sec = 60; % analysis window size in seconds
     config.IrB.cov_thr   = 0.3;
-    config.IrB.rmssd_thr = 0.5;
-    config.IrB.min_dur_sec = 30;
+    config.IrB.rmssd_thr = 0.0; % if zero, do not include this measure
     config.IrB.pause_thr_sec = 10;
     config.IrB.do_plot       = true;
 
@@ -57,7 +68,7 @@ function config = get_config()
     config.SlB.analysis_win_sec = 60;     % rolling analysis window (30–60 s allowed)
     config.SlB.rr_thr_bpm       = 10;     % mean RR <= 10 bpm
     config.SlB.min_dur_sec      = 30;     % sustained >= 30 s
-    config.SlB.classify_depth   = true;   % Depth classification (slow + shallow vs slow + deep)
+    config.SlB.classify_depth   = false;   % Depth classification (slow + shallow vs slow + deep)
     config.SlB.shallow_lo_ratio = 0.20;   % 20% of baseline (Shallow amplitude band (same logic as ShB))
     config.SlB.shallow_hi_ratio = 0.35;   % 35% of baseline (Shallow amplitude band (same logic as ShB))
     config.SlB.mark_desat        = true;  % Desaturation logic (append "_desat" if overlap)
@@ -69,7 +80,7 @@ function config = get_config()
     config.RaB.analysis_win_sec = 60;
     config.RaB.rr_thr_bpm       = 20;    % mean RR >= 20 bpm
     config.RaB.min_dur_sec      = 30;    % sustained >= 30 s
-    config.RaB.classify_depth   = true; % Depth classification (fast+deep vs fast+shallow) ----
+    config.RaB.classify_depth   = false; % Depth classification (fast+deep vs fast+shallow) ----
     config.RaB.shallow_lo_ratio = 0.20;  % 20% of baseline (Same amplitude band logic as ShB)
     config.RaB.shallow_hi_ratio = 0.35;  % 35% of baseline (Same amplitude band logic as ShB)
     config.RaB.mark_desat      = true;   % Desaturation association ; append "_desat" if overlapping
@@ -86,7 +97,7 @@ function config = get_config()
 
     %---- LABEL 7: Apnea
     config.Anp = struct();
-    config.Apn.analysis_win_sec = 30;    % rolling window for amplitude ratio estimate
+    config.Apn.analysis_win_sec = 10;    % rolling window for amplitude ratio estimate
     config.Apn.amp_ratio_thr    = 0.10;  % <=10% of baseline in BOTH belts
     config.Apn.min_dur_sec      = 10;    % >=10 s
     config.Apn.mark_desat        = true;     % append "_desat" if associated

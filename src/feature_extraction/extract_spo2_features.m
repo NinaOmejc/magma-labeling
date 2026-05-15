@@ -23,7 +23,7 @@ function spo2_feat = extract_spo2_features(data, baseline, config)
     end
 
     spo2_feat.spo2 = data(:, spo2_feat.idx_spo2);
-    spo2_feat.t_spo2 = (0:numel(spo2_feat.spo2)-1) / config.fs;
+    spo2_feat.t_spo2 = (0:numel(spo2_feat.spo2)-1) / config.fs;     % time for spo2
 
     if ~isfield(baseline, 'SpO2_median') || ~isfinite(baseline.SpO2_median)
         spo2_feat.desat_events = empty_events();
@@ -103,11 +103,16 @@ function desat_events = detect_desaturation_events(spo2, spo2_base, fs, spo2_flo
             continue;
         end
 
+        start_t = (s-1)/fs;
+        end_t   = (e-1)/fs;
+        
         desat_events(end+1,1) = struct( ...
             'type',      'desaturation', ...
             'start_idx', s, ...
             'end_idx',   e, ...
-            'start_t',   (s-1)/fs, ...
-            'end_t',     (e-1)/fs );
+            'start_t',   start_t, ...
+            'end_t',     end_t, ...
+            'duration',  end_t - start_t );
+
     end
 end

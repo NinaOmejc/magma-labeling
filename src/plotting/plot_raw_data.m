@@ -17,10 +17,6 @@ function [fig, ax, ph] = plot_raw_data(data, config)
         return;
     end
 
-    % Time vector
-    N = size(data,1);
-    t = (0:N-1) / config.fs;
-
     fig = figure('Units','pixels','Position',[100 100 1200 800], 'Visible', config.make_figs_visible); 
     tl = tiledlayout(6,1);
 
@@ -29,7 +25,7 @@ function [fig, ax, ph] = plot_raw_data(data, config)
 
     for k = 1:6
         ax(k) = nexttile;
-        ph(k) = plot(t, data(:,k));
+        ph(k) = plot(config.times, data(:,k));
         ylabel(config.data_columns{k})
 
         if ~isempty(config.plot_raw_data_xrange)
@@ -37,7 +33,7 @@ function [fig, ax, ph] = plot_raw_data(data, config)
         end
 
         if k == 1
-            title(['Subject: ' num2str(config.subject) ' | Condition: ' num2str(config.condition) ' | Physiological Signals'])
+            title(['Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure) ' | Physiological Signals'])
         end
 
         if k == 6

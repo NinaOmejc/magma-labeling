@@ -1,5 +1,4 @@
 function b = extract_respiration_feature(x, config, basename)
-% resp_extract_breaths
 % Unified respiration breath extraction:
 % - detrends (robustly)
 % - finds peaks (breaths)
@@ -11,7 +10,7 @@ function b = extract_respiration_feature(x, config, basename)
 %   b.peak_idx, b.peak_t, b.peak_val
 %   b.trough_idx, b.trough_t, b.trough_val     (between peak i and i+1)
 %   b.amp                                   (peak(i) - trough(i)) length n_peaks-1
-%   b.ibi_s                                 inter-breath intervals (seconds)
+%   b.ibi                                 inter-breath intervals (seconds)
 %   b.rr_bpm                                instantaneous RR per interval (bpm)
 %   b.rr_mean_bpm                           mean RR in segment
 %   b.ok                                   true if enough peaks found
@@ -29,25 +28,29 @@ function b = extract_respiration_feature(x, config, basename)
     end
 
     b = struct();
+    b.basename = basename;
     b.ok = false;
 
-    if isempty(x) || all(isnan(x))
+    if isempty(x) || all(isnan(x)) || ~any(x)
+        b.amp = NaN;
+        b.peak_t = NaN;
+        b.peak_val = NaN;
+        b.ibi = NaN;
         return;
     end
 
     x = x(:);
 
-    % ---- detrend (robust) ----
-    x0 = x - median(x, 'omitnan');
     if config.resp.smooth_sec > 0
-        x0 = smoothdata(x0, 'movmean', max(1, round(config.resp.smooth_sec*config.fs)));
+        x = smoothdata(x, 'movmean', max(1, round(config.resp.smooth_sec*config.fs)));
     end
-    b.x0 = x0;
+    b.x0 = x;
 
     % ---- peaks ----
-    [pks, locs] = findpeaks(x0, ...
+    [pks, locs] = findpeaks(x, ...
         'MinPeakDistance', max(1, round(config.resp.min_peak_dist_sec*config.fs)), ...
-        'MinPeakProminence', config.resp.min_peak_prom);
+        'MinPeakProminence', config.resp.min_peak_prom, ...
+        'MinPeakHeight', config.resp.min_peak_height);
 
     b.peak_idx = locs(:);
     b.peak_t   = (locs(:)-1)/config.fs;
@@ -66,7 +69,7 @@ function b = extract_respiration_feature(x, config, basename)
 
     for i = 1:n-1
         idx_range = locs(i):locs(i+1);
-        seg = x0(idx_range);
+        seg = x(idx_range);
 
         switch lower(config.resp.trough_method)
             case 'min'
@@ -96,21 +99,24 @@ function b = extract_respiration_feature(x, config, basename)
 
     % ---- IBI / RR ----
     ibi = diff(locs) / config.fs; % time between breaths
-    b.ibi_s = ibi(:);
-    b.rr_bpm = 60 ./ b.ibi_s; % convert to seconds per breath to breats per minute
-    b.rr_mean_bpm = 60 / mean(b.ibi_s, 'omitnan');
+    b.ibi = ibi(:);
+    b.rr_bpm = 60 ./ b.ibi; % convert to seconds per breath to breats per minute
+    b.rr_mean_bpm = 60 / mean(b.ibi, 'omitnan');
     b.rr_std_bpm = std(b.rr_bpm, 'omitnan');
     b.ok = true;
 
     % ---- optional plotting ----
     if isfield(config.resp, 'do_plot') && config.resp.do_plot
+        t = (1:length(x))/config.fs;
         figure('Units','pixels','Position',[100 100 1200 800], 'Visible', config.make_figs_visible); 
         hold on
-        plot(x0)
-        plot(b.peak_idx, b.peak_val, 'ro', 'MarkerFaceColor', 'r')
-        plot(b.trough_idx, b.trough_val, 'bo', 'MarkerFaceColor', 'b')
-        title(['RESPIRATION' newline 'Subject: ' num2str(config.subject) ' | Condition: ' num2str(config.condition)])
+        plot(t, x)
+        plot(b.peak_idx/config.fs, b.peak_val, 'ro', 'MarkerFaceColor', 'r')
+        plot(b.trough_idx/config.fs, b.trough_val, 'bo', 'MarkerFaceColor', 'b')
+        title(['RESPIRATION ' basename newline 'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)])
         legend('x0', 'peaks', 'troughs')
+        ylabel('Standardized respiration belt amplitude')
+        xlabel('Time (seconds)')
         hold off
         save_figure(config, basename)
     end

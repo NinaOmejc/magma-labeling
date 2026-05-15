@@ -89,7 +89,7 @@ function events = detect_apnea(data, baseline, breaths_lungs, breaths_diaph, spo
         t_raw = (0:N-1)/config.fs;
 
         figure('Units','pixels','Position',[100 100 1200 800], 'Visible', config.make_figs_visible); 
-        sgtitle(['APNEA | Subject: ' num2str(config.subject) ' | Condition: ' num2str(config.condition)])
+        sgtitle(['APNEA | Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)])
 
         subplot(3,1,1); hold on
         plot(t_raw, data(:, idx_lungs), 'k')
