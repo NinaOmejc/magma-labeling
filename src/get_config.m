@@ -115,12 +115,15 @@ function config = get_config()
 
     %---- LABEL 8: Sigh
     config.Sig = struct();
-    config.Sig.prev_win_sec     = 60;
-    config.Sig.amp_ratio_thr    = 1.5;
-    config.Sig.min_prev_breaths = 3;
-    config.Sig.use_either_belt  = true;
-    config.Sig.freq_win_sec       = 1800; % optional frequency summary
-    config.Sig.freq_thr_per_30min = 7; % optional frequency summary
+    config.Sig.method = 'global_ratio_outlier'; % default: nonparametric global outliers in amplitude/baseline ratio
+    config.Sig.ratio_prctile = 98;              % top 2% normalized breaths are sigh candidates
+    config.Sig.use_either_belt = false;         % stricter default: require overlap between belts
+
+    % Legacy option: previous 60 s thresholding
+    config.Sig.legacy_prev_win_sec = 60;
+    config.Sig.legacy_amp_ratio_thr = 1.5;
+    config.Sig.legacy_min_prev_breaths = 3;
+
     config.Sig.do_plot = true;
 
 
