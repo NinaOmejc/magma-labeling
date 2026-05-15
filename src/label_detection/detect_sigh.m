@@ -77,41 +77,50 @@ function events = detect_sigh(data, baseline, breaths_lungs, breaths_diaph, spo2
         figure('Units','pixels','Position',[100 100 1500 800], 'Visible', config.make_figs_visible);
         sgtitle(['SIGH | Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)])
 
-        subplot(3,1,1); hold on
+        ax1 = subplot(3,1,1); hold on
         if ~isempty(idx_lungs), plot(t_raw, data(:,idx_lungs), 'k'); end
         [~, ~, lungs_ratio, lungs_ratio_thr] = sigh_flags_global_ratio_outlier( ...
             breaths_lungs, baseline, config, 'lungs_amp_ref', ratio_prctile);
-        plot(breaths_lungs.peak_t(sigh_lungs), interp1(t_raw, data(:,idx_lungs), breaths_lungs.peak_t(sigh_lungs), 'linear', 'extrap'), 'ro', 'MarkerFaceColor','r')
+        if ~isempty(idx_lungs)
+            y_lungs_mark = interp1(t_raw, data(:,idx_lungs), breaths_lungs.peak_t(sigh_lungs), 'linear', 'extrap');
+        else
+            y_lungs_mark = nan(sum(sigh_lungs),1);
+        end
+        plot(breaths_lungs.peak_t(sigh_lungs), y_lungs_mark, 'ro', 'MarkerFaceColor','r')
         yyaxis right
         plot(breaths_lungs.peak_t, lungs_ratio, 'b-')
-        yline(lungs_ratio_thr, 'b--', 'Ratio threshold')
+        if isfinite(lungs_ratio_thr)
+            yline(lungs_ratio_thr, 'b--', 'Ratio threshold')
+        end
         ylabel('Amp ratio')
         yyaxis left
         title('Sigh detection (lungs): red dots = sigh breaths')
         xlabel('Time (s)'); ylabel('Resp-Lungs / amp'); grid on; hold off
 
-        subplot(3,1,2); hold on
+        ax2 = subplot(3,1,2); hold on
         if ~isempty(idx_diaph), plot(t_raw, data(:,idx_diaph), 'k'); end
         [~, ~, diaph_ratio, diaph_ratio_thr] = sigh_flags_global_ratio_outlier( ...
             breaths_diaph, baseline, config, 'diaph_amp_ref', ratio_prctile);
-        plot(breaths_diaph.peak_t(sigh_diaph), interp1(t_raw, data(:,idx_diaph), breaths_diaph.peak_t(sigh_diaph), 'linear', 'extrap'), 'ro', 'MarkerFaceColor','r')
+        if ~isempty(idx_diaph)
+            y_diaph_mark = interp1(t_raw, data(:,idx_diaph), breaths_diaph.peak_t(sigh_diaph), 'linear', 'extrap');
+        else
+            y_diaph_mark = nan(sum(sigh_diaph),1);
+        end
+        plot(breaths_diaph.peak_t(sigh_diaph), y_diaph_mark, 'ro', 'MarkerFaceColor','r')
         yyaxis right
         plot(breaths_diaph.peak_t, diaph_ratio, 'b-')
-        yline(diaph_ratio_thr, 'b--', 'Ratio threshold')
+        if isfinite(diaph_ratio_thr)
+            yline(diaph_ratio_thr, 'b--', 'Ratio threshold')
+        end
         ylabel('Amp ratio')
         yyaxis left
         title('Sigh detection (diaphragm): red dots = sigh breaths')
         xlabel('Time (s)'); ylabel('Resp-Diaphragm / amp'); grid on; hold off
 
-        ax = findall(gcf,'Type','axes');
-        ax = ax(arrayfun(@(a) ~strcmp(a.Tag,'legend'), ax));
-        linkaxes(ax,'x');
-        xlim(ax(1), [0 t_grid(end)]);
-
         % ----------------------
         % Subplot 3: SpO2 + no_desat mask
         % ----------------------
-        subplot(3,1,3)
+        ax3 = subplot(3,1,3)
         hold on
     
         % SpO2 time series (sampled signal)
@@ -144,6 +153,9 @@ function events = detect_sigh(data, baseline, breaths_lungs, breaths_diaph, spo2
             legend('SpO₂','90%','Baseline-drop', 'Location','northeast')
         end
     
+        linkaxes([ax1 ax2 ax3], 'x');
+        xlim(ax1, [0 t_grid(end)]);
+
         title('SpO₂')
         xlabel('Time (s)')
         ylabel('SpO₂ (%)')
