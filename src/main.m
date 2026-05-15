@@ -44,7 +44,7 @@ for isub = 1:length(subjects)
         % events_ReA = detect_respiratory_asynchrony(data, config);
         % events_Des = detect_desaturation(data, baseline, spo2_feat, config);
         % events_Apn = detect_apnea(data, baseline, breaths_lungs, breaths_diaph, spo2_feat, config);
-        events_Sigh = detect_sigh(data, breaths_lungs, breaths_diaph, config);
+        events_Sigh = detect_sigh(data, baseline, breaths_lungs, breaths_diaph, config);
 
         % JOIN EVENTS FOR SUBJECT, CONDITION
         % sub_events = merge_events({events_ShB, events_IrB, events_SlB, events_RaB, ...

@@ -1,26 +1,22 @@
-function events = detect_sigh(data, breaths_lungs, breaths_diaph, config)
+function events = detect_sigh(data, baseline, breaths_lungs, breaths_diaph, config)
 % detect_sigh
 % Label 8 – Sigh
 %
-% Definition:
-%   Single breath with clearly larger amplitude compared to normal cycles.
+% Default method: global nonparametric outlier detection on normalized breath amplitude.
+% ratio = breath_amp / baseline_ref_at_breath
+% sigh if ratio >= prctile(ratio_valid, ratio_prctile)
 %
-% Conditions:
-%   Cycle amplitude >= 1.5 * median amplitude from previous 60 s.
-%   Computed per-breath using breath amplitudes from resp extraction.
-%   If either lungs OR diaphragm meets criterion -> sigh.
+% Baseline source:
+%   - rolling baseline, when available and enabled
+%   - otherwise stationary baseline (median breath amplitude)
 %
-% Additionally (summary metric):
-%   Frequency >= 7–10 sighs per 30 minutes (does not change per-breath detection here).
-%
-% Usage:
-%   events = detect_sigh(data, baseline, breaths_lungs, breaths_diaph, config);
+% Legacy method (optional): previous-window thresholding.
 
     events = empty_events();
 
     N = size(data,1);
     fs = config.fs;
-    t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';  % common grid (seconds)
+    t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';
 
     if isempty(breaths_lungs) || isempty(breaths_diaph) || ...
        ~isfield(breaths_lungs,'peak_t') || ~isfield(breaths_lungs,'amp') || ...
@@ -28,155 +24,139 @@ function events = detect_sigh(data, breaths_lungs, breaths_diaph, config)
         return;
     end
 
-    % ----------------------------
-    % Config defaults
-    % ----------------------------
-    prev_win_sec        = 60;     % previous window length for "normal cycles"
-    amp_ratio_thr       = 1.5;    % sigh threshold multiplier
-    min_prev_breaths    = 3;      % need at least this many breaths in prev window
-    use_either_belt     = true;   % OR across belts (recommended)
-    do_plot             = false;
+    method = 'global_ratio_outlier';
+    ratio_prctile = 98;
+    use_either_belt = false;
+    do_plot = false;
 
-    % Optional frequency summary
-    freq_win_sec        = 1800;   % 30 minutes
-    freq_thr_per_30min  = 7;      % lower end of 7–10 / 30 min
+    % legacy
+    legacy_prev_win_sec = 60;
+    legacy_amp_ratio_thr = 1.5;
+    legacy_min_prev_breaths = 3;
 
     if isfield(config,'Sig')
-        if isfield(config.Sig,'prev_win_sec'),       prev_win_sec = config.Sig.prev_win_sec; end
-        if isfield(config.Sig,'amp_ratio_thr'),      amp_ratio_thr = config.Sig.amp_ratio_thr; end
-        if isfield(config.Sig,'min_prev_breaths'),   min_prev_breaths = config.Sig.min_prev_breaths; end
-        if isfield(config.Sig,'use_either_belt'),    use_either_belt = config.Sig.use_either_belt; end
-        if isfield(config.Sig,'do_plot'),            do_plot = config.Sig.do_plot; end
+        if isfield(config.Sig,'method'), method = config.Sig.method; end
+        if isfield(config.Sig,'ratio_prctile'), ratio_prctile = config.Sig.ratio_prctile; end
+        if isfield(config.Sig,'use_either_belt'), use_either_belt = config.Sig.use_either_belt; end
+        if isfield(config.Sig,'do_plot'), do_plot = config.Sig.do_plot; end
 
-        if isfield(config.Sig,'freq_win_sec'),       freq_win_sec = config.Sig.freq_win_sec; end
-        if isfield(config.Sig,'freq_thr_per_30min'), freq_thr_per_30min = config.Sig.freq_thr_per_30min; end
+        if isfield(config.Sig,'legacy_prev_win_sec'), legacy_prev_win_sec = config.Sig.legacy_prev_win_sec; end
+        if isfield(config.Sig,'legacy_amp_ratio_thr'), legacy_amp_ratio_thr = config.Sig.legacy_amp_ratio_thr; end
+        if isfield(config.Sig,'legacy_min_prev_breaths'), legacy_min_prev_breaths = config.Sig.legacy_min_prev_breaths; end
     end
 
-    % ----------------------------
-    % Build sigh flags per-breath for each belt
-    % ----------------------------
-    sigh_lungs = sigh_flags_from_breath_series(breaths_lungs, prev_win_sec, amp_ratio_thr, min_prev_breaths);
-    sigh_diaph = sigh_flags_from_breath_series(breaths_diaph, prev_win_sec, amp_ratio_thr, min_prev_breaths);
+    switch lower(method)
+        case 'legacy_60s'
+            sigh_lungs = sigh_flags_legacy_60s(breaths_lungs, legacy_prev_win_sec, legacy_amp_ratio_thr, legacy_min_prev_breaths);
+            sigh_diaph = sigh_flags_legacy_60s(breaths_diaph, legacy_prev_win_sec, legacy_amp_ratio_thr, legacy_min_prev_breaths);
+        otherwise
+            sigh_lungs = sigh_flags_global_ratio_outlier( ...
+                breaths_lungs, baseline, config, 'lungs_amp_ref', ratio_prctile);
+            sigh_diaph = sigh_flags_global_ratio_outlier( ...
+                breaths_diaph, baseline, config, 'diaph_amp_ref', ratio_prctile);
+    end
 
-    % Build sigh events from each belt independently
     events_L = sigh_flags_to_events(breaths_lungs.peak_t, sigh_lungs, N, fs);
     events_D = sigh_flags_to_events(breaths_diaph.peak_t, sigh_diaph, N, fs);
-    
+
     if use_either_belt
-        events = merge_events([events_L; events_D], 0.5);  % merge overlaps; 0.5s tolerance
+        events = merge_events([events_L; events_D], 0.5);
     else
-        % "AND across belts": keep only events that overlap between belts
         events = intersect_events(events_L, events_D);
     end
 
-    % ----------------------------
-    % Optional: frequency summary per 30 min (does not affect event list)
-    % ----------------------------
-    if ~isempty(events)
-        sigh_times = arrayfun(@(e) 0.5*(e.start_t + e.end_t), events);
-
-        % Sliding count in [t - freq_win_sec, t]
-        t_end = (N-1)/fs;
-        t_grid_freq = (0:60:t_end)';  % every 60s for summary
-        counts = zeros(size(t_grid_freq));
-
-        for k = 1:numel(t_grid_freq)
-            t = t_grid_freq(k);
-            counts(k) = sum(sigh_times >= (t - freq_win_sec) & sigh_times <= t);
-        end
-
-        if any(counts >= freq_thr_per_30min)
-            % You can turn this into a separate "sigh_cluster" label if you want later.
-            % For now just display a message when plotting or debugging.
-            if do_plot
-                fprintf('[Sigh] High sigh frequency detected: max %d sighs / 30 min\n', max(counts));
-            end
-        end
-    end
-
-    % ----------------------------
-    % Optional plot
-    % ----------------------------
     if do_plot
         idx_lungs = find(strcmp(config.data_columns, 'Resp-Lungs'), 1);
         idx_diaph  = find(strcmp(config.data_columns, 'Resp-Diaphragm'), 1);
 
         t_raw = (0:N-1)/fs;
 
-        figure('Units','pixels','Position',[100 100 1200 800], 'Visible', config.make_figs_visible); 
+        figure('Units','pixels','Position',[100 100 1200 800], 'Visible', config.make_figs_visible);
         sgtitle(['SIGH | Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)])
 
         subplot(2,1,1); hold on
-        if ~isempty(idx_lungs)
-            plot(t_raw, data(:,idx_lungs), 'k')
-        end
-        plot(breaths_lungs.peak_t, breaths_lungs.amp, 'b')  % breath amp trace (lungs)
+        if ~isempty(idx_lungs), plot(t_raw, data(:,idx_lungs), 'k'); end
+        plot(breaths_lungs.peak_t, breaths_lungs.amp, 'b')
         plot(breaths_lungs.peak_t(sigh_lungs), breaths_lungs.amp(sigh_lungs), 'ro', 'MarkerFaceColor','r')
         title('Sigh detection (lungs): red dots = sigh breaths')
-        xlabel('Time (s)'); ylabel('Resp-Lungs / amp')
-        grid on
-        hold off
+        xlabel('Time (s)'); ylabel('Resp-Lungs / amp'); grid on; hold off
 
         subplot(2,1,2); hold on
-        if ~isempty(idx_diaph)
-            plot(t_raw, data(:,idx_diaph), 'k')
-        end
-
-        % Diaphragm breath times may differ slightly; plot on its own axis
+        if ~isempty(idx_diaph), plot(t_raw, data(:,idx_diaph), 'k'); end
         plot(breaths_diaph.peak_t, breaths_diaph.amp, 'b')
         plot(breaths_diaph.peak_t(sigh_diaph), breaths_diaph.amp(sigh_diaph), 'ro', 'MarkerFaceColor','r')
         title('Sigh detection (diaphragm): red dots = sigh breaths')
-        xlabel('Time (s)'); ylabel('Resp-Diaphragm / amp')
-        grid on
-        hold off
+        xlabel('Time (s)'); ylabel('Resp-Diaphragm / amp'); grid on; hold off
 
         ax = findall(gcf,'Type','axes');
         ax = ax(arrayfun(@(a) ~strcmp(a.Tag,'legend'), ax));
-        linkaxes(ax,'x');          % tie x-zoom/pan
-        xlim(ax(1), [0 t_grid(end)]);     % or whatever common range you want
-   
+        linkaxes(ax,'x');
+        xlim(ax(1), [0 t_grid(end)]);
+
         save_figure(config, 'sigh');
     end
 end
 
-% ===================== helpers =====================
-
-function sigh_flags = sigh_flags_from_breath_series(b, prev_win_sec, amp_ratio_thr, min_prev_breaths)
-% For each breath i, compute median amplitude over previous prev_win_sec seconds and compare:
-%   sigh if b.amp(i) >= amp_ratio_thr * median(prev_amps)
-
+function sigh_flags = sigh_flags_global_ratio_outlier(b, baseline, config, rolling_field, ratio_prctile)
     peak_t = b.peak_t(:);
-    amp    = b.amp(:);
+    amp = b.amp(:);
 
     L = min(numel(peak_t), numel(amp));
     peak_t = peak_t(1:L);
-    amp    = amp(1:L);
+    amp = amp(1:L);
+    sigh_flags = false(L,1);
 
+    if L < 10
+        return;
+    end
+
+    local_ref = nan(L,1);
+    use_rolling = isfield(config,'rolling_baseline') && isfield(config.rolling_baseline,'enabled') && config.rolling_baseline.enabled && ...
+        isfield(baseline,'rolling') && isfield(baseline.rolling,'t_grid') && isfield(baseline.rolling,rolling_field);
+
+    if use_rolling
+        local_ref = interp1(baseline.rolling.t_grid, baseline.rolling.(rolling_field), peak_t, 'linear', 'extrap');
+    elseif isfield(b,'amp_ref') && isfinite(b.amp_ref) && b.amp_ref > 0
+        local_ref(:) = b.amp_ref;
+    else
+        ref = median(amp, 'omitnan');
+        local_ref(:) = ref;
+    end
+
+    ratio = amp ./ local_ref;
+    valid = isfinite(ratio) & ratio > 0 & isfinite(amp) & amp > 0 & isfinite(local_ref) & local_ref > 0;
+
+    if sum(valid) < 10
+        return;
+    end
+
+    ratio_thr = prctile(ratio(valid), ratio_prctile);
+    sigh_flags(valid) = ratio(valid) >= ratio_thr;
+end
+
+function sigh_flags = sigh_flags_legacy_60s(b, prev_win_sec, amp_ratio_thr, min_prev_breaths)
+    peak_t = b.peak_t(:);
+    amp = b.amp(:);
+    L = min(numel(peak_t), numel(amp));
+    peak_t = peak_t(1:L);
+    amp = amp(1:L);
     sigh_flags = false(L,1);
 
     for i = 1:L
         t = peak_t(i);
         lb = t - prev_win_sec;
-        if lb < 0
-            continue;
-        end
+        if lb < 0, continue; end
         prev_idx = find(peak_t < t & peak_t >= lb);
-        if numel(prev_idx) < min_prev_breaths
-            continue;
-        end
-
+        if numel(prev_idx) < min_prev_breaths, continue; end
         med_prev = median(amp(prev_idx), 'omitnan');
-        if ~isfinite(med_prev) || med_prev <= 0 || ~isfinite(amp(i))
-            continue;
-        end
-
-        % if amp(i) >= amp_ratio_thr * med_prev
-        if amp(i) >= prctile(amp(prev_idx), 95)
+        if ~isfinite(med_prev) || med_prev <= 0 || ~isfinite(amp(i)), continue; end
+        if amp(i) >= amp_ratio_thr * med_prev
             sigh_flags(i) = true;
         end
     end
 end
 
+% rest unchanged
 
 function events = sigh_flags_to_events(peak_t, flags, N, fs)
     events = empty_events();
