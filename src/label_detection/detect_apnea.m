@@ -23,7 +23,7 @@ function events = detect_apnea(data, baseline, breaths_lungs, breaths_diaph, spo
     end
 
     if ~isfield(baseline, 'lungs_amp_ref') || ~isfinite(baseline.lungs_amp_ref) || baseline.lungs_amp_ref <= 0 || ...
-       ~isfield(baseline, 'diap_amp_ref')  || ~isfinite(baseline.diap_amp_ref)  || baseline.diap_amp_ref  <= 0
+       ~isfield(baseline, 'diaph_amp_ref')  || ~isfinite(baseline.diaph_amp_ref)  || baseline.diaph_amp_ref  <= 0
         return;
     end
 
@@ -51,11 +51,11 @@ function events = detect_apnea(data, baseline, breaths_lungs, breaths_diaph, spo
     % Amplitude criterion on grid (both belts <= 10% reference)
     % ----------------------------
     ref_lungs = get_resp_ref_on_grid(baseline, 'lungs', t_grid);
-    ref_diap = get_resp_ref_on_grid(baseline, 'diap', t_grid);
+    ref_diaph = get_resp_ref_on_grid(baseline, 'diaph', t_grid);
 
     apnea_amp = apnea_amp_condition_on_grid( ...
         breaths_lungs, breaths_diaph, t_grid, analysis_win_sec, ...
-        ref_lungs, ref_diap, amp_ratio_thr);
+        ref_lungs, ref_diaph, amp_ratio_thr);
 
     % Convert to events (>=10 s)
     ev_grid = runs_to_events(apnea_amp, 1/config.grid_step_sec, min_dur_sec, 'apnea');
@@ -88,7 +88,7 @@ function events = detect_apnea(data, baseline, breaths_lungs, breaths_diaph, spo
     % ----------------------------
     if isfield(config, 'Apn') && isfield(config.Apn, 'do_plot') && config.Apn.do_plot
         idx_lungs = find(strcmp(config.data_columns, 'Resp-Lungs'), 1);
-        idx_diap  = find(strcmp(config.data_columns, 'Resp-Diaphragm'), 1);
+        idx_diaph  = find(strcmp(config.data_columns, 'Resp-Diaphragm'), 1);
         t_raw = (0:N-1)/config.fs;
 
         figure('Units','pixels','Position',[100 100 1200 800], 'Visible', config.make_figs_visible); 
@@ -103,7 +103,7 @@ function events = detect_apnea(data, baseline, breaths_lungs, breaths_diaph, spo
         hold off
 
         subplot(3,1,2); hold on
-        plot(t_raw, data(:, idx_diap), 'k')
+        plot(t_raw, data(:, idx_diaph), 'k')
         shade_mask_on_axis(t_grid, apnea_amp)
         title('Apnea detection mask (both belts) over diaphragm raw signal')
         xlabel('Time (s)'); ylabel('Resp-Diaphragm'); grid on
@@ -112,9 +112,9 @@ function events = detect_apnea(data, baseline, breaths_lungs, breaths_diaph, spo
         subplot(3,1,3); hold on
         % Show amplitude ratios as traces for intuition (computed on grid)
         lungs_ratio = amp_ratio_on_grid(breaths_lungs, t_grid, analysis_win_sec, ref_lungs);
-        diap_ratio  = amp_ratio_on_grid(breaths_diaph, t_grid, analysis_win_sec, ref_diap);
+        diaph_ratio  = amp_ratio_on_grid(breaths_diaph, t_grid, analysis_win_sec, ref_diaph);
         plot(t_grid, lungs_ratio, 'k')
-        plot(t_grid, diap_ratio,  'b')
+        plot(t_grid, diaph_ratio,  'b')
         yline(amp_ratio_thr, 'r--')
         if isfield(config,'rolling_baseline') && isfield(config.rolling_baseline,'enabled') && config.rolling_baseline.enabled
             title(sprintf('Amplitude ratios on grid (rolling ref win=%ds, lag=%ds)', config.rolling_baseline.win_sec, config.rolling_baseline.lag_sec))
@@ -122,7 +122,7 @@ function events = detect_apnea(data, baseline, breaths_lungs, breaths_diaph, spo
             title('Amplitude ratios on grid (static ref)')
         end
         xlabel('Time (s)'); ylabel('Amp ratio'); grid on
-        legend('lungs ratio','diap ratio','thr')
+        legend('lungs ratio','diaph ratio','thr')
         hold off
 
         ax = findall(gcf,'Type','axes');

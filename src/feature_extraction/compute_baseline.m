@@ -10,7 +10,7 @@ function baseline = compute_baseline(data, config)
 
     idxSpO2 = find(strcmp(config.data_columns, 'SpO₂'), 1);
     idxLungs = find(strcmp(config.data_columns, 'Resp-Lungs'), 1);
-    idxDiap = find(strcmp(config.data_columns, 'Resp-Diaphragm'), 1);
+    idxDiaph = find(strcmp(config.data_columns, 'Resp-Diaphragm'), 1);
     
     n0 = min(size(data,1), config.baseline_sec*config.fs);
     
@@ -43,7 +43,7 @@ function baseline = compute_baseline(data, config)
 
     % Respiratory reference amplitude: robust cycle amplitude from baseline segment
     [baseline.lungs_amp_ref, baseline.lungs_rr_ref] = resp_amp_ref_from_segment(d0(:, idxLungs), config, ['baseline_lungs']);
-    [baseline.diap_amp_ref, baseline.diap_rr_ref] = resp_amp_ref_from_segment(d0(:, idxDiap), config, ['baseline_diaph']);
+    [baseline.diaph_amp_ref, baseline.diaph_rr_ref] = resp_amp_ref_from_segment(d0(:, idxDiaph), config, ['baseline_diaph']);
 
 end
 

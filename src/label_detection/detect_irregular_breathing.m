@@ -54,8 +54,8 @@ function irregular_events = detect_irregular_breathing(data, breaths_lungs, brea
     irregular_ev_grid_lungs = runs_to_events(irregular_mask_lungs, 1/config.grid_step_sec, min_dur_sec, 'irregular_breathing_lungs');
     irregular_events_lungs = grid_events_to_sample_events(irregular_ev_grid_lungs, config.fs, N);
 
-    irregular_ev_grid_diaph = runs_to_events(irregular_mask_diaph, 1/config.grid_step_sec, min_dur_sec, 'irregular_breathing_diaph');
-    irregular_events_diaph = grid_events_to_sample_events(irregular_ev_grid_diaph, config.fs, N);
+    irregular_events_on_grid_diaph = runs_to_events(irregular_mask_diaph, 1/config.grid_step_sec, min_dur_sec, 'irregular_breathing_diaph');
+    irregular_events_diaph = grid_events_to_sample_events(irregular_events_on_grid_diaph, config.fs, N);
     
     irregular_events = merge_events({irregular_events_lungs, irregular_events_diaph});
 
@@ -63,7 +63,7 @@ function irregular_events = detect_irregular_breathing(data, breaths_lungs, brea
     if do_plot
     
         idx_lungs = find(strcmp(config.data_columns, 'Resp-Lungs'), 1);
-        idx_diap  = find(strcmp(config.data_columns, 'Resp-Diaphragm'), 1);
+        idx_diaph  = find(strcmp(config.data_columns, 'Resp-Diaphragm'), 1);
         
         figure('Units','pixels','Position',[100 100 1200 800], 'Visible', config.make_figs_visible); 
         sgtitle(['IRREGULAR BREATHING' newline 'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)])
@@ -90,7 +90,7 @@ function irregular_events = detect_irregular_breathing(data, breaths_lungs, brea
         % =========================
         subplot(2,1,2); hold on
     
-        plot(config.times, data(:,idx_diap), 'k')
+        plot(config.times, data(:,idx_diaph), 'k')
     
         shade_mask_on_axis(t_grid, irregular_mask_diaph)
     

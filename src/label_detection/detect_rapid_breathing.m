@@ -50,7 +50,7 @@ function events = detect_rapid_breathing(data, baseline, breaths_lungs, breaths_
     end
 
     % ----------------------------
-    % Rapid RR condition on grid (lungs/diap)
+    % Rapid RR condition on grid (lungs/diaph)
     % ----------------------------
     rapid_lungs = rr_geq_condition_on_grid_from_peaks( ...
         breaths_lungs.peak_t, t_grid, analysis_win_sec, rr_thr_bpm);
@@ -70,11 +70,11 @@ function events = detect_rapid_breathing(data, baseline, breaths_lungs, breaths_
     if classify_depth
 
         ref_lungs = get_resp_ref_on_grid(baseline, 'lungs', t_grid);
-        ref_diap = get_resp_ref_on_grid(baseline, 'diap', t_grid);
+        ref_diaph = get_resp_ref_on_grid(baseline, 'diaph', t_grid);
 
         amp_shallow = shallow_amp_condition_on_grid( ...
             breaths_lungs, breaths_diaph, t_grid, analysis_win_sec, ...
-            ref_lungs, ref_diap, shallow_lo_ratio, shallow_hi_ratio);
+            ref_lungs, ref_diaph, shallow_lo_ratio, shallow_hi_ratio);
 
         for e = 1:numel(events)
             g0 = max(1, round(events(e).start_t / config.grid_step_sec) + 1);
@@ -110,7 +110,7 @@ function events = detect_rapid_breathing(data, baseline, breaths_lungs, breaths_
     % ----------------------------
     if isfield(config, 'RaB') && isfield(config.RaB, 'do_plot') && config.RaB.do_plot
         idx_lungs = find(strcmp(config.data_columns, 'Resp-Lungs'), 1);
-        idx_diap  = find(strcmp(config.data_columns, 'Resp-Diaphragm'), 1);
+        idx_diaph  = find(strcmp(config.data_columns, 'Resp-Diaphragm'), 1);
         t_raw = (0:N-1)/config.fs;
 
         figure('Units','pixels','Position',[100 100 1200 800], 'Visible', config.make_figs_visible); 
@@ -124,7 +124,7 @@ function events = detect_rapid_breathing(data, baseline, breaths_lungs, breaths_
         hold off
 
         subplot(2,1,2); hold on
-        plot(t_raw, data(:, idx_diap), 'k')
+        plot(t_raw, data(:, idx_diaph), 'k')
         shade_mask_on_axis(t_grid, rapid_diaph)
         title('Rapid breathing (diaphragm) over raw signal')
         xlabel('Time (s)'); ylabel('Resp-Diaphragm'); grid on
