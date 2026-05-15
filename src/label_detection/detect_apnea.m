@@ -50,9 +50,12 @@ function events = detect_apnea(data, baseline, breaths_lungs, breaths_diaph, spo
     % ----------------------------
     % Amplitude criterion on grid (both belts <= 10% reference)
     % ----------------------------
+    ref_lungs = get_resp_ref_on_grid(baseline, 'lungs', t_grid);
+    ref_diap = get_resp_ref_on_grid(baseline, 'diap', t_grid);
+
     apnea_amp = apnea_amp_condition_on_grid( ...
         breaths_lungs, breaths_diaph, t_grid, analysis_win_sec, ...
-        baseline.lungs_amp_ref, baseline.diap_amp_ref, amp_ratio_thr);
+        ref_lungs, ref_diap, amp_ratio_thr);
 
     % Convert to events (>=10 s)
     ev_grid = runs_to_events(apnea_amp, 1/config.grid_step_sec, min_dur_sec, 'apnea');
@@ -108,12 +111,16 @@ function events = detect_apnea(data, baseline, breaths_lungs, breaths_diaph, spo
 
         subplot(3,1,3); hold on
         % Show amplitude ratios as traces for intuition (computed on grid)
-        lungs_ratio = amp_ratio_on_grid(breaths_lungs, t_grid, analysis_win_sec, baseline.lungs_amp_ref);
-        diap_ratio  = amp_ratio_on_grid(breaths_diaph, t_grid, analysis_win_sec, baseline.diap_amp_ref);
+        lungs_ratio = amp_ratio_on_grid(breaths_lungs, t_grid, analysis_win_sec, ref_lungs);
+        diap_ratio  = amp_ratio_on_grid(breaths_diaph, t_grid, analysis_win_sec, ref_diap);
         plot(t_grid, lungs_ratio, 'k')
         plot(t_grid, diap_ratio,  'b')
         yline(amp_ratio_thr, 'r--')
-        title('Amplitude ratios on grid (lungs/diap)')
+        if isfield(config,'rolling_baseline') && isfield(config.rolling_baseline,'enabled') && config.rolling_baseline.enabled
+            title(sprintf('Amplitude ratios on grid (rolling ref win=%ds, lag=%ds)', config.rolling_baseline.win_sec, config.rolling_baseline.lag_sec))
+        else
+            title('Amplitude ratios on grid (static ref)')
+        end
         xlabel('Time (s)'); ylabel('Amp ratio'); grid on
         legend('lungs ratio','diap ratio','thr')
         hold off
@@ -135,6 +142,14 @@ function cond = apnea_amp_condition_on_grid(b_l, b_d, t_grid, win_sec, ref_l, re
 % True if BOTH belts have median amplitude ratio <= amp_ratio_thr in [t-win_sec, t]
     cond = false(size(t_grid));
 
+    if isscalar(ref_l)
+        ref_l = ref_l * ones(size(t_grid));
+    end
+
+    if isscalar(ref_d)
+        ref_d = ref_d * ones(size(t_grid));
+    end
+
     for i = 1:numel(t_grid)
         t = t_grid(i);
         lb = t - win_sec;
@@ -151,8 +166,8 @@ function cond = apnea_amp_condition_on_grid(b_l, b_d, t_grid, win_sec, ref_l, re
         med_l = median(a_l, 'omitnan');
         med_d = median(a_d, 'omitnan');
 
-        rl = med_l / ref_l; % relative = current amplitude / reference amp
-        rd = med_d / ref_d;
+        rl = med_l / ref_l(i); % relative = current amplitude / reference amp
+        rd = med_d / ref_d(i);
 
         if isfinite(rl) && isfinite(rd) && rl <= amp_ratio_thr && rd <= amp_ratio_thr
             cond(i) = true;
@@ -169,7 +184,11 @@ function ratio = amp_ratio_on_grid(b, t_grid, win_sec, ref_amp)
         a = b.amp(b.peak_t <= t & b.peak_t >= lb);
         if numel(a) < 2, continue; end
         med_a = median(a, 'omitnan');
-        ratio(i) = med_a / ref_amp;
+        if isscalar(ref_amp)
+            ratio(i) = med_a / ref_amp;
+        else
+            ratio(i) = med_a / ref_amp(i);
+        end
     end
 end
 

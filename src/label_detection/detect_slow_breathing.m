@@ -72,18 +72,20 @@ function events = detect_slow_breathing(data, baseline, breaths_lungs, breaths_d
     % ----------------------------
     % Optional: classify slow+shallow vs slow+deep using amplitude ratio
     % ----------------------------
-    if classify_depth && isfinite(baseline.lungs_amp_ref) && baseline.lungs_amp_ref > 0 && ...
-                        isfinite(baseline.diap_amp_ref)  && baseline.diap_amp_ref  > 0
+    if classify_depth
+
+        ref_lungs = get_resp_ref_on_grid(baseline, 'lungs', t_grid);
+        ref_diap = get_resp_ref_on_grid(baseline, 'diap', t_grid);
 
         % Build an amplitude "shallow-ish" mask on the same grid:
         % shallow-ish if median amp ratio in last 60s <= 0.35 (and >=0.20 if you want)
         shallow_amp_lungs = shallow_amp_condition_on_grid( ...
             breaths_lungs, t_grid, config.ShB.min_dur_sec, ...
-            baseline.lungs_amp_ref,config.ShB.amp_ratio_low, config.ShB.amp_ratio_high);
+            ref_lungs, config.ShB.amp_ratio_low, config.ShB.amp_ratio_high);
     
         shallow_amp_diaph = shallow_amp_condition_on_grid( ...
             breaths_diaph, t_grid, config.ShB.min_dur_sec, ...
-            baseline.diap_amp_ref, config.ShB.amp_ratio_low, config.ShB.amp_ratio_high);
+            ref_diap, config.ShB.amp_ratio_low, config.ShB.amp_ratio_high);
 
         % Rewrite event types based on majority overlap with amp_shallow
         for e = 1:numel(events)

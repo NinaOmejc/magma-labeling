@@ -35,6 +35,15 @@ function save_figure(config, base_name)
     fontsize = 10;
     allAxes = findall(fig, 'Type', 'axes');
     set(allAxes, 'FontSize', fontsize);   % change 9 to what you want
+
+    % Light global readability improvements
+    if ~isempty(allAxes)
+        set(allAxes, 'Box', 'off', 'LineWidth', 1.0, 'TickDir', 'out');
+        for ia = 1:numel(allAxes)
+            allAxes(ia).GridAlpha = 0.2;
+            allAxes(ia).MinorGridAlpha = 0.1;
+        end
+    end
     
     allText = findall(fig, 'Type', 'text');
     set(allText, 'FontSize', fontsize);

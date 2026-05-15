@@ -34,6 +34,8 @@ for isub = 1:length(subjects)
         [breaths_lungs, breaths_diaph] = extract_respiration_features(data, baseline, config);
         spo2_feat = extract_spo2_features(data, baseline, config);
 
+        baseline = add_rolling_resp_baseline(baseline, breaths_lungs, breaths_diaph, size(data,1), config);
+
         % LABEL DETECTIONS
         % events_ShB = detect_shallow_breathing(data, baseline, breaths_lungs, breaths_diaph, spo2_feat, config);
         events_IrB = detect_irregular_breathing(data, breaths_lungs, breaths_diaph, config);

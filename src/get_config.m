@@ -29,6 +29,13 @@ function config = get_config()
     config.baseline_sec = 60;
     config.baseline_location = '5/20'; % It can either be 'first', 'second', '5/21' or 'last' minute of the data.
 
+    %---- ROLLING RESPIRATORY BASELINE SETTINGS ----
+    config.rolling_baseline.enabled = true;
+    config.rolling_baseline.win_sec = 180;
+    config.rolling_baseline.lag_sec = 30;
+    config.rolling_baseline.min_breaths = 5;
+    config.rolling_baseline.method = 'median';
+
     %---- RESPIRATION / BREATHING AMPLITUDE EXTRACTION SETTINGS ----
     config.resp.min_peak_dist_sec = 1.0;   % Peak selection; min time between breaths (tune if needed)
     config.resp.min_peak_prom     = 0.3;   % Peak selection; key knob: increase to reduce extra peaks
@@ -96,7 +103,7 @@ function config = get_config()
     config.Des.do_plot = true;
 
     %---- LABEL 7: Apnea
-    config.Anp = struct();
+    config.Apn = struct();
     config.Apn.analysis_win_sec = 10;    % rolling window for amplitude ratio estimate
     config.Apn.amp_ratio_thr    = 0.10;  % <=10% of baseline in BOTH belts
     config.Apn.min_dur_sec      = 10;    % >=10 s
