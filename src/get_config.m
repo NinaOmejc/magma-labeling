@@ -124,6 +124,8 @@ function config = get_config()
     config.Sig.legacy_min_prev_breaths = 3;
 
     config.Sig.do_plot = true;
+    config.Sig.manual_control = false;      % allow click-to-add/remove sigh markers in GUI
+    config.Sig.manual_window_sec = 300;     % visible time span for manual GUI scrolling
 
 
 end
