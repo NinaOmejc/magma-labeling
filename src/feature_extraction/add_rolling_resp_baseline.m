@@ -24,7 +24,81 @@ baseline.rolling.diap_amp_ref = rolling_amp_ref( ...
     breaths_diaph, t_grid, win_sec, lag_sec, min_breaths, ...
     method, baseline.diap_amp_ref);
 
+
+%%%%%%%%%%%%%
+% PLOTTING 
+
+if config.rolling_baseline.do_plot
+    t_roll = baseline.rolling.t_grid;
+    x_label_extra = 'Rolling baseline shown at detector time';
+    
+    figure('Visible', config.make_figs_visible, 'Color', 'w');
+    
+    tiledlayout(2, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
+    
+    % -------------------------
+    % Lungs
+    % -------------------------
+    nexttile;
+    
+    if isfield(breaths_lungs, 'peak_t') && isfield(breaths_lungs, 'amp') && ...
+            ~isempty(breaths_lungs.peak_t) && ~isempty(breaths_lungs.amp)
+    
+        plot(breaths_lungs.peak_t, breaths_lungs.amp, '.-');
+        hold on;
+    else
+        hold on;
+        text(0.5, 0.5, 'No lung breath amplitudes available', ...
+            'Units', 'normalized', 'HorizontalAlignment', 'center');
+    end
+    
+    plot(t_roll, baseline.rolling.lungs_amp_ref, 'LineWidth', 1.5);
+    yline(baseline.lungs_amp_ref, '--', 'LineWidth', 1.2);
+    
+    xlabel('Time [s]');
+    ylabel('Lung amplitude');
+    title(sprintf('Lungs rolling baseline | win = %g s, lag = %g s, min breaths = %d, method = %s', ...
+        config.rolling_baseline.win_sec, ...
+        config.rolling_baseline.lag_sec, ...
+        config.rolling_baseline.min_breaths, ...
+        config.rolling_baseline.method), ...
+        'Interpreter', 'none');
+    
+    legend('Breath amplitudes', 'Rolling baseline', 'Static baseline', ...
+        'Location', 'best');
+    
+    grid on;
+    
+    % -------------------------
+    % Diaphragm
+    % -------------------------
+    nexttile;
+    
+    if isfield(breaths_diaph, 'peak_t') && isfield(breaths_diaph, 'amp') && ...
+            ~isempty(breaths_diaph.peak_t) && ~isempty(breaths_diaph.amp)
+    
+        plot(breaths_diaph.peak_t, breaths_diaph.amp, '.-');
+        hold on;
+    else
+        hold on;
+        text(0.5, 0.5, 'No diaphragm breath amplitudes available', ...
+            'Units', 'normalized', 'HorizontalAlignment', 'center');
+    end
+    
+    plot(t_roll, baseline.rolling.diap_amp_ref, 'LineWidth', 1.5);
+    yline(baseline.diap_amp_ref, '--', 'LineWidth', 1.2);
+    
+    xlabel(sprintf('Time [s] — %s', x_label_extra));
+    ylabel('Diaphragm amplitude');
+    title('Diaphragm rolling baseline');
+    legend('Breath amplitudes', 'Rolling baseline', 'Static baseline', ...
+        'Location', 'best');
+    grid on;
+    
+    save_figure(config, 'rolling_baseline')
 end
+end
+
 
 function ref = rolling_amp_ref(breaths, t_grid, win_sec, lag_sec, min_breaths, method, fallback_ref)
 
@@ -53,8 +127,8 @@ for i = 1:numel(t_grid)
     t2 = t - lag_sec;
     t1 = t2 - win_sec;
 
-    if t2 <= 0
-        ref(i) = fallback_ref;
+    if t1 <= 0
+        ref(i) = NaN;
         continue;
     end
 
@@ -62,7 +136,7 @@ for i = 1:numel(t_grid)
     amps = amp(in_win);
 
     if numel(amps) < min_breaths
-        ref(i) = fallback_ref;
+        ref(i) = NaN;
         continue;
     end
 
@@ -74,6 +148,25 @@ for i = 1:numel(t_grid)
         otherwise
             error('Unknown rolling baseline method: %s', method);
     end
+end
+
+
+% Replace early NaNs with first valid rolling baseline point
+valid_ref = isfinite(ref) & ref > 0;
+
+if any(valid_ref)
+    first_valid_idx = find(valid_ref, 1, 'first');
+    first_valid_val = ref(first_valid_idx);
+
+    ref(1:first_valid_idx-1) = first_valid_val;
+
+    for k = first_valid_idx+1:numel(ref)
+        if ~isfinite(ref(k)) || ref(k) <= 0
+            ref(k) = ref(k-1);
+        end
+    end
+else
+    ref(:) = fallback_ref;
 end
 
 bad = ~isfinite(ref) | ref <= 0;

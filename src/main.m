@@ -37,8 +37,8 @@ for isub = 1:length(subjects)
         baseline = add_rolling_resp_baseline(baseline, breaths_lungs, breaths_diaph, size(data,1), config);
 
         % LABEL DETECTIONS
-        % events_ShB = detect_shallow_breathing(data, baseline, breaths_lungs, breaths_diaph, spo2_feat, config);
-        events_IrB = detect_irregular_breathing(data, breaths_lungs, breaths_diaph, config);
+        events_ShB = detect_shallow_breathing(data, baseline, breaths_lungs, breaths_diaph, spo2_feat, config);
+        % events_IrB = detect_irregular_breathing(data, breaths_lungs, breaths_diaph, config);
         % events_SlB = detect_slow_breathing(data, baseline, breaths_lungs, breaths_diaph, spo2_feat, config);
         % events_RaB = detect_rapid_breathing(data, baseline, breaths_lungs, breaths_diaph, spo2_feat, config);
         % events_ReA = detect_respiratory_asynchrony(data, config);

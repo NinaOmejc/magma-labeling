@@ -31,10 +31,11 @@ function config = get_config()
 
     %---- ROLLING RESPIRATORY BASELINE SETTINGS ----
     config.rolling_baseline.enabled = true;
-    config.rolling_baseline.win_sec = 180;
-    config.rolling_baseline.lag_sec = 30;
-    config.rolling_baseline.min_breaths = 5;
+    config.rolling_baseline.win_sec = 360;
+    config.rolling_baseline.lag_sec = 30; % when computing the rolling baseline at time t, ignore the most recent 30 seconds before t. [t - win_sec - lag_sec, t - lag_sec]
+    config.rolling_baseline.min_breaths = 10;
     config.rolling_baseline.method = 'median';
+    config.rolling_baseline.do_plot = true;
 
     %---- RESPIRATION / BREATHING AMPLITUDE EXTRACTION SETTINGS ----
     config.resp.min_peak_dist_sec = 1.0;   % Peak selection; min time between breaths (tune if needed)
