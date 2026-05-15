@@ -170,7 +170,8 @@ function sigh_flags = sigh_flags_from_breath_series(b, prev_win_sec, amp_ratio_t
             continue;
         end
 
-        if amp(i) >= amp_ratio_thr * med_prev
+        % if amp(i) >= amp_ratio_thr * med_prev
+        if amp(i) >= prctile(amp(prev_idx), 95)
             sigh_flags(i) = true;
         end
     end

@@ -81,11 +81,16 @@ function shallow_events = detect_shallow_breathing(data, baseline, breaths_lungs
         hold on
         scatter(breaths_diaph.peak_t, breaths_diaph.amp, 'k.')
         ylim([0, mean(breaths_diaph.amp, 'omitnan') + 3*std(breaths_diaph.amp, 'omitnan')])
-        shade_events_on_axis(shallow_events_diaph);
+
+        if isempty(shallow_events_diaph)
+            legend('Amp', 'Location','eastoutside')
+        else
+            shade_events_on_axis(shallow_events_diaph);
+            legend('Amp','Detected events', 'Location','eastoutside')
+        end
         title('Diaphragm Breath Amplitudes')
         xlabel('Time (s)')
         ylabel('Amplitude')
-        legend('Amp','Detected events', 'Location','eastoutside')
         grid on
         hold off
 
