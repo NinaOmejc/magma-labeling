@@ -1,4 +1,4 @@
-function save_figure(config, base_name)
+function save_figure(config, base_name, save_matfig)
 % save_current_figure
 % If config.save_plots == true:
 %   - saves current figure as PNG
@@ -6,6 +6,10 @@ function save_figure(config, base_name)
 % If false:
 %   - does nothing (figure remains open)
 
+    if nargin < 3 || isempty(save_matfig)
+        save_matfig = false;
+    end
+    
     if ~isfield(config,'save_plots') || ~config.save_plots
         return;   % leave figure open
     end
@@ -62,7 +66,8 @@ function save_figure(config, base_name)
     % Save with high quality
     
     if (contains(base_name, 'lungs') && ~contains(base_name, 'baseline') && ~contains(base_name, 'normality')) || ...
-       (contains(base_name, 'diaph') && ~contains(base_name, 'baseline') && ~contains(base_name, 'normality'))
+       (contains(base_name, 'diaph') && ~contains(base_name, 'baseline') && ~contains(base_name, 'normality')) || ...
+       save_matfig
         set(fig, 'Visible', 'on') % needed so it can be opened afterwards
         savefig(fig, replace(fullpath, '.png', '.fig'))
     else

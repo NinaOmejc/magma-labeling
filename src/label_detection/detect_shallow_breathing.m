@@ -26,7 +26,7 @@ function shallow_events = detect_shallow_breathing(data, baseline, breaths_lungs
         ref_diaph, config.ShB.amp_ratio_low, config.ShB.amp_ratio_high);
 
     % ---- no-desaturation condition on grid ----
-    no_desat = no_desat_from_events_on_grid(spo2_feat.desat_events, t_grid);
+    no_desat = get_desaturation_mask(spo2_feat.desat_events, t_grid);
 
     % final condition (grid)
     shallow_mask_lungs_final = shallow_mask_lungs & no_desat;
@@ -177,13 +177,3 @@ function shallow_events = detect_shallow_breathing(data, baseline, breaths_lungs
     end    
 end
 
-% ===================== helper functions =====================
-
-function no_desat = no_desat_from_events_on_grid(desat_events, t_grid)
-% no_desat(t)=true if t is NOT inside any desaturation event
-    no_desat = true(size(t_grid));
-    for k = 1:numel(desat_events)
-        in_event = (t_grid >= desat_events(k).start_t) & (t_grid <= desat_events(k).end_t);
-        no_desat(in_event) = false;
-    end
-end

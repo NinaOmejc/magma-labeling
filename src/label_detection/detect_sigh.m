@@ -1,4 +1,4 @@
-function events = detect_sigh(data, baseline, breaths_lungs, breaths_diaph, config)
+function events = detect_sigh(data, baseline, breaths_lungs, breaths_diaph, spo2_feat, config)
 % detect_sigh
 % Label 8 – Sigh
 %
@@ -26,7 +26,6 @@ function events = detect_sigh(data, baseline, breaths_lungs, breaths_diaph, conf
 
     method = 'global_ratio_outlier';
     ratio_prctile = 98;
-    use_either_belt = false;
     do_plot = false;
 
     % legacy
@@ -37,7 +36,6 @@ function events = detect_sigh(data, baseline, breaths_lungs, breaths_diaph, conf
     if isfield(config,'Sig')
         if isfield(config.Sig,'method'), method = config.Sig.method; end
         if isfield(config.Sig,'ratio_prctile'), ratio_prctile = config.Sig.ratio_prctile; end
-        if isfield(config.Sig,'use_either_belt'), use_either_belt = config.Sig.use_either_belt; end
         if isfield(config.Sig,'do_plot'), do_plot = config.Sig.do_plot; end
 
         if isfield(config.Sig,'legacy_prev_win_sec'), legacy_prev_win_sec = config.Sig.legacy_prev_win_sec; end
@@ -56,14 +54,11 @@ function events = detect_sigh(data, baseline, breaths_lungs, breaths_diaph, conf
                 breaths_diaph, baseline, config, 'diaph_amp_ref', ratio_prctile);
     end
 
-    events_L = sigh_flags_to_events(breaths_lungs.peak_t, sigh_lungs, N, fs);
-    events_D = sigh_flags_to_events(breaths_diaph.peak_t, sigh_diaph, N, fs);
+    events_L = sigh_flags_to_events(breaths_lungs.peak_t, sigh_lungs, N, fs, 'lungs');
+    events_D = sigh_flags_to_events(breaths_diaph.peak_t, sigh_diaph, N, fs, 'diaph');
+    events = merge_events({events_L, events_D});
 
-    if use_either_belt
-        events = merge_events([events_L; events_D], 0.5);
-    else
-        events = intersect_events(events_L, events_D);
-    end
+    desat_mask = get_desaturation_mask(spo2_feat.desat_events, t_grid);
 
     if do_plot
         idx_lungs = find(strcmp(config.data_columns, 'Resp-Lungs'), 1);
@@ -71,19 +66,19 @@ function events = detect_sigh(data, baseline, breaths_lungs, breaths_diaph, conf
 
         t_raw = (0:N-1)/fs;
 
-        figure('Units','pixels','Position',[100 100 1200 800], 'Visible', config.make_figs_visible);
+        figure('Units','pixels','Position',[100 100 1500 800], 'Visible', config.make_figs_visible);
         sgtitle(['SIGH | Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)])
 
-        subplot(2,1,1); hold on
+        subplot(3,1,1); hold on
         if ~isempty(idx_lungs), plot(t_raw, data(:,idx_lungs), 'k'); end
-        plot(breaths_lungs.peak_t, breaths_lungs.amp, 'b')
+        % plot(breaths_lungs.peak_t, breaths_lungs.amp, 'b')
         plot(breaths_lungs.peak_t(sigh_lungs), breaths_lungs.amp(sigh_lungs), 'ro', 'MarkerFaceColor','r')
         title('Sigh detection (lungs): red dots = sigh breaths')
         xlabel('Time (s)'); ylabel('Resp-Lungs / amp'); grid on; hold off
 
-        subplot(2,1,2); hold on
+        subplot(3,1,2); hold on
         if ~isempty(idx_diaph), plot(t_raw, data(:,idx_diaph), 'k'); end
-        plot(breaths_diaph.peak_t, breaths_diaph.amp, 'b')
+        % plot(breaths_diaph.peak_t, breaths_diaph.amp, 'b')
         plot(breaths_diaph.peak_t(sigh_diaph), breaths_diaph.amp(sigh_diaph), 'ro', 'MarkerFaceColor','r')
         title('Sigh detection (diaphragm): red dots = sigh breaths')
         xlabel('Time (s)'); ylabel('Resp-Diaphragm / amp'); grid on; hold off
@@ -93,7 +88,49 @@ function events = detect_sigh(data, baseline, breaths_lungs, breaths_diaph, conf
         linkaxes(ax,'x');
         xlim(ax(1), [0 t_grid(end)]);
 
-        save_figure(config, 'sigh');
+        % ----------------------
+        % Subplot 3: SpO2 + no_desat mask
+        % ----------------------
+        subplot(3,1,3)
+        hold on
+    
+        % SpO2 time series (sampled signal)
+        spo2 = spo2_feat.spo2(:);
+        t_spo2 = spo2_feat.t_spo2(:);
+    
+        plot(t_spo2, spo2, 'k')
+        yline(90, 'r--')
+        ylim([89 100])
+        xlim([0 1800])
+    
+        % baseline - drop threshold (informational)
+        drop_thr = config.spo2.drop_thr;
+        if isfield(baseline,'SpO2_median') && isfinite(baseline.SpO2_median)
+            yline(baseline.SpO2_median - drop_thr, 'g--')
+        end
+    
+        % Plot no_desat as a binary trace near bottom (scaled)
+        spo2_min = min(spo2, [], 'omitnan');
+        spo2_max = max(spo2, [], 'omitnan');
+        y0 = spo2_min + 0.05*(spo2_max - spo2_min);
+        y1 = spo2_min + 0.20*(spo2_max - spo2_min);
+        % plot(t_grid, y0 + (y1-y0)*double(no_desat), 'b')
+    
+        % Optional: show desaturation event spans as shaded regions
+        if isfield(spo2_feat,'desat_events') && ~isempty(spo2_feat.desat_events)
+            shade_events_on_axis(spo2_feat.desat_events);
+            legend('SpO₂','90%','Baseline-drop','desat events', 'Location','eastoutside')
+        else
+            legend('SpO₂','90%','Baseline-drop', 'Location','northeast')
+        end
+    
+        title('SpO₂')
+        xlabel('Time (s)')
+        ylabel('SpO₂ (%)')
+        grid on
+        hold off
+
+        save_figure(config, 'sigh', true);
     end
 end
 
@@ -134,6 +171,7 @@ function sigh_flags = sigh_flags_global_ratio_outlier(b, baseline, config, rolli
     sigh_flags(valid) = ratio(valid) >= ratio_thr;
 end
 
+
 function sigh_flags = sigh_flags_legacy_60s(b, prev_win_sec, amp_ratio_thr, min_prev_breaths)
     peak_t = b.peak_t(:);
     amp = b.amp(:);
@@ -158,7 +196,7 @@ end
 
 % rest unchanged
 
-function events = sigh_flags_to_events(peak_t, flags, N, fs)
+function events = sigh_flags_to_events(peak_t, flags, N, fs, belt)
     events = empty_events();
     peak_t = peak_t(:);
     flags  = logical(flags(:));
@@ -195,44 +233,12 @@ function events = sigh_flags_to_events(peak_t, flags, N, fs)
         end_t   = (e-1)/fs;
         
         events(end+1,1) = struct( ...
-            'type', 'sigh', ...
+            'type', ['sigh_' belt], ...
             'start_idx', s, ...
             'end_idx', e, ...
             'start_t', start_t, ...
             'end_t', end_t, ...
             'duration', end_t - start_t );
 
-    end
-end
-
-function ev = merge_events(ev, tol_sec)
-% Merge events that overlap or are within tol_sec of each other.
-    if isempty(ev), return; end
-    [~,ord] = sort([ev.start_t]);
-    ev = ev(ord);
-
-    out = ev(1);
-    for i = 2:numel(ev)
-        if ev(i).start_t <= out(end).end_t + tol_sec
-            % merge
-            out(end).end_t   = max(out(end).end_t, ev(i).end_t);
-            out(end).end_idx = max(out(end).end_idx, ev(i).end_idx);
-        else
-            out(end+1,1) = ev(i); %#ok<AGROW>
-        end
-    end
-    ev = out;
-end
-
-function out = intersect_events(a, b)
-% Keep events in a that overlap any event in b (simple AND definition).
-    out = empty_events();
-    for i = 1:numel(a)
-        for k = 1:numel(b)
-            if ~(a(i).end_t < b(k).start_t || a(i).start_t > b(k).end_t)
-                out(end+1,1) = a(i); %#ok<AGROW>
-                break;
-            end
-        end
     end
 end

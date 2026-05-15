@@ -116,8 +116,7 @@ function config = get_config()
     %---- LABEL 8: Sigh
     config.Sig = struct();
     config.Sig.method = 'global_ratio_outlier'; % default: nonparametric global outliers in amplitude/baseline ratio
-    config.Sig.ratio_prctile = 98;              % top 2% normalized breaths are sigh candidates
-    config.Sig.use_either_belt = false;         % stricter default: require overlap between belts
+    config.Sig.ratio_prctile = 95;              % top 2% normalized breaths are sigh candidates
 
     % Legacy option: previous 60 s thresholding
     config.Sig.legacy_prev_win_sec = 60;
