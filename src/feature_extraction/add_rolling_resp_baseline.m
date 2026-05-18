@@ -64,9 +64,12 @@ if config.rolling_baseline.do_plot
         config.rolling_baseline.method), ...
         'Interpreter', 'none');
     
-    legend('Breath amplitudes', 'Rolling baseline', 'Static baseline', ...
-        'Location', 'best');
-    
+    if isfield(breaths_lungs, 'peak_t') && isfield(breaths_lungs, 'amp') && ...
+        ~isempty(breaths_lungs.peak_t) && ~isempty(breaths_lungs.amp)
+
+        legend('Breath amplitudes', 'Rolling baseline', 'Static baseline', ...
+                'Location', 'best');
+    end
     grid on;
     
     % -------------------------
@@ -101,75 +104,75 @@ end
 
 
 function ref = rolling_amp_ref(breaths, t_grid, win_sec, lag_sec, min_breaths, method, fallback_ref)
-
-ref = nan(size(t_grid));
-
-if isempty(breaths) || ~isstruct(breaths) || ~isfield(breaths, 'peak_t') || ...
-        ~isfield(breaths, 'amp') || ~isfield(breaths, 'ok') || ~breaths.ok
-    ref(:) = fallback_ref;
-    return;
-end
-
-peak_t = breaths.peak_t(:);
-amp = breaths.amp(:);
-
-L = min(numel(peak_t), numel(amp));
-peak_t = peak_t(1:L);
-amp = amp(1:L);
-
-valid = isfinite(peak_t) & isfinite(amp) & amp > 0;
-peak_t = peak_t(valid);
-amp = amp(valid);
-
-for i = 1:numel(t_grid)
-    t = t_grid(i);
-
-    t2 = t - lag_sec;
-    t1 = t2 - win_sec;
-
-    if t1 <= 0
-        ref(i) = NaN;
-        continue;
+    
+    ref = nan(size(t_grid));
+    
+    if isempty(breaths) || ~isstruct(breaths) || ~isfield(breaths, 'peak_t') || ...
+            ~isfield(breaths, 'amp') || ~isfield(breaths, 'ok') || ~breaths.ok
+        ref(:) = fallback_ref;
+        return;
     end
-
-    in_win = peak_t >= t1 & peak_t <= t2;
-    amps = amp(in_win);
-
-    if numel(amps) < min_breaths
-        ref(i) = NaN;
-        continue;
-    end
-
-    switch lower(method)
-        case 'median'
-            ref(i) = median(amps, 'omitnan');
-        case 'p75'
-            ref(i) = prctile(amps, 75);
-        otherwise
-            error('Unknown rolling baseline method: %s', method);
-    end
-end
-
-
-% Replace early NaNs with first valid rolling baseline point
-valid_ref = isfinite(ref) & ref > 0;
-
-if any(valid_ref)
-    first_valid_idx = find(valid_ref, 1, 'first');
-    first_valid_val = ref(first_valid_idx);
-
-    ref(1:first_valid_idx-1) = first_valid_val;
-
-    for k = first_valid_idx+1:numel(ref)
-        if ~isfinite(ref(k)) || ref(k) <= 0
-            ref(k) = ref(k-1);
+    
+    peak_t = breaths.peak_t(:);
+    amp = breaths.amp(:);
+    
+    L = min(numel(peak_t), numel(amp));
+    peak_t = peak_t(1:L);
+    amp = amp(1:L);
+    
+    valid = isfinite(peak_t) & isfinite(amp) & amp > 0;
+    peak_t = peak_t(valid);
+    amp = amp(valid);
+    
+    for i = 1:numel(t_grid)
+        t = t_grid(i);
+    
+        t2 = t - lag_sec;
+        t1 = t2 - win_sec;
+    
+        if t1 <= 0
+            ref(i) = NaN;
+            continue;
+        end
+    
+        in_win = peak_t >= t1 & peak_t <= t2;
+        amps = amp(in_win);
+    
+        if numel(amps) < min_breaths
+            ref(i) = NaN;
+            continue;
+        end
+    
+        switch lower(method)
+            case 'median'
+                ref(i) = median(amps, 'omitnan');
+            case 'p75'
+                ref(i) = prctile(amps, 75);
+            otherwise
+                error('Unknown rolling baseline method: %s', method);
         end
     end
-else
-    ref(:) = fallback_ref;
-end
-
-bad = ~isfinite(ref) | ref <= 0;
-ref(bad) = fallback_ref;
+    
+    
+    % Replace early NaNs with first valid rolling baseline point
+    valid_ref = isfinite(ref) & ref > 0;
+    
+    if any(valid_ref)
+        first_valid_idx = find(valid_ref, 1, 'first');
+        first_valid_val = ref(first_valid_idx);
+    
+        ref(1:first_valid_idx-1) = first_valid_val;
+    
+        for k = first_valid_idx+1:numel(ref)
+            if ~isfinite(ref(k)) || ref(k) <= 0
+                ref(k) = ref(k-1);
+            end
+        end
+    else
+        ref(:) = fallback_ref;
+    end
+    
+    bad = ~isfinite(ref) | ref <= 0;
+    ref(bad) = fallback_ref;
 
 end

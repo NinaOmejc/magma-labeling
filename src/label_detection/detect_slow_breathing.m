@@ -34,11 +34,12 @@ function events = detect_slow_breathing(data, baseline, breaths_lungs, breaths_d
     min_dur_sec      = 30;
 
     classify_depth   = true;      % slow+shallow vs slow+deep
-    shallow_hi_ratio = 0.35;      % same as ShB upper bound (20–35%); here we use <=0.35 => "shallow"
-    shallow_lo_ratio = 0.20;      % not required for slow+shallow, but kept for symmetry
+    shallow_lo_ratio = get_config_value(config, 'ShB', 'amp_ratio_low', 0.65);
+    shallow_hi_ratio = get_config_value(config, 'ShB', 'amp_ratio_high', 0.80);
 
     mark_desat       = true;
-    desat_delay_sec  = 20;        % allow SpO2 lag by expanding desat events by +/- this many sec
+    desat_association_delay_sec = get_config_value(config, 'spo2', 'desat_association_delay_sec', 10);
+    plot_rr_step_sec = 15;
 
     if isfield(config, 'SlB')
         if isfield(config.SlB, 'analysis_win_sec'), analysis_win_sec = config.SlB.analysis_win_sec; end
@@ -46,32 +47,30 @@ function events = detect_slow_breathing(data, baseline, breaths_lungs, breaths_d
         if isfield(config.SlB, 'min_dur_sec'),      min_dur_sec      = config.SlB.min_dur_sec; end
 
         if isfield(config.SlB, 'classify_depth'),   classify_depth   = config.SlB.classify_depth; end
-        if isfield(config.SlB, 'shallow_hi_ratio'), shallow_hi_ratio = config.SlB.shallow_hi_ratio; end
-        if isfield(config.SlB, 'shallow_lo_ratio'), shallow_lo_ratio = config.SlB.shallow_lo_ratio; end
-
         if isfield(config.SlB, 'mark_desat'),       mark_desat       = config.SlB.mark_desat; end
-        if isfield(config.SlB, 'desat_delay_sec'),  desat_delay_sec  = config.SlB.desat_delay_sec; end
+        if isfield(config.SlB, 'plot_rr_step_sec'), plot_rr_step_sec = config.SlB.plot_rr_step_sec; end
     end
 
     % ----------------------------
     % Slow RR condition on grid (lungs/diaph)
     % ----------------------------
     slow_lungs = false(size(t_grid));
+    rr_lungs = nan(size(t_grid));
     if lungs_valid
-        slow_lungs = compute_breath_rate_mask(breaths_lungs.peak_t, t_grid, analysis_win_sec, rr_thr_bpm, '<=', false);
+        [slow_lungs, rr_lungs] = compute_breath_rate_mask(breaths_lungs.peak_t, t_grid, analysis_win_sec, rr_thr_bpm, '<=', true);
     end
 
     slow_diaph = false(size(t_grid));
+    rr_diaph = nan(size(t_grid));
     if diaph_valid
-        slow_diaph = compute_breath_rate_mask(breaths_diaph.peak_t, t_grid, analysis_win_sec, rr_thr_bpm, '<=', false);
+        [slow_diaph, rr_diaph] = compute_breath_rate_mask(breaths_diaph.peak_t, t_grid, analysis_win_sec, rr_thr_bpm, '<=', true);
     end
 
-    % Sustain >= 30 s -> events
-    ev_grid_lungs = runs_to_events(slow_lungs, 1/config.grid_step_sec, min_dur_sec, 'slow_breathing_lungs');
-    events_lungs  = grid_events_to_sample_events(ev_grid_lungs, config.fs, N);
-
-    events_on_grid_diaph = runs_to_events(slow_diaph, 1/config.grid_step_sec, min_dur_sec, 'slow_breathing_diaph');
-    events_diaph  = grid_events_to_sample_events(events_on_grid_diaph, config.fs, N);
+    % Sustain the endpoint RR condition before creating events.
+    [events_lungs, slow_lungs] = sustained_condition_to_events( ...
+        slow_lungs, t_grid, config.fs, N, min_dur_sec, 'slow_breathing_lungs');
+    [events_diaph, slow_diaph] = sustained_condition_to_events( ...
+        slow_diaph, t_grid, config.fs, N, min_dur_sec, 'slow_breathing_diaph');
 
     events = merge_events({events_lungs, events_diaph});
 
@@ -110,8 +109,8 @@ function events = detect_slow_breathing(data, baseline, breaths_lungs, breaths_d
     
         desat_events = spo2_feat.desat_events;
     
-        % Expand desat events to allow SpO2 delay
-        desat_events = expand_events_time(desat_events, desat_delay_sec, (N-1)/config.fs);
+        % Allow SpO2 drops that start shortly after the breathing event.
+        desat_events = expand_events_for_delayed_overlap(desat_events, desat_association_delay_sec);
     
         % If a slow event overlaps any desat event -> relabel with "_desat"
         for e = 1:numel(events)
@@ -125,32 +124,18 @@ function events = detect_slow_breathing(data, baseline, breaths_lungs, breaths_d
     % Optional plot (raw + shaded slow mask)
     % ----------------------------
     if isfield(config, 'SlB') && isfield(config.SlB, 'do_plot') && config.SlB.do_plot
-        idx_lungs = find(strcmp(config.data_columns, 'Resp-Lungs'), 1);
-        idx_diaph  = find(strcmp(config.data_columns, 'Resp-Diaphragm'), 1);
-        t_raw = (0:N-1)/config.fs;
-
-        figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', config.make_figs_visible); 
-        sgtitle(['SLOW BREATHING' newline 'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)])
-
-        subplot(2,1,1); hold on
-        plot(t_raw, data(:, idx_lungs), 'k')
-        shade_mask_on_axis(t_grid, slow_lungs)
-        title('Slow breathing (lungs) over raw signal')
-        xlabel('Time (s)'); ylabel('Resp-Lungs'); grid on
-        hold off
-
-        subplot(2,1,2); hold on
-        plot(t_raw, data(:, idx_diaph), 'k')
-        shade_mask_on_axis(t_grid, slow_diaph)
-        title('Slow breathing (diaphragm) over raw signal')
-        xlabel('Time (s)'); ylabel('Resp-Diaphragm'); grid on
-        hold off
-
-        ax = findall(gcf,'Type','axes');
-        ax = ax(arrayfun(@(a) ~strcmp(a.Tag,'legend'), ax));
-        linkaxes(ax,'x');          % tie x-zoom/pan
-        xlim(ax(1), [0 t_grid(end)]);     % or whatever common range you want
-   
-        save_figure(config, 'slow_breathing');
+        opts = struct( ...
+            'figure_title', ['SLOW BREATHING' newline 'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)], ...
+            'event_name', 'Slow breathing', ...
+            'metric_title', 'Mean breaths/min used for slow detection', ...
+            'metric_detail', sprintf('%g s held median', plot_rr_step_sec), ...
+            'metric_ylabel', 'Breaths/min', ...
+            'threshold', rr_thr_bpm, ...
+            'threshold_label', sprintf('Threshold: <= %g breaths/min', rr_thr_bpm), ...
+            'plot_step_sec', plot_rr_step_sec, ...
+            'min_ymax', rr_thr_bpm + 10, ...
+            'ymax_padding', 5, ...
+            'output_name', 'slow_breathing');
+        plot_belt_diagnostic_figure(data, config, t_grid, slow_lungs, slow_diaph, rr_lungs, rr_diaph, opts);
     end
 end

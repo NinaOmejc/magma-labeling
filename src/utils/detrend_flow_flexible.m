@@ -10,7 +10,7 @@ function [output, trend] = detrend_flow_flexible(t_series, config)
     sampl_freq = 200;
     highpass_cutoff = 0.01;   % Hz
     filter_order    = 4;
-    hp_edge_pad_sec = [];
+    hp_edge_pad_sec = 100;    % seconds
     window_l        = 90;     % seconds
     do_plot         = false;
     signals = {'Resp-Lungs', 'Resp-Diaphragm'};
@@ -19,9 +19,10 @@ function [output, trend] = detrend_flow_flexible(t_series, config)
     if isfield(config, 'fs'), sampl_freq = config.fs; end
     if isfield(config, 'detrend')
         if isfield(config.detrend, 'method'), method = config.detrend.method; end
-        if isfield(config.detrend, 'signals'), signals = config.detrend.signals; end
         if isfield(config.detrend, 'highpass_cutoff'), highpass_cutoff = config.detrend.highpass_cutoff; end
+        if isfield(config.detrend, 'filter_order'), filter_order = config.detrend.filter_order; end
         if isfield(config.detrend, 'hp_edge_pad_sec'), hp_edge_pad_sec = config.detrend.hp_edge_pad_sec; end
+        if isfield(config.detrend, 'signals'), signals = config.detrend.signals; end
         if isfield(config.detrend, 'window_length'), window_l = config.detrend.window_length; end
         if isfield(config.detrend, 'do_plot'), do_plot = config.detrend.do_plot; end
     end

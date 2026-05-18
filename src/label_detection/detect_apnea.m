@@ -6,8 +6,12 @@ function events = detect_apnea(data, baseline, breaths_lungs, breaths_diaph, spo
 %   1) Amplitude criterion: lungs <= 10% ref AND diaphragm <= 10% ref
 %      (>=90% reduction), evaluated using rolling windows.
 %   2) Duration >= 10 s.
-%   3) Optional: accompanying SpO2 desaturation (>=3% drop or <90%) within
+%   3) Optional: accompanying SpO2 desaturation (>=3% drop or <90%) that
 %      30–60 s (SpO2 lag). If present, append "_desat" to event type.
+%
+% Current code uses config.spo2.desat_association_delay_sec as the single
+% shared association delay for breathing-related desaturation; the older
+% apnea-specific 30-60 s lag window is no longer used.
 %
 % Usage:
 %   events_Apn = detect_apnea(data, baseline, breaths_lungs, breaths_diaph, spo2_feat, config);
@@ -31,25 +35,12 @@ function events = detect_apnea(data, baseline, breaths_lungs, breaths_diaph, spo
     amp_ratio_thr    = 0.10;    % <=10% of reference for both belts
     min_dur_sec      = 10;      % apnea duration
     mark_desat       = true;    % optional certainty tagging
-    desat_lag_min_sec = 30;     % expected SpO2 lag lower bound after apnea end
-    desat_lag_max_sec = 60;     % expected SpO2 lag upper bound after apnea end
-    desat_pad_sec    = 0;       % optional extra padding (usually not needed)
+    desat_association_delay_sec = get_config_value(config, 'spo2', 'desat_association_delay_sec', 10);
 
     if isfield(config, 'Apn')
         if isfield(config.Apn, 'amp_ratio_thr'),    amp_ratio_thr    = config.Apn.amp_ratio_thr; end
         if isfield(config.Apn, 'min_dur_sec'),      min_dur_sec      = config.Apn.min_dur_sec; end
         if isfield(config.Apn, 'mark_desat'),       mark_desat       = config.Apn.mark_desat; end
-        if isfield(config.Apn, 'desat_lag_min_sec'), desat_lag_min_sec = config.Apn.desat_lag_min_sec; end
-        if isfield(config.Apn, 'desat_lag_max_sec'), desat_lag_max_sec = config.Apn.desat_lag_max_sec; end
-        if isfield(config.Apn, 'desat_lag_sec') && ~isfield(config.Apn, 'desat_lag_max_sec')
-            desat_lag_max_sec = config.Apn.desat_lag_sec;
-        end
-        if isfield(config.Apn, 'desat_pad_sec'),    desat_pad_sec    = config.Apn.desat_pad_sec; end
-    end
-    if desat_lag_max_sec < desat_lag_min_sec
-        tmp = desat_lag_min_sec;
-        desat_lag_min_sec = desat_lag_max_sec;
-        desat_lag_max_sec = tmp;
     end
 
     % ----------------------------
@@ -72,29 +63,20 @@ function events = detect_apnea(data, baseline, breaths_lungs, breaths_diaph, spo
         breaths_lungs, breaths_diaph, t_grid, min_dur_sec, ...
         ref_lungs, ref_diaph, amp_ratio_thr, lungs_valid, diaph_valid);
 
-    % Convert to events (>=10 s)
-    ev_grid = runs_to_events(apnea_amp, 1/config.grid_step_sec, min_dur_sec, 'apnea');
-    events  = grid_events_to_sample_events(ev_grid, config.fs, N);
+    % Sustain the endpoint amplitude condition before creating events.
+    [events, apnea_amp] = sustained_condition_to_events( ...
+        apnea_amp, t_grid, config.fs, N, min_dur_sec, 'apnea');
 
     % ----------------------------
-    % Optional: mark apnea with desaturation (diagnostic certainty)
-    % We associate apnea with a desat event occurring within [end+lag_min, end+lag_max]
-    % (and optionally expand desat events a bit).
+    % Optional: mark apnea with desaturation (diagnostic certainty).
+    % A desaturation is associated if it overlaps apnea or starts within
+    % config.spo2.desat_association_delay_sec after apnea.
     % ----------------------------
     if mark_desat && exist('spo2_feat','var') && ~isempty(spo2_feat) && isfield(spo2_feat,'desat_events')
-        desat_events = spo2_feat.desat_events;
-
-        if desat_pad_sec > 0
-            desat_events = expand_events_time(desat_events, desat_pad_sec, (N-1)/config.fs);
-        end
+        desat_events = expand_events_for_delayed_overlap(spo2_feat.desat_events, desat_association_delay_sec);
 
         for e = 1:numel(events)
-            % Build a lagged association window after apnea end.
-            assoc = struct( ...
-                'start_t', events(e).end_t + desat_lag_min_sec, ...
-                'end_t',   events(e).end_t + desat_lag_max_sec);
-
-            if events_overlap_any(assoc, desat_events)
+            if events_overlap_any(events(e), desat_events)
                 events(e).type = [events(e).type '_desat'];
             end
         end

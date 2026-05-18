@@ -17,7 +17,9 @@ function [data, config, do_analysis] = load_raw_data(config)
             return
         end
     else
-        mkdir(config.sub_results_path);
+        if ~isfolder(config.sub_results_path)
+            mkdir(config.sub_results_path);
+        end
         disp(['Successfully loaded data: Sub ' num2str(config.subject) ' | Measurement: ' num2str(config.measure) ])
     end
 
@@ -36,7 +38,7 @@ function [data, config, do_analysis] = load_raw_data(config)
     config.times = (0:size(data,1)-1)/config.fs;
 
     % PLOT RAW DATA
-    [fig, ax, ph] = plot_raw_data(data, config);
+    plot_raw_data(data, config);
     
 end
 

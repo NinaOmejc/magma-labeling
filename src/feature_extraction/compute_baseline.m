@@ -1,9 +1,9 @@
 function baseline = compute_baseline(data, config)
-% compute_baseline  Compute baseline stats from the first baseline_sec seconds.
-% Baseline definitions follow Labels.docx (e.g., SpO2 median first ~60s). :contentReference[oaicite:1]{index=1}
+% compute_baseline  Compute baseline stats from the configured static segment.
+% Baseline definitions follow Labels.docx (e.g., SpO2 median over the configured static segment). :contentReference[oaicite:1]{index=1}
 % Baseline is required for labels:
 %   1) Shallow breathing ( respiratory belt signals  amplitude baseline (lungs, diaphragm))
-%   6) Desaturation (SpO2 baseline: median of first 60 s)
+%   6) Desaturation (SpO2 baseline: median of the static segment)
 %   7) Apnea (respiratory belt signals amplitude baseline (lungs, diaphragm) )
 %
 % baseline = compute_baseline(data, fs, columns, baseline_sec)
@@ -12,27 +12,25 @@ function baseline = compute_baseline(data, config)
     idxLungs = find(strcmp(config.data_columns, 'Resp-Lungs'), 1);
     idxDiaph = find(strcmp(config.data_columns, 'Resp-Diaphragm'), 1);
     
-    n0 = min(size(data,1), config.baseline_sec*config.fs);
-    
-    if strcmp(config.baseline_location, 'second')
-        d0 = data(n0+1:2*n0, :);
-    elseif strcmp(config.baseline_location, 'last')
-        d0 = data(end-n0+1:end, :);
-    elseif strcmp(config.baseline_location, '5/20')
-        if config.measure == 1 || config.measure == 3
-            d0 = data(5*n0+1:6*n0, :);
-        else
-            n2 = min(23*n0, size(data,1));
-            n1 = n2 - 1*n0 + 1;
-            d0 = data(n1:n2, :);
-        end
-    else
-        d0 = data(1:n0, :);
-    end
-
     baseline = struct();
+    [baseline_start_idx, baseline_end_idx, baseline_start_t, baseline_end_t] = ...
+        get_static_baseline_interval(size(data,1), config);
+    d0 = data(baseline_start_idx:baseline_end_idx, :);
 
-    % SpO2 baseline: median of first 60s
+    baseline.static_baseline_start_idx = baseline_start_idx;
+    baseline.static_baseline_end_idx = baseline_end_idx;
+    baseline.static_baseline_start_t = baseline_start_t;
+    baseline.static_baseline_end_t = baseline_end_t;
+    baseline.static_baseline_location = '';
+    if isfield(config, 'baseline_location')
+        baseline.static_baseline_location = config.baseline_location;
+    end
+    baseline.SpO2_baseline_start_idx = baseline_start_idx;
+    baseline.SpO2_baseline_end_idx = baseline_end_idx;
+    baseline.SpO2_baseline_start_t = baseline_start_t;
+    baseline.SpO2_baseline_end_t = baseline_end_t;
+
+    % SpO2 baseline: median of the configured static segment.
     if ~isempty(idxSpO2)
         baseline.SpO2_median = median(d0(:, idxSpO2), 'omitnan');
         baseline.SpO2_mean   = mean(d0(:, idxSpO2), 'omitnan');
@@ -42,8 +40,8 @@ function baseline = compute_baseline(data, config)
     end
 
     % Respiratory reference amplitude: robust cycle amplitude from baseline segment
-    [baseline.lungs_amp_ref, baseline.lungs_rr_ref] = resp_amp_ref_from_segment(d0(:, idxLungs), config, ['baseline_lungs']);
-    [baseline.diaph_amp_ref, baseline.diaph_rr_ref] = resp_amp_ref_from_segment(d0(:, idxDiaph), config, ['baseline_diaph']);
+    [baseline.lungs_amp_ref, baseline.lungs_rr_ref] = resp_amp_ref_from_segment(d0(:, idxLungs), config, 'baseline-lungs');
+    [baseline.diaph_amp_ref, baseline.diaph_rr_ref] = resp_amp_ref_from_segment(d0(:, idxDiaph), config, 'baseline-diaph');
 
 end
 

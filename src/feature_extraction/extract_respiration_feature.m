@@ -26,6 +26,7 @@ function b = extract_respiration_feature(x, config, basename)
     if nargin < 3 || isempty(basename)
         basename = '';
     end
+    min_num_peaks = 3;
 
     b = struct();
     b.basename = basename;
@@ -68,7 +69,7 @@ function b = extract_respiration_feature(x, config, basename)
     [locs, peak_qc] = apply_respiration_peak_qc(x, locs, proms, config);
     b.peak_qc = peak_qc;
 
-    if numel(locs) < config.resp.min_num_peaks
+    if numel(locs) < min_num_peaks
         b = recompute_respiration_breath_fields(b, x, locs, config);
         % not enough peaks to define breaths robustly
         return;
@@ -96,6 +97,7 @@ end
 function [peak_idx, qc] = apply_respiration_peak_qc(x, peak_idx, peak_prom, config)
     peak_idx = peak_idx(:);
     peak_prom = peak_prom(:);
+    min_num_peaks = 3;
     qc = struct( ...
         'enabled', false, ...
         'removed_peak_idx', [], ...
@@ -134,7 +136,7 @@ function [peak_idx, qc] = apply_respiration_peak_qc(x, peak_idx, peak_prom, conf
     removed_reason = {};
     max_iter = 5;
     for iter = 1:max_iter
-        if numel(peak_idx) < config.resp.min_num_peaks
+        if numel(peak_idx) < min_num_peaks
             break;
         end
 

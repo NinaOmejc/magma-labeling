@@ -1,4 +1,4 @@
-function events_Des = detect_desaturation(data, baseline, spo2_feat, config)
+function events_Des = detect_desaturation(~, baseline, spo2_feat, config)
 % detect_desaturation
 % Label 6 – Desaturation (Hypoxia)
 %
@@ -45,34 +45,31 @@ function events_Des = detect_desaturation(data, baseline, spo2_feat, config)
     sgtitle(['Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure) ' | Label 6 – Desaturation (Hypoxia)'])
 
     hold on
-    plot(t_spo2, spo2, 'k')
     grid on
     xlabel('Time (s)')
     ylabel('SpO_2 (%)')
     ylim([89, 100])
+    shade_static_baseline_on_axis(baseline, 'SpO2 baseline window');
+    plot(t_spo2, spo2, 'k', 'DisplayName', 'SpO2')
 
-    % Baseline line (median first 60s)
+    % Baseline line (median of configured static segment)
     if isfield(baseline,'SpO2_median') && isfinite(baseline.SpO2_median)
-        yline(baseline.SpO2_median, 'k--', 'baseline (median 60s)');
-        yline(baseline.SpO2_median - drop_thr, 'r--', sprintf('baseline-%g', drop_thr));
+        yline(baseline.SpO2_median, 'k--', 'baseline median', 'DisplayName', 'baseline');
+        yline(baseline.SpO2_median - drop_thr, 'r--', sprintf('baseline-%g', drop_thr), 'DisplayName', 'baseline-drop');
     end
 
     % Absolute threshold
-    yline(floor_thr, 'r--', sprintf('%g%%', floor_thr));
+    yline(floor_thr, 'r--', sprintf('%g%%', floor_thr), 'DisplayName', 'floor');
 
     % Shade detected desaturation events
-    shade_events_on_axis(events_Des);
+    shade_events_on_axis(events_Des, 'desat events');
 
     % Optional: plot event start/end markers
     for k = 1:numel(events_Des)
-        xline(events_Des(k).start_t, ':');
-        xline(events_Des(k).end_t,   ':');
+        xline(events_Des(k).start_t, ':', 'HandleVisibility', 'off');
+        xline(events_Des(k).end_t,   ':', 'HandleVisibility', 'off');
     end
-    if isempty(events_Des)
-        legend('SpO_2','baseline','baseline-drop','floor')
-    else
-        legend('SpO_2','baseline','baseline-drop','floor','desat events')        
-    end
+    legend('show')
     hold off
     save_figure(config, 'desaturation');
 end

@@ -1,4 +1,4 @@
-function cond = compute_breath_rate_mask(peak_t, t_grid, win_sec, rr_thr_bpm, comparison, fill_window)
+function [cond, rr_bpm] = compute_breath_rate_mask(peak_t, t_grid, win_sec, rr_thr_bpm, comparison, fill_window)
 % compute_breath_rate_mask
 % Respiratory-rate condition on an evaluation grid.
 %
@@ -14,6 +14,7 @@ function cond = compute_breath_rate_mask(peak_t, t_grid, win_sec, rr_thr_bpm, co
     end
 
     cond = false(size(t_grid));
+    rr_bpm = nan(size(t_grid));
     peak_t = peak_t(:);
     peak_t = peak_t(isfinite(peak_t));
 
@@ -33,6 +34,7 @@ function cond = compute_breath_rate_mask(peak_t, t_grid, win_sec, rr_thr_bpm, co
         if ~isfinite(rr_mean)
             continue;
         end
+        rr_bpm(i) = rr_mean;
 
         switch comparison
             case '>='

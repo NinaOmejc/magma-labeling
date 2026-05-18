@@ -25,7 +25,7 @@ function b = recompute_respiration_breath_fields(b, x, peak_idx, config)
     b.rr_std_bpm = NaN;
     b.ok = false;
 
-    if numel(peak_idx) < config.resp.min_num_peaks
+    if numel(peak_idx) < 3
         return;
     end
 

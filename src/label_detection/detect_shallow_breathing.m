@@ -56,12 +56,11 @@ function shallow_events = detect_shallow_breathing(data, baseline, breaths_lungs
     shallow_mask_lungs_final = shallow_mask_lungs & no_desat;
     shallow_mask_diaph_final = shallow_mask_diaph & no_desat;
     
-    % convert grid runs -> events (>=30 s)
-    shallow_ev_grid_lungs = runs_to_events(shallow_mask_lungs_final, 1/config.grid_step_sec, config.ShB.min_dur_sec, 'shallow_breathing_lungs');
-    shallow_events_lungs = grid_events_to_sample_events(shallow_ev_grid_lungs, config.fs, N);
-
-    shallow_events_on_grid_diaph = runs_to_events(shallow_mask_diaph_final, 1/config.grid_step_sec, config.ShB.min_dur_sec, 'shallow_breathing_diaph');
-    shallow_events_diaph = grid_events_to_sample_events(shallow_events_on_grid_diaph, config.fs, N);
+    % convert sustained grid runs -> events (>=30 s)
+    [shallow_events_lungs, ~] = sustained_condition_to_events( ...
+        shallow_mask_lungs_final, t_grid, config.fs, N, config.ShB.min_dur_sec, 'shallow_breathing_lungs');
+    [shallow_events_diaph, ~] = sustained_condition_to_events( ...
+        shallow_mask_diaph_final, t_grid, config.fs, N, config.ShB.min_dur_sec, 'shallow_breathing_diaph');
     
     shallow_events = merge_events({shallow_events_lungs, shallow_events_diaph});
     % shallow_mask = events_to_sample_mask(events, N, config.fs);
@@ -161,23 +160,24 @@ function shallow_events = detect_shallow_breathing(data, baseline, breaths_lungs
         spo2 = spo2_feat.spo2(:);
         t_spo2 = spo2_feat.t_spo2(:);
     
-        plot(t_spo2, spo2, 'k')
-        yline(90, 'r--')
         ylim([89 100])
         xlim([0 1800])
+        shade_static_baseline_on_axis(baseline, 'SpO2 baseline window');
+        plot(t_spo2, spo2, 'k', 'DisplayName', 'SpO2')
+        yline(90, 'r--', 'DisplayName', '90%')
     
         % baseline - drop threshold (informational)
         drop_thr = config.spo2.drop_thr;
         if isfield(baseline,'SpO2_median') && isfinite(baseline.SpO2_median)
-            yline(baseline.SpO2_median - drop_thr, 'g--')
+            yline(baseline.SpO2_median - drop_thr, 'g--', 'DisplayName', 'Baseline-drop')
         end
     
         % Optional: show desaturation event spans as shaded regions
         if isfield(spo2_feat,'desat_events') && ~isempty(spo2_feat.desat_events)
-            shade_events_on_axis(spo2_feat.desat_events);
-            legend('SpO₂','90%','Baseline-drop','desat events', 'Location','eastoutside')
+            shade_events_on_axis(spo2_feat.desat_events, 'desat events');
+            legend('show', 'Location','eastoutside')
         else
-            legend('SpO₂','90%','Baseline-drop', 'Location','eastoutside')
+            legend('show', 'Location','eastoutside')
         end
     
         title('SpO₂')

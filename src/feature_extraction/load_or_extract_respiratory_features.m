@@ -1,4 +1,4 @@
-function [breaths_lungs, breaths_diaph, spo2_feat] = load_or_extract_features(data, baseline, config)
+function [breaths_lungs, breaths_diaph] = load_or_extract_respiratory_features(data, config)
 % Load cached feature extraction results, or run extraction and cache them.
 
     cache_file = feature_cache_file(config);
@@ -9,7 +9,6 @@ function [breaths_lungs, breaths_diaph, spo2_feat] = load_or_extract_features(da
         if is_valid_feature_cache(cached, size(data,1), cache_version)
             breaths_lungs = cached.breaths_lungs;
             breaths_diaph = cached.breaths_diaph;
-            spo2_feat = cached.spo2_feat;
             fprintf('Loaded cached feature extraction results: %s\n', cache_file);
             return;
         end
@@ -17,8 +16,7 @@ function [breaths_lungs, breaths_diaph, spo2_feat] = load_or_extract_features(da
         warning('Feature cache exists but is incomplete or mismatched. Recomputing: %s', cache_file);
     end
 
-    [breaths_lungs, breaths_diaph] = extract_respiration_features(data, baseline, config);
-    spo2_feat = extract_spo2_features(data, baseline, config);
+    [breaths_lungs, breaths_diaph] = extract_respiration_features(data, config);
 
     feature_cache_meta = struct( ...
         'cache_version', cache_version, ...
@@ -34,7 +32,7 @@ function [breaths_lungs, breaths_diaph, spo2_feat] = load_or_extract_features(da
         mkdir(cache_dir);
     end
 
-    save(cache_file, 'breaths_lungs', 'breaths_diaph', 'spo2_feat', 'feature_cache_meta');
+    save(cache_file, 'breaths_lungs', 'breaths_diaph', 'feature_cache_meta');
     fprintf('Saved feature extraction results: %s\n', cache_file);
 end
 
@@ -53,7 +51,7 @@ function cache_file = feature_cache_file(config)
 end
 
 function ok = is_valid_feature_cache(cached, n_samples, cache_version)
-    required = {'breaths_lungs', 'breaths_diaph', 'spo2_feat'};
+    required = {'breaths_lungs', 'breaths_diaph'};
     ok = all(isfield(cached, required));
     if ~ok
         return;
@@ -65,10 +63,9 @@ function ok = is_valid_feature_cache(cached, n_samples, cache_version)
         return;
     end
 
-    ok = isstruct(cached.breaths_lungs) && isstruct(cached.breaths_diaph) && isstruct(cached.spo2_feat) && ...
+    ok = isstruct(cached.breaths_lungs) && isstruct(cached.breaths_diaph) && ...
          isfield(cached.breaths_lungs, 'peak_idx') && isfield(cached.breaths_lungs, 'trough_idx') && ...
-         isfield(cached.breaths_diaph, 'peak_idx') && isfield(cached.breaths_diaph, 'trough_idx') && ...
-         isfield(cached.spo2_feat, 'spo2');
+         isfield(cached.breaths_diaph, 'peak_idx') && isfield(cached.breaths_diaph, 'trough_idx');
     if ~ok
         return;
     end
@@ -81,10 +78,6 @@ function ok = is_valid_feature_cache(cached, n_samples, cache_version)
     if isfield(cached.breaths_diaph, 'x0') && numel(cached.breaths_diaph.x0) ~= n_samples
         ok = false;
         return;
-    end
-
-    if numel(cached.spo2_feat.spo2) ~= n_samples
-        ok = false;
     end
 end
 

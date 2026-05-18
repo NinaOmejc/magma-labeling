@@ -9,7 +9,7 @@ function spo2_feat = extract_spo2_features(data, baseline, config)
 %   spo2_feat.desat_events          (Label 6 canonical)
 %   spo2_feat.is_desat_samples      (logical, sample-level)
 %
-% Uses baseline.SpO2_median as baseline (median first 60s).
+% Uses baseline.SpO2_median as baseline.
 
     spo2_feat = struct();
     spo2_feat.idx_spo2 = find(strcmp(config.data_columns, 'SpO₂'), 1);
@@ -59,7 +59,7 @@ function desat_events = detect_desaturation_events(spo2, spo2_base, fs, spo2_flo
 %
 % Inputs:
 %   spo2        [N x 1] SpO2 signal (can include NaNs)
-%   spo2_base   scalar baseline (e.g., median of first 60s)
+%   spo2_base   scalar baseline
 %   fs          sampling frequency (Hz)
 %   spo2_floor  absolute threshold (default 90)
 %   drop_thr    relative drop from baseline (default 3)
@@ -88,31 +88,7 @@ function desat_events = detect_desaturation_events(spo2, spo2_base, fs, spo2_flo
 
     is_desat(valid) = (spo2(valid) < spo2_floor) | ((spo2_base - spo2(valid)) >= drop_thr);
 
-    % Convert contiguous runs of is_desat -> events, enforce duration
-    d = diff([false; is_desat; false]);
-    run_starts = find(d == 1);
-    run_ends   = find(d == -1) - 1;
-    joined_runs = [run_starts, run_ends, run_ends - run_starts];
-    min_len = max(1, round(min_dur_sec * fs));
-
-    for k = 1:numel(run_starts)
-        s = run_starts(k);
-        e = run_ends(k);
-
-        if (e - s + 1) < min_len
-            continue;
-        end
-
-        start_t = (s-1)/fs;
-        end_t   = (e-1)/fs;
-        
-        desat_events(end+1,1) = struct( ...
-            'type',      'desaturation', ...
-            'start_idx', s, ...
-            'end_idx',   e, ...
-            'start_t',   start_t, ...
-            'end_t',     end_t, ...
-            'duration',  end_t - start_t );
-
-    end
+    % Convert contiguous runs of is_desat -> events, enforcing duration with
+    % the same run-to-event helper used by the other label detectors.
+    desat_events = runs_to_events(is_desat, fs, min_dur_sec, 'desaturation');
 end

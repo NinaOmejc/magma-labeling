@@ -17,7 +17,9 @@ function [b_l, b_d] = manual_edit_respiration_features(data, b_l, b_d, config)
     trL = plot(ax1, b_l.trough_t, b_l.trough_val, 'bo', 'MarkerFaceColor','b', 'MarkerSize', 6);
     title(ax1, 'GUI breath peak editing (lungs): edit red peaks only; blue troughs update automatically');
     ylabel(ax1, 'Resp-Lungs');
-    legend(ax1, 'signal', 'peaks', 'troughs', 'Location','eastoutside');
+    if ~isempty(b_l.peak_t)
+        legend(ax1, 'signal', 'peaks', 'troughs', 'Location','eastoutside');
+    end
     grid(ax1, 'on');
 
     ax2 = subplot(2,1,2); hold(ax2, 'on');

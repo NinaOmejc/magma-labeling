@@ -75,14 +75,23 @@ function save_figure(config, base_name, save_matfig)
     if (contains(base_name, 'lungs') && ~contains(base_name, 'baseline') && ~contains(base_name, 'normality')) || ...
        (contains(base_name, 'diaph') && ~contains(base_name, 'baseline') && ~contains(base_name, 'normality')) || ...
        save_matfig
-        set(fig, 'Visible', 'on') % needed so it can be opened afterwards
-        savefig(fig, replace(fullpath, '.png', '.fig'))
+        save_fig_for_direct_open(fig, replace(fullpath, '.png', '.fig'));
     else
         exportgraphics(fig, fullpath, 'Resolution', config.plot_dpi);
     end
 
     % Close figure after saving
     close(fig);
+end
+
+function save_fig_for_direct_open(fig, fig_path)
+% Save a .fig created invisibly so double-clicking opens it visibly later,
+% without making the live batch figure visible during saving.
+
+    original_create_fcn = fig.CreateFcn;
+    cleanup = onCleanup(@() set(fig, 'CreateFcn', original_create_fcn));
+    fig.CreateFcn = @(src, event) set(src, 'Visible', 'on');
+    savefig(fig, fig_path);
 end
 
 function strengthen_dashed_lines(fig, target_width)

@@ -134,23 +134,24 @@ function events = detect_sigh(data, baseline, breaths_lungs, breaths_diaph, spo2
         spo2 = spo2_feat.spo2(:);
         t_spo2 = spo2_feat.t_spo2(:);
     
-        plot(t_spo2, spo2, 'k')
-        yline(90, 'r--')
         ylim([89 100])
         xlim([0 1800])
+        shade_static_baseline_on_axis(baseline, 'SpO2 baseline window');
+        plot(t_spo2, spo2, 'k', 'DisplayName', 'SpO2')
+        yline(90, 'r--', 'DisplayName', '90%')
     
         % baseline - drop threshold (informational)
         drop_thr = config.spo2.drop_thr;
         if isfield(baseline,'SpO2_median') && isfinite(baseline.SpO2_median)
-            yline(baseline.SpO2_median - drop_thr, 'g--')
+            yline(baseline.SpO2_median - drop_thr, 'g--', 'DisplayName', 'Baseline-drop')
         end
     
         % Optional: show desaturation event spans as shaded regions
         if isfield(spo2_feat,'desat_events') && ~isempty(spo2_feat.desat_events)
-            shade_events_on_axis(spo2_feat.desat_events);
-            legend('SpO₂','90%','Baseline-drop','desat events', 'Location','eastoutside')
+            shade_events_on_axis(spo2_feat.desat_events, 'desat events');
+            legend('show', 'Location','eastoutside')
         else
-            legend('SpO₂','90%','Baseline-drop', 'Location','northeast')
+            legend('show', 'Location','northeast')
         end
     
         linkaxes([ax1 ax2 ax3], 'x');

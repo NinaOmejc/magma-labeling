@@ -29,32 +29,37 @@ function events = detect_rapid_breathing(data, baseline, breaths_lungs, breaths_
         return;
     end
 
-    analysis_win_sec = get_config_value(config, 'RaB', 'analysis_win_sec', 30);
     rr_thr_bpm = get_config_value(config, 'RaB', 'rr_thr_bpm', 20);
     min_dur_sec = get_config_value(config, 'RaB', 'min_dur_sec', 30);
     classify_depth = get_config_value(config, 'RaB', 'classify_depth', true);
-    shallow_lo_ratio = get_config_value(config, 'RaB', 'shallow_lo_ratio', get_config_value(config, 'ShB', 'amp_ratio_low', 0.65));
-    shallow_hi_ratio = get_config_value(config, 'RaB', 'shallow_hi_ratio', get_config_value(config, 'ShB', 'amp_ratio_high', 0.80));
+    shallow_lo_ratio = get_config_value(config, 'ShB', 'amp_ratio_low', 0.65);
+    shallow_hi_ratio = get_config_value(config, 'ShB', 'amp_ratio_high', 0.80);
     deep_lo_ratio = get_config_value(config, 'RaB', 'deep_lo_ratio', 1.20);
     deep_hi_ratio = get_config_value(config, 'RaB', 'deep_hi_ratio', 1.35);
     amp_win_sec = get_config_value(config, 'ShB', 'min_dur_sec', min_dur_sec);
-    subtype_min_overlap_frac = get_config_value(config, 'RaB', 'subtype_min_overlap_frac', 0.5);
+    subtype_min_overlap_frac = 0.5;
     mark_desat = get_config_value(config, 'RaB', 'mark_desat', true);
-    desat_delay_sec = get_config_value(config, 'RaB', 'desat_delay_sec', 20);
+    desat_association_delay_sec = get_config_value(config, 'spo2', 'desat_association_delay_sec', 10);
+    plot_rr_step_sec = get_config_value(config, 'RaB', 'plot_rr_step_sec', 15);
+    subtype_min_overlap_frac = get_config_value(config, 'RaB', 'subtype_min_overlap_frac', subtype_min_overlap_frac);
 
-    rapid_lungs = false(size(t_grid));
+    rapid_lungs_rr = false(size(t_grid));
+    rr_lungs = nan(size(t_grid));
     if lungs_valid
-        rapid_lungs = compute_breath_rate_mask(breaths_lungs.peak_t, t_grid, analysis_win_sec, rr_thr_bpm, '>=', true);
+        [rapid_lungs_rr, rr_lungs] = compute_breath_rate_mask(breaths_lungs.peak_t, t_grid, min_dur_sec, rr_thr_bpm, '>=', true);
     end
 
-    rapid_diaph = false(size(t_grid));
+    rapid_diaph_rr = false(size(t_grid));
+    rr_diaph = nan(size(t_grid));
     if diaph_valid
-        rapid_diaph = compute_breath_rate_mask(breaths_diaph.peak_t, t_grid, analysis_win_sec, rr_thr_bpm, '>=', true);
+        [rapid_diaph_rr, rr_diaph] = compute_breath_rate_mask(breaths_diaph.peak_t, t_grid, min_dur_sec, rr_thr_bpm, '>=', true);
     end
-    rapid_any = rapid_lungs | rapid_diaph;
 
-    ev_grid = runs_to_events(rapid_any, 1/config.grid_step_sec, min_dur_sec, 'rapid');
-    rapid_events = grid_events_to_sample_events(ev_grid, config.fs, N);
+    [rapid_events_lungs, rapid_lungs] = sustained_condition_to_events( ...
+        rapid_lungs_rr, t_grid, config.fs, N, min_dur_sec, 'rapid');
+    [rapid_events_diaph, rapid_diaph] = sustained_condition_to_events( ...
+        rapid_diaph_rr, t_grid, config.fs, N, min_dur_sec, 'rapid');
+    rapid_events = merge_events({rapid_events_lungs, rapid_events_diaph});
     if isempty(rapid_events)
         return;
     end
@@ -74,7 +79,7 @@ function events = detect_rapid_breathing(data, baseline, breaths_lungs, breaths_
 
     desat_events = empty_events();
     if mark_desat && exist('spo2_feat','var') && ~isempty(spo2_feat) && isfield(spo2_feat,'desat_events')
-        desat_events = expand_events_for_delayed_overlap(spo2_feat.desat_events, desat_delay_sec);
+        desat_events = expand_events_for_delayed_overlap(spo2_feat.desat_events, desat_association_delay_sec);
     end
 
     events = tag_rapid_events(rapid_events, shallow_amp, deep_amp, desat_events, ...
@@ -84,33 +89,19 @@ function events = detect_rapid_breathing(data, baseline, breaths_lungs, breaths_
     % Optional debug plot (raw + shaded rapid mask)
     % ----------------------------
     if isfield(config, 'RaB') && isfield(config.RaB, 'do_plot') && config.RaB.do_plot
-        idx_lungs = find(strcmp(config.data_columns, 'Resp-Lungs'), 1);
-        idx_diaph  = find(strcmp(config.data_columns, 'Resp-Diaphragm'), 1);
-        t_raw = (0:N-1)/config.fs;
-
-        figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', config.make_figs_visible); 
-        sgtitle(['RAPID BREATHING' newline 'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)])
-
-        subplot(2,1,1); hold on
-        plot(t_raw, data(:, idx_lungs), 'k')
-        shade_mask_on_axis(t_grid, rapid_lungs)
-        title('Rapid breathing (lungs) over raw signal')
-        xlabel('Time (s)'); ylabel('Resp-Lungs'); grid on
-        hold off
-
-        subplot(2,1,2); hold on
-        plot(t_raw, data(:, idx_diaph), 'k')
-        shade_mask_on_axis(t_grid, rapid_diaph)
-        title('Rapid breathing (diaphragm) over raw signal')
-        xlabel('Time (s)'); ylabel('Resp-Diaphragm'); grid on
-        hold off
-
-        ax = findall(gcf,'Type','axes');
-        ax = ax(arrayfun(@(a) ~strcmp(a.Tag,'legend'), ax));
-        linkaxes(ax,'x');          % tie x-zoom/pan
-        xlim(ax(1), [0 t_grid(end)]);     % or whatever common range you want
-   
-        save_figure(config, 'rapid_breathing');
+        opts = struct( ...
+            'figure_title', ['RAPID BREATHING' newline 'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)], ...
+            'event_name', 'Rapid breathing', ...
+            'metric_title', 'Mean breaths/min used for rapid detection', ...
+            'metric_detail', sprintf('%g s held median', plot_rr_step_sec), ...
+            'metric_ylabel', 'Breaths/min', ...
+            'threshold', rr_thr_bpm, ...
+            'threshold_label', sprintf('Threshold: >= %g breaths/min', rr_thr_bpm), ...
+            'plot_step_sec', plot_rr_step_sec, ...
+            'min_ymax', rr_thr_bpm + 10, ...
+            'ymax_padding', 5, ...
+            'output_name', 'rapid_breathing');
+        plot_belt_diagnostic_figure(data, config, t_grid, rapid_lungs, rapid_diaph, rr_lungs, rr_diaph, opts);
     end
 end
 
