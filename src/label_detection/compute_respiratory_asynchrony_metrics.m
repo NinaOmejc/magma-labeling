@@ -1,9 +1,9 @@
-function rea = compute_respiratory_asynchrony_metrics(data, breaths_lungs, breaths_diaph, config)
+function rea = compute_respiratory_asynchrony_metrics(data, resp_feat, config)
 % compute_respiratory_asynchrony_metrics
 % Wavelet phase-coherence diagnostics for Label 5.
 
     N = size(data, 1);
-    t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';
+    t_grid = (0:config.grid_step_sec:(N-1)/config.new_fs)';
 
     rea = empty_rea_metrics(t_grid, config);
 
@@ -21,11 +21,11 @@ function rea = compute_respiratory_asynchrony_metrics(data, breaths_lungs, breat
         return;
     end
 
-    if ~isempty(breaths_lungs) && ~is_valid_breath_signal(breaths_lungs, false)
+    if ~isempty(resp_feat) && ~is_valid_breath_signal(resp_feat.lungs, false)
         rea.skip_code = 3;
         return;
     end
-    if ~isempty(breaths_diaph) && ~is_valid_breath_signal(breaths_diaph, false)
+    if ~isempty(resp_feat) && ~is_valid_breath_signal(resp_feat.diaph, false)
         rea.skip_code = 4;
         return;
     end
@@ -38,7 +38,7 @@ function rea = compute_respiratory_asynchrony_metrics(data, breaths_lungs, breat
     end
 
     try
-        [lungs_pc, diaph_pc, fs_pc] = resample_pair_local(lungs_sig, diaph_sig, config.fs, rea.target_fs);
+        [lungs_pc, diaph_pc, fs_pc] = resample_pair_local(lungs_sig, diaph_sig, config.new_fs, rea.target_fs);
         fmax = min(rea.fmax_hz, 0.95 * fs_pc / 2);
         if rea.fmin_hz >= fmax
             rea.skip_code = 6;
@@ -59,9 +59,6 @@ function rea = compute_respiratory_asynchrony_metrics(data, breaths_lungs, breat
         end
 
         TPC = tlphcoh(WT_lungs, WT_diaph, freq, fs_pc, rea.tlphcoh_cycles);
-        avg_TPC = mean(TPC, 2, 'omitnan');
-        % figure, plot(freq, avg_TPC)
-
     catch ME
         rea.skip_code = 8;
         rea.error_message = ME.message;
@@ -102,7 +99,7 @@ function rea = empty_rea_metrics(t_grid, config)
     rea.skip_code = 0;
     rea.error_message = '';
 
-    rea.target_fs = get_config_value(config, 'ReA', 'target_fs', min(config.fs, 20));
+    rea.target_fs = get_config_value(config, 'ReA', 'target_fs', min(config.new_fs, 20));
     rea.fmin_hz = get_config_value(config, 'ReA', 'fmin', 0.052);
     rea.fmax_hz = get_config_value(config, 'ReA', 'fmax', 2.0);
     rea.f0 = get_config_value(config, 'ReA', 'f0', 1);
@@ -135,9 +132,13 @@ function [x, ok] = prepare_resp_signal_local(x)
 
     sample_idx = (1:numel(x))';
     x(~finite) = interp1(sample_idx(finite), x(finite), sample_idx(~finite), 'linear', 'extrap');
-    x = x - median(x, 'omitnan');
+    x_median = median(x, 'omitnan');
+    x = x - x_median;
 
-    sx = std(x, 'omitnan');
+    sx = 1.4826 * median(abs(x), 'omitnan');
+    if ~isfinite(sx) || sx <= eps
+        sx = std(x, 'omitnan');
+    end
     ok = isfinite(sx) && sx > eps;
     if ok
         x = x ./ sx;

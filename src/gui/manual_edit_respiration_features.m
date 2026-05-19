@@ -1,5 +1,5 @@
 function [b_l, b_d] = manual_edit_respiration_features(data, b_l, b_d, config)
-    fs = config.fs;
+    fs = config.new_fs;
     N = size(data, 1);
     t_raw = (0:N-1) / fs;
 

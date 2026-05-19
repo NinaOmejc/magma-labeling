@@ -92,6 +92,7 @@ results.subject   = config.subject;    % Subject identifier (e.g., 42)
 results.condition = config.condition;  % Experimental condition identifier (1: pre, 2: post)
 results.events    = sub_events;        % *Struct array of detected events* (type + subtype + timing)
 results.mask      = label_mask;        % Sample-level logical mask [N x 8] for the main labels; useful for ML applications
+results.resp_feat = resp_feat;         % Respiratory features with fields .lungs and .diaph
 results.baseline  = baseline;          % Baseline reference values (e.g., SpO₂, respiratory amplitudes)
 results.config    = config;            % Full configuration used for this run (for reproducibility)
 ```

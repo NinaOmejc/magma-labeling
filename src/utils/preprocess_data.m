@@ -1,7 +1,7 @@
-function [output, trend] = detrend_flow_flexible(t_series, config)
-%DETREND_FLOW_FLEXIBLE Detrend vector or matrix time series over time
-%intervals or using high pass filter.
-%
+function [output, config, trend] = preprocess_data(t_series, config)
+% preprocess_data
+% Detrend configured signal columns, then resample all channels to
+% config.new_fs.
 
     % -----------------------------
     % Defaults
@@ -35,6 +35,7 @@ function [output, trend] = detrend_flow_flexible(t_series, config)
     if isvector(t_series)
         time = [];
         data = t_series(:);   % work as column
+        signal_cols = 1;
     else
         signal_cols = find(ismember(config.data_columns, signals));
         time = [];
@@ -173,6 +174,101 @@ function [output, trend] = detrend_flow_flexible(t_series, config)
         end
         save_figure(config, 'data_detrend_comparison_in_amplitude')
         
+    end
+
+    [output, trend, config] = resample_preprocessed_data(output, trend, config, sampl_freq);
+end
+
+function [data_out, trend_out, config] = resample_preprocessed_data(data_in, trend_in, config, input_fs)
+% Resample the full preprocessed data matrix and update config.new_fs/times.
+
+    target_fs = input_fs;
+    if isfield(config, 'new_fs') && ~isempty(config.new_fs)
+        target_fs = config.new_fs;
+    end
+
+    if ~isfinite(target_fs) || target_fs <= 0
+        error('config.new_fs must be a positive finite sampling rate.');
+    end
+
+    if target_fs > input_fs
+        error('config.new_fs must be <= config.fs for downsampling.');
+    end
+
+    config.raw_fs = input_fs;
+    config.preprocessing.original_fs = input_fs;
+    config.preprocessing.new_fs = target_fs;
+
+    if abs(target_fs - input_fs) <= max(eps(input_fs), eps(target_fs))
+        data_out = data_in;
+        trend_out = trend_in;
+    else
+        data_was_row_vector = isrow(data_in) && isvector(data_in);
+        trend_was_row_vector = isrow(trend_in) && isvector(trend_in);
+
+        data_resample_in = data_in;
+        trend_resample_in = trend_in;
+        if isvector(data_in)
+            data_resample_in = data_in(:);
+        end
+        if isvector(trend_in)
+            trend_resample_in = trend_in(:);
+        end
+
+        data_out = resample_matrix(data_resample_in, input_fs, target_fs);
+        trend_out = resample_matrix(trend_resample_in, input_fs, target_fs);
+
+        if data_was_row_vector
+            data_out = data_out';
+        end
+        if trend_was_row_vector
+            trend_out = trend_out';
+        end
+    end
+
+    config.new_fs = target_fs;
+    if isvector(data_out)
+        n_samples = numel(data_out);
+    else
+        n_samples = size(data_out, 1);
+    end
+    config.times = (0:n_samples-1) / config.new_fs;
+end
+
+function y = resample_matrix(x, fs_in, fs_out)
+% Resample columns while tolerating all-NaN trend columns.
+
+    if isempty(x)
+        y = x;
+        return;
+    end
+
+    [p, q] = rat(fs_out / fs_in, 1e-12);
+    y = [];
+
+    for c = 1:size(x, 2)
+        xc = x(:, c);
+        valid = isfinite(xc);
+
+        if any(valid)
+            x_fill = xc;
+            if ~all(valid)
+                x_fill = fillmissing(x_fill, 'linear', 'EndValues', 'nearest');
+            end
+            yc = resample(x_fill, p, q);
+
+            if ~all(valid)
+                missing_mask = resample(double(~valid), p, q) > 0.01;
+                yc(missing_mask) = NaN;
+            end
+        else
+            yc = nan(size(resample(zeros(size(xc)), p, q)));
+        end
+
+        if isempty(y)
+            y = nan(numel(yc), size(x, 2));
+        end
+        y(:, c) = yc;
     end
 end
 

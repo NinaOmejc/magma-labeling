@@ -7,11 +7,18 @@ function [start_idx, end_idx, start_t, end_t] = get_static_baseline_interval(N, 
     start_t = NaN;
     end_t = NaN;
 
-    if N <= 0 || ~isfield(config, 'fs') || ~isfinite(config.fs) || config.fs <= 0
+    if isfield(config, 'new_fs')
+        fs = config.new_fs;
+    elseif isfield(config, 'fs')
+        fs = config.fs;
+    else
+        fs = NaN;
+    end
+
+    if N <= 0 || ~isfinite(fs) || fs <= 0
         return;
     end
 
-    fs = config.fs;
     baseline_sec = 60;
     if isfield(config, 'baseline_sec') && isfinite(config.baseline_sec) && config.baseline_sec > 0
         baseline_sec = config.baseline_sec;

@@ -27,32 +27,32 @@ for isub = 1:length(subjects)
             continue;
         end
         
-        % ADDITIONAL ROLLING DETREND
-        [data, ~] = detrend_flow_flexible(data_raw, config);
+        % PREPROCESS DATA
+        [data, config] = preprocess_data(data_raw, config);
 
         % columns = [6];
         % trange = [2 4];
-        % data = modify_data_to_test(data, config.fs, columns, trange, 'shallow_breathing', true);
+        % data = modify_data_to_test(data, config.new_fs, columns, trange, 'shallow_breathing', true);
 
         % EXTRACT OR LOAD FEATURES (manually checked breath peaks/troughs + SpO2)
-        [breaths_lungs, breaths_diaph] = load_or_extract_respiratory_features(data, config);
+        resp_feat = load_or_extract_respiratory_features(data, config);
 
         % COMPUTE BASELINES
         baseline = compute_baseline(data, config);
-        baseline = add_rolling_resp_baseline(baseline, breaths_lungs, breaths_diaph, size(data,1), config);
+        baseline = add_rolling_resp_baseline(baseline, resp_feat, size(data,1), config);
         
         % EXTRACT SPO2 FEATURES
         spo2_feat = extract_spo2_features(data, baseline, config);
 
         % LABEL DETECTIONS
-        events_ShB = detect_shallow_breathing(data, baseline, breaths_lungs, breaths_diaph, spo2_feat, config);
-        events_IrB = detect_irregular_breathing(data, breaths_lungs, breaths_diaph, config);
-        events_SlB = detect_slow_breathing(data, baseline, breaths_lungs, breaths_diaph, spo2_feat, config);
-        events_RaB = detect_rapid_breathing(data, baseline, breaths_lungs, breaths_diaph, spo2_feat, config);
-        [events_ReA, diagnostics_ReA] = detect_respiratory_asynchrony(data, baseline, breaths_lungs, breaths_diaph, config);
+        events_ShB = detect_shallow_breathing(data, baseline, resp_feat, spo2_feat, config);
+        events_IrB = detect_irregular_breathing(data, resp_feat, config);
+        events_SlB = detect_slow_breathing(data, baseline, resp_feat, spo2_feat, config);
+        events_RaB = detect_rapid_breathing(data, baseline, resp_feat, spo2_feat, config);
+        [events_ReA, diagnostics_ReA] = detect_respiratory_asynchrony(data, baseline, resp_feat, config);
         events_Des = detect_desaturation(data, baseline, spo2_feat, config);
-        events_Apn = detect_apnea(data, baseline, breaths_lungs, breaths_diaph, spo2_feat, config);
-        events_Sigh = detect_sigh(data, baseline, breaths_lungs, breaths_diaph, spo2_feat, config);
+        events_Apn = detect_apnea(data, baseline, resp_feat, spo2_feat, config);
+        events_Sigh = detect_sigh(data, baseline, resp_feat, spo2_feat, config);
 
         % JOIN EVENTS FOR SUBJECT, CONDITION
         sub_events = merge_events({events_ShB, events_IrB, events_SlB, events_RaB, events_ReA, events_Des, events_Apn, events_Sigh});
@@ -60,7 +60,7 @@ for isub = 1:length(subjects)
         
         N = size(data,1); 
         [label_mask, label_names] = events_to_time_mask(sub_events, N, config);
-        diagnostic_signals = compute_label_diagnostic_signals(data, baseline, breaths_lungs, breaths_diaph, spo2_feat, config, diagnostics_ReA);
+        diagnostic_signals = compute_label_diagnostic_signals(data, baseline, resp_feat, spo2_feat, config, diagnostics_ReA);
         
         % if ~isempty(events_IrB)
         %     disp(['Found a subject with irr breathing. Its ' num2str(config.subject) ' | M ' num2str(config.measure)])
@@ -72,8 +72,7 @@ for isub = 1:length(subjects)
         results.events = sub_events;
         results.mask   = label_mask;
         results.label_names = label_names;
-        results.breaths_lungs = breaths_lungs;
-        results.breaths_diaph = breaths_diaph;
+        results.resp_feat = resp_feat;
         results.spo2_feat = spo2_feat;
         results.diagnostic_signals = diagnostic_signals;
         results.baseline = baseline;

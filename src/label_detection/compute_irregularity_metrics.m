@@ -1,14 +1,20 @@
-function [irregular_condition, cov_trace, rmssd_trace] = compute_irregularity_metrics( ...
-    breaths, t_grid, win_sec, cov_thr, rmssd_thr, pause_thr_sec)
+function [irregular_condition, cov_trace, robust_cov_trace, rmssd_trace] = compute_irregularity_metrics( ...
+    breaths, t_grid, win_sec, cov_thr, robust_cov_thr, rmssd_thr, pause_thr_sec, detection_metric)
 % compute_irregularity_metrics (irregularity in time)
 % Return an analysis-window irregularity mask and endpoint IBI variability
-% traces on t_grid. When a rolling window meets the irregularity criterion,
-% the full window is marked as irregular because that whole interval
-% contributed to the decision.
+% traces on t_grid. Both plain CoV and robust CoV are always computed when
+% possible. detection_metric controls which trace is used for the label.
 
     irregular_condition = false(size(t_grid));
     cov_trace = nan(size(t_grid));
+    robust_cov_trace = nan(size(t_grid));
     rmssd_trace = nan(size(t_grid));
+
+    if nargin < 8 || isempty(detection_metric)
+        detection_metric = 'robust_cov';
+    elseif isstring(detection_metric)
+        detection_metric = char(detection_metric);
+    end
 
     if isempty(breaths) || ~isstruct(breaths) || ~isfield(breaths, 'peak_t') || ...
             ~isfield(breaths, 'ibi') || ~isfield(breaths, 'ok') || ~breaths.ok
@@ -58,7 +64,18 @@ function [irregular_condition, cov_trace, rmssd_trace] = compute_irregularity_me
         end
 
         cov_trace(i) = sd / mu;
-        is_irregular_window = ~has_pause && cov_trace(i) >= cov_thr;
+        med_ibi = median(ibi_win, 'omitnan');
+        if isfinite(med_ibi) && med_ibi > 0
+            mad_ibi = median(abs(ibi_win - med_ibi), 'omitnan');
+            if isfinite(mad_ibi)
+                robust_cov_trace(i) = 1.4826 * mad_ibi / med_ibi;
+            end
+        end
+
+        cov_is_irregular = isfinite(cov_trace(i)) && cov_trace(i) >= cov_thr;
+        robust_cov_is_irregular = isfinite(robust_cov_trace(i)) && robust_cov_trace(i) >= robust_cov_thr;
+        is_irregular_window = ~has_pause && select_irregularity_metric( ...
+            cov_is_irregular, robust_cov_is_irregular, detection_metric);
 
         if use_rmssd
             dibi = diff(ibi_win);
@@ -72,5 +89,20 @@ function [irregular_condition, cov_trace, rmssd_trace] = compute_irregularity_me
         if is_irregular_window
             irregular_condition(t_grid >= lb & t_grid <= t) = true;
         end
+    end
+end
+
+function tf = select_irregularity_metric(cov_is_irregular, robust_cov_is_irregular, detection_metric)
+    switch lower(strtrim(detection_metric))
+        case {'cov', 'plain_cov'}
+            tf = cov_is_irregular;
+        case {'robust_cov', 'robust'}
+            tf = robust_cov_is_irregular;
+        case 'either'
+            tf = cov_is_irregular || robust_cov_is_irregular;
+        case 'both'
+            tf = cov_is_irregular && robust_cov_is_irregular;
+        otherwise
+            error('Unsupported irregular breathing detection metric: %s', detection_metric);
     end
 end

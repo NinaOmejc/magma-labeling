@@ -1,4 +1,4 @@
-function events = detect_rapid_breathing(data, baseline, breaths_lungs, breaths_diaph, spo2_feat, config)
+function events = detect_rapid_breathing(data, baseline, resp_feat, spo2_feat, config)
 % detect_rapid_breathing
 % Label 4 – Rapid Breathing (Tachypnea)
 %
@@ -16,14 +16,14 @@ function events = detect_rapid_breathing(data, baseline, breaths_lungs, breaths_
     events = empty_events();
 
     N = size(data,1);
-    t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';  % seconds
+    t_grid = (0:config.grid_step_sec:(N-1)/config.new_fs)';  % seconds
 
     lungs_broken = isfield(config,'problems') && isfield(config.problems,'subjects_with_broken_lung_belt') && ...
         any(config.subject == config.problems.subjects_with_broken_lung_belt);
-    lungs_valid = is_valid_breath_signal(breaths_lungs, false) && ~lungs_broken;
-    diaph_valid = is_valid_breath_signal(breaths_diaph, false);
-    lungs_amp_valid = lungs_valid && is_valid_breath_signal(breaths_lungs, true);
-    diaph_amp_valid = diaph_valid && is_valid_breath_signal(breaths_diaph, true);
+    lungs_valid = is_valid_breath_signal(resp_feat.lungs, false) && ~lungs_broken;
+    diaph_valid = is_valid_breath_signal(resp_feat.diaph, false);
+    lungs_amp_valid = lungs_valid && is_valid_breath_signal(resp_feat.lungs, true);
+    diaph_amp_valid = diaph_valid && is_valid_breath_signal(resp_feat.diaph, true);
 
     if ~lungs_valid && ~diaph_valid
         return;
@@ -46,19 +46,19 @@ function events = detect_rapid_breathing(data, baseline, breaths_lungs, breaths_
     rapid_lungs_rr = false(size(t_grid));
     rr_lungs = nan(size(t_grid));
     if lungs_valid
-        [rapid_lungs_rr, rr_lungs] = compute_breath_rate_mask(breaths_lungs.peak_t, t_grid, min_dur_sec, rr_thr_bpm, '>=', true);
+        [rapid_lungs_rr, rr_lungs] = compute_breath_rate_mask(resp_feat.lungs.peak_t, t_grid, min_dur_sec, rr_thr_bpm, '>=', true);
     end
 
     rapid_diaph_rr = false(size(t_grid));
     rr_diaph = nan(size(t_grid));
     if diaph_valid
-        [rapid_diaph_rr, rr_diaph] = compute_breath_rate_mask(breaths_diaph.peak_t, t_grid, min_dur_sec, rr_thr_bpm, '>=', true);
+        [rapid_diaph_rr, rr_diaph] = compute_breath_rate_mask(resp_feat.diaph.peak_t, t_grid, min_dur_sec, rr_thr_bpm, '>=', true);
     end
 
     [rapid_events_lungs, rapid_lungs] = sustained_condition_to_events( ...
-        rapid_lungs_rr, t_grid, config.fs, N, min_dur_sec, 'rapid');
+        rapid_lungs_rr, t_grid, config.new_fs, N, min_dur_sec, 'rapid');
     [rapid_events_diaph, rapid_diaph] = sustained_condition_to_events( ...
-        rapid_diaph_rr, t_grid, config.fs, N, min_dur_sec, 'rapid');
+        rapid_diaph_rr, t_grid, config.new_fs, N, min_dur_sec, 'rapid');
     rapid_events = merge_events({rapid_events_lungs, rapid_events_diaph});
     if isempty(rapid_events)
         return;
@@ -70,11 +70,11 @@ function events = detect_rapid_breathing(data, baseline, breaths_lungs, breaths_
         ref_lungs = get_resp_ref_on_grid(baseline, 'lungs', t_grid);
         ref_diaph = get_resp_ref_on_grid(baseline, 'diaph', t_grid);
         shallow_amp = compute_amplitude_band_mask( ...
-            breaths_lungs, lungs_amp_valid, breaths_diaph, diaph_amp_valid, ...
-            t_grid, amp_win_sec, ref_lungs, ref_diaph, shallow_lo_ratio, shallow_hi_ratio);
+            resp_feat, lungs_amp_valid, diaph_amp_valid, t_grid, amp_win_sec, ...
+            ref_lungs, ref_diaph, shallow_lo_ratio, shallow_hi_ratio);
         deep_amp = compute_amplitude_band_mask( ...
-            breaths_lungs, lungs_amp_valid, breaths_diaph, diaph_amp_valid, ...
-            t_grid, amp_win_sec, ref_lungs, ref_diaph, deep_lo_ratio, deep_hi_ratio);
+            resp_feat, lungs_amp_valid, diaph_amp_valid, t_grid, amp_win_sec, ...
+            ref_lungs, ref_diaph, deep_lo_ratio, deep_hi_ratio);
     end
 
     desat_events = empty_events();

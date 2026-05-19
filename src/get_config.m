@@ -4,7 +4,8 @@ function config = get_config()
     config = struct;                                                                                    % main configuration container
     config.path_data_in = 'D:\Projects\MAGMA\raw_data';                                                 % folder with raw input .dat files
     config.path_results_out = 'D:\Projects\MAGMA\data_analyis\disorder_classification';                 % root output folder
-    config.fs = 200;                                                                                    % sampling frequency in Hz
+    config.fs = 200;                                                                                    % raw sampling frequency in Hz
+    config.new_fs = 20;                                                                                 % sampling frequency after preprocessing in Hz
     config.data_columns = {'ECG1', 'ECG2', 'SpO₂', 'Resp-Lungs', 'Blood Pressure', 'Resp-Diaphragm'};   % column names in raw data
     config.labels = get_labels();                                                                       % canonical label names and indices
     config.plot_raw_data = true;                                                                        % save an overview plot of raw signals
@@ -12,7 +13,7 @@ function config = get_config()
     config.save_plots = true;                                                                           % save all plots to the subject output folder
     config.plot_format     = 'png';      
     config.plot_dpi        = 150;                                                                       % resolution of the saved figures
-    config.make_figs_visible = 'on';                                                                   % create figures hidden during batch runs, so they dont pop up (for faster run)
+    config.make_figs_visible = 'off';                                                                   % create figures hidden during batch runs, so they dont pop up (for faster run)
     config.overwrite_results = true;   % recompute even if label output already exists (but recompute only the labeling, the features will remain computed if the file "*_features.mat" exists. If you want to recompute features, delete the file.
 
     %---- PREPROCESSING ----                
@@ -84,6 +85,8 @@ function config = get_config()
     config.IrB = struct();              % irregular breathing settings
     config.IrB.min_dur_sec = 60;        % rolling window length and sustained endpoint duration
     config.IrB.cov_thr   = 0.3;         % CoV threshold for irregularity
+    config.IrB.robust_cov_thr = 0.25;   % robust CoV threshold: 1.4826*MAD(IBI)/median(IBI)
+    config.IrB.detection_metric = 'robust_cov'; % options: 'cov', 'robust_cov', 'either', 'both'
     config.IrB.rmssd_thr = 0.0;         % if zero, do not include this measure
     config.IrB.pause_thr_sec = 10;      % exclude irregular windows with pauses at or above this length
     config.IrB.plot_cov_step_sec = 5;   % display CoV as held values over "step_sec" windows (just for display)
@@ -136,6 +139,16 @@ function config = get_config()
     config.Apn.amp_ratio_thr    = 0.10;     % <=10% of baseline in BOTH belts (if only one belt is working, then consider only one)
     config.Apn.min_dur_sec      = 10;       % it needs to be sustained for more than X (here 10) seconds
     config.Apn.mark_desat       = true;     % append "_desat" if a SpO2 drop is associated using config.spo2.desat_association_delay_sec
+    config.Apn.raw_flat_enabled = true;     % optional second apnea detector based directly on raw belt flatness/low motion, independent of detected breath peaks
+    config.Apn.raw_flat_win_sec = 10;       % raw-signal analysis window for flat/low-motion apnea evidence
+    config.Apn.raw_flat_ref_win_sec = 60;   % prior raw-signal reference window for normal belt motion
+    config.Apn.raw_flat_ref_lag_sec = 10;   % ignore the most recent seconds when estimating the raw-signal reference
+    config.Apn.raw_flat_ref_floor_ratio = 0.25;     % prevent raw reference from collapsing during long flat intervals
+    config.Apn.raw_flat_motion_ratio_thr = 0.10;    % raw robust excursion must be <= this fraction of local raw motion reference
+    config.Apn.raw_flat_slope_ratio_thr = 0.15;     % raw median abs slope must be <= this fraction of local raw slope reference
+    config.Apn.raw_flat_hist_peak_frac_thr = 0.35;  % histogram peak must contain at least this fraction of window samples
+    config.Apn.raw_flat_min_plateau_sec = 5;        % minimum continuous time spent inside the dominant histogram amplitude band
+    config.Apn.raw_flat_hist_bins = 40;             % histogram bins used to find held-amplitude plateaus
     config.Apn.do_plot = true;              % save apnea diagnostic plot
 
     %---- LABEL 8: Sigh
@@ -146,7 +159,7 @@ function config = get_config()
     config.Sig.iqr_k = 3.5;                     % IQR multiplier for outlier-based sigh detection
     config.Sig.min_gap_sec = 2;                 % minimum time between separate sigh events (check if this condition actually makes sense)
     config.Sig.manual_control = true;           % allow click-to-add/remove sigh markers in GUI - GUI will appear where sighs can be edited!)
-    config.Sig.manual_window_sec = 1000;        % visible time span for manual GUI scrolling
+    config.Sig.manual_window_sec = 1200;        % visible time span for manual GUI scrolling
     config.Sig.do_plot = true;                  % save sigh diagnostic plot
         
     % Legacy option: previous 60 s thresholding

@@ -1,24 +1,25 @@
-function [b_l, b_d] = extract_respiration_features(data, config)
+function resp_feat = extract_respiration_features(data, config)
     
     idx_lungs = find(strcmp(config.data_columns, 'Resp-Lungs'), 1);
     idx_diaph  = find(strcmp(config.data_columns, 'Resp-Diaphragm'), 1);
 
     % ---- breath series (peaks + per-breath amplitudes) ----
-    b_l = extract_respiration_feature(data(:, idx_lungs), config, 'lungs');
-    b_d = extract_respiration_feature(data(:, idx_diaph), config, 'diaph');
+    resp_feat = struct();
+    resp_feat.lungs = extract_respiration_feature(data(:, idx_lungs), config, 'lungs');
+    resp_feat.diaph = extract_respiration_feature(data(:, idx_diaph), config, 'diaph');
 
     if isfield(config.resp, 'manual_control') && config.resp.manual_control
-        [b_l, b_d] = manual_edit_respiration_features(data, b_l, b_d, config);
+        [resp_feat.lungs, resp_feat.diaph] = manual_edit_respiration_features(data, resp_feat.lungs, resp_feat.diaph, config);
         if isfield(config.resp, 'do_plot') && config.resp.do_plot
-            save_final_respiration_feature_figure(b_l, config, 'lungs');
-            save_final_respiration_feature_figure(b_d, config, 'diaph');
+            save_final_respiration_feature_figure(resp_feat.lungs, config, 'lungs');
+            save_final_respiration_feature_figure(resp_feat.diaph, config, 'diaph');
         end
     end
     
     if ~ismember(config.subject, config.problems.subjects_with_broken_lung_belt)
-        check_normalities(b_l, config);
+        check_normalities(resp_feat.lungs, config);
     end
-    check_normalities(b_d, config);
+    check_normalities(resp_feat.diaph, config);
 end
 
 function save_final_respiration_feature_figure(b, config, basename)
@@ -29,27 +30,34 @@ function save_final_respiration_feature_figure(b, config, basename)
     end
 
     x = b.x0(:);
-    t = (0:numel(x)-1) / config.fs;
+    t = (0:numel(x)-1) / config.new_fs;
 
     figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', config.make_figs_visible);
     hold on
-    plot(t, x)
-    plot_breath_markers(b, 'peak', config.fs, 'ro', 'r');
-    plot_breath_markers(b, 'trough', config.fs, 'bo', 'b');
+    h_signal = plot(t, x, 'DisplayName', 'x0');
+    h_peak = plot_breath_markers(b, 'peak', config.new_fs, 'ro', 'r', 'peaks');
+    h_trough = plot_breath_markers(b, 'trough', config.new_fs, 'bo', 'b', 'troughs');
     title(['FINAL RESPIRATION ' basename newline ...
         'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)])
-    legend('x0', 'peaks', 'troughs')
+    legend_handles = [h_signal; h_peak; h_trough];
+    legend_handles = legend_handles(isgraphics(legend_handles));
+    legend_labels = get(legend_handles, 'DisplayName');
+    if ischar(legend_labels) || isstring(legend_labels)
+        legend_labels = cellstr(legend_labels);
+    end
+    legend(legend_handles, legend_labels, 'Location', 'best')
     ylabel('Standardized respiration belt amplitude')
     xlabel('Time (seconds)')
     hold off
     save_figure(config, basename)
 end
 
-function plot_breath_markers(b, marker_name, fs, marker_style, marker_color)
+function h = plot_breath_markers(b, marker_name, fs, marker_style, marker_color, display_name)
     idx_field = [marker_name '_idx'];
     time_field = [marker_name '_t'];
     val_field = [marker_name '_val'];
 
+    h = gobjects(0);
     marker_t = [];
     marker_val = [];
     if isfield(b, val_field)
@@ -64,5 +72,11 @@ function plot_breath_markers(b, marker_name, fs, marker_style, marker_color)
         marker_val = marker_val(:);
     end
 
-    plot(marker_t, marker_val, marker_style, 'MarkerFaceColor', marker_color)
+    if isempty(marker_t) || isempty(marker_val)
+        return;
+    end
+
+    h = plot(marker_t, marker_val, marker_style, ...
+        'MarkerFaceColor', marker_color, ...
+        'DisplayName', display_name);
 end

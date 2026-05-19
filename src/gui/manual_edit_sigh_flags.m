@@ -1,9 +1,9 @@
-function [flags_lungs, flags_diaph] = manual_edit_sigh_flags(data, bL, bD, flags_lungs, flags_diaph, spo2_feat, config, window_sec)
+function [flags_lungs, flags_diaph] = manual_edit_sigh_flags(data, bL, bD, flags_lungs, flags_diaph, baseline, spo2_feat, config, window_sec)
     idx_lungs = find(strcmp(config.data_columns, 'Resp-Lungs'), 1);
     idx_diaph = find(strcmp(config.data_columns, 'Resp-Diaphragm'), 1);
     if isempty(idx_lungs) || isempty(idx_diaph), return; end
 
-    fs = config.fs;
+    fs = config.new_fs;
     N = size(data,1);
     t_raw = (0:N-1)/fs;
     window_sec = max(30, window_sec);
@@ -21,36 +21,8 @@ function [flags_lungs, flags_diaph] = manual_edit_sigh_flags(data, bL, bD, flags
         'ro', 'MarkerFaceColor','r', 'MarkerSize', 7);
     title(ax2, 'GUI sigh manual editing (diaphragm)'); ylabel(ax2, 'Resp-Diaphragm'); grid(ax2,'on');
 
-    ax3 = subplot(3,1,3); hold(ax3,'on');
-    [t_spo2, spo2] = get_spo2_trace(data, spo2_feat, config);
-    if isempty(spo2)
-        plot(ax3, t_raw, zeros(size(t_raw)), 'w');
-        ylim(ax3, [-1 1]);
-        title(ax3, 'GUI SpO2 unavailable. Left-click trace to add. Left-click red marker to remove.');
-    else
-        plot(ax3, t_spo2, spo2, 'k');
-        yline(ax3, 90, 'r--', 'LineWidth', 1.6);
-        finite_spo2 = spo2(isfinite(spo2));
-        if ~isempty(finite_spo2)
-            y0 = min(finite_spo2);
-            y1 = max(finite_spo2);
-            if y0 == y1
-                ylim(ax3, [y0-1 y1+1]);
-            else
-                ylim(ax3, [y0-0.05*(y1-y0) y1+0.05*(y1-y0)]);
-            end
-        end
-        if isfield(spo2_feat, 'desat_events') && ~isempty(spo2_feat.desat_events)
-            axes(ax3);
-            shade_events_on_axis(spo2_feat.desat_events);
-            plot(ax3, t_spo2, spo2, 'k');
-            yline(ax3, 90, 'r--', 'LineWidth', 1.6);
-        end
-        title(ax3, 'GUI SpO2. Left-click trace to add. Left-click red marker to remove.');
-    end
-    xlabel(ax3, 'Time (s)');
-    ylabel(ax3, 'SpO2 (%)');
-    grid(ax3,'on');
+    ax3 = subplot(3,1,3);
+    plot_spo2_diagnostic_panel(ax3, data, baseline, spo2_feat, config, 'SpO2 with desaturation thresholds');
 
     sgtitle(['GUI SIGH MANUAL EDITING' newline ...
         'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)]);
@@ -150,27 +122,5 @@ function [flags_lungs, flags_diaph] = manual_edit_sigh_flags(data, bL, bD, flags
         set(marker_plot, ...
             'XData', marker_t, ...
             'YData', interp1(t_raw, data(:,signal_idx), marker_t, 'linear','extrap'));
-    end
-
-    function [t_spo2, spo2] = get_spo2_trace(data, spo2_feat, config)
-        if isfield(spo2_feat, 'spo2') && isfield(spo2_feat, 't_spo2') && ~isempty(spo2_feat.spo2)
-            spo2 = spo2_feat.spo2(:);
-            t_spo2 = spo2_feat.t_spo2(:);
-            return;
-        end
-
-        idx_spo2 = find(strcmp(config.data_columns, 'SpO2'), 1);
-        if isempty(idx_spo2)
-            idx_spo2 = find(contains(config.data_columns, 'SpO'), 1);
-        end
-
-        if isempty(idx_spo2)
-            t_spo2 = [];
-            spo2 = [];
-            return;
-        end
-
-        spo2 = data(:, idx_spo2);
-        t_spo2 = (0:numel(spo2)-1)' / config.fs;
     end
 end

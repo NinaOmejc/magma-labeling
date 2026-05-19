@@ -1,5 +1,5 @@
-function [breaths_lungs, breaths_diaph] = load_or_extract_respiratory_features(data, config)
-% Load cached feature extraction results, or run extraction and cache them.
+function resp_feat = load_or_extract_respiratory_features(data, config)
+% Load cached respiratory feature extraction results, or run extraction and cache them.
 
     cache_file = feature_cache_file(config);
     cache_version = current_feature_cache_version();
@@ -7,22 +7,21 @@ function [breaths_lungs, breaths_diaph] = load_or_extract_respiratory_features(d
     if exist(cache_file, 'file')
         cached = load(cache_file);
         if is_valid_feature_cache(cached, size(data,1), cache_version)
-            breaths_lungs = cached.breaths_lungs;
-            breaths_diaph = cached.breaths_diaph;
-            fprintf('Loaded cached feature extraction results: %s\n', cache_file);
+            resp_feat = cached_resp_feat(cached);
+            fprintf('Loaded cached respiratory feature extraction results: %s\n', cache_file);
             return;
         end
 
         warning('Feature cache exists but is incomplete or mismatched. Recomputing: %s', cache_file);
     end
 
-    [breaths_lungs, breaths_diaph] = extract_respiration_features(data, config);
+    resp_feat = extract_respiration_features(data, config);
 
     feature_cache_meta = struct( ...
         'cache_version', cache_version, ...
         'subject', config.subject, ...
         'measure', config.measure, ...
-        'fs', config.fs, ...
+        'fs', config.new_fs, ...
         'n_samples', size(data,1), ...
         'created_on', char(datetime('now', 'Format', 'yyyy-MM-dd HH:mm:ss')), ...
         'manual_resp_control', isfield(config.resp, 'manual_control') && config.resp.manual_control);
@@ -32,8 +31,8 @@ function [breaths_lungs, breaths_diaph] = load_or_extract_respiratory_features(d
         mkdir(cache_dir);
     end
 
-    save(cache_file, 'breaths_lungs', 'breaths_diaph', 'feature_cache_meta');
-    fprintf('Saved feature extraction results: %s\n', cache_file);
+    save(cache_file, 'resp_feat', 'feature_cache_meta');
+    fprintf('Saved respiratory feature extraction results: %s\n', cache_file);
 end
 
 function cache_file = feature_cache_file(config)
@@ -51,36 +50,52 @@ function cache_file = feature_cache_file(config)
 end
 
 function ok = is_valid_feature_cache(cached, n_samples, cache_version)
-    required = {'breaths_lungs', 'breaths_diaph'};
-    ok = all(isfield(cached, required));
+    ok = isfield(cached, 'feature_cache_meta') && isstruct(cached.feature_cache_meta) && ...
+       isfield(cached.feature_cache_meta, 'cache_version') && cached.feature_cache_meta.cache_version == cache_version;
     if ~ok
         return;
     end
 
-    if ~isfield(cached, 'feature_cache_meta') || ~isstruct(cached.feature_cache_meta) || ...
-       ~isfield(cached.feature_cache_meta, 'cache_version') || cached.feature_cache_meta.cache_version ~= cache_version
+    if isfield(cached, 'resp_feat')
+        resp_feat = cached.resp_feat;
+    elseif all(isfield(cached, {'breaths_lungs', 'breaths_diaph'}))
+        resp_feat = struct('lungs', cached.breaths_lungs, 'diaph', cached.breaths_diaph);
+    else
         ok = false;
         return;
     end
 
-    ok = isstruct(cached.breaths_lungs) && isstruct(cached.breaths_diaph) && ...
-         isfield(cached.breaths_lungs, 'peak_idx') && isfield(cached.breaths_lungs, 'trough_idx') && ...
-         isfield(cached.breaths_diaph, 'peak_idx') && isfield(cached.breaths_diaph, 'trough_idx');
+    ok = is_valid_resp_feat(resp_feat, n_samples);
+end
+
+function resp_feat = cached_resp_feat(cached)
+    if isfield(cached, 'resp_feat')
+        resp_feat = cached.resp_feat;
+    else
+        resp_feat = struct('lungs', cached.breaths_lungs, 'diaph', cached.breaths_diaph);
+    end
+end
+
+function ok = is_valid_resp_feat(resp_feat, n_samples)
+    ok = isstruct(resp_feat) && isfield(resp_feat, 'lungs') && isfield(resp_feat, 'diaph') && ...
+         isstruct(resp_feat.lungs) && isstruct(resp_feat.diaph) && ...
+         isfield(resp_feat.lungs, 'peak_idx') && isfield(resp_feat.lungs, 'trough_idx') && ...
+         isfield(resp_feat.diaph, 'peak_idx') && isfield(resp_feat.diaph, 'trough_idx');
     if ~ok
         return;
     end
 
-    if isfield(cached.breaths_lungs, 'x0') && numel(cached.breaths_lungs.x0) ~= n_samples
+    if isfield(resp_feat.lungs, 'x0') && numel(resp_feat.lungs.x0) ~= n_samples
         ok = false;
         return;
     end
 
-    if isfield(cached.breaths_diaph, 'x0') && numel(cached.breaths_diaph.x0) ~= n_samples
+    if isfield(resp_feat.diaph, 'x0') && numel(resp_feat.diaph.x0) ~= n_samples
         ok = false;
         return;
     end
 end
 
 function v = current_feature_cache_version()
-    v = 2;
+    v = 3;
 end

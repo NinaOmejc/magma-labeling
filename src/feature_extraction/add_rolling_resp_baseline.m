@@ -1,4 +1,4 @@
-function baseline = add_rolling_resp_baseline(baseline, breaths_lungs, breaths_diaph, N, config)
+function baseline = add_rolling_resp_baseline(baseline, resp_feat, N, config)
 % add_rolling_resp_baseline
 % Adds time-varying respiratory amplitude references to baseline.
 
@@ -6,7 +6,7 @@ if ~isfield(config, 'rolling_baseline') || ~config.rolling_baseline.enabled
     return;
 end
 
-t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';
+t_grid = (0:config.grid_step_sec:(N-1)/config.new_fs)';
 
 win_sec = config.rolling_baseline.win_sec;
 lag_sec = config.rolling_baseline.lag_sec;
@@ -17,11 +17,11 @@ baseline.rolling = struct();
 baseline.rolling.t_grid = t_grid;
 
 baseline.rolling.lungs_amp_ref = rolling_amp_ref( ...
-    breaths_lungs, t_grid, win_sec, lag_sec, min_breaths, ...
+    resp_feat.lungs, t_grid, win_sec, lag_sec, min_breaths, ...
     method, baseline.lungs_amp_ref);
 
 baseline.rolling.diaph_amp_ref = rolling_amp_ref( ...
-    breaths_diaph, t_grid, win_sec, lag_sec, min_breaths, ...
+    resp_feat.diaph, t_grid, win_sec, lag_sec, min_breaths, ...
     method, baseline.diaph_amp_ref);
 
 
@@ -41,10 +41,10 @@ if config.rolling_baseline.do_plot
     % -------------------------
     nexttile;
     
-    if isfield(breaths_lungs, 'peak_t') && isfield(breaths_lungs, 'amp') && ...
-            ~isempty(breaths_lungs.peak_t) && ~isempty(breaths_lungs.amp)
+    if isfield(resp_feat.lungs, 'peak_t') && isfield(resp_feat.lungs, 'amp') && ...
+            ~isempty(resp_feat.lungs.peak_t) && ~isempty(resp_feat.lungs.amp)
     
-        plot(breaths_lungs.peak_t, breaths_lungs.amp, '.-');
+        plot(resp_feat.lungs.peak_t, resp_feat.lungs.amp, '.-');
         hold on;
     else
         hold on;
@@ -64,8 +64,8 @@ if config.rolling_baseline.do_plot
         config.rolling_baseline.method), ...
         'Interpreter', 'none');
     
-    if isfield(breaths_lungs, 'peak_t') && isfield(breaths_lungs, 'amp') && ...
-        ~isempty(breaths_lungs.peak_t) && ~isempty(breaths_lungs.amp)
+    if isfield(resp_feat.lungs, 'peak_t') && isfield(resp_feat.lungs, 'amp') && ...
+        ~isempty(resp_feat.lungs.peak_t) && ~isempty(resp_feat.lungs.amp)
 
         legend('Breath amplitudes', 'Rolling baseline', 'Static baseline', ...
                 'Location', 'best');
@@ -77,10 +77,10 @@ if config.rolling_baseline.do_plot
     % -------------------------
     nexttile;
     
-    if isfield(breaths_diaph, 'peak_t') && isfield(breaths_diaph, 'amp') && ...
-            ~isempty(breaths_diaph.peak_t) && ~isempty(breaths_diaph.amp)
+    if isfield(resp_feat.diaph, 'peak_t') && isfield(resp_feat.diaph, 'amp') && ...
+            ~isempty(resp_feat.diaph.peak_t) && ~isempty(resp_feat.diaph.amp)
     
-        plot(breaths_diaph.peak_t, breaths_diaph.amp, '.-');
+        plot(resp_feat.diaph.peak_t, resp_feat.diaph.amp, '.-');
         hold on;
     else
         hold on;

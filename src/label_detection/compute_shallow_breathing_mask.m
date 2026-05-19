@@ -1,10 +1,16 @@
-function cond = compute_shallow_breathing_mask(breaths, t_grid, win_sec, ref, r_lo, r_hi)
+function cond = compute_shallow_breathing_mask(resp, t_grid, win_sec, ref, r_lo, r_hi)
     
     cond = false(size(t_grid));
     
-    if ~breaths.ok
+    if ~resp.ok
         return
     end
+
+    peak_t = resp.peak_t(:);
+    amp = resp.amp(:);
+    n = min(numel(peak_t), numel(amp));
+    peak_t = peak_t(1:n);
+    amp = amp(1:n);
     
     if isscalar(ref)
         ref = ref * ones(size(t_grid));
@@ -24,7 +30,7 @@ function cond = compute_shallow_breathing_mask(breaths, t_grid, win_sec, ref, r_
             continue;
         end
     
-        amplitudes_in_window = breaths.amp(breaths.peak_t <= t & breaths.peak_t >= lb);
+        amplitudes_in_window = amp(peak_t <= t & peak_t >= lb);
     
         if numel(amplitudes_in_window) < 3
             continue;

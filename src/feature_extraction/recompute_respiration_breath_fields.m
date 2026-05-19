@@ -2,7 +2,7 @@ function b = recompute_respiration_breath_fields(b, x, peak_idx, config)
 % Recompute peak, trough, amplitude, IBI, and RR fields after peak edits.
 
     x = x(:);
-    fs = config.fs;
+    fs = config.new_fs;
 
     peak_idx = peak_idx(:);
     peak_idx = peak_idx(isfinite(peak_idx));

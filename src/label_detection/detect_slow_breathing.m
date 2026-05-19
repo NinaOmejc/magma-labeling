@@ -1,4 +1,4 @@
-function events = detect_slow_breathing(data, baseline, breaths_lungs, breaths_diaph, spo2_feat, config)
+function events = detect_slow_breathing(data, baseline, resp_feat, spo2_feat, config)
 % detect_slow_breathing
 % Label 3 – Slow Breathing (Bradypnea)
 %
@@ -15,12 +15,12 @@ function events = detect_slow_breathing(data, baseline, breaths_lungs, breaths_d
     events = empty_events();
 
     N = size(data,1);
-    t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';  % seconds
+    t_grid = (0:config.grid_step_sec:(N-1)/config.new_fs)';  % seconds
 
     lungs_broken = isfield(config,'problems') && isfield(config.problems,'subjects_with_broken_lung_belt') && ...
         any(config.subject == config.problems.subjects_with_broken_lung_belt);
-    lungs_valid = is_valid_breath_signal(breaths_lungs, false) && ~lungs_broken;
-    diaph_valid = is_valid_breath_signal(breaths_diaph, false);
+    lungs_valid = is_valid_breath_signal(resp_feat.lungs, false) && ~lungs_broken;
+    diaph_valid = is_valid_breath_signal(resp_feat.diaph, false);
 
     if ~lungs_valid && ~diaph_valid
         return;
@@ -57,20 +57,20 @@ function events = detect_slow_breathing(data, baseline, breaths_lungs, breaths_d
     slow_lungs = false(size(t_grid));
     rr_lungs = nan(size(t_grid));
     if lungs_valid
-        [slow_lungs, rr_lungs] = compute_breath_rate_mask(breaths_lungs.peak_t, t_grid, analysis_win_sec, rr_thr_bpm, '<=', true);
+        [slow_lungs, rr_lungs] = compute_breath_rate_mask(resp_feat.lungs.peak_t, t_grid, analysis_win_sec, rr_thr_bpm, '<=', true);
     end
 
     slow_diaph = false(size(t_grid));
     rr_diaph = nan(size(t_grid));
     if diaph_valid
-        [slow_diaph, rr_diaph] = compute_breath_rate_mask(breaths_diaph.peak_t, t_grid, analysis_win_sec, rr_thr_bpm, '<=', true);
+        [slow_diaph, rr_diaph] = compute_breath_rate_mask(resp_feat.diaph.peak_t, t_grid, analysis_win_sec, rr_thr_bpm, '<=', true);
     end
 
     % Sustain the endpoint RR condition before creating events.
     [events_lungs, slow_lungs] = sustained_condition_to_events( ...
-        slow_lungs, t_grid, config.fs, N, min_dur_sec, 'slow_breathing_lungs');
+        slow_lungs, t_grid, config.new_fs, N, min_dur_sec, 'slow_breathing_lungs');
     [events_diaph, slow_diaph] = sustained_condition_to_events( ...
-        slow_diaph, t_grid, config.fs, N, min_dur_sec, 'slow_breathing_diaph');
+        slow_diaph, t_grid, config.new_fs, N, min_dur_sec, 'slow_breathing_diaph');
 
     events = merge_events({events_lungs, events_diaph});
 
@@ -83,8 +83,8 @@ function events = detect_slow_breathing(data, baseline, breaths_lungs, breaths_d
         ref_diaph = get_resp_ref_on_grid(baseline, 'diaph', t_grid);
 
         shallow_amp = compute_amplitude_band_mask( ...
-            breaths_lungs, lungs_valid, breaths_diaph, diaph_valid, ...
-            t_grid, config.ShB.min_dur_sec, ref_lungs, ref_diaph, ...
+            resp_feat, lungs_valid, diaph_valid, t_grid, ...
+            config.ShB.min_dur_sec, ref_lungs, ref_diaph, ...
             shallow_lo_ratio, shallow_hi_ratio);
 
         % Rewrite event types based on majority overlap with amp_shallow

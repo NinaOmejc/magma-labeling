@@ -17,7 +17,7 @@ function data_modified = modify_data_to_test(data, fs, columns, trange_min, modi
 %   data_modified     - same size as data, with selected columns modified
 %
 % Example:
-%   data_mod = modify_data_to_test(data, config.fs, [5 6], [2 4], ...
+%   data_mod = modify_data_to_test(data, config.new_fs, [5 6], [2 4], ...
 %       'shallow_breathing', true);
 
     % -----------------------------
