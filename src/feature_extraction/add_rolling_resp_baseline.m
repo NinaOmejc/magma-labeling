@@ -32,7 +32,7 @@ if config.rolling_baseline.do_plot
     t_roll = baseline.rolling.t_grid;
     x_label_extra = 'Rolling baseline shown at detector time';
     
-    figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', config.make_figs_visible, 'Color', 'w');
+    fig = figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', config.make_figs_visible, 'Color', 'w');
     
     tiledlayout(2, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
     
@@ -97,6 +97,8 @@ if config.rolling_baseline.do_plot
     legend('Breath amplitudes', 'Rolling baseline', 'Static baseline', ...
         'Location', 'best');
     grid on;
+
+    set(fig, 'Visible', config.make_figs_visible);
     
     save_figure(config, 'rolling_baseline')
 end

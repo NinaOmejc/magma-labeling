@@ -4,7 +4,9 @@ function resp_feat = load_or_extract_respiratory_features(data, config)
     cache_file = feature_cache_file(config);
     cache_version = current_feature_cache_version();
 
-    if exist(cache_file, 'file')
+    force_recompute = isfield(config, 'overwrite_features') && config.overwrite_features;
+
+    if exist(cache_file, 'file') && ~force_recompute
         cached = load(cache_file);
         if is_valid_feature_cache(cached, size(data,1), cache_version)
             resp_feat = cached_resp_feat(cached);
@@ -13,6 +15,8 @@ function resp_feat = load_or_extract_respiratory_features(data, config)
         end
 
         warning('Feature cache exists but is incomplete or mismatched. Recomputing: %s', cache_file);
+    elseif exist(cache_file, 'file') && force_recompute
+        fprintf('Recomputing respiratory features because config.overwrite_features is true: %s\n', cache_file);
     end
 
     resp_feat = extract_respiration_features(data, config);

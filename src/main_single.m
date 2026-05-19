@@ -1,6 +1,6 @@
 
 %---- SETTINGS ----
-subjects = [1 3 7 55 80 92];
+subjects = 80:81;
 remove_subjects = [3 30 91];
 subjects(ismember(subjects, remove_subjects)) = [];
 
@@ -15,7 +15,7 @@ end
 % load config structure
 config = get_config();
 
-%---- CONDITION AND SUBJECT LOOPS
+%---- MEASUREMENT AND SUBJECT LOOPS
 for isub = 1:length(subjects)
     for imeasure = 1:length(measurements)
         config.subject = subjects(isub);
@@ -53,13 +53,15 @@ for isub = 1:length(subjects)
         events_Des = detect_desaturation(data, baseline, spo2_feat, config);
         events_Apn = detect_apnea(data, baseline, resp_feat, spo2_feat, config);
         events_Sigh = detect_sigh(data, baseline, resp_feat, spo2_feat, config);
+        events_CSR = detect_periodic_breathing(data, resp_feat, config);
 
-        % JOIN EVENTS FOR SUBJECT, CONDITION
-        sub_events = merge_events({events_ShB, events_IrB, events_SlB, events_RaB, events_ReA, events_Des, events_Apn, events_Sigh});
+        % JOIN EVENTS FOR SUBJECT, MEASUREMENT
+        sub_events = merge_events({events_ShB, events_IrB, events_SlB, events_RaB, events_ReA, events_Des, events_Apn, events_Sigh, events_CSR});
         sub_events = normalize_event_types_and_meta(sub_events);
         
         N = size(data,1); 
         [label_mask, label_names] = events_to_time_mask(sub_events, N, config);
+        plot_label_mask(label_mask, label_names, config);
         diagnostic_signals = compute_label_diagnostic_signals(data, baseline, resp_feat, spo2_feat, config, diagnostics_ReA);
         
         % if ~isempty(events_IrB)
@@ -68,7 +70,7 @@ for isub = 1:length(subjects)
 
         % SAVE
         results.subject = config.subject;
-        results.condition = config.measure;
+        results.measure = config.measure;
         results.events = sub_events;
         results.mask   = label_mask;
         results.label_names = label_names;
@@ -82,3 +84,5 @@ for isub = 1:length(subjects)
         disp(['Successfully finished label detection for: Sub ' num2str(config.subject) ' | Measurement: ' num2str(config.measure) ])
     end
 end
+
+save([config.path_results_out, filesep, 'analysis_configuration.mat'], "config")

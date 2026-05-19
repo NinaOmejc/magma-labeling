@@ -178,6 +178,7 @@ function [output, config, trend] = preprocess_data(t_series, config)
 
     [output, trend, config] = resample_preprocessed_data(output, trend, config, sampl_freq);
 end
+
 function [data_out, trend_out, config] = resample_preprocessed_data(data_in, trend_in, config, input_fs)
 % Resample preprocessed data by interpolating each column independently.
 

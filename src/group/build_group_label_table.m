@@ -19,6 +19,7 @@ function group_table = build_group_label_table(config_or_results_path)
     end
 
     files = dir(fullfile(results_path, 'Sub*_M*', '*_labels.mat'));
+    files = filter_result_files(files, config);
     out_dir = fullfile(results_path, 'group_analysis');
     if ~isfolder(out_dir)
         mkdir(out_dir);
@@ -52,8 +53,10 @@ function row = label_file_to_summary_row(label_file, config)
 
     row = struct();
     row.label_file = label_file;
-    row.subject = get_loaded_value(loaded, 'subject', nan);
-    row.condition = get_loaded_value(loaded, 'condition', nan);
+    [file_subject, file_measure] = parse_subject_measure(label_file);
+    row.subject = get_loaded_value(loaded, 'subject', file_subject);
+    row.measure = get_loaded_value(loaded, 'measure', file_measure);
+    row.subject_group = subject_group_for_subject(row.subject, config);
 
     if isfield(loaded, 'mask') && isfield(loaded, 'label_names')
         fs = get_results_fs(loaded, config);
@@ -63,7 +66,11 @@ function row = label_file_to_summary_row(label_file, config)
             label = matlab.lang.makeValidName(loaded.label_names{j});
             label_samples = nnz(loaded.mask(:,j) ~= 0);
             row.(['label_' label '_duration_sec']) = label_samples / fs;
-            row.(['label_' label '_fraction']) = (label_samples / fs) / duration_sec;
+            if isfinite(duration_sec) && duration_sec > 0
+                row.(['label_' label '_fraction']) = (label_samples / fs) / duration_sec;
+            else
+                row.(['label_' label '_fraction']) = nan;
+            end
         end
     else
         row.duration_sec = nan;
@@ -75,6 +82,11 @@ function row = label_file_to_summary_row(label_file, config)
 
     if isfield(loaded, 'diagnostic_signals')
         row = add_diagnostic_summaries(row, loaded.diagnostic_signals);
+    end
+
+    if isfield(loaded, 'baseline') && isfield(loaded.baseline, 'rolling')
+        row = add_numeric_struct_summaries(row, loaded.baseline.rolling, ...
+            'baseline_rolling', {'t_grid'});
     end
 end
 
@@ -125,19 +137,24 @@ function row = add_event_counts(row, events)
 end
 
 function row = add_diagnostic_summaries(row, diagnostic_signals)
-    names = fieldnames(diagnostic_signals);
+    row = add_numeric_struct_summaries(row, diagnostic_signals, ...
+        'diagnostic', {'time_sec'});
+end
+
+function row = add_numeric_struct_summaries(row, source, prefix, skip_names)
+    names = fieldnames(source);
     for i = 1:numel(names)
         name = names{i};
-        if strcmp(name, 'time_sec')
+        if any(strcmp(name, skip_names))
             continue;
         end
 
-        x = diagnostic_signals.(name);
+        x = source.(name);
         if ~isnumeric(x)
             continue;
         end
 
-        col = ['diagnostic_' matlab.lang.makeValidName(name)];
+        col = [prefix '_' matlab.lang.makeValidName(name)];
         if isscalar(x)
             row.(col) = x;
         else
@@ -153,6 +170,13 @@ function row = add_diagnostic_summaries(row, diagnostic_signals)
                 row.([col '_median']) = median(x, 'omitnan');
                 row.([col '_p10']) = prctile(x, 10);
                 row.([col '_p90']) = prctile(x, 90);
+                row.([col '_std']) = std(x, 'omitnan');
+                med_x = median(x, 'omitnan');
+                if isfinite(med_x) && med_x ~= 0
+                    row.([col '_cv']) = std(x, 'omitnan') / abs(med_x);
+                else
+                    row.([col '_cv']) = nan;
+                end
             end
         end
     end
@@ -171,9 +195,85 @@ function rows = fill_missing_fields(rows, all_fields)
 end
 
 function value = missing_value_for_field(name)
-    if strcmp(name, 'label_file')
+    if strcmp(name, 'label_file') || strcmp(name, 'subject_group')
         value = '';
+    elseif (startsWith(name, 'events_') || startsWith(name, 'subtype_')) && endsWith(name, '_count')
+        value = 0;
+    elseif startsWith(name, 'label_') && ...
+            (endsWith(name, '_duration_sec') || endsWith(name, '_fraction'))
+        value = 0;
     else
         value = nan;
+    end
+end
+
+function files = filter_result_files(files, config)
+    subjects = get_group_filter(config, 'subjects');
+    measures = get_group_filter(config, 'measurements');
+
+    if isempty(subjects) && isempty(measures)
+        return;
+    end
+
+    keep = true(size(files));
+    for i = 1:numel(files)
+        [subject, measure] = parse_subject_measure(fullfile(files(i).folder, files(i).name));
+        if ~isempty(subjects) && ~ismember(subject, subjects)
+            keep(i) = false;
+        end
+        if ~isempty(measures) && ~ismember(measure, measures)
+            keep(i) = false;
+        end
+    end
+    files = files(keep);
+end
+
+function value = get_group_filter(config, name)
+    value = [];
+    if isfield(config, 'group') && isfield(config.group, name)
+        value = config.group.(name);
+    elseif isfield(config, name)
+        value = config.(name);
+    end
+    value = value(:)';
+end
+
+function group_name = subject_group_for_subject(subject, config)
+    group_name = 'Unknown';
+    if isempty(subject) || ~isnumeric(subject) || ~isscalar(subject) || ~isfinite(subject)
+        return;
+    end
+
+    control_subjects = get_subject_group_list(config, 'control_subjects');
+    patient_subjects = get_subject_group_list(config, 'patient_subjects');
+
+    if ismember(subject, control_subjects)
+        group_name = 'Control';
+    elseif ismember(subject, patient_subjects)
+        group_name = 'Patient';
+    end
+end
+
+function subjects = get_subject_group_list(config, name)
+    subjects = [];
+    if isfield(config, 'group') && isfield(config.group, name)
+        subjects = config.group.(name);
+    elseif isfield(config, name)
+        subjects = config.(name);
+    end
+    subjects = subjects(:)';
+end
+
+function [subject, measure] = parse_subject_measure(label_file)
+    subject = nan;
+    measure = nan;
+    [~, name] = fileparts(label_file);
+    tok = regexp(name, 'Sub(\d+)_M(\d+)', 'tokens', 'once');
+    if isempty(tok)
+        tok = regexp(label_file, 'Sub(\d+)_M(\d+)', 'tokens', 'once');
+    end
+    if ~isempty(tok)
+        subject = str2double(tok{1});
+        measure = str2double(tok{2});
     end
 end

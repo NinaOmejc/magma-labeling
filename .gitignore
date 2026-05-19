@@ -15,3 +15,5 @@ Thumbs.db
 # Data folders
 data/
 results/
+test_data/*.dat
+test_data/*.csv

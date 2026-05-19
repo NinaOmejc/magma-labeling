@@ -103,25 +103,31 @@ function events = detect_sigh(data, baseline, resp_feat, spo2_feat, config)
         sgtitle(['SIGH | Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)])
 
         ax1 = subplot(3,1,1); hold on
-        if ~isempty(idx_lungs), plot(t_raw, data(:,idx_lungs), 'k'); end
+        h_lungs_trace = gobjects(0);
+        if ~isempty(idx_lungs), h_lungs_trace = plot(t_raw, data(:,idx_lungs), 'k', 'DisplayName', 'Resp-Lungs'); end
         if ~isempty(idx_lungs)
             y_lungs_mark = interp1(t_raw, data(:,idx_lungs), resp_feat.lungs.peak_t(sigh_lungs), 'linear', 'extrap');
         else
             y_lungs_mark = nan(sum(sigh_lungs),1);
         end
-        plot(resp_feat.lungs.peak_t(sigh_lungs), y_lungs_mark, 'ro', 'MarkerFaceColor','r')
+        h_lungs_sigh = plot(resp_feat.lungs.peak_t(sigh_lungs), y_lungs_mark, 'ro', 'MarkerFaceColor','r', ...
+            'DisplayName', 'Sigh breaths');
         title('Sigh detection (lungs): red dots = sigh breaths')
+        add_axis_legend(gca, [h_lungs_trace; h_lungs_sigh], {'Resp-Lungs', 'Sigh breaths'});
         xlabel('Time (s)'); ylabel('Resp-Lungs'); grid on; hold off
 
         ax2 = subplot(3,1,2); hold on
-        if ~isempty(idx_diaph), plot(t_raw, data(:,idx_diaph), 'k'); end
+        h_diaph_trace = gobjects(0);
+        if ~isempty(idx_diaph), h_diaph_trace = plot(t_raw, data(:,idx_diaph), 'k', 'DisplayName', 'Resp-Diaphragm'); end
         if ~isempty(idx_diaph)
             y_diaph_mark = interp1(t_raw, data(:,idx_diaph), resp_feat.diaph.peak_t(sigh_diaph), 'linear', 'extrap');
         else
             y_diaph_mark = nan(sum(sigh_diaph),1);
         end
-        plot(resp_feat.diaph.peak_t(sigh_diaph), y_diaph_mark, 'ro', 'MarkerFaceColor','r')
+        h_diaph_sigh = plot(resp_feat.diaph.peak_t(sigh_diaph), y_diaph_mark, 'ro', 'MarkerFaceColor','r', ...
+            'DisplayName', 'Sigh breaths');
         title('Sigh detection (diaphragm): red dots = sigh breaths')
+        add_axis_legend(gca, [h_diaph_trace; h_diaph_sigh], {'Resp-Diaphragm', 'Sigh breaths'});
         xlabel('Time (s)'); ylabel('Resp-Diaphragm'); grid on; hold off
 
         % ----------------------
@@ -322,4 +328,26 @@ function flags_out = enforce_min_gap_by_strength(flags_in, peak_t, strength, min
             flags_out(i) = true;
         end
     end
+end
+
+function add_axis_legend(ax, handles, labels)
+    keep = false(size(handles));
+    for i = 1:numel(handles)
+        h = handles(i);
+        if ~isgraphics(h)
+            continue;
+        end
+        xdata = get(h, 'XData');
+        if ~isempty(xdata)
+            keep(i) = true;
+        end
+    end
+
+    handles = handles(keep);
+    labels = labels(keep);
+    if isempty(handles)
+        legend(ax, 'off');
+        return;
+    end
+    legend(ax, handles, labels, 'Location', 'eastoutside');
 end

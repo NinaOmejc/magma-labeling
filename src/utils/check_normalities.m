@@ -22,21 +22,21 @@ function [signals_normality, normality_stats] = check_normalities(sigs, config)
     
     col_names = {'x0', 'peak_val', 'trough_val', 'amp', 'ibi', 'rr_bpm'};
 
-    do_plot = true;
+    do_plot = false;
     alpha = 0.05;
     method = 'lillie';
 
-    % if nargin >= 2 && isfield(config, 'normality')
-    %     if isfield(config.normality, 'do_plot')
-    %         do_plot = config.normality.do_plot;
-    %     end
-    %     if isfield(config.normality, 'alpha')
-    %         alpha = config.normality.alpha;
-    %     end
-    %     if isfield(config.normality, 'method')
-    %         method = config.normality.method;
-    %     end
-    % end
+    if nargin >= 2 && isfield(config, 'normality')
+        if isfield(config.normality, 'do_plot')
+            do_plot = config.normality.do_plot;
+        end
+        if isfield(config.normality, 'alpha')
+            alpha = config.normality.alpha;
+        end
+        if isfield(config.normality, 'method')
+            method = config.normality.method;
+        end
+    end
 
     % -----------------------------
     % Allocate outputs

@@ -79,7 +79,7 @@ function shallow_events = detect_shallow_breathing(data, baseline, resp_feat, sp
             ref_txt = 'Static amp ref';
         end
         
-        figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', config.make_figs_visible); 
+        fig = figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', config.make_figs_visible); 
         % ----------------------
         % Subplot 1: Lungs
         % ----------------------
@@ -105,7 +105,7 @@ function shallow_events = detect_shallow_breathing(data, baseline, resp_feat, sp
             if isfinite(y_top_l) && y_top_l > 0
                 ylim([0, 1.05 * y_top_l])
             end
-            shade_events_on_axis(shallow_events_lungs);
+            shade_events_on_axis(gca, shallow_events_lungs);
             legend('Location','eastoutside')
         end
         title('Lungs Breath Amplitudes')
@@ -141,7 +141,7 @@ function shallow_events = detect_shallow_breathing(data, baseline, resp_feat, sp
         if isempty(shallow_events_diaph)
             legend('Location','eastoutside')
         else
-            shade_events_on_axis(shallow_events_diaph);
+            shade_events_on_axis(gca, shallow_events_diaph);
             legend('Location','eastoutside')
         end
         title('Diaphragm Breath Amplitudes')
@@ -190,6 +190,8 @@ function shallow_events = detect_shallow_breathing(data, baseline, resp_feat, sp
         
             ax(k).Position = p;
         end
+
+        set(fig, 'Visible', config.make_figs_visible);
         
         linkaxes(ax,'x');
         xlim(ax(1), [0 t_grid(end)]);

@@ -37,7 +37,7 @@ function plot_respiratory_asynchrony(data, config, t_grid, rea_mask, rea_metrics
     idx_diaph = find(strcmp(config.data_columns, 'Resp-Diaphragm'), 1);
     t_raw = (0:size(data, 1)-1) / config.new_fs;
 
-    figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', config.make_figs_visible);
+    fig = figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', config.make_figs_visible);
     tl = tiledlayout(5, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
     title(tl, ['RESPIRATORY ASYNCHRONY' newline 'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)])
 
@@ -71,6 +71,7 @@ function plot_respiratory_asynchrony(data, config, t_grid, rea_mask, rea_metrics
         right_pad = 0;
     end
     xlim(ax1, [0 max(t_raw(end), t_grid(end)) + right_pad]);
+    set(fig, 'Visible', config.make_figs_visible);
     save_figure(config, 'respiratory_asynchrony');
 end
 

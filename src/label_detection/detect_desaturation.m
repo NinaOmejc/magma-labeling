@@ -19,7 +19,7 @@ function events_Des = detect_desaturation(data, baseline, spo2_feat, config)
         return;
     end
 
-    figure('Units', 'pixels', 'Position', near_fullscreen_figure_position(), ...
+    fig = figure('Units', 'pixels', 'Position', near_fullscreen_figure_position(), ...
         'Visible', config.make_figs_visible);
     sgtitle(['Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure) ' | Label 6 - Desaturation (Hypoxia)'])
 
@@ -31,5 +31,6 @@ function events_Des = detect_desaturation(data, baseline, spo2_feat, config)
         xline(ax, events_Des(k).end_t, ':', 'HandleVisibility', 'off');
     end
 
+    set(fig, 'Visible', config.make_figs_visible);
     save_figure(config, 'desaturation');
 end

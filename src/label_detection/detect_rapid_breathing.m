@@ -56,9 +56,9 @@ function events = detect_rapid_breathing(data, baseline, resp_feat, spo2_feat, c
     end
 
     [rapid_events_lungs, rapid_lungs] = sustained_condition_to_events( ...
-        rapid_lungs_rr, t_grid, config.new_fs, N, min_dur_sec, 'rapid');
+        rapid_lungs_rr, t_grid, config.new_fs, N, min_dur_sec, 'rapid_lungs');
     [rapid_events_diaph, rapid_diaph] = sustained_condition_to_events( ...
-        rapid_diaph_rr, t_grid, config.new_fs, N, min_dur_sec, 'rapid');
+        rapid_diaph_rr, t_grid, config.new_fs, N, min_dur_sec, 'rapid_diaph');
     rapid_events = merge_events({rapid_events_lungs, rapid_events_diaph});
     if isempty(rapid_events)
         return;
@@ -113,17 +113,18 @@ function events = tag_rapid_events(rapid_events, shallow_amp, deep_amp, desat_ev
         g1 = min(numel(t_grid), ceil(rapid_events(e).end_t / grid_step_sec) + 1);
 
         labels = {};
+        belt_suffix = event_belt_suffix(rapid_events(e).type);
         if g0 <= g1 && mean(shallow_amp(g0:g1)) >= min_frac
-            labels{end+1} = 'rapid_shallow'; %#ok<AGROW>
+            labels{end+1} = ['rapid_shallow' belt_suffix]; %#ok<AGROW>
         end
         if g0 <= g1 && mean(deep_amp(g0:g1)) >= min_frac
-            labels{end+1} = 'rapid_deep'; %#ok<AGROW>
+            labels{end+1} = ['rapid_deep' belt_suffix]; %#ok<AGROW>
         end
         if ~isempty(desat_events) && events_overlap_any(rapid_events(e), desat_events)
-            labels{end+1} = 'rapid_desat'; %#ok<AGROW>
+            labels{end+1} = ['rapid_desat' belt_suffix]; %#ok<AGROW>
         end
         if isempty(labels)
-            labels = {'rapid'};
+            labels = {['rapid' belt_suffix]};
         end
 
         for k = 1:numel(labels)
@@ -131,5 +132,15 @@ function events = tag_rapid_events(rapid_events, shallow_amp, deep_amp, desat_ev
             ev.type = labels{k};
             events(end+1,1) = ev; %#ok<AGROW>
         end
+    end
+end
+
+function suffix = event_belt_suffix(raw_type)
+    suffix = '';
+    s = lower(string(raw_type));
+    if contains(s, 'lungs')
+        suffix = '_lungs';
+    elseif contains(s, 'diaph')
+        suffix = '_diaph';
     end
 end

@@ -10,7 +10,6 @@ function h = plot_spo2_diagnostic_panel(ax, data, baseline, spo2_feat, config, t
     end
 
     h = struct();
-    axes(ax); %#ok<LAXES>
     hold(ax, 'on');
     grid(ax, 'on');
     xlabel(ax, 'Time (s)');
@@ -31,7 +30,7 @@ function h = plot_spo2_diagnostic_panel(ax, data, baseline, spo2_feat, config, t
     drop_thr = get_config_value(config, 'spo2', 'drop_thr', 3);
 
     set_spo2_limits(ax, spo2, baseline, floor_thr, drop_thr);
-    h.baseline_window = shade_static_baseline_on_axis(baseline, 'baseline window');
+    h.baseline_window = shade_static_baseline_on_axis(ax, baseline, 'baseline window');
     h.spo2 = plot(ax, t_spo2, spo2, 'k', 'DisplayName', 'SpO2');
 
     if isstruct(baseline) && isfield(baseline, 'SpO2_median') && isfinite(baseline.SpO2_median)
@@ -49,7 +48,7 @@ function h = plot_spo2_diagnostic_panel(ax, data, baseline, spo2_feat, config, t
 
     h.desat_events = gobjects(0);
     if isstruct(spo2_feat) && isfield(spo2_feat, 'desat_events') && ~isempty(spo2_feat.desat_events)
-        h.desat_events = shade_events_on_axis(spo2_feat.desat_events, 'desaturation');
+        h.desat_events = shade_events_on_axis(ax, spo2_feat.desat_events, 'desaturation');
     end
 
     plot(ax, t_spo2, spo2, 'k', 'HandleVisibility', 'off');

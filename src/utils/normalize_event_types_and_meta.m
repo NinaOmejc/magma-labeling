@@ -1,13 +1,13 @@
 function events = normalize_event_types_and_meta(events)
 % normalize_event_types_and_meta
-% Convert detector-specific event.type strings into the 8 canonical labels:
-%   ShB, IrB, SlB, RaB, ReA, Des, Apn, Sig
+% Convert detector-specific event.type strings into the 9 canonical labels:
+%   ShB, IrB, SlB, RaB, ReA, Des, Apn, Sig, CSR
 % and extract common modifiers:
-%   events(e).subtype  ('shallow'/'deep'/'desat'/'' )
+%   events(e).subtype  ('lungs'/'diaph'/'both' or modifier+belt composites)
 %   events(e).desat    (true/false)
 %   events(e).depth    ('shallow'/'deep'/'' )
 %
-% This keeps the sample mask on the main 8 label columns while retaining
+% This keeps the sample mask on the main label columns while retaining
 % subtype detail in the event table/struct.
 %
 % Example conversions:
@@ -17,6 +17,7 @@ function events = normalize_event_types_and_meta(events)
 %   'apnea_desat'                  -> type='Apn', subtype='', desat=true
 %   'desaturation'                 -> type='Des'
 %   'sigh'                         -> type='Sig'
+%   'periodic_breathing_lungs'      -> type='CSR', subtype='lungs'
 %
 % Usage:
 %   sub_events = merge_events({events_ShB,events_IrB,...});
@@ -43,8 +44,9 @@ function events = normalize_event_types_and_meta(events)
         s = strrep(s, '-', '_');
 
         base = map_type_to_base_label(s);
+        modifier = map_modifier(s, base);
+        belt = map_belt(s);
 
-        events(e).subtype = map_subtype(s, base);
         events(e).desat = contains(s, 'desat');
         if contains(s, 'shallow')
             events(e).depth = 'shallow';
@@ -55,11 +57,19 @@ function events = normalize_event_types_and_meta(events)
         end
 
         events(e).type = base;
+        events(e).modifier = modifier;
+        events(e).belt = belt;
     end
+
+    events = merge_normalized_belt_events(events);
+    for e = 1:numel(events)
+        events(e).subtype = compose_subtype(events(e).modifier, events(e).belt);
+    end
+    events = rmfield(events, {'modifier', 'belt'});
 end
 
 % =========================================================
-% Helper: map raw type string -> one of 8 canonical labels
+% Helper: map raw type string -> one of 9 canonical labels
 % =========================================================
 function base = map_type_to_base_label(s)
     % Shallow breathing
@@ -112,23 +122,101 @@ function base = map_type_to_base_label(s)
         return;
     end
 
+    % Cheyne-Stokes-like / periodic breathing
+    if startsWith(s,'periodic_breathing') || startsWith(s,'cheyne_stokes') || ...
+            strcmp(s,'csr') || strcmp(s,'csb') || contains(s,'periodicbreathing')
+        base = 'CSR';
+        return;
+    end
+
     % Fallback: keep original (but ideally you never hit this)
     base = s;
 end
 
-function subtype = map_subtype(s, base)
-    subtype = '';
-
+function modifier = map_modifier(s, base)
+    modifier = '';
     switch base
         case {'RaB', 'SlB'}
             if contains(s, 'shallow')
-                subtype = 'shallow';
+                modifier = 'shallow';
             elseif contains(s, 'deep')
-                subtype = 'deep';
+                modifier = 'deep';
             elseif strcmp(base, 'RaB') && contains(s, 'desat')
-                subtype = 'desat';
+                modifier = 'desat';
             end
-        otherwise
-            subtype = '';
     end
+end
+
+function belt = map_belt(s)
+    belt = '';
+    if contains(s, 'lungs')
+        belt = 'lungs';
+    elseif contains(s, 'diaph')
+        belt = 'diaph';
+    end
+end
+
+function subtype = compose_subtype(modifier, belt)
+    subtype = '';
+    if ~isempty(modifier) && ~isempty(belt)
+        subtype = [modifier '_' belt];
+    elseif ~isempty(modifier)
+        subtype = modifier;
+    elseif ~isempty(belt)
+        subtype = belt;
+    end
+end
+
+function events = merge_normalized_belt_events(events)
+    if numel(events) <= 1
+        return;
+    end
+
+    types = {events.type}';
+    depths = {events.depth}';
+    modifiers = {events.modifier}';
+    desats = [events.desat]';
+    starts = [events.start_t]';
+    idx = (1:numel(events))';
+    T = table(types, depths, modifiers, desats, starts, idx, ...
+        'VariableNames', {'type', 'depth', 'modifier', 'desat', 'start_t', 'idx'});
+    T = sortrows(T, {'type', 'depth', 'modifier', 'desat', 'start_t'});
+    events = events(T.idx);
+
+    out = events(1);
+    for i = 2:numel(events)
+        curr = events(i);
+        last = out(end);
+
+        same_type = strcmp(curr.type, last.type);
+        same_depth = strcmp(curr.depth, last.depth);
+        same_desat = isequal(curr.desat, last.desat);
+        same_modifier = strcmp(curr.modifier, last.modifier);
+        close_enough = curr.start_t <= last.end_t;
+
+        if same_type && same_depth && same_desat && same_modifier && close_enough
+            out(end).start_t = min(last.start_t, curr.start_t);
+            out(end).end_t = max(last.end_t, curr.end_t);
+            out(end).start_idx = min(last.start_idx, curr.start_idx);
+            out(end).end_idx = max(last.end_idx, curr.end_idx);
+            out(end).duration = out(end).end_t - out(end).start_t;
+            out(end).belt = merge_belt_labels(last.belt, curr.belt);
+        else
+            out(end+1,1) = curr; %#ok<AGROW>
+        end
+    end
+
+    events = out;
+end
+
+function belt = merge_belt_labels(a, b)
+    if strcmp(a, b) || isempty(b)
+        belt = a;
+        return;
+    end
+    if isempty(a)
+        belt = b;
+        return;
+    end
+    belt = 'both';
 end

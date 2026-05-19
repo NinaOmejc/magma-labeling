@@ -1,10 +1,13 @@
-function h = shade_static_baseline_on_axis(baseline, display_name)
+function h = shade_static_baseline_on_axis(ax, baseline, display_name)
 % shade_static_baseline_on_axis
 % Shade the static baseline interval stored by compute_baseline.
 
     h = gobjects(0);
 
-    if nargin < 2 || isempty(display_name)
+    if nargin < 1 || isempty(ax)
+        ax = gca;
+    end
+    if nargin < 3 || isempty(display_name)
         display_name = 'baseline window';
     end
 
@@ -26,8 +29,8 @@ function h = shade_static_baseline_on_axis(baseline, display_name)
         return;
     end
 
-    y_limits = ylim;
-    h = patch([start_t end_t end_t start_t], ...
+    y_limits = ylim(ax);
+    h = patch(ax, [start_t end_t end_t start_t], ...
               [y_limits(1) y_limits(1) y_limits(2) y_limits(2)], ...
               [0.80 0.88 1.00], ...
               'EdgeColor', 'none', ...

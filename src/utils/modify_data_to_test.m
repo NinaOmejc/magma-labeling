@@ -9,8 +9,16 @@ function data_modified = modify_data_to_test(data, fs, columns, trange_min, modi
 %   fs                - sampling frequency in Hz
 %   columns           - columns to modify, e.g. [5 6]
 %   trange_min        - time range in minutes, e.g. [2 4]
-%   modification_type - string, currently supports:
+%   modification_type - string, supports:
 %                         'shallow_breathing'
+%                         'irregular_breathing'
+%                         'slow_breathing'
+%                         'rapid_breathing'
+%                         'respiratory_asynchrony'
+%                         'desaturation'
+%                         'apnea'
+%                         'sigh'
+%                         'periodic_breathing'
 %   to_plot           - true/false
 %
 % Output:
@@ -62,37 +70,46 @@ function data_modified = modify_data_to_test(data, fs, columns, trange_min, modi
     % -----------------------------
     % Modification type
     % -----------------------------
-    switch lower(modification_type)
+    switch lower(char(string(modification_type)))
 
         case 'shallow_breathing'
-            % Reduce oscillation amplitude by 50% around local center.
-            %
-            % This preserves local baseline but makes the selected segment
-            % shallower.
+            % Keep amplitudes in the detector's shallow band:
+            % config.ShB defaults to 0.65-0.80 of reference.
+            data_modified = scale_selected_columns(data_modified, time_sec, trange_mask, columns, fs, 0.72);
 
-            amplitude_scale = 0.25;
+        case 'irregular_breathing'
+            data_modified = replace_respiration_with_variable_rate( ...
+                data_modified, time_sec, trange_mask, columns, fs);
 
-            for i = 1:numel(columns)
-                c = columns(i);
+        case 'slow_breathing'
+            data_modified = replace_respiration_with_fixed_rate( ...
+                data_modified, time_sec, trange_mask, columns, fs, 9.5, 1.00);
 
-                sig = data(:, c);
-                sig_modified = sig;
+        case 'rapid_breathing'
+            data_modified = replace_respiration_with_fixed_rate( ...
+                data_modified, time_sec, trange_mask, columns, fs, 22.0, 1.00);
 
-                local_center = mean(sig(trange_mask), 'omitnan');
+        case 'respiratory_asynchrony'
+            data_modified = replace_respiration_with_asynchrony( ...
+                data_modified, time_sec, trange_mask, columns, fs);
 
-                if ~isfinite(local_center)
-                    warning('Column %d has invalid local center. Skipping.', c);
-                    continue
-                end
+        case 'desaturation'
+            data_modified = apply_desaturation(data_modified, trange_mask, columns);
 
-                sig_modified(trange_mask) = local_center + ...
-                    amplitude_scale * (sig(trange_mask) - local_center);
+        case 'apnea'
+            data_modified = flatten_selected_columns(data_modified, time_sec, trange_mask, columns, fs);
 
-                data_modified(:, c) = sig_modified;
-            end
+        case 'sigh'
+            data_modified = inject_sigh_breath(data_modified, time_sec, trange_mask, columns, fs);
+
+        case 'periodic_breathing'
+            data_modified = replace_respiration_with_periodic_breathing( ...
+                data_modified, time_sec, trange_mask, columns, fs);
 
         otherwise
-            error('Unknown modification_type: %s. Currently supported: ''shallow_breathing''.', ...
+            error(['Unknown modification_type: %s. Supported: shallow_breathing, ' ...
+                'irregular_breathing, slow_breathing, rapid_breathing, ' ...
+                'respiratory_asynchrony, desaturation, apnea, sigh, periodic_breathing.'], ...
                 modification_type);
     end
 
@@ -126,4 +143,191 @@ function data_modified = modify_data_to_test(data, fs, columns, trange_min, modi
         end
     end
 
+end
+
+function data_out = scale_selected_columns(data_in, time_sec, mask, columns, fs, scale)
+    data_out = data_in;
+    for i = 1:numel(columns)
+        c = columns(i);
+        sig = data_out(:, c);
+        [center, ~] = local_center_and_amp(sig, mask);
+        replacement = sig;
+        replacement(mask) = center + scale * (sig(mask) - center);
+        data_out(:, c) = blend_masked_segment(sig, replacement, time_sec, mask, fs, 2.0);
+    end
+end
+
+function data_out = replace_respiration_with_fixed_rate(data_in, time_sec, mask, columns, fs, bpm, amp_scale)
+    data_out = data_in;
+    phase_offsets = linspace(0, 0.12, max(1, numel(columns)));
+    t0 = time_sec(find(mask, 1, 'first'));
+
+    for i = 1:numel(columns)
+        c = columns(i);
+        sig = data_out(:, c);
+        [center, amp] = local_center_and_amp(sig, mask);
+        phase = 2 * pi * (bpm / 60) * (time_sec - t0) + phase_offsets(i);
+        replacement = sig;
+        replacement(mask) = center + amp_scale * amp * sin(phase(mask));
+        data_out(:, c) = blend_masked_segment(sig, replacement, time_sec, mask, fs, 2.0);
+    end
+end
+
+function data_out = replace_respiration_with_variable_rate(data_in, time_sec, mask, columns, fs)
+    data_out = data_in;
+    t0 = time_sec(find(mask, 1, 'first'));
+    local_t = time_sec - t0;
+    bpm = 15 + 8 * sin(2 * pi * local_t / 37) + 5 * sin(2 * pi * local_t / 17);
+    bpm = min(max(bpm, 6.5), 28.0);
+    phase = 2 * pi * cumsum(bpm / 60) / fs;
+
+    for i = 1:numel(columns)
+        c = columns(i);
+        sig = data_out(:, c);
+        [center, amp] = local_center_and_amp(sig, mask);
+        replacement = sig;
+        replacement(mask) = center + amp * sin(phase(mask) + 0.10 * (i - 1));
+        data_out(:, c) = blend_masked_segment(sig, replacement, time_sec, mask, fs, 2.0);
+    end
+end
+
+function data_out = replace_respiration_with_asynchrony(data_in, time_sec, mask, columns, fs)
+    data_out = data_in;
+    if numel(columns) < 2
+        error('respiratory_asynchrony requires two respiration columns, e.g. [4 6].');
+    end
+
+    t0 = time_sec(find(mask, 1, 'first'));
+    local_t = time_sec - t0;
+
+    c_lungs = columns(1);
+    c_diaph = columns(2);
+    [center_l, amp_l] = local_center_and_amp(data_out(:, c_lungs), mask);
+    [center_d, amp_d] = local_center_and_amp(data_out(:, c_diaph), mask);
+
+    lungs = data_out(:, c_lungs);
+    diaph = data_out(:, c_diaph);
+    repl_lungs = lungs;
+    repl_diaph = diaph;
+
+    phase_lungs = 2 * pi * (12 / 60) * local_t;
+    phase_drift = 1.3 * (1 - cos(2 * pi * local_t / 120));
+    phase_diaph = phase_lungs + phase_drift;
+
+    repl_lungs(mask) = center_l + amp_l * sin(phase_lungs(mask));
+    repl_diaph(mask) = center_d + amp_d * sin(phase_diaph(mask));
+
+    data_out(:, c_lungs) = blend_masked_segment(lungs, repl_lungs, time_sec, mask, fs, 2.0);
+    data_out(:, c_diaph) = blend_masked_segment(diaph, repl_diaph, time_sec, mask, fs, 2.0);
+end
+
+function data_out = apply_desaturation(data_in, mask, columns)
+    data_out = data_in;
+    for i = 1:numel(columns)
+        c = columns(i);
+        sig = data_out(:, c);
+        local_base = median(sig(~mask), 'omitnan');
+        if ~isfinite(local_base)
+            local_base = median(sig, 'omitnan');
+        end
+        if ~isfinite(local_base)
+            local_base = 97;
+        end
+        sig(mask) = min(local_base - 5, 88);
+        data_out(:, c) = sig;
+    end
+end
+
+function data_out = flatten_selected_columns(data_in, time_sec, mask, columns, fs)
+    data_out = data_in;
+    for i = 1:numel(columns)
+        c = columns(i);
+        sig = data_out(:, c);
+        [center, amp] = local_center_and_amp(sig, mask);
+        replacement = sig;
+        replacement(mask) = center + 0.01 * amp * sin(2 * pi * 0.2 * time_sec(mask));
+        data_out(:, c) = blend_masked_segment(sig, replacement, time_sec, mask, fs, 1.0);
+    end
+end
+
+function data_out = inject_sigh_breath(data_in, time_sec, mask, columns, fs)
+    data_out = data_in;
+    event_t = mean(time_sec(mask), 'omitnan');
+    sigma_sec = 0.9;
+
+    for i = 1:numel(columns)
+        c = columns(i);
+        sig = data_out(:, c);
+        [~, amp] = local_center_and_amp(sig, mask);
+        sigh = 3.5 * amp * exp(-0.5 * ((time_sec - event_t) / sigma_sec) .^ 2);
+        replacement = sig + sigh;
+        data_out(:, c) = blend_masked_segment(sig, replacement, time_sec, mask, fs, 0.5);
+    end
+end
+
+function data_out = replace_respiration_with_periodic_breathing(data_in, time_sec, mask, columns, fs)
+    data_out = data_in;
+    t0 = time_sec(find(mask, 1, 'first'));
+    local_t = time_sec - t0;
+    cycle_sec = 50;
+    bpm = 12;
+
+    envelope = 0.35 + 0.95 * 0.5 .* (1 - cos(2 * pi * local_t / cycle_sec));
+    phase_offsets = linspace(0, 0.10, max(1, numel(columns)));
+
+    for i = 1:numel(columns)
+        c = columns(i);
+        sig = data_out(:, c);
+        [center, amp] = local_center_and_amp(sig, mask);
+        phase = 2 * pi * (bpm / 60) * local_t + phase_offsets(i);
+        replacement = sig;
+        replacement(mask) = center + amp * envelope(mask) .* sin(phase(mask));
+        data_out(:, c) = blend_masked_segment(sig, replacement, time_sec, mask, fs, 2.0);
+    end
+end
+
+function [center, amp] = local_center_and_amp(sig, mask)
+    segment = sig(mask);
+    center = median(segment, 'omitnan');
+    if ~isfinite(center)
+        center = median(sig, 'omitnan');
+    end
+    if ~isfinite(center)
+        center = 0;
+    end
+
+    finite_segment = segment(isfinite(segment));
+    if numel(finite_segment) >= 5
+        amp = 0.5 * (prctile(finite_segment, 95) - prctile(finite_segment, 5));
+    else
+        amp = std(sig, 'omitnan');
+    end
+    if ~isfinite(amp) || amp <= 0
+        amp = 1;
+    end
+end
+
+function sig_out = blend_masked_segment(sig, replacement, time_sec, mask, fs, fade_sec)
+    sig_out = sig;
+    idx = find(mask);
+    if isempty(idx)
+        return;
+    end
+
+    weights = ones(numel(idx), 1);
+    fade_n = min(round(fade_sec * fs), floor(numel(idx) / 2));
+    if fade_n > 1
+        fade_in = linspace(0, 1, fade_n)';
+        weights(1:fade_n) = fade_in;
+        weights(end-fade_n+1:end) = flipud(fade_in);
+    end
+
+    sig_out(idx) = (1 - weights) .* sig(idx) + weights .* replacement(idx);
+
+    % Keep the exact requested segment boundaries from being ambiguous in
+    % plots when the selected range has non-integer sample limits.
+    if numel(idx) > 1
+        sig_out(time_sec < time_sec(idx(1)) | time_sec > time_sec(idx(end))) = ...
+            sig(time_sec < time_sec(idx(1)) | time_sec > time_sec(idx(end)));
+    end
 end

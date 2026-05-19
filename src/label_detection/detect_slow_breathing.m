@@ -93,10 +93,11 @@ function events = detect_slow_breathing(data, baseline, resp_feat, spo2_feat, co
             g1 = min(numel(t_grid), round(events(e).end_t   / config.grid_step_sec) + 1);
             if g0 <= g1
                 frac_shallow = mean(shallow_amp(g0:g1));
+                belt_suffix = event_belt_suffix(events(e).type);
                 if frac_shallow >= 0.5
-                    events(e).type = 'slow_breathing_shallow';
+                    events(e).type = ['slow_breathing_shallow' belt_suffix];
                 else
-                    events(e).type = 'slow_breathing_deep';
+                    events(e).type = ['slow_breathing_deep' belt_suffix];
                 end
             end
         end
@@ -137,5 +138,15 @@ function events = detect_slow_breathing(data, baseline, resp_feat, spo2_feat, co
             'ymax_padding', 5, ...
             'output_name', 'slow_breathing');
         plot_belt_diagnostic_figure(data, config, t_grid, slow_lungs, slow_diaph, rr_lungs, rr_diaph, opts);
+    end
+end
+
+function suffix = event_belt_suffix(raw_type)
+    suffix = '';
+    s = lower(string(raw_type));
+    if contains(s, 'lungs')
+        suffix = '_lungs';
+    elseif contains(s, 'diaph')
+        suffix = '_diaph';
     end
 end

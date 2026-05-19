@@ -1,11 +1,14 @@
-function h = shade_events_on_axis(events, display_name)
-% Shade each event interval on current axes.
+function h = shade_events_on_axis(ax, events, display_name)
+% Shade each event interval on the specified axes.
     h = gobjects(0);
-    if nargin < 2
+    if nargin < 1 || isempty(ax)
+        ax = gca;
+    end
+    if nargin < 3
         display_name = '';
     end
 
-    y_limits = ylim;
+    y_limits = ylim(ax);
     for k = 1:numel(events)
         x0 = events(k).start_t;
         x1 = events(k).end_t;
@@ -15,7 +18,7 @@ function h = shade_events_on_axis(events, display_name)
             handle_visibility = 'on';
             patch_name = display_name;
         end
-        h(end+1,1) = patch([x0 x1 x1 x0], ...
+        h(end+1,1) = patch(ax, [x0 x1 x1 x0], ...
               [y_limits(1) y_limits(1) y_limits(2) y_limits(2)], ...
               [1 0.8 0.8], ...
               'EdgeColor','none', ...

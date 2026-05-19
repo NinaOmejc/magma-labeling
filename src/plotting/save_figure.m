@@ -12,6 +12,12 @@ function save_figure(config, base_name, save_matfig)
 
     % Resize figure BEFORE saving
     fig = gcf;
+    target_visibility = resolve_target_visibility(config);
+    if ~strcmpi(fig.Visible, target_visibility)
+        set(fig, 'Visible', target_visibility);
+        drawnow;
+    end
+
     if isfield(config,'fig_width') && isfield(config,'fig_height')
         set(fig, 'Units', 'pixels');
         fig.Position(3) = config.fig_width;
@@ -77,6 +83,10 @@ function save_figure(config, base_name, save_matfig)
        save_matfig
         save_fig_for_direct_open(fig, replace(fullpath, '.png', '.fig'));
     else
+        if ~strcmpi(fig.Visible, target_visibility)
+            set(fig, 'Visible', target_visibility);
+            drawnow;
+        end
         exportgraphics(fig, fullpath, 'Resolution', config.plot_dpi);
     end
 
@@ -118,5 +128,12 @@ function strengthen_dashed_lines(fig, target_width)
         catch
             % Ignore handles that do not expose standard line style/width access.
         end
+    end
+end
+
+function visibility = resolve_target_visibility(config)
+    visibility = 'on';
+    if isfield(config, 'make_figs_visible') && ~isempty(config.make_figs_visible)
+        visibility = char(string(config.make_figs_visible));
     end
 end

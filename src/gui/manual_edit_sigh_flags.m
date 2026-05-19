@@ -10,16 +10,18 @@ function [flags_lungs, flags_diaph] = manual_edit_sigh_flags(data, bL, bD, flags
 
     fh = figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', 'on');
     ax1 = subplot(3,1,1); hold(ax1,'on');
-    p1 = plot(ax1, t_raw, data(:,idx_lungs), 'k');
+    p1 = plot(ax1, t_raw, data(:,idx_lungs), 'k', 'DisplayName', 'Resp-Lungs');
     m1 = plot(ax1, bL.peak_t(flags_lungs), interp1(t_raw, data(:,idx_lungs), bL.peak_t(flags_lungs), 'linear','extrap'), ...
-        'ro', 'MarkerFaceColor','r', 'MarkerSize', 7);
+        'ro', 'MarkerFaceColor','r', 'MarkerSize', 7, 'DisplayName', 'Sigh breaths');
     title(ax1, 'GUI sigh manual editing (lungs)'); ylabel(ax1, 'Resp-Lungs'); grid(ax1,'on');
+    update_axis_legend(ax1, [p1; m1], {'Resp-Lungs', 'Sigh breaths'});
 
     ax2 = subplot(3,1,2); hold(ax2,'on');
-    p2 = plot(ax2, t_raw, data(:,idx_diaph), 'k');
+    p2 = plot(ax2, t_raw, data(:,idx_diaph), 'k', 'DisplayName', 'Resp-Diaphragm');
     m2 = plot(ax2, bD.peak_t(flags_diaph), interp1(t_raw, data(:,idx_diaph), bD.peak_t(flags_diaph), 'linear','extrap'), ...
-        'ro', 'MarkerFaceColor','r', 'MarkerSize', 7);
+        'ro', 'MarkerFaceColor','r', 'MarkerSize', 7, 'DisplayName', 'Sigh breaths');
     title(ax2, 'GUI sigh manual editing (diaphragm)'); ylabel(ax2, 'Resp-Diaphragm'); grid(ax2,'on');
+    update_axis_legend(ax2, [p2; m2], {'Resp-Diaphragm', 'Sigh breaths'});
 
     ax3 = subplot(3,1,3);
     plot_spo2_diagnostic_panel(ax3, data, baseline, spo2_feat, config, 'SpO2 with desaturation thresholds');
@@ -75,6 +77,7 @@ function [flags_lungs, flags_diaph] = manual_edit_sigh_flags(data, bL, bD, flags
                 flags_lungs(i) = true;
             end
             update_marker_plot(m1, bL, flags_lungs, idx_lungs);
+            update_axis_legend(ax1, [p1; m1], {'Resp-Lungs', 'Sigh breaths'});
         else
             if remove_marker
                 i = nearest_flagged_index(bD.peak_t, flags_diaph, t_click);
@@ -85,6 +88,7 @@ function [flags_lungs, flags_diaph] = manual_edit_sigh_flags(data, bL, bD, flags
                 flags_diaph(i) = true;
             end
             update_marker_plot(m2, bD, flags_diaph, idx_diaph);
+            update_axis_legend(ax2, [p2; m2], {'Resp-Diaphragm', 'Sigh breaths'});
         end
         drawnow;
     end
@@ -122,5 +126,27 @@ function [flags_lungs, flags_diaph] = manual_edit_sigh_flags(data, bL, bD, flags
         set(marker_plot, ...
             'XData', marker_t, ...
             'YData', interp1(t_raw, data(:,signal_idx), marker_t, 'linear','extrap'));
+    end
+
+    function update_axis_legend(ax, handles, labels)
+        keep = false(size(handles));
+        for i = 1:numel(handles)
+            h = handles(i);
+            if ~isgraphics(h)
+                continue;
+            end
+            xdata = get(h, 'XData');
+            if ~isempty(xdata)
+                keep(i) = true;
+            end
+        end
+
+        handles = handles(keep);
+        labels = labels(keep);
+        if isempty(handles)
+            legend(ax, 'off');
+            return;
+        end
+        legend(ax, handles, labels, 'Location', 'eastoutside');
     end
 end
