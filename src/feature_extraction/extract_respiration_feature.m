@@ -90,7 +90,11 @@ function b = extract_respiration_feature(x, config, basename)
         title(['RESPIRATION ' basename newline 'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)])
         legend_handles = [h_signal; h_peak; h_trough];
         legend_handles = legend_handles(isgraphics(legend_handles));
-        legend(legend_handles, 'Location', 'best')
+        legend_labels = get(legend_handles, 'DisplayName');
+        if ischar(legend_labels) || isstring(legend_labels)
+            legend_labels = cellstr(legend_labels);
+        end
+        legend(legend_handles, legend_labels, 'Location', 'best')
         ylabel('Standardized respiration belt amplitude')
         xlabel('Time (seconds)')
         hold off

@@ -178,11 +178,11 @@ function [output, config, trend] = preprocess_data(t_series, config)
 
     [output, trend, config] = resample_preprocessed_data(output, trend, config, sampl_freq);
 end
-
 function [data_out, trend_out, config] = resample_preprocessed_data(data_in, trend_in, config, input_fs)
-% Resample the full preprocessed data matrix and update config.new_fs/times.
+% Resample preprocessed data by interpolating each column independently.
 
     target_fs = input_fs;
+
     if isfield(config, 'new_fs') && ~isempty(config.new_fs)
         target_fs = config.new_fs;
     end
@@ -192,85 +192,64 @@ function [data_out, trend_out, config] = resample_preprocessed_data(data_in, tre
     end
 
     if target_fs > input_fs
-        error('config.new_fs must be <= config.fs for downsampling.');
+        error('config.new_fs must be <= input_fs for downsampling.');
     end
 
     config.raw_fs = input_fs;
     config.preprocessing.original_fs = input_fs;
     config.preprocessing.new_fs = target_fs;
-
-    if abs(target_fs - input_fs) <= max(eps(input_fs), eps(target_fs))
-        data_out = data_in;
-        trend_out = trend_in;
-    else
-        data_was_row_vector = isrow(data_in) && isvector(data_in);
-        trend_was_row_vector = isrow(trend_in) && isvector(trend_in);
-
-        data_resample_in = data_in;
-        trend_resample_in = trend_in;
-        if isvector(data_in)
-            data_resample_in = data_in(:);
-        end
-        if isvector(trend_in)
-            trend_resample_in = trend_in(:);
-        end
-
-        data_out = resample_matrix(data_resample_in, input_fs, target_fs);
-        trend_out = resample_matrix(trend_resample_in, input_fs, target_fs);
-
-        if data_was_row_vector
-            data_out = data_out';
-        end
-        if trend_was_row_vector
-            trend_out = trend_out';
-        end
-    end
-
     config.new_fs = target_fs;
-    if isvector(data_out)
-        n_samples = numel(data_out);
-    else
-        n_samples = size(data_out, 1);
-    end
-    config.times = (0:n_samples-1) / config.new_fs;
+
+    data_out  = resample_by_time(data_in,  input_fs, target_fs);
+    trend_out = resample_by_time(trend_in, input_fs, target_fs);
+
+    n_samples = size(data_out, 1);
+    config.times = (0:n_samples-1)' / target_fs;
 end
 
-function y = resample_matrix(x, fs_in, fs_out)
-% Resample columns while tolerating all-NaN trend columns.
+
+function y = resample_by_time(x, fs_in, fs_out)
+% Interpolate columns independently onto a new time grid.
 
     if isempty(x)
         y = x;
         return;
     end
 
-    [p, q] = rat(fs_out / fs_in, 1e-12);
-    y = [];
+    was_row_vector = isrow(x) && isvector(x);
+
+    if isvector(x)
+        x = x(:);
+    end
+
+    n_in = size(x, 1);
+
+    t_in_end = (n_in - 1) / fs_in;
+    n_out = floor(t_in_end * fs_out) + 1;
+
+    t_in  = (0:n_in-1)' / fs_in;
+    t_out = (0:n_out-1)' / fs_out;
+
+    y = nan(n_out, size(x, 2));
 
     for c = 1:size(x, 2)
         xc = x(:, c);
         valid = isfinite(xc);
 
-        if any(valid)
-            x_fill = xc;
-            if ~all(valid)
-                x_fill = fillmissing(x_fill, 'linear', 'EndValues', 'nearest');
-            end
-            yc = resample(x_fill, p, q);
-
-            if ~all(valid)
-                missing_mask = resample(double(~valid), p, q) > 0.01;
-                yc(missing_mask) = NaN;
-            end
+        if nnz(valid) >= 2
+            y(:, c) = interp1(t_in(valid), xc(valid), t_out, 'linear', NaN);
+        elseif nnz(valid) == 1
+            y(:, c) = xc(find(valid, 1));
         else
-            yc = nan(size(resample(zeros(size(xc)), p, q)));
+            y(:, c) = NaN;
         end
+    end
 
-        if isempty(y)
-            y = nan(numel(yc), size(x, 2));
-        end
-        y(:, c) = yc;
+    if was_row_vector
+        y = y';
     end
 end
+
 
 function y = highpass_with_reflect_padding(x, b, a, fs, cutoff_hz, pad_sec_cfg)
 % Apply zero-phase high-pass filtering with reflected edge padding.

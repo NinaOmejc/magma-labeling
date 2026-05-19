@@ -5,7 +5,6 @@ function config = get_config()
     config.path_data_in = 'D:\Projects\MAGMA\raw_data';                                                 % folder with raw input .dat files
     config.path_results_out = 'D:\Projects\MAGMA\data_analyis\disorder_classification';                 % root output folder
     config.fs = 200;                                                                                    % raw sampling frequency in Hz
-    config.new_fs = 20;                                                                                 % sampling frequency after preprocessing in Hz
     config.data_columns = {'ECG1', 'ECG2', 'SpO₂', 'Resp-Lungs', 'Blood Pressure', 'Resp-Diaphragm'};   % column names in raw data
     config.labels = get_labels();                                                                       % canonical label names and indices
     config.plot_raw_data = true;                                                                        % save an overview plot of raw signals
@@ -17,6 +16,7 @@ function config = get_config()
     config.overwrite_results = true;   % recompute even if label output already exists (but recompute only the labeling, the features will remain computed if the file "*_features.mat" exists. If you want to recompute features, delete the file.
 
     %---- PREPROCESSING ----                
+    config.new_fs = 20;                                                                                 % sampling frequency after preprocessing in Hz
     config.detrend.method = 'hpfilter';                         % 'hpfilter': Butterworth high-pass filter with filtfilt or 'moving_detrend', moving-average trend subtraction. 
     config.detrend.signals = {'Resp-Lungs', 'Resp-Diaphragm'};  % signals to additionally detrend before feature extraction (in general, all signals are already detrended by Marcin, this is just additional moving detrend for some noisier data)
     config.detrend.highpass_cutoff = 0.01;                      % high-pass cutoff frequency in Hz
