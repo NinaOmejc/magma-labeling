@@ -74,12 +74,16 @@ function [t_spo2, spo2] = get_spo2_trace(data, spo2_feat, config)
         return;
     end
 
-    idx_spo2 = find(strcmp(config.data_columns, 'SpO2'), 1);
-    if isempty(idx_spo2)
-        idx_spo2 = find(strcmp(config.data_columns, 'SpO₂'), 1);
-    end
-    if isempty(idx_spo2)
-        idx_spo2 = find(contains(config.data_columns, 'SpO'), 1);
+    idx_spo2 = [];
+    if isfield(config, 'channels') && isfield(config.channels, 'spo2_idx')
+        idx_spo2 = config.channels.spo2_idx;
+    else
+        try
+            [config, ~] = resolve_signal_channels(config);
+            idx_spo2 = config.channels.spo2_idx;
+        catch
+            idx_spo2 = [];
+        end
     end
 
     if isempty(idx_spo2)

@@ -1,6 +1,9 @@
 function [flags_lungs, flags_diaph] = manual_edit_sigh_flags(data, bL, bD, flags_lungs, flags_diaph, baseline, spo2_feat, config, window_sec)
-    idx_lungs = find(strcmp(config.data_columns, 'Resp-Lungs'), 1);
-    idx_diaph = find(strcmp(config.data_columns, 'Resp-Diaphragm'), 1);
+    if ~isfield(config, 'channels')
+        config = resolve_signal_channels(config);
+    end
+    idx_lungs = config.channels.lungs_idx;
+    idx_diaph = config.channels.diaph_idx;
     if isempty(idx_lungs) || isempty(idx_diaph), return; end
 
     fs = config.new_fs;
@@ -31,6 +34,7 @@ function [flags_lungs, flags_diaph] = manual_edit_sigh_flags(data, bL, bD, flags
 
     linkaxes([ax1 ax2 ax3],'x');
     xlim(ax1, [0 min(window_sec,t_raw(end))]);
+    align_sigh_axes();
 
     uicontrol(fh, 'Style','slider', 'Units','normalized', 'Position',[0.1 0.01 0.8 0.03], ...
         'Min',0, 'Max',max(0,t_raw(end)-window_sec), 'Value',0, ...
@@ -145,8 +149,24 @@ function [flags_lungs, flags_diaph] = manual_edit_sigh_flags(data, bL, bD, flags
         labels = labels(keep);
         if isempty(handles)
             legend(ax, 'off');
+            align_sigh_axes();
             return;
         end
         legend(ax, handles, labels, 'Location', 'eastoutside');
+        align_sigh_axes();
+    end
+
+    function align_sigh_axes()
+        axes_to_align = gobjects(0);
+        if exist('ax1', 'var') && isgraphics(ax1)
+            axes_to_align(end+1,1) = ax1;
+        end
+        if exist('ax2', 'var') && isgraphics(ax2)
+            axes_to_align(end+1,1) = ax2;
+        end
+        if exist('ax3', 'var') && isgraphics(ax3)
+            axes_to_align(end+1,1) = ax3;
+        end
+        align_axes_x_widths(axes_to_align);
     end
 end

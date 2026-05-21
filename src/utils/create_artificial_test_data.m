@@ -8,7 +8,7 @@ function test_specs = create_artificial_test_data(config, output_dir, source_sub
 %   ...
 %   ECG1_ECG2_SpO2_RespL_BP_RespD_fs200_Sub0_Pom9_DeTr_Norm.dat
 %
-% Measurements 1-9 map to labels ShB, IrB, SlB, RaB, ReA, Des, Apn, Sig, CSR.
+% Measurements 1-9 map to labels shallowB, irregB, slowB, rapidB, asyncB, desat, apnea, sigh, CSR.
 
     if nargin < 2 || isempty(output_dir)
         repo_root = fileparts(fileparts(mfilename('fullpath')));
@@ -113,14 +113,14 @@ function test_specs = build_test_specs(idx_spo2, idx_lungs, idx_diaph)
         'file', '');
     test_specs = repmat(template, 9, 1);
 
-    test_specs(1) = make_spec(1, 'ShB', 'ShallowBreathing', 'shallow_breathing', resp_columns);
-    test_specs(2) = make_spec(2, 'IrB', 'IrregularBreathing', 'irregular_breathing', resp_columns);
-    test_specs(3) = make_spec(3, 'SlB', 'SlowBreathing', 'slow_breathing', resp_columns);
-    test_specs(4) = make_spec(4, 'RaB', 'RapidBreathing', 'rapid_breathing', resp_columns);
-    test_specs(5) = make_spec(5, 'ReA', 'RespiratoryAsynchrony', 'respiratory_asynchrony', resp_columns);
-    test_specs(6) = make_spec(6, 'Des', 'Desaturation', 'desaturation', idx_spo2);
-    test_specs(7) = make_spec(7, 'Apn', 'Apnea', 'apnea', resp_columns);
-    test_specs(8) = make_spec(8, 'Sig', 'Sigh', 'sigh', resp_columns);
+    test_specs(1) = make_spec(1, 'shallowB', 'ShallowBreathing', 'shallow_breathing', resp_columns);
+    test_specs(2) = make_spec(2, 'irregB', 'IrregularBreathing', 'irregular_breathing', resp_columns);
+    test_specs(3) = make_spec(3, 'slowB', 'SlowBreathing', 'slow_breathing', resp_columns);
+    test_specs(4) = make_spec(4, 'rapidB', 'RapidBreathing', 'rapid_breathing', resp_columns);
+    test_specs(5) = make_spec(5, 'asyncB', 'RespiratoryAsynchrony', 'respiratory_asynchrony', resp_columns);
+    test_specs(6) = make_spec(6, 'desat', 'Desaturation', 'desaturation', idx_spo2);
+    test_specs(7) = make_spec(7, 'apnea', 'Apnea', 'apnea', resp_columns);
+    test_specs(8) = make_spec(8, 'sigh', 'Sigh', 'sigh', resp_columns);
     test_specs(9) = make_spec(9, 'CSR', 'PeriodicBreathingCheyneStokesLike', 'periodic_breathing', resp_columns);
 end
 

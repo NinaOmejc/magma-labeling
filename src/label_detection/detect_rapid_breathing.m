@@ -18,8 +18,7 @@ function events = detect_rapid_breathing(data, baseline, resp_feat, spo2_feat, c
     N = size(data,1);
     t_grid = (0:config.grid_step_sec:(N-1)/config.new_fs)';  % seconds
 
-    lungs_broken = isfield(config,'problems') && isfield(config.problems,'subjects_with_broken_lung_belt') && ...
-        any(config.subject == config.problems.subjects_with_broken_lung_belt);
+    lungs_broken = is_lung_belt_ignored(config);
     lungs_valid = is_valid_breath_signal(resp_feat.lungs, false) && ~lungs_broken;
     diaph_valid = is_valid_breath_signal(resp_feat.diaph, false);
     lungs_amp_valid = lungs_valid && is_valid_breath_signal(resp_feat.lungs, true);
@@ -43,16 +42,18 @@ function events = detect_rapid_breathing(data, baseline, resp_feat, spo2_feat, c
     plot_rr_step_sec = get_config_value(config, 'RaB', 'plot_rr_step_sec', 15);
     subtype_min_overlap_frac = get_config_value(config, 'RaB', 'subtype_min_overlap_frac', subtype_min_overlap_frac);
 
+    % RR endpoint condition on grid. Keep the event mask aligned with the
+    % plotted metric instead of marking the whole trailing analysis window.
     rapid_lungs_rr = false(size(t_grid));
     rr_lungs = nan(size(t_grid));
     if lungs_valid
-        [rapid_lungs_rr, rr_lungs] = compute_breath_rate_mask(resp_feat.lungs.peak_t, t_grid, min_dur_sec, rr_thr_bpm, '>=', true);
+        [rapid_lungs_rr, rr_lungs] = compute_breath_rate_mask(resp_feat.lungs.peak_t, t_grid, min_dur_sec, rr_thr_bpm, '>=', false);
     end
 
     rapid_diaph_rr = false(size(t_grid));
     rr_diaph = nan(size(t_grid));
     if diaph_valid
-        [rapid_diaph_rr, rr_diaph] = compute_breath_rate_mask(resp_feat.diaph.peak_t, t_grid, min_dur_sec, rr_thr_bpm, '>=', true);
+        [rapid_diaph_rr, rr_diaph] = compute_breath_rate_mask(resp_feat.diaph.peak_t, t_grid, min_dur_sec, rr_thr_bpm, '>=', false);
     end
 
     [rapid_events_lungs, rapid_lungs] = sustained_condition_to_events( ...

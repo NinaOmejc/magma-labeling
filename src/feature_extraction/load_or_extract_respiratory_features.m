@@ -8,7 +8,7 @@ function resp_feat = load_or_extract_respiratory_features(data, config)
 
     if exist(cache_file, 'file') && ~force_recompute
         cached = load(cache_file);
-        if is_valid_feature_cache(cached, size(data,1), cache_version)
+        if is_valid_feature_cache(cached, size(data,1), cache_version, config)
             resp_feat = cached_resp_feat(cached);
             fprintf('Loaded cached respiratory feature extraction results: %s\n', cache_file);
             return;
@@ -27,6 +27,7 @@ function resp_feat = load_or_extract_respiratory_features(data, config)
         'measure', config.measure, ...
         'fs', config.new_fs, ...
         'n_samples', size(data,1), ...
+        'data_columns', {config.data_columns}, ...
         'created_on', char(datetime('now', 'Format', 'yyyy-MM-dd HH:mm:ss')), ...
         'manual_resp_control', isfield(config.resp, 'manual_control') && config.resp.manual_control);
 
@@ -53,10 +54,16 @@ function cache_file = feature_cache_file(config)
     end
 end
 
-function ok = is_valid_feature_cache(cached, n_samples, cache_version)
+function ok = is_valid_feature_cache(cached, n_samples, cache_version, config)
     ok = isfield(cached, 'feature_cache_meta') && isstruct(cached.feature_cache_meta) && ...
        isfield(cached.feature_cache_meta, 'cache_version') && cached.feature_cache_meta.cache_version == cache_version;
     if ~ok
+        return;
+    end
+
+    if isfield(cached.feature_cache_meta, 'data_columns') && ...
+            ~isequal(cellstr(string(cached.feature_cache_meta.data_columns)), cellstr(string(config.data_columns)))
+        ok = false;
         return;
     end
 
@@ -89,17 +96,17 @@ function ok = is_valid_resp_feat(resp_feat, n_samples)
         return;
     end
 
-    if isfield(resp_feat.lungs, 'x0') && numel(resp_feat.lungs.x0) ~= n_samples
+    if isfield(resp_feat.lungs, 'x0') && ~isempty(resp_feat.lungs.x0) && numel(resp_feat.lungs.x0) ~= n_samples
         ok = false;
         return;
     end
 
-    if isfield(resp_feat.diaph, 'x0') && numel(resp_feat.diaph.x0) ~= n_samples
+    if isfield(resp_feat.diaph, 'x0') && ~isempty(resp_feat.diaph.x0) && numel(resp_feat.diaph.x0) ~= n_samples
         ok = false;
         return;
     end
 end
 
 function v = current_feature_cache_version()
-    v = 3;
+    v = 4;
 end

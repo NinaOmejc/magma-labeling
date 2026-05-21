@@ -1,11 +1,13 @@
-function [irregular_condition, cov_trace, robust_cov_trace, rmssd_trace] = compute_irregularity_metrics( ...
+function [irregular_condition, cov_trace, robust_cov_trace, rmssd_trace, endpoint_condition] = compute_irregularity_metrics( ...
     breaths, t_grid, win_sec, cov_thr, robust_cov_thr, rmssd_thr, pause_thr_sec, detection_metric)
 % compute_irregularity_metrics (irregularity in time)
-% Return an analysis-window irregularity mask and endpoint IBI variability
-% traces on t_grid. Both plain CoV and robust CoV are always computed when
-% possible. detection_metric controls which trace is used for the label.
+% Return an analysis-window irregularity mask, endpoint condition, and
+% endpoint IBI variability traces on t_grid. Both plain CoV and robust CoV
+% are always computed when possible. detection_metric controls which trace
+% is used for the label.
 
     irregular_condition = false(size(t_grid));
+    endpoint_condition = false(size(t_grid));
     cov_trace = nan(size(t_grid));
     robust_cov_trace = nan(size(t_grid));
     rmssd_trace = nan(size(t_grid));
@@ -87,6 +89,7 @@ function [irregular_condition, cov_trace, robust_cov_trace, rmssd_trace] = compu
         end
 
         if is_irregular_window
+            endpoint_condition(i) = true;
             irregular_condition(t_grid >= lb & t_grid <= t) = true;
         end
     end

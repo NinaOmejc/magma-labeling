@@ -9,11 +9,12 @@ function shallow_events = detect_shallow_breathing(data, baseline, resp_feat, sp
 %   - Duration: sustained >= 30 s.
 %   - No desaturation: SpO2 < 90 OR SpO2 drop >= 3–4% below baseline (baseline from first 30–60 s).
 
+    disp('Starting label detection ...')
+
     % ---- indices ---
     N = size(data,1);
     t_grid = (0:config.grid_step_sec:(N-1)/config.new_fs)';  % seconds
-    lungs_broken = isfield(config,'problems') && isfield(config.problems,'subjects_with_broken_lung_belt') && ...
-        any(config.subject == config.problems.subjects_with_broken_lung_belt);
+    lungs_broken = is_lung_belt_ignored(config);
     lungs_valid = is_valid_breath_signal(resp_feat.lungs, true) && ~lungs_broken;
     diaph_valid = is_valid_breath_signal(resp_feat.diaph, true);
 

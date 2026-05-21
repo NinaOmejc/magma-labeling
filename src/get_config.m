@@ -2,30 +2,25 @@ function config = get_config()
 
     %---- GENERAL SETTINGS ----
     config = struct;                                                                                    % main configuration container
-    config.path_data_in = 'D:\Projects\MAGMA\raw_data';                                                 % folder with raw input .dat files
-    config.path_results_out = 'D:\Projects\MAGMA\data_analyis\disorder_classification';                 % root output folder
+    config.path_data_in = 'D:\Projects\MAGMA\test_data';                                                 % folder with raw input .dat files
+    config.path_results_out = 'D:\Projects\MAGMA\test_data\results';  %data_analyis\disorder_classification';                 % root output folder
+    config.subjects = [0];
+    config.remove_subjects = [3 30 91];
+    config.measurements = [2];                    % 1: pre-rehab-pre-stress, 2: pre-rehab-post-stress, 3:post-rehab-pre-stress, 4:post-rehab-post-stress
     config.fs = 200;                                                                                    % raw sampling frequency in Hz
     config.data_columns = {'ECG1', 'ECG2', 'SpO₂', 'Resp-Lungs', 'Blood Pressure', 'Resp-Diaphragm'};   % column names in raw data
+    config.input_filename_pattern = 'ECG1_ECG2_SpO2_RespL_BP_RespD_fs200_Sub{subject}_Pom{measure}_DeTr_Norm.dat';
     config.labels = get_labels();                                                                       % canonical label names and indices
-    config.plot_raw_data = true;                                                                        % save an overview plot of raw signals
-    config.plot_raw_data_xrange = [1, 10];                                                              % raw overview x-axis range in seconds
     config.save_plots = true;                                                                           % save all plots to the subject output folder
     config.plot_format     = 'png';      
     config.plot_dpi        = 150;                                                                       % resolution of the saved figures
     config.make_figs_visible = 'off';                                                                   % create figures hidden during batch runs, so they dont pop up (for faster run)
-    config.overwrite_results = false;   % recompute even if label output already exists
+    config.overwrite_results = true;   % recompute even if label output already exists
     config.overwrite_features = false;  % recompute respiratory features even if "*_features.mat" exists
-    config.normality = struct();
-    config.normality.do_plot = false;                                                               % diagnostic normality plots for extracted respiration features
-    config.LabelMask = struct();                                                                        % label-mask heatmap figure
-    config.LabelMask.do_plot = true;                                                                    % generate a label-mask summary figure
-    config.LabelMask.save_plot = true;                                                                  % save the label-mask figure to the subject output folder
-    config.LabelMask.use_long_names = true;                                                             % use long dysfunction names on the y-axis instead of only short codes
-    config.LabelMask.colormap_anchors = [ ...
-        1.00 1.00 1.00; ...
-        1.00 0.97 0.84; ...
-        0.98 0.74 0.40; ...
-        0.78 0.12 0.12];                                                                               % white/yellow -> orange -> red
+
+    % plot first X seconds of raw data
+    config.plot_raw_data = true;                                                                        % save an overview plot of raw signals
+    config.plot_raw_data_xrange = [1, 10];                                                              % raw overview x-axis range in seconds
 
     %---- PREPROCESSING ----                
     config.new_fs = 20;                                                                                 % sampling frequency after preprocessing in Hz
@@ -36,6 +31,10 @@ function config = get_config()
     config.detrend.window_length = 60;                          % moving detrend window length in seconds
     config.detrend.do_plot = false;                             % save detrending diagnostic plots
     
+    config.normality = struct;
+    config.normality.method = 'lillie';
+    config.normality.do_plot = false;                                                               % diagnostic normality plots for extracted respiration features
+
     %---- PROBLEMS ----
     config.problems.subjects_with_broken_lung_belt = 1:25;      % subjects where lung belt signal should be ignored 
 
@@ -85,6 +84,16 @@ function config = get_config()
     %---- GENERAL DETECTION SETTINGS
     config.grid_step_sec = 1;      % evaluation grid for "state" labels
 
+    %---- MANUAL LABEL EVENT EDITING
+    config.LabelEdit = struct();
+    config.LabelEdit.manual_control = true;      % open final event-interval editor before saving labels
+    config.LabelEdit.apply_saved_edits = true;    % reuse saved manual event edits on rerun, even when GUI is off
+    config.LabelEdit.save_edits = true;           % persist edited event intervals in the subject results folder
+    config.LabelEdit.window_sec = 300;            % visible time span for manual label GUI scrolling
+    config.LabelEdit.min_interval_sec = 1;        % minimum drag interval accepted as a manual event
+    config.LabelEdit.filename_suffix = '_manual_label_events.mat';
+    config.LabelEdit.rewrite_changed_figures = true; % overwrite only label diagnostic images whose intervals changed manually
+
     %---- LABEL 1 - ShB - DETECTION SETTINGS 
     config.ShB = struct();                  % shallow breathing settings
     config.ShB.amp_ratio_low    = 0.65;     % lower amplitude ratio bound for shallow breaths (35 % decreased from baseline)
@@ -98,10 +107,10 @@ function config = get_config()
     config.IrB.min_dur_sec = 60;        % rolling window length and sustained endpoint duration
     config.IrB.cov_thr   = 0.3;         % CoV threshold for irregularity
     config.IrB.robust_cov_thr = 0.25;   % robust CoV threshold: 1.4826*MAD(IBI)/median(IBI)
-    config.IrB.detection_metric = 'robust_cov'; % options: 'cov', 'robust_cov', 'either', 'both'
+    config.IrB.detection_metric = 'cov'; % options: 'cov', 'robust_cov', 'either', 'both'
     config.IrB.rmssd_thr = 0.0;         % if zero, do not include this measure
     config.IrB.pause_thr_sec = 10;      % exclude irregular windows with pauses at or above this length
-    config.IrB.plot_cov_step_sec = 5;   % display CoV as held values over "step_sec" windows (just for display)
+    config.IrB.plot_cov_step_sec = 1;   % display CoV as held values over "step_sec" windows (just for display)
     config.IrB.do_plot       = true;    % save irregular breathing diagnostic plot
 
     %---- LABEL 3 - SlB - DETECTION SETTINGS 
@@ -185,29 +194,46 @@ function config = get_config()
     config.CSR.max_cycle_sec = 120;              % upper cycle duration for periodic breathing envelopes
     config.CSR.min_cycles = 2;                   % require repeated waxing-waning cycles
     config.CSR.min_modulation_ratio = 1.5;       % envelope peak must be at least this multiple of trough envelope
-    config.CSR.max_trough_ratio = 0.90;          % trough envelope should be low compared with local baseline
     config.CSR.min_breaths_per_cycle = 3;        % minimum breath count in each trough-to-trough cycle
     config.CSR.min_side_breaths = 1;             % breaths required on each side of the envelope peak
     config.CSR.env_smooth_breaths = 3;           % moving median smoothing of normalized breath amplitude
-    config.CSR.baseline_window_breaths = 21;     % local amplitude baseline for normalization
+    config.CSR.normalization_window_breaths = 0; % 0 = global median scale only; use large values only to remove very slow amplitude-scale drift
     config.CSR.min_peak_prominence = 0.25;       % envelope peak prominence for candidate cycles
     config.CSR.min_trough_prominence = 0.15;     % envelope trough prominence for candidate cycles
     config.CSR.min_shape_fraction = 0.55;        % loose monotonicity score for rise and fall limbs
     config.CSR.max_cycle_gap_sec = 10;           % allowed gap when merging adjacent candidate cycles
     config.CSR.do_plot = true;                   % save periodic breathing diagnostic plot
+
+    % HOW TO REPRESENT RESULTS
+    config.LabelMask = struct();                                                                        % label-mask heatmap figure
+    config.LabelMask.do_plot = true;                                                                    % generate a label-mask summary figure
+    config.LabelMask.save_plot = true;                                                                  % save the label-mask figure to the subject output folder
+    config.LabelMask.use_long_names = true;                                                             % use long dysfunction names on the y-axis instead of only short codes
+    config.LabelMask.colormap_anchors = [ ...
+        1.00 1.00 1.00; ...
+        1.00 0.97 0.84; ...
+        0.98 0.74 0.40; ...
+        0.78 0.12 0.12];                                                                               % white/yellow -> orange -> red
+
+
+    % some additional logic:
+    config.subjects(ismember(config.subjects, config.remove_subjects)) = [];
+
+    % add src to path
+    src_root = fileparts(mfilename('fullpath'));
+    if ~isempty(src_root)
+        addpath(genpath(src_root));
+    end
+
 end
 
 
 function labels = get_labels()
-    labels_long = {'ShallowBreathing', 'IrregularBreathing', 'SlowBreathing', 'Rapid Breathing', 'RespiratoryAsynchrony', 'Desaturation', 'Apnea', 'Sigh', 'PeriodicBreathingCheyneStokesLike'};
-    labels_short = {'ShB', 'IrB', 'SlB', 'RaB', 'ReA', 'Des', 'Apn', 'Sig', 'CSR'};
+    labels_long = {'ShallowBreathing', 'IrregularBreathing', 'SlowBreathing', 'RapidBreathing', 'RespiratoryAsynchrony', 'Desaturation', 'Apnea', 'Sigh', 'PeriodicBreathingCheyneStokesLike'};
+    labels_short = {'shallowB', 'irregB', 'slowB', 'rapidB', 'asyncB', 'desat', 'apnea', 'sigh', 'CSR'};
     labels_idx = 1:9;
     labels = struct( ...
         'idx',   num2cell(labels_idx), ...
         'long',  labels_long, ...
         'short', labels_short );
 end
-
-
-
-

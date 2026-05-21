@@ -39,7 +39,7 @@ if config.rolling_baseline.do_plot
     % -------------------------
     % Lungs
     % -------------------------
-    nexttile;
+    ax1 = nexttile;
     
     if isfield(resp_feat.lungs, 'peak_t') && isfield(resp_feat.lungs, 'amp') && ...
             ~isempty(resp_feat.lungs.peak_t) && ~isempty(resp_feat.lungs.amp)
@@ -53,7 +53,7 @@ if config.rolling_baseline.do_plot
     end
     
     plot(t_roll, baseline.rolling.lungs_amp_ref, 'LineWidth', 1.5);
-    yline(baseline.lungs_amp_ref, '--', 'LineWidth', 1.2);
+    plot_static_ref_line(baseline.lungs_amp_ref);
     
     xlabel('Time [s]');
     ylabel('Lung amplitude');
@@ -68,14 +68,14 @@ if config.rolling_baseline.do_plot
         ~isempty(resp_feat.lungs.peak_t) && ~isempty(resp_feat.lungs.amp)
 
         legend('Breath amplitudes', 'Rolling baseline', 'Static baseline', ...
-                'Location', 'best');
+                'Location', 'eastoutside');
     end
     grid on;
     
     % -------------------------
     % Diaphragm
     % -------------------------
-    nexttile;
+    ax2 = nexttile;
     
     if isfield(resp_feat.diaph, 'peak_t') && isfield(resp_feat.diaph, 'amp') && ...
             ~isempty(resp_feat.diaph.peak_t) && ~isempty(resp_feat.diaph.amp)
@@ -89,19 +89,27 @@ if config.rolling_baseline.do_plot
     end
     
     plot(t_roll, baseline.rolling.diaph_amp_ref, 'LineWidth', 1.5);
-    yline(baseline.diaph_amp_ref, '--', 'LineWidth', 1.2);
+    plot_static_ref_line(baseline.diaph_amp_ref);
     
     xlabel(sprintf('Time [s] — %s', x_label_extra));
     ylabel('Diaphragm amplitude');
     title('Diaphragm rolling baseline');
     legend('Breath amplitudes', 'Rolling baseline', 'Static baseline', ...
-        'Location', 'best');
+        'Location', 'eastoutside');
     grid on;
 
+    align_axes_x_widths([ax1 ax2]);
     set(fig, 'Visible', config.make_figs_visible);
     
     save_figure(config, 'rolling_baseline')
 end
+end
+
+function h = plot_static_ref_line(ref_value)
+    h = gobjects(0);
+    if isfinite(ref_value)
+        h = yline(ref_value, '--', 'LineWidth', 1.2);
+    end
 end
 
 

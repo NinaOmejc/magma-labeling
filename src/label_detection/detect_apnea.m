@@ -17,12 +17,13 @@ function events = detect_apnea(data, baseline, resp_feat, spo2_feat, config)
     N = size(data, 1);
     t_grid = (0:config.grid_step_sec:(N-1)/config.new_fs)';  % seconds
 
-    idx_lungs = find(strcmp(config.data_columns, 'Resp-Lungs'), 1);
-    idx_diaph = find(strcmp(config.data_columns, 'Resp-Diaphragm'), 1);
+    if ~isfield(config, 'channels')
+        config = resolve_signal_channels(config);
+    end
+    idx_lungs = config.channels.lungs_idx;
+    idx_diaph = config.channels.diaph_idx;
 
-    lungs_broken = isfield(config, 'problems') && ...
-        isfield(config.problems, 'subjects_with_broken_lung_belt') && ...
-        any(config.subject == config.problems.subjects_with_broken_lung_belt);
+    lungs_broken = is_lung_belt_ignored(config);
 
     lungs_breath_valid = is_valid_breath_signal(resp_feat.lungs, true) && ~lungs_broken;
     diaph_breath_valid = is_valid_breath_signal(resp_feat.diaph, true);
@@ -129,7 +130,7 @@ function events = detect_apnea(data, baseline, resp_feat, spo2_feat, config)
 
         subplot(5, 1, 1); hold on
         plot_resp_trace_or_message(t_raw, data, idx_lungs, 'Resp-Lungs');
-        shade_mask_on_axis(t_grid, apnea_mask)
+        shade_mask_on_axis(t_grid, apnea_mask);
         yline(0, ':')
         title('Combined apnea mask over lungs raw signal')
         xlabel('Time (s)'); ylabel('Resp-Lungs'); grid on
@@ -137,7 +138,7 @@ function events = detect_apnea(data, baseline, resp_feat, spo2_feat, config)
 
         subplot(5, 1, 2); hold on
         plot_resp_trace_or_message(t_raw, data, idx_diaph, 'Resp-Diaphragm');
-        shade_mask_on_axis(t_grid, apnea_mask)
+        shade_mask_on_axis(t_grid, apnea_mask);
         title('Combined apnea mask over diaphragm raw signal')
         xlabel('Time (s)'); ylabel('Resp-Diaphragm'); grid on
         hold off
@@ -147,9 +148,10 @@ function events = detect_apnea(data, baseline, resp_feat, spo2_feat, config)
         stairs(t_grid, double(apnea_raw), 'b', 'LineWidth', 1.2)
         stairs(t_grid, double(apnea_mask), 'r', 'LineWidth', 1.4)
         ylim([-0.05 1.15])
+        shade_mask_on_axis(t_grid, apnea_mask);
         title('Apnea evidence masks')
         xlabel('Time (s)'); ylabel('Mask'); grid on
-        legend('peak amplitude', 'raw flat', 'combined', 'Location', 'best')
+        legend('peak amplitude', 'raw flat', 'combined', 'Location', 'eastoutside')
         hold off
 
         subplot(5, 1, 4); hold on
@@ -164,6 +166,7 @@ function events = detect_apnea(data, baseline, resp_feat, spo2_feat, config)
         plot(t_grid, lungs_ratio, 'k')
         plot(t_grid, diaph_ratio, 'b')
         yline(amp_ratio_thr, 'r--')
+        shade_mask_on_axis(t_grid, apnea_mask);
         if isfield(config, 'rolling_baseline') && isfield(config.rolling_baseline, 'enabled') && config.rolling_baseline.enabled
             title(sprintf('Peak-amplitude ratios (rolling ref win=%ds, lag=%ds)', ...
                 config.rolling_baseline.win_sec, config.rolling_baseline.lag_sec))
@@ -171,7 +174,7 @@ function events = detect_apnea(data, baseline, resp_feat, spo2_feat, config)
             title('Peak-amplitude ratios (static ref)')
         end
         xlabel('Time (s)'); ylabel('Amp ratio'); grid on
-        legend('lungs ratio', 'diaph ratio', 'thr', 'Location', 'best')
+        legend('lungs ratio', 'diaph ratio', 'thr', 'Location', 'eastoutside')
         hold off
 
         subplot(5, 1, 5); hold on
@@ -182,10 +185,11 @@ function events = detect_apnea(data, baseline, resp_feat, spo2_feat, config)
             plot(t_grid, raw_diag.diaph.hist_peak_frac, 'Color', [0.1 0.35 0.9], 'LineStyle', ':')
             yline(raw_cfg.motion_ratio_thr, 'r--')
             yline(raw_cfg.hist_peak_frac_thr, 'm--')
+            shade_mask_on_axis(t_grid, apnea_mask);
             title('Raw-flat diagnostics: movement ratio and histogram plateau score')
             xlabel('Time (s)'); ylabel('Ratio / fraction'); grid on
             legend('lungs motion', 'diaph motion', 'lungs hist peak', 'diaph hist peak', ...
-                'motion thr', 'hist thr', 'Location', 'best')
+                'motion thr', 'hist thr', 'Location', 'eastoutside')
         else
             text(0.5, 0.5, 'Raw-flat apnea detection disabled', ...
                 'Units', 'normalized', 'HorizontalAlignment', 'center')
@@ -197,6 +201,7 @@ function events = detect_apnea(data, baseline, resp_feat, spo2_feat, config)
         ax = ax(arrayfun(@(a) ~strcmp(a.Tag, 'legend'), ax));
         linkaxes(ax, 'x');
         xlim(ax(1), [0 t_grid(end)]);
+        align_axes_x_widths(ax);
 
         save_figure(config, 'apnea');
     end

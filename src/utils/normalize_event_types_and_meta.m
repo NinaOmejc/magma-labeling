@@ -1,7 +1,7 @@
 function events = normalize_event_types_and_meta(events)
 % normalize_event_types_and_meta
 % Convert detector-specific event.type strings into the 9 canonical labels:
-%   ShB, IrB, SlB, RaB, ReA, Des, Apn, Sig, CSR
+%   shallowB, irregB, slowB, rapidB, asyncB, desat, apnea, sigh, CSR
 % and extract common modifiers:
 %   events(e).subtype  ('lungs'/'diaph'/'both' or modifier+belt composites)
 %   events(e).desat    (true/false)
@@ -11,12 +11,12 @@ function events = normalize_event_types_and_meta(events)
 % subtype detail in the event table/struct.
 %
 % Example conversions:
-%   'slow_breathing_shallow_desat' -> type='SlB', subtype='shallow', desat=true
-%   'rapid_deep'                   -> type='RaB', subtype='deep'
-%   'rapid_desat'                  -> type='RaB', subtype='desat', desat=true
-%   'apnea_desat'                  -> type='Apn', subtype='', desat=true
-%   'desaturation'                 -> type='Des'
-%   'sigh'                         -> type='Sig'
+%   'slow_breathing_shallow_desat' -> type='slowB', subtype='shallow', desat=true
+%   'rapid_deep'                   -> type='rapidB', subtype='deep'
+%   'rapid_desat'                  -> type='rapidB', subtype='desat', desat=true
+%   'apnea_desat'                  -> type='apnea', subtype='', desat=true
+%   'desaturation'                 -> type='desat'
+%   'sigh'                         -> type='sigh'
 %   'periodic_breathing_lungs'      -> type='CSR', subtype='lungs'
 %
 % Usage:
@@ -73,58 +73,65 @@ end
 % =========================================================
 function base = map_type_to_base_label(s)
     % Shallow breathing
-    if startsWith(s,'shallow_breathing') || strcmp(s,'shb') || contains(s,'shallowbreathing')
-        base = 'ShB';
+    if startsWith(s,'shallow_breathing') || any(strcmp(s, {'shb', 'shallowb'})) || ...
+            startsWith(s, 'shb_') || startsWith(s, 'shallowb_') || contains(s,'shallowbreathing')
+        base = 'shallowB';
         return;
     end
 
     % Irregular breathing
-    if startsWith(s,'irregular_breathing') || strcmp(s,'irb') || contains(s,'irregularbreathing')
-        base = 'IrB';
+    if startsWith(s,'irregular_breathing') || any(strcmp(s, {'irb', 'irregb'})) || ...
+            startsWith(s, 'irb_') || startsWith(s, 'irregb_') || contains(s,'irregularbreathing')
+        base = 'irregB';
         return;
     end
 
     % Slow breathing (bradypnea)
-    if startsWith(s,'slow_breathing') || strcmp(s,'slb') || contains(s,'slowbreathing')
-        base = 'SlB';
+    if startsWith(s,'slow_breathing') || any(strcmp(s, {'slb', 'slowb'})) || ...
+            startsWith(s, 'slb_') || startsWith(s, 'slowb_') || contains(s,'slowbreathing')
+        base = 'slowB';
         return;
     end
 
     % Rapid breathing (tachypnea)
-    if strcmp(s,'rapid') || strcmp(s,'rab') || strcmp(s,'rapid_breathing') || ...
+    if strcmp(s,'rapid') || any(strcmp(s, {'rab', 'rapidb'})) || startsWith(s, 'rab_') || ...
+            startsWith(s, 'rapidb_') || strcmp(s,'rapid_breathing') || ...
             contains(s,'rapidbreathing') || contains(s,'tachypnea') || startsWith(s,'rapid_breathing') || ...
             startsWith(s,'rapid_')
-        base = 'RaB';
+        base = 'rapidB';
         return;
     end
 
     % Respiratory asynchrony
-    if startsWith(s,'respiratory_asynchrony') || strcmp(s,'rea') || contains(s,'asynchron')
-        base = 'ReA';
+    if startsWith(s,'respiratory_asynchrony') || any(strcmp(s, {'rea', 'asyncb'})) || ...
+            startsWith(s, 'rea_') || startsWith(s, 'asyncb_') || contains(s,'asynchron')
+        base = 'asyncB';
         return;
     end
 
     % Desaturation
-    if startsWith(s,'desaturation') || strcmp(s,'des') || contains(s,'hypoxia')
-        base = 'Des';
+    if startsWith(s,'desaturation') || any(strcmp(s, {'des', 'desat'})) || ...
+            startsWith(s, 'des_') || startsWith(s, 'desat_') || contains(s,'hypoxia')
+        base = 'desat';
         return;
     end
 
     % Apnea
-    if startsWith(s,'apnea') || strcmp(s,'apn')
-        base = 'Apn';
+    if startsWith(s,'apnea') || any(strcmp(s, {'apn', 'apnea'})) || startsWith(s, 'apn_')
+        base = 'apnea';
         return;
     end
 
     % Sigh
-    if startsWith(s,'sigh') || strcmp(s,'sig')
-        base = 'Sig';
+    if startsWith(s,'sigh') || any(strcmp(s, {'sig', 'sigh'})) || startsWith(s, 'sig_')
+        base = 'sigh';
         return;
     end
 
     % Cheyne-Stokes-like / periodic breathing
     if startsWith(s,'periodic_breathing') || startsWith(s,'cheyne_stokes') || ...
-            strcmp(s,'csr') || strcmp(s,'csb') || contains(s,'periodicbreathing')
+            strcmp(s,'csr') || startsWith(s, 'csr_') || strcmp(s,'csb') || startsWith(s, 'csb_') || ...
+            contains(s,'periodicbreathing')
         base = 'CSR';
         return;
     end
@@ -136,12 +143,12 @@ end
 function modifier = map_modifier(s, base)
     modifier = '';
     switch base
-        case {'RaB', 'SlB'}
+        case {'rapidB', 'slowB'}
             if contains(s, 'shallow')
                 modifier = 'shallow';
             elseif contains(s, 'deep')
                 modifier = 'deep';
-            elseif strcmp(base, 'RaB') && contains(s, 'desat')
+            elseif strcmp(base, 'rapidB') && contains(s, 'desat')
                 modifier = 'desat';
             end
     end

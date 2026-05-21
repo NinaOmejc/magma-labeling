@@ -3,8 +3,10 @@ function events = detect_periodic_breathing(data, resp_feat, config)
 % Label 9 - Cheyne-Stokes-like / periodic breathing.
 %
 % This is a simplified RIP-belt pattern detector, not a diagnostic CSR
-% scorer. It looks for repeated breath-amplitude envelope cycles:
-% low envelope trough -> high envelope peak -> low envelope trough.
+% scorer. It detects repeated modulation of the breath-amplitude envelope:
+% smaller breaths -> larger breaths -> smaller breaths, typically over
+% cycles of about 40-120 s. It uses breath amplitudes, not the slow
+% baseline drift of the raw belt signal.
 
     events = empty_events();
 
@@ -12,9 +14,7 @@ function events = detect_periodic_breathing(data, resp_feat, config)
     fs = config.new_fs;
     cfg = periodic_breathing_config(config);
 
-    lungs_broken = isfield(config, 'problems') && ...
-        isfield(config.problems, 'subjects_with_broken_lung_belt') && ...
-        any(config.subject == config.problems.subjects_with_broken_lung_belt);
+    lungs_broken = is_lung_belt_ignored(config);
     lungs_valid = is_valid_breath_signal(resp_feat.lungs, true) && ~lungs_broken;
     diaph_valid = is_valid_breath_signal(resp_feat.diaph, true);
 
@@ -50,11 +50,13 @@ function cfg = periodic_breathing_config(config)
     cfg.max_cycle_sec = get_config_value(config, 'CSR', 'max_cycle_sec', 120);
     cfg.min_cycles = get_config_value(config, 'CSR', 'min_cycles', 2);
     cfg.min_modulation_ratio = get_config_value(config, 'CSR', 'min_modulation_ratio', 1.5);
-    cfg.max_trough_ratio = get_config_value(config, 'CSR', 'max_trough_ratio', 0.90);
     cfg.min_breaths_per_cycle = get_config_value(config, 'CSR', 'min_breaths_per_cycle', 3);
     cfg.min_side_breaths = get_config_value(config, 'CSR', 'min_side_breaths', 1);
     cfg.env_smooth_breaths = odd_window(get_config_value(config, 'CSR', 'env_smooth_breaths', 3));
-    cfg.baseline_window_breaths = odd_window(get_config_value(config, 'CSR', 'baseline_window_breaths', 21));
+    cfg.normalization_window_breaths = get_config_value(config, 'CSR', 'normalization_window_breaths', 0);
+    if cfg.normalization_window_breaths >= 3
+        cfg.normalization_window_breaths = odd_window(cfg.normalization_window_breaths);
+    end
     cfg.min_peak_prominence = get_config_value(config, 'CSR', 'min_peak_prominence', 0.25);
     cfg.min_trough_prominence = get_config_value(config, 'CSR', 'min_trough_prominence', 0.15);
     cfg.min_shape_fraction = get_config_value(config, 'CSR', 'min_shape_fraction', 0.55);
@@ -99,11 +101,23 @@ function [breath_t, amp] = breath_amp_vectors(breaths)
         return;
     end
 
-    breath_t = breaths.peak_t(:);
-    amp = breaths.amp(:);
-    n = min(numel(breath_t), numel(amp));
-    breath_t = breath_t(1:n);
-    amp = amp(1:n);
+    if isfield(breaths, 'peak_val') && isfield(breaths, 'trough_val') && ...
+            numel(breaths.peak_t) >= 2 && numel(breaths.trough_val) >= 1
+        peak_t = breaths.peak_t(:);
+        peak_val = breaths.peak_val(:);
+        trough_val = breaths.trough_val(:);
+        n = min([numel(peak_t) - 1, numel(peak_val) - 1, numel(trough_val)]);
+
+        % Breath amplitude at peak i is peak(i) minus the preceding trough.
+        breath_t = peak_t(2:n+1);
+        amp = peak_val(2:n+1) - trough_val(1:n);
+    else
+        breath_t = breaths.peak_t(:);
+        amp = breaths.amp(:);
+        n = min(numel(breath_t), numel(amp));
+        breath_t = breath_t(1:n);
+        amp = amp(1:n);
+    end
 
     valid = isfinite(breath_t) & isfinite(amp) & amp > 0;
     breath_t = breath_t(valid);
@@ -116,16 +130,20 @@ end
 function [amp_env, amp_norm] = normalized_amplitude_envelope(amp, cfg)
     amp = amp(:);
 
-    local_ref = movmedian(amp, cfg.baseline_window_breaths, 'omitnan');
-    fallback_ref = median(amp(isfinite(amp) & amp > 0), 'omitnan');
-    if ~isfinite(fallback_ref) || fallback_ref <= 0
-        fallback_ref = 1;
+    global_ref = median(amp(isfinite(amp) & amp > 0), 'omitnan');
+    if ~isfinite(global_ref) || global_ref <= 0
+        global_ref = 1;
     end
 
-    bad_ref = ~isfinite(local_ref) | local_ref <= 0;
-    local_ref(bad_ref) = fallback_ref;
+    if cfg.normalization_window_breaths >= 3
+        local_ref = movmedian(amp, cfg.normalization_window_breaths, 'omitnan');
+        bad_ref = ~isfinite(local_ref) | local_ref <= 0;
+        local_ref(bad_ref) = global_ref;
+        amp_norm = amp ./ max(local_ref, eps);
+    else
+        amp_norm = amp ./ max(global_ref, eps);
+    end
 
-    amp_norm = amp ./ max(local_ref, eps);
     amp_env = movmedian(amp_norm, cfg.env_smooth_breaths, 'omitnan');
 end
 
@@ -193,7 +211,7 @@ function cycles = find_periodic_cycles(breath_t, amp_env, cfg)
         end
 
         modulation_ratio = peak_amp / max(trough_amp, eps);
-        if modulation_ratio < cfg.min_modulation_ratio || trough_amp > cfg.max_trough_ratio
+        if modulation_ratio < cfg.min_modulation_ratio
             continue;
         end
 
@@ -337,8 +355,11 @@ function plot_periodic_breathing_diagnostics( ...
 
     N = size(data, 1);
     t_raw = (0:N-1) / config.new_fs;
-    idx_lungs = find(strcmp(config.data_columns, 'Resp-Lungs'), 1);
-    idx_diaph = find(strcmp(config.data_columns, 'Resp-Diaphragm'), 1);
+    if ~isfield(config, 'channels')
+        config = resolve_signal_channels(config);
+    end
+    idx_lungs = config.channels.lungs_idx;
+    idx_diaph = config.channels.diaph_idx;
 
     fig = figure('Units', 'pixels', 'Position', near_fullscreen_figure_position(), ...
         'Visible', config.make_figs_visible);
@@ -363,7 +384,6 @@ function plot_periodic_breathing_diagnostics( ...
     plot_envelope_trace(diag_lungs, [0.1 0.1 0.1], 'lungs envelope');
     plot_envelope_trace(diag_diaph, [0.1 0.35 0.9], 'diaph envelope');
     yline(1.0, 'k:');
-    yline(cfg.max_trough_ratio, 'm--', 'trough ceiling');
     shade_events_on_axis(gca, events, 'periodic breathing');
     title(sprintf('Normalized breath-amplitude envelope | cycles %d-%d s | ratio >= %.2f', ...
         cfg.min_cycle_sec, cfg.max_cycle_sec, cfg.min_modulation_ratio))
@@ -374,6 +394,7 @@ function plot_periodic_breathing_diagnostics( ...
     ax = [ax1 ax2 ax3];
     linkaxes(ax, 'x');
     xlim(ax1, [0 t_raw(end)]);
+    align_axes_x_widths(ax);
 
     set(fig, 'Visible', config.make_figs_visible);
     save_figure(config, 'periodic_breathing');

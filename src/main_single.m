@@ -1,25 +1,13 @@
 
 %---- SETTINGS ----
-subjects = 80:81;
-remove_subjects = [3 30 91];
-subjects(ismember(subjects, remove_subjects)) = [];
-
-measurements = [1, 2]; % 1: pre-rehab-pre-stress, 2: pre-rehab-post-stress, 3:post-rehab-pre-stress, 4:post-rehab-post-stress
-
-% add src to path
-src_root = fileparts(mfilename('fullpath'));
-if ~isempty(src_root)
-    addpath(genpath(src_root));
-end
-
-% load config structure
 config = get_config();
 
 %---- MEASUREMENT AND SUBJECT LOOPS
-for isub = 1:length(subjects)
-    for imeasure = 1:length(measurements)
-        config.subject = subjects(isub);
-        config.measure = measurements(imeasure);
+for isub = 1:length(config.subjects)
+    for imeasure = 1:length(config.measurements)
+
+        config.subject = config.subjects(isub);
+        config.measure = config.measurements(imeasure);
         
         % LOAD DATA
         [data_raw, config, do_analysis] = load_raw_data(config);
@@ -29,10 +17,6 @@ for isub = 1:length(subjects)
         
         % PREPROCESS DATA
         [data, config] = preprocess_data(data_raw, config);
-
-        % columns = [6];
-        % trange = [2 4];
-        % data = modify_data_to_test(data, config.new_fs, columns, trange, 'shallow_breathing', true);
 
         % EXTRACT OR LOAD FEATURES (manually checked breath peaks/troughs + SpO2)
         resp_feat = load_or_extract_respiratory_features(data, config);
@@ -55,19 +39,39 @@ for isub = 1:length(subjects)
         events_Sigh = detect_sigh(data, baseline, resp_feat, spo2_feat, config);
         events_CSR = detect_periodic_breathing(data, resp_feat, config);
 
+        % Optional final manual event-interval editing.
+        % Sigh is intentionally excluded because it has its own breath-level GUI.
+        event_sets = struct( ...
+            'shallowB', events_ShB, ...
+            'irregB', events_IrB, ...
+            'slowB', events_SlB, ...
+            'rapidB', events_RaB, ...
+            'asyncB', events_ReA, ...
+            'desat', events_Des, ...
+            'apnea', events_Apn, ...
+            'CSR', events_CSR);
+        [event_sets, manual_label_edit] = manual_edit_label_events(data, config, event_sets);
+        
+        events_ShB = event_sets.shallowB;
+        events_IrB = event_sets.irregB;
+        events_SlB = event_sets.slowB;
+        events_RaB = event_sets.rapidB;
+        events_ReA = event_sets.asyncB;
+        events_Des = event_sets.desat;
+        events_Apn = event_sets.apnea;
+        events_CSR = event_sets.CSR;
+
         % JOIN EVENTS FOR SUBJECT, MEASUREMENT
         sub_events = merge_events({events_ShB, events_IrB, events_SlB, events_RaB, events_ReA, events_Des, events_Apn, events_Sigh, events_CSR});
         sub_events = normalize_event_types_and_meta(sub_events);
         
         N = size(data,1); 
         [label_mask, label_names] = events_to_time_mask(sub_events, N, config);
-        plot_label_mask(label_mask, label_names, config);
         diagnostic_signals = compute_label_diagnostic_signals(data, baseline, resp_feat, spo2_feat, config, diagnostics_ReA);
+        rewritten_manual_label_figures = rewrite_changed_manual_label_figures( ...
+            data, baseline, resp_feat, spo2_feat, diagnostic_signals, event_sets, manual_label_edit, config);
+        plot_label_mask(label_mask, label_names, config);
         
-        % if ~isempty(events_IrB)
-        %     disp(['Found a subject with irr breathing. Its ' num2str(config.subject) ' | M ' num2str(config.measure)])
-        % end
-
         % SAVE
         results.subject = config.subject;
         results.measure = config.measure;
@@ -77,7 +81,10 @@ for isub = 1:length(subjects)
         results.resp_feat = resp_feat;
         results.spo2_feat = spo2_feat;
         results.diagnostic_signals = diagnostic_signals;
+        results.manual_label_edit = manual_label_edit;
+        results.rewritten_manual_label_figures = rewritten_manual_label_figures;
         results.baseline = baseline;
+        results.input_config = config.input_config;
         results.config = config;
         save(fullfile(config.sub_results_path, config.sub_results_filename), '-struct', 'results');
         

@@ -4,7 +4,7 @@ subjects = [1 3 7 55 80 92];
 remove_subjects = [3 30 91];
 subjects(ismember(subjects, remove_subjects)) = [];
 
-measurements = [1, 2]; % 1: pre-rehab-pre-stress, 2: pre-rehab-post-stress, 3:post-rehab-pre-stress, 4:post-rehab-post-stress
+measurements = [1]; % 1: pre-rehab-pre-stress, 2: pre-rehab-post-stress, 3:post-rehab-pre-stress, 4:post-rehab-post-stress
 
 % add src to path
 src_root = fileparts(mfilename('fullpath'));

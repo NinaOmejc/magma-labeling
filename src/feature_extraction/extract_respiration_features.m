@@ -1,25 +1,43 @@
 function resp_feat = extract_respiration_features(data, config)
     
-    idx_lungs = find(strcmp(config.data_columns, 'Resp-Lungs'), 1);
-    idx_diaph  = find(strcmp(config.data_columns, 'Resp-Diaphragm'), 1);
+    if ~isfield(config, 'channels')
+        config = resolve_signal_channels(config);
+    end
+    idx_lungs = config.channels.lungs_idx;
+    idx_diaph = config.channels.diaph_idx;
 
     % ---- breath series (peaks + per-breath amplitudes) ----
     resp_feat = struct();
-    resp_feat.lungs = extract_respiration_feature(data(:, idx_lungs), config, 'lungs');
-    resp_feat.diaph = extract_respiration_feature(data(:, idx_diaph), config, 'diaph');
+    if ~isempty(idx_lungs)
+        resp_feat.lungs = extract_respiration_feature(data(:, idx_lungs), config, 'lungs');
+    else
+        resp_feat.lungs = empty_respiration_feature('lungs');
+    end
+    if ~isempty(idx_diaph)
+        resp_feat.diaph = extract_respiration_feature(data(:, idx_diaph), config, 'diaph');
+    else
+        resp_feat.diaph = empty_respiration_feature('diaph');
+    end
 
     if isfield(config.resp, 'manual_control') && config.resp.manual_control
-        [resp_feat.lungs, resp_feat.diaph] = manual_edit_respiration_features(data, resp_feat.lungs, resp_feat.diaph, config);
-        if isfield(config.resp, 'do_plot') && config.resp.do_plot
-            save_final_respiration_feature_figure(resp_feat.lungs, config, 'lungs');
-            save_final_respiration_feature_figure(resp_feat.diaph, config, 'diaph');
+        if is_valid_breath_signal(resp_feat.lungs, false) && is_valid_breath_signal(resp_feat.diaph, false)
+            [resp_feat.lungs, resp_feat.diaph] = manual_edit_respiration_features(data, resp_feat.lungs, resp_feat.diaph, config);
+            if isfield(config.resp, 'do_plot') && config.resp.do_plot
+                save_final_respiration_feature_figure(resp_feat.lungs, config, 'lungs');
+                save_final_respiration_feature_figure(resp_feat.diaph, config, 'diaph');
+            end
+        else
+            warning('MAGMA:Respiration:ManualSkipped', ...
+                'Manual breath editing requires two extracted respiratory belts and was skipped for this input configuration.');
         end
     end
     
-    if ~ismember(config.subject, config.problems.subjects_with_broken_lung_belt)
+    if is_valid_breath_signal(resp_feat.lungs, false) && ~is_lung_belt_ignored(config)
         check_normalities(resp_feat.lungs, config);
     end
-    check_normalities(resp_feat.diaph, config);
+    if is_valid_breath_signal(resp_feat.diaph, false)
+        check_normalities(resp_feat.diaph, config);
+    end
 end
 
 function save_final_respiration_feature_figure(b, config, basename)

@@ -17,8 +17,7 @@ function events = detect_slow_breathing(data, baseline, resp_feat, spo2_feat, co
     N = size(data,1);
     t_grid = (0:config.grid_step_sec:(N-1)/config.new_fs)';  % seconds
 
-    lungs_broken = isfield(config,'problems') && isfield(config.problems,'subjects_with_broken_lung_belt') && ...
-        any(config.subject == config.problems.subjects_with_broken_lung_belt);
+    lungs_broken = is_lung_belt_ignored(config);
     lungs_valid = is_valid_breath_signal(resp_feat.lungs, false) && ~lungs_broken;
     diaph_valid = is_valid_breath_signal(resp_feat.diaph, false);
 
@@ -52,18 +51,20 @@ function events = detect_slow_breathing(data, baseline, resp_feat, spo2_feat, co
     end
 
     % ----------------------------
-    % Slow RR condition on grid (lungs/diaph)
+    % Slow RR endpoint condition on grid (lungs/diaph). The metric plotted
+    % at time t is computed from [t-analysis_win_sec, t], so the detection
+    % mask follows that endpoint trace instead of backfilling the window.
     % ----------------------------
     slow_lungs = false(size(t_grid));
     rr_lungs = nan(size(t_grid));
     if lungs_valid
-        [slow_lungs, rr_lungs] = compute_breath_rate_mask(resp_feat.lungs.peak_t, t_grid, analysis_win_sec, rr_thr_bpm, '<=', true);
+        [slow_lungs, rr_lungs] = compute_breath_rate_mask(resp_feat.lungs.peak_t, t_grid, analysis_win_sec, rr_thr_bpm, '<=', false);
     end
 
     slow_diaph = false(size(t_grid));
     rr_diaph = nan(size(t_grid));
     if diaph_valid
-        [slow_diaph, rr_diaph] = compute_breath_rate_mask(resp_feat.diaph.peak_t, t_grid, analysis_win_sec, rr_thr_bpm, '<=', true);
+        [slow_diaph, rr_diaph] = compute_breath_rate_mask(resp_feat.diaph.peak_t, t_grid, analysis_win_sec, rr_thr_bpm, '<=', false);
     end
 
     % Sustain the endpoint RR condition before creating events.

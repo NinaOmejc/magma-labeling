@@ -17,6 +17,9 @@ function [output, config, trend] = preprocess_data(t_series, config)
 
 
     if isfield(config, 'fs'), sampl_freq = config.fs; end
+    if ~isfield(config, 'channels')
+        config = resolve_signal_channels(config);
+    end
     if isfield(config, 'detrend')
         if isfield(config.detrend, 'method'), method = config.detrend.method; end
         if isfield(config.detrend, 'highpass_cutoff'), highpass_cutoff = config.detrend.highpass_cutoff; end
@@ -37,7 +40,7 @@ function [output, config, trend] = preprocess_data(t_series, config)
         data = t_series(:);   % work as column
         signal_cols = 1;
     else
-        signal_cols = find(ismember(config.data_columns, signals));
+        signal_cols = resolved_resp_signal_cols(config, signals);
         time = [];
         data = t_series(:, signal_cols);
     end
@@ -177,6 +180,20 @@ function [output, config, trend] = preprocess_data(t_series, config)
     end
 
     [output, trend, config] = resample_preprocessed_data(output, trend, config, sampl_freq);
+end
+
+function signal_cols = resolved_resp_signal_cols(config, fallback_signals)
+    signal_cols = [];
+    if isfield(config, 'channels')
+        signal_cols = [config.channels.lungs_idx config.channels.diaph_idx];
+        signal_cols = unique(signal_cols, 'stable');
+    end
+    if isempty(signal_cols)
+        signal_cols = find(ismember(config.data_columns, fallback_signals));
+    end
+    if isempty(signal_cols)
+        error('No respiratory belt columns are available for preprocessing.');
+    end
 end
 
 function [data_out, trend_out, config] = resample_preprocessed_data(data_in, trend_in, config, input_fs)

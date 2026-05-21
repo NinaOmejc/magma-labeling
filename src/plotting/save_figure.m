@@ -53,9 +53,13 @@ function save_figure(config, base_name, save_matfig)
         dashed_width = config.plot_dashed_line_width;
     end
     strengthen_dashed_lines(fig, dashed_width);
+    align_axes_x_widths(allAxes);
 
     if ~isfield(config,'save_plots') || ~config.save_plots
-        return;   % leave figure open (style adjustments already applied)
+        if strcmpi(target_visibility, 'off')
+            close(fig);
+        end
+        return;   % leave visible figures open for interactive inspection
     end
 
     if ~isfield(config,'sub_results_path') || isempty(config.sub_results_path)

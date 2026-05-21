@@ -18,8 +18,7 @@ function events = detect_sigh(data, baseline, resp_feat, spo2_feat, config)
     fs = config.new_fs;
     t_grid = (0:config.grid_step_sec:(N-1)/config.new_fs)';
 
-    lungs_broken = isfield(config,'problems') && isfield(config.problems,'subjects_with_broken_lung_belt') && ...
-        any(config.subject == config.problems.subjects_with_broken_lung_belt);
+    lungs_broken = is_lung_belt_ignored(config);
     lungs_valid = is_valid_breath_signal(resp_feat.lungs, true) && ~lungs_broken;
     diaph_valid = is_valid_breath_signal(resp_feat.diaph, true);
 
@@ -85,8 +84,11 @@ function events = detect_sigh(data, baseline, resp_feat, spo2_feat, config)
             end
     end
 
-    if manual_control
+    if manual_control && lungs_valid && diaph_valid
         [sigh_lungs, sigh_diaph] = manual_edit_sigh_flags(data, resp_feat.lungs, resp_feat.diaph, sigh_lungs, sigh_diaph, baseline, spo2_feat, config, manual_window_sec);
+    elseif manual_control
+        warning('MAGMA:Sigh:ManualSkipped', ...
+            'Manual sigh editing requires two valid respiratory belts and was skipped for this input configuration.');
     end
 
     events_L = sigh_flags_to_events(resp_feat.lungs.peak_t, sigh_lungs, N, fs, 'lungs');
@@ -94,8 +96,11 @@ function events = detect_sigh(data, baseline, resp_feat, spo2_feat, config)
     events = merge_events({events_L, events_D});
 
     if do_plot
-        idx_lungs = find(strcmp(config.data_columns, 'Resp-Lungs'), 1);
-        idx_diaph  = find(strcmp(config.data_columns, 'Resp-Diaphragm'), 1);
+        if ~isfield(config, 'channels')
+            config = resolve_signal_channels(config);
+        end
+        idx_lungs = config.channels.lungs_idx;
+        idx_diaph = config.channels.diaph_idx;
 
         t_raw = (0:N-1)/fs;
 
@@ -105,6 +110,7 @@ function events = detect_sigh(data, baseline, resp_feat, spo2_feat, config)
         ax1 = subplot(3,1,1); hold on
         h_lungs_trace = gobjects(0);
         if ~isempty(idx_lungs), h_lungs_trace = plot(t_raw, data(:,idx_lungs), 'k', 'DisplayName', 'Resp-Lungs'); end
+        shade_events_on_axis(gca, events_L, 'sigh lungs');
         if ~isempty(idx_lungs)
             y_lungs_mark = interp1(t_raw, data(:,idx_lungs), resp_feat.lungs.peak_t(sigh_lungs), 'linear', 'extrap');
         else
@@ -119,6 +125,7 @@ function events = detect_sigh(data, baseline, resp_feat, spo2_feat, config)
         ax2 = subplot(3,1,2); hold on
         h_diaph_trace = gobjects(0);
         if ~isempty(idx_diaph), h_diaph_trace = plot(t_raw, data(:,idx_diaph), 'k', 'DisplayName', 'Resp-Diaphragm'); end
+        shade_events_on_axis(gca, events_D, 'sigh diaphragm');
         if ~isempty(idx_diaph)
             y_diaph_mark = interp1(t_raw, data(:,idx_diaph), resp_feat.diaph.peak_t(sigh_diaph), 'linear', 'extrap');
         else
@@ -138,6 +145,7 @@ function events = detect_sigh(data, baseline, resp_feat, spo2_feat, config)
     
         linkaxes([ax1 ax2 ax3], 'x');
         xlim(ax1, [0 t_grid(end)]);
+        align_axes_x_widths([ax1 ax2 ax3]);
 
         title('SpO₂')
         xlabel('Time (s)')
@@ -145,6 +153,7 @@ function events = detect_sigh(data, baseline, resp_feat, spo2_feat, config)
         grid on
         hold off
         title(ax3, 'SpO2 with desaturation thresholds')
+        align_axes_x_widths([ax1 ax2 ax3]);
 
         save_figure(config, 'sigh');
     end

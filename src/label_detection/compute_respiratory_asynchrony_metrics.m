@@ -7,15 +7,17 @@ function rea = compute_respiratory_asynchrony_metrics(data, resp_feat, config)
 
     rea = empty_rea_metrics(t_grid, config);
 
-    idx_lungs = find(strcmp(config.data_columns, 'Resp-Lungs'), 1);
-    idx_diaph = find(strcmp(config.data_columns, 'Resp-Diaphragm'), 1);
+    if ~isfield(config, 'channels')
+        config = resolve_signal_channels(config);
+    end
+    idx_lungs = config.channels.lungs_idx;
+    idx_diaph = config.channels.diaph_idx;
     if isempty(idx_lungs) || isempty(idx_diaph)
         rea.skip_code = 1;
         return;
     end
 
-    lungs_broken = isfield(config,'problems') && isfield(config.problems,'subjects_with_broken_lung_belt') && ...
-        any(config.subject == config.problems.subjects_with_broken_lung_belt);
+    lungs_broken = is_lung_belt_ignored(config);
     if lungs_broken
         rea.skip_code = 2;
         return;
@@ -36,6 +38,12 @@ function rea = compute_respiratory_asynchrony_metrics(data, resp_feat, config)
         rea.skip_code = 5;
         return;
     end
+
+    old_default_visibility = get(groot, 'defaultFigureVisible');
+    figures_before = findall(groot, 'Type', 'figure');
+    target_visibility = target_figure_visibility(config);
+    cleanup_visibility = onCleanup(@() restore_figure_visibility(old_default_visibility, figures_before, target_visibility)); %#ok<NASGU>
+    set(groot, 'defaultFigureVisible', target_visibility);
 
     try
         [lungs_pc, diaph_pc, fs_pc] = resample_pair_local(lungs_sig, diaph_sig, config.new_fs, rea.target_fs);
@@ -90,6 +98,24 @@ function rea = compute_respiratory_asynchrony_metrics(data, resp_feat, config)
     rea.low_coherence_mask = rea.deviation_bin_count >= rea.min_deviating_bins;
     rea.valid_analysis = true;
     rea.skip_code = 0;
+end
+
+function visibility = target_figure_visibility(config)
+    visibility = 'on';
+    if isfield(config, 'make_figs_visible') && ~isempty(config.make_figs_visible)
+        visibility = char(string(config.make_figs_visible));
+    end
+end
+
+function restore_figure_visibility(old_visibility, existing_figures, target_visibility)
+    set(groot, 'defaultFigureVisible', old_visibility);
+    if strcmpi(target_visibility, 'off')
+        current_figures = findall(groot, 'Type', 'figure');
+        new_figures = setdiff(current_figures, existing_figures);
+        if ~isempty(new_figures)
+            close(new_figures(ishandle(new_figures)));
+        end
+    end
 end
 
 function rea = empty_rea_metrics(t_grid, config)

@@ -2,8 +2,11 @@ function plot_belt_diagnostic_figure(data, config, t_grid, mask_lungs, mask_diap
 % plot_belt_diagnostic_figure
 % Shared raw-belt + diagnostic-metric plot for lungs and diaphragm.
 
-    idx_lungs = find(strcmp(config.data_columns, 'Resp-Lungs'), 1);
-    idx_diaph = find(strcmp(config.data_columns, 'Resp-Diaphragm'), 1);
+    if ~isfield(config, 'channels')
+        config = resolve_signal_channels(config);
+    end
+    idx_lungs = config.channels.lungs_idx;
+    idx_diaph = config.channels.diaph_idx;
     t_raw = (0:size(data,1)-1) / config.new_fs;
 
     plot_step_sec = get_opt(opts, 'plot_step_sec', 15);
@@ -11,31 +14,35 @@ function plot_belt_diagnostic_figure(data, config, t_grid, mask_lungs, mask_diap
     metric_diaph_plot = held_median_trace_local(t_grid, metric_diaph, plot_step_sec);
     [secondary_lungs, secondary_lungs_plot] = secondary_metric_local(opts, 'lungs', t_grid, plot_step_sec);
     [secondary_diaph, secondary_diaph_plot] = secondary_metric_local(opts, 'diaph', t_grid, plot_step_sec);
+    metric_mask_lungs = get_opt(opts, 'metric_mask_lungs', mask_lungs);
+    metric_mask_diaph = get_opt(opts, 'metric_mask_diaph', mask_diaph);
+    metric_trigger_mask_lungs = get_opt(opts, 'metric_trigger_mask_lungs', []);
+    metric_trigger_mask_diaph = get_opt(opts, 'metric_trigger_mask_diaph', []);
 
     figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', config.make_figs_visible);
     tl = tiledlayout(4, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
     title(tl, opts.figure_title)
 
     ax1 = nexttile(tl); hold on
-    plot(t_raw, data(:,idx_lungs), 'k')
-    shade_mask_on_axis(t_grid, mask_lungs)
+    plot_resp_trace_or_message(t_raw, data, idx_lungs, 'Resp-Lungs')
+    shade_mask_on_axis(t_grid, mask_lungs);
     title(sprintf('%s (lungs) over raw signal', opts.event_name))
     xlabel('Time (s)'); ylabel('Resp-Lungs'); grid on
     hold off
 
     ax2 = nexttile(tl); hold on
-    plot_diagnostic_metric(t_grid, metric_lungs, metric_lungs_plot, secondary_lungs, secondary_lungs_plot, opts, 'lungs');
+    plot_diagnostic_metric(t_grid, metric_lungs, metric_lungs_plot, secondary_lungs, secondary_lungs_plot, opts, 'lungs', metric_mask_lungs, metric_trigger_mask_lungs);
     hold off
 
     ax3 = nexttile(tl); hold on
-    plot(t_raw, data(:,idx_diaph), 'k')
-    shade_mask_on_axis(t_grid, mask_diaph)
+    plot_resp_trace_or_message(t_raw, data, idx_diaph, 'Resp-Diaphragm')
+    shade_mask_on_axis(t_grid, mask_diaph);
     title(sprintf('%s (diaphragm) over raw signal', opts.event_name))
     xlabel('Time (s)'); ylabel('Resp-Diaphragm'); grid on
     hold off
 
     ax4 = nexttile(tl); hold on
-    plot_diagnostic_metric(t_grid, metric_diaph, metric_diaph_plot, secondary_diaph, secondary_diaph_plot, opts, 'diaphragm');
+    plot_diagnostic_metric(t_grid, metric_diaph, metric_diaph_plot, secondary_diaph, secondary_diaph_plot, opts, 'diaphragm', metric_mask_diaph, metric_trigger_mask_diaph);
     hold off
 
     ax = [ax1 ax2 ax3 ax4];
@@ -45,7 +52,16 @@ function plot_belt_diagnostic_figure(data, config, t_grid, mask_lungs, mask_diap
     save_figure(config, opts.output_name);
 end
 
-function plot_diagnostic_metric(t_grid, metric_raw, metric_plot, secondary_raw, secondary_plot, opts, belt_name)
+function plot_resp_trace_or_message(t_raw, data, idx, label_text)
+    if isempty(idx)
+        text(0.5, 0.5, [label_text ' channel not found'], ...
+            'Units', 'normalized', 'HorizontalAlignment', 'center')
+    else
+        plot(t_raw, data(:, idx), 'k')
+    end
+end
+
+function plot_diagnostic_metric(t_grid, metric_raw, metric_plot, secondary_raw, secondary_plot, opts, belt_name, detection_mask, trigger_mask)
     primary_label = get_opt(opts, 'primary_label', 'Metric');
     plot(t_grid, metric_raw, 'Color', [0.70 0.70 0.70], 'LineWidth', 0.8, ...
         'DisplayName', [primary_label ' raw'])
@@ -81,12 +97,45 @@ function plot_diagnostic_metric(t_grid, metric_raw, metric_plot, secondary_raw, 
         values = [values; secondary_raw(:); secondary_plot(:)];
     end
     set_metric_limits(values, opts);
+    if nargin >= 8 && ~isempty(detection_mask)
+        shade_mask_on_axis(gca, t_grid, detection_mask);
+    end
+    if nargin >= 9 && ~isempty(trigger_mask)
+        mark_trigger_mask_on_axis(gca, t_grid, trigger_mask);
+    end
     title(sprintf('%s (%s, %s)', opts.metric_title, belt_name, opts.metric_detail))
     xlabel('Time (s)')
     ylabel(opts.metric_ylabel)
     grid on
     if has_secondary
         legend('show', 'Location', 'eastoutside')
+    end
+end
+
+function mark_trigger_mask_on_axis(ax, t_grid, trigger_mask)
+% Mark metric endpoint samples that crossed threshold within a labeled window.
+    trigger_mask = trigger_mask(:) ~= 0;
+    t_grid = t_grid(:);
+    if isempty(trigger_mask) || ~any(trigger_mask) || numel(trigger_mask) ~= numel(t_grid)
+        return;
+    end
+
+    grid_step_sec = median(diff(t_grid), 'omitnan');
+    if ~isfinite(grid_step_sec) || grid_step_sec <= 0
+        grid_step_sec = 0;
+    end
+
+    y_limits = ylim(ax);
+    y0 = y_limits(1) + 0.88 * diff(y_limits);
+    y1 = y_limits(2);
+    d = diff([false; trigger_mask; false]);
+    starts = find(d == 1);
+    ends = find(d == -1) - 1;
+    for i = 1:numel(starts)
+        x0 = t_grid(starts(i));
+        x1 = t_grid(ends(i)) + grid_step_sec;
+        patch(ax, [x0 x1 x1 x0], [y0 y0 y1 y1], [0.75 0.00 0.00], ...
+            'EdgeColor', 'none', 'FaceAlpha', 0.65, 'HandleVisibility', 'off');
     end
 end
 

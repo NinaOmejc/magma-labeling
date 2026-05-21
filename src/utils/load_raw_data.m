@@ -1,5 +1,7 @@
 function [data, config, do_analysis] = load_raw_data(config)
 
+    [config, input_config] = resolve_signal_channels(config);
+
     % PREPARE OUTPUT FOLDER
     config.sub_results_path = [config.path_results_out filesep 'Sub' num2str(config.subject) '_M' num2str(config.measure)];
     config.sub_results_filename = ['Sub' num2str(config.subject) '_M' num2str(config.measure) '_labels.mat'];
@@ -24,14 +26,26 @@ function [data, config, do_analysis] = load_raw_data(config)
     end
 
     % LOAD DATA
-    filename = ['ECG1_ECG2_SpO2_RespL_BP_RespD_fs200_Sub' num2str(config.subject) '_Pom' num2str(config.measure) '_DeTr_Norm.dat'];
-    data = load([config.path_data_in filesep filename]);
-    data = reshape(data, [], 6);
+    filename = resolve_input_filename(config);
     
+    full_fname = [config.path_data_in filesep filename];
+    if exist(full_fname, 'file')
+        data = load(full_fname);
+    elseif exist(strrep(full_fname, '.dat', '_Glue.dat'), 'file')
+        data = load(strrep(full_fname, '.dat', '_Glue.dat'));
+    else
+        error(['File could not be loaded: ' full_fname])
+    end
+
+    data = reshape_loaded_data(data, numel(config.data_columns), full_fname);
+    print_input_configuration(input_config);
+
     % CHECK PROBLEMS
-    if any(config.subject == config.problems.subjects_with_broken_lung_belt)
-        lung_idx = find(ismember(config.data_columns, 'Resp-Lungs'));
-        data(:, lung_idx) = data(:, lung_idx) * 0;
+    if is_lung_belt_ignored(config)
+        lung_idx = config.channels.lungs_idx;
+        if ~isempty(lung_idx)
+            data(:, lung_idx) = data(:, lung_idx) * 0;
+        end
     end
 
     % CALCULATE TIMES
@@ -42,3 +56,52 @@ function [data, config, do_analysis] = load_raw_data(config)
     
 end
 
+function filename = resolve_input_filename(config)
+    pattern = 'ECG1_ECG2_SpO2_RespL_BP_RespD_fs200_Sub{subject}_Pom{measure}_DeTr_Norm.dat';
+    if isfield(config, 'input') && isfield(config.input, 'filename_pattern') && ...
+            ~isempty(config.input.filename_pattern)
+        pattern = config.input.filename_pattern;
+    elseif isfield(config, 'input_filename_pattern') && ~isempty(config.input_filename_pattern)
+        pattern = config.input_filename_pattern;
+    end
+
+    filename = char(string(pattern));
+    filename = strrep(filename, '{subject}', num2str(config.subject));
+    filename = strrep(filename, '{measure}', num2str(config.measure));
+end
+
+function data = reshape_loaded_data(raw_data, n_cols, filename)
+    if isempty(raw_data)
+        error('Loaded data is empty: %s', filename);
+    end
+
+    if size(raw_data, 2) == n_cols
+        data = raw_data;
+        return;
+    end
+
+    if ~isvector(raw_data)
+        error(['Loaded data column mismatch for %s. config.data_columns has %d entries, ' ...
+            'but the loaded array is %d x %d.'], ...
+            filename, n_cols, size(raw_data, 1), size(raw_data, 2));
+    end
+
+    if mod(numel(raw_data), n_cols) == 0
+        data = reshape(raw_data, [], n_cols);
+        return;
+    end
+
+    error(['Loaded data column mismatch for %s. config.data_columns has %d entries, ' ...
+        'but the loaded array is %d x %d and cannot be reshaped to that width.'], ...
+        filename, n_cols, size(raw_data, 1), size(raw_data, 2));
+end
+
+function print_input_configuration(input_config)
+    fprintf('Detected input configuration: %s\n', input_config.description);
+    fprintf('Running labels: %s\n', strjoin(input_config.running_labels, ', '));
+    if isempty(input_config.skipped_labels)
+        fprintf('Skipped labels: none\n');
+    else
+        fprintf('Skipped labels: %s\n', strjoin(input_config.skipped_labels, ', '));
+    end
+end

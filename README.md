@@ -14,7 +14,7 @@ Detected labels include:
 - Sigh
 - Cheyne-Stokes-like / periodic breathing
 
-The pipeline processes multi-channel physiological recordings and saves structured event annotations, label masks, diagnostic signals, features, and figures. Original label definitions are in `Labels.docx`; label 9 is implemented in `config.CSR` and `detect_periodic_breathing.m`.
+The pipeline processes multi-channel physiological recordings and saves structured event annotations, label masks, diagnostic signals, features, and figures. Original label definitions are in `Labels.docx`.
 
 ## Download And Setup
 
@@ -37,8 +37,8 @@ Or download the ZIP from GitHub with **Code > Download ZIP**, then extract it.
 addpath(genpath(fullfile(pwd, 'src')));
 ```
 
-4. Edit `src/main_single.m` to choose the `subjects` and `measurements` to process.
-5. Edit `src/get_config.m` if paths or detector settings need to change.
+4. Edit `src/get_config.m` to choose the `subjects` and `measurements` to process.
+5. Edit `src/get_config.m` if paths, detector settings, plotting, or manual review options need to change.
 6. Run:
 
 ```matlab
@@ -53,20 +53,36 @@ All main settings are defined in `src/get_config.m`.
 
 Key parameters:
 
-- `config.fs` - raw sampling rate, usually 200 Hz
+- `config.fs` - raw sampling rate
 - `config.new_fs` - sampling rate after preprocessing
 - `config.path_data_in` - input `.dat` file directory
 - `config.path_results_out` - output directory
-- `config.data_columns` - expected 6-channel column order
+- `config.subjects` - subject identifiers to process
+- `config.measurements` - measurement identifiers to process
+- `config.data_columns` - input column names; at least one respiratory belt is required and SpO2 is optional
+- `config.input_filename_pattern` - raw input filename pattern, with `{subject}` and `{measure}` placeholders
 - `config.save_plots` - save detector and diagnostic figures
 - `config.make_figs_visible` - show or hide figures during batch runs
 - `config.overwrite_results` - recompute labels when a saved label file already exists
 
 Each detector has its own settings block, for example `config.ShB`, `config.IrB`, `config.SlB`, `config.RaB`, `config.ReA`, `config.Des`, `config.Apn`, `config.Sig`, and `config.CSR`.
 
+Manual review can be enabled at three levels:
+
+- `config.resp.manual_control` - opens a breath peak editor before label detection. Edited peaks/troughs affect all downstream respiratory labels.
+- `config.Sig.manual_control` - opens the sigh-specific breath-level editor for adding or removing sigh markers.
+- `config.LabelEdit.manual_control` - opens the final event-interval editor after automatic detection and before the final label mask is saved. This editor handles `shallowB`, `irregB`, `slowB`, `rapidB`, `asyncB`, `desat`, `apnea`, and `CSR`; sigh is excluded because it has its own editor.
+
+Final manual label edits are controlled by:
+
+- `config.LabelEdit.apply_saved_edits` - reuse previously saved manual event edits on rerun, even if the GUI is disabled.
+- `config.LabelEdit.save_edits` - save the edited per-label event intervals in a separate `*_manual_label_events.mat` file.
+- `config.LabelEdit.rewrite_changed_figures` - after manual editing, overwrite only the label diagnostic images whose intervals changed; unchanged label images are left untouched.
+
 ## Input Data Format
 
-Each recording is expected as a `.dat` file with 6 columns:
+Each recording is expected as a numeric `.dat` file whose columns match `config.data_columns`.
+The default MAGMA configuration remains the original 6-column order:
 
 1. ECG1
 2. ECG2
@@ -75,7 +91,22 @@ Each recording is expected as a `.dat` file with 6 columns:
 5. Blood Pressure
 6. Resp-Diaphragm
 
-Rows are time samples. The raw sampling rate must match `config.fs`.
+Rows are time samples and columns are signals. The raw sampling rate must match `config.fs`.
+
+For external data, `config.data_columns` can also list only the available signals, for example:
+
+```matlab
+config.data_columns = {'SpO2', 'Resp-Lungs', 'Resp-Diaphragm'};
+config.data_columns = {'Resp-Lungs', 'Resp-Diaphragm'};
+config.data_columns = {'Resp', 'SpO2'};
+config.data_columns = {'Resp'};
+```
+
+Accepted respiratory aliases include `Resp-Lungs`, `Lungs`, `Thorax`, `Chest`, `Resp-Diaphragm`, `Diaphragm`, `Abdomen`, `Resp`, `RespiratoryBelt`, and `Respiration`.
+Accepted oxygen-saturation aliases include `SpO2`, `SpO₂`, `Spo2`, `SaO2`, and `OxygenSaturation`.
+If only one belt is present, one-belt respiratory labels still run and respiratory asynchrony is skipped. If SpO2 is absent, desaturation detection and desaturation modifiers are skipped.
+
+The loader resolves available channels from `config.data_columns` and records the resolved channel configuration in `results.input_config`. This allows the same pipeline and plotting/manual-review interfaces to run on the full MAGMA signal set as well as smaller external files with only the available respiratory and/or SpO2 channels.
 
 The expected filename pattern is:
 
@@ -102,6 +133,7 @@ For each subject and measurement, the pipeline creates one output folder:
     Sub42_M1_rapid_breathing.png
     Sub42_M1_slow_breathing.png
     Sub42_M1_desaturation.png
+    Sub42_M1_manual_label_events.mat
     ...
 ```
 
@@ -116,11 +148,16 @@ results.label_names        = label_names;         % Label names matching mask co
 results.resp_feat          = resp_feat;           % Respiratory features for lungs and diaphragm
 results.spo2_feat          = spo2_feat;           % SpO2 features and desaturation candidates
 results.diagnostic_signals = diagnostic_signals;  % Continuous detector-adjacent signals
+results.manual_label_edit  = manual_label_edit;   % Manual edit metadata and changed label list
+results.rewritten_manual_label_figures = rewritten_manual_label_figures; % Figures rewritten after manual interval edits
 results.baseline           = baseline;            % Static and rolling baseline references
+results.input_config       = config.input_config; % Resolved channels and skipped/running labels
 results.config             = config;              % Full configuration used for this run
 ```
 
-`results.measure` is the only saved measurement identifier.
+`results.events` and `results.mask` already include accepted manual edits. The separate `Sub*_M*_manual_label_events.mat` file stores the edited per-label event sets before final merging/normalization, so the same human edits can be reused on rerun and compared against newly detected automatic events.
+
+`results.measure` is the saved measurement identifier.
 
 ## Artificial Test Signals
 
@@ -130,20 +167,21 @@ To generate nine artificial one-label datasets from source recording Sub1/M1 and
 run('src/main_test_signals.m')
 ```
 
-This creates ignored local files under `test_data/` named as `Sub0_Pom1` through `Sub0_Pom9`. Measurements map to labels in order: `ShB`, `IrB`, `SlB`, `RaB`, `ReA`, `Des`, `Apn`, `Sig`, and `CSR`. Results are saved under `results/test_signals/`. The script errors if a measurement misses its expected label and reports any additional canonical labels so detector weaknesses remain visible.
+This creates ignored local files under `test_data/` named as `Sub0_Pom1` through `Sub0_Pom9`. Measurements map to labels in order: `shallowB`, `irregB`, `slowB`, `rapidB`, `asyncB`, `desat`, `apnea`, `sigh`, and `CSR`. Results are saved under `results/test_signals/`. The script errors if a measurement misses its expected label and reports any additional canonical labels so detector weaknesses remain visible.
 
 ## Event Struct Format
 
 Each event contains:
 
-- `type` - one of the main labels: `ShB`, `IrB`, `SlB`, `RaB`, `ReA`, `Des`, `Apn`, `Sig`, `CSR`
+- `type` - one of the main labels: `shallowB`, `irregB`, `slowB`, `rapidB`, `asyncB`, `desat`, `apnea`, `sigh`, `CSR`
 - `subtype` - optional modifier, for example `shallow`, `deep`, or `desat`
 - `desat` - true when the event is associated with desaturation
 - `depth` - `shallow`, `deep`, or empty when not applicable
 - `start_idx`, `end_idx` - sample indices
 - `start_t`, `end_t` - event times in seconds
 
-Rapid breathing remains `type = 'RaB'` in the main mask. Its variants are stored in `subtype`, so a rapid-deep episode is represented as `type = 'RaB'`, `subtype = 'deep'`.
+Rapid breathing remains `type = 'rapidB'` in the main mask. Its variants are stored in `subtype`, so a rapid-deep episode is represented as `type = 'rapidB'`, `subtype = 'deep'`.
+Older short event names such as `RaB`, `Apn`, or `Sig` are still accepted by the normalization helper, but new outputs use the longer canonical names.
 
 ## License
 
