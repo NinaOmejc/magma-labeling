@@ -252,16 +252,19 @@ function event_sets = run_editor(data, config, event_sets, auto_event_sets, labe
     plot_trace_or_message(ax1, t_raw, data, idx_lungs, 'Resp-Lungs');
     title(ax1, 'Manual label editing: lungs');
     ylabel(ax1, 'Resp-Lungs'); grid(ax1, 'on');
+    set_global_ylim_from_channel(ax1, data, idx_lungs);
 
     ax2 = subplot(3, 1, 2); hold(ax2, 'on');
     plot_trace_or_message(ax2, t_raw, data, idx_diaph, 'Resp-Diaphragm');
     title(ax2, 'Manual label editing: diaphragm');
     ylabel(ax2, 'Resp-Diaphragm'); grid(ax2, 'on');
+    set_global_ylim_from_channel(ax2, data, idx_diaph);
 
     ax3 = subplot(3, 1, 3); hold(ax3, 'on');
     plot_trace_or_message(ax3, t_raw, data, idx_spo2, 'SpO2');
     title(ax3, 'Manual label editing: SpO2');
     ylabel(ax3, 'SpO2'); xlabel(ax3, 'Time (s)'); grid(ax3, 'on');
+    set_global_ylim_from_channel(ax3, data, idx_spo2);
 
     ax = [ax1 ax2 ax3];
     for i = 1:numel(ax)
@@ -516,6 +519,30 @@ function plot_trace_or_message(ax, t_raw, data, idx, label_text)
 
     h = plot(ax, t_raw, data(:, idx), 'k');
     set(h, 'HitTest', 'off', 'PickableParts', 'none');
+end
+
+function set_global_ylim_from_channel(ax, data, idx)
+    if isempty(idx) || ~isgraphics(ax)
+        return;
+    end
+    ylim(ax, compute_global_ylim(data(:, idx)));
+end
+
+function y_limits = compute_global_ylim(signal)
+    signal = signal(isfinite(signal));
+    if isempty(signal)
+        y_limits = [-1, 1];
+        return;
+    end
+
+    y_min = min(signal);
+    y_max = max(signal);
+    if y_min == y_max
+        pad = max(1e-3, 0.05 * max(1, abs(y_min)));
+    else
+        pad = max(1e-3, 0.05 * (y_max - y_min));
+    end
+    y_limits = [y_min - pad, y_max + pad];
 end
 
 function ev = make_event(event_type, start_t, end_t, N, fs)

@@ -26,6 +26,7 @@ function irregular_events = detect_irregular_breathing(data, resp_feat, config)
     diaph_valid = is_valid_breath_signal(resp_feat.diaph, false);
 
     if ~lungs_valid && ~diaph_valid
+        fprintf('Skipping irregB detection: no valid respiratory belt with usable breath timing.\n');
         return;
     end
 

@@ -108,5 +108,5 @@ function ok = is_valid_resp_feat(resp_feat, n_samples)
 end
 
 function v = current_feature_cache_version()
-    v = 4;
+    v = 5;
 end

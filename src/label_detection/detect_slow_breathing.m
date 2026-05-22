@@ -22,6 +22,7 @@ function events = detect_slow_breathing(data, baseline, resp_feat, spo2_feat, co
     diaph_valid = is_valid_breath_signal(resp_feat.diaph, false);
 
     if ~lungs_valid && ~diaph_valid
+        fprintf('Skipping slowB detection: no valid respiratory belt with usable breath timing.\n');
         return;
     end
 

@@ -15,6 +15,7 @@ function [events, rea_metrics] = detect_respiratory_asynchrony(data, baseline_or
     rea_metrics = compute_respiratory_asynchrony_metrics(data, resp_feat, config);
 
     if ~rea_metrics.valid_analysis
+        fprintf('Skipping asyncB detection: %s\n', rea_skip_reason(rea_metrics.skip_code, rea_metrics.error_message));
         return;
     end
 
@@ -27,6 +28,33 @@ function [events, rea_metrics] = detect_respiratory_asynchrony(data, baseline_or
 
     if do_plot
         plot_respiratory_asynchrony(data, config, rea_metrics.time_sec, rea_mask, rea_metrics);
+    end
+end
+
+function msg = rea_skip_reason(skip_code, error_message)
+    switch skip_code
+        case 1
+            msg = 'missing respiratory belt channel(s).';
+        case 2
+            msg = 'lung belt is marked broken for this subject.';
+        case 3
+            msg = 'lungs belt breathing features are invalid.';
+        case 4
+            msg = 'diaphragm belt breathing features are invalid.';
+        case 5
+            msg = 'at least one respiratory belt signal is unusable (all invalid/flat).';
+        case 6
+            msg = 'asynchrony frequency range is invalid for the signal sampling rate.';
+        case 7
+            msg = 'wavelet outputs were empty after alignment.';
+        case 8
+            if isempty(error_message)
+                msg = 'wavelet coherence computation failed.';
+            else
+                msg = ['wavelet coherence computation failed (' error_message ').'];
+            end
+        otherwise
+            msg = 'input data do not support asynchrony computation.';
     end
 end
 

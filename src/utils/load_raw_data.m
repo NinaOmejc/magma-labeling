@@ -98,10 +98,4 @@ end
 
 function print_input_configuration(input_config)
     fprintf('Detected input configuration: %s\n', input_config.description);
-    fprintf('Running labels: %s\n', strjoin(input_config.running_labels, ', '));
-    if isempty(input_config.skipped_labels)
-        fprintf('Skipped labels: none\n');
-    else
-        fprintf('Skipped labels: %s\n', strjoin(input_config.skipped_labels, ', '));
-    end
 end

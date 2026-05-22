@@ -1,31 +1,31 @@
 function config = get_config()
 
     %---- GENERAL SETTINGS ----
-    config = struct;                                                                                    % main configuration container
-    config.path_data_in = 'D:\Projects\MAGMA\test_data';                                                 % folder with raw input .dat files
-    config.path_results_out = 'D:\Projects\MAGMA\test_data\results';  %data_analyis\disorder_classification';                 % root output folder
-    config.subjects = [0];
-    config.remove_subjects = [3 30 91];
-    config.measurements = [2];                    % 1: pre-rehab-pre-stress, 2: pre-rehab-post-stress, 3:post-rehab-pre-stress, 4:post-rehab-post-stress
-    config.fs = 200;                                                                                    % raw sampling frequency in Hz
-    config.data_columns = {'ECG1', 'ECG2', 'SpO₂', 'Resp-Lungs', 'Blood Pressure', 'Resp-Diaphragm'};   % column names in raw data
-    config.input_filename_pattern = 'ECG1_ECG2_SpO2_RespL_BP_RespD_fs200_Sub{subject}_Pom{measure}_DeTr_Norm.dat';
-    config.labels = get_labels();                                                                       % canonical label names and indices
-    config.save_plots = true;                                                                           % save all plots to the subject output folder
-    config.plot_format     = 'png';      
-    config.plot_dpi        = 150;                                                                       % resolution of the saved figures
-    config.make_figs_visible = 'off';                                                                   % create figures hidden during batch runs, so they dont pop up (for faster run)
-    config.overwrite_results = true;   % recompute even if label output already exists
-    config.overwrite_features = false;  % recompute respiratory features even if "*_features.mat" exists
+    config = struct;                                                                                   % main configuration container
+    config.path_data_in = 'D:\Projects\MAGMA\raw_data';                                                % *** folder with raw input .dat files
+    config.path_results_out = 'D:\Projects\MAGMA\data_analysis\disorder_classification';               % *** root output folder
+    config.subjects = [7 42];                                                                          % *** subjects to analyze
+    config.remove_subjects = [3 30 91];                                                                % *** subjects to not analyze
+    config.measurements = [1 2];                                                                       % *** measurements to analyze - 1: pre-rehab-pre-stress, 2: pre-rehab-post-stress, 3:post-rehab-pre-stress, 4:post-rehab-post-stress
+    config.fs = 200;                                                                                   % raw/original sampling frequency in Hz
+    config.data_columns = {'ECG1', 'ECG2', 'SpO₂', 'Resp-Lungs', 'Blood Pressure', 'Resp-Diaphragm'};  % column names in raw data
+    config.input_filename_pattern = 'ECG1_ECG2_SpO2_RespL_BP_RespD_fs200_Sub{subject}_Pom{measure}_DeTr_Norm.dat'; % The generic name of the data files
+    config.labels = get_labels();                                          % canonical label names and indices
+    config.save_plots = true;                                              % save all plots to the subject output folder
+    config.plot_format     = 'png';         
+    config.plot_dpi        = 150;                                          % resolution of the saved figures
+    config.make_figs_visible = 'off';                                      % create figures hidden during batch runs, so they dont pop up (for faster run)
+    config.overwrite_results = true;                                       % *** Recompute even if label output already exists
+    config.overwrite_features = false;                                     % *** Recompute respiratory features even if "*_features.mat" exists
 
     % plot first X seconds of raw data
-    config.plot_raw_data = true;                                                                        % save an overview plot of raw signals
-    config.plot_raw_data_xrange = [1, 10];                                                              % raw overview x-axis range in seconds
+    config.plot_raw_data = false;                               % save an overview plot of raw signals
+    config.plot_raw_data_xrange = [1, 10];                      % raw overview x-axis range in seconds
 
     %---- PREPROCESSING ----                
-    config.new_fs = 20;                                                                                 % sampling frequency after preprocessing in Hz
+    config.new_fs = 20;                                         % *** Sampling frequency after preprocessing in Hz
     config.detrend.method = 'hpfilter';                         % 'hpfilter': Butterworth high-pass filter with filtfilt or 'moving_detrend', moving-average trend subtraction. 
-    config.detrend.signals = {'Resp-Lungs', 'Resp-Diaphragm'};  % signals to additionally detrend before feature extraction (in general, all signals are already detrended by Marcin, this is just additional moving detrend for some noisier data)
+    config.detrend.signals = {'Resp-Lungs', 'Resp-Diaphragm'};  % *** signals to additionally detrend before feature extraction (in general, all signals are already detrended by Marcin, this is just additional moving detrend, that can be useful for some noisier data)
     config.detrend.highpass_cutoff = 0.01;                      % high-pass cutoff frequency in Hz
     config.detrend.hp_edge_pad_sec = 100;                       % reflection padding before filtfilt to reduce edge artifacts
     config.detrend.window_length = 60;                          % moving detrend window length in seconds
@@ -33,19 +33,19 @@ function config = get_config()
     
     config.normality = struct;
     config.normality.method = 'lillie';
-    config.normality.do_plot = false;                                                               % diagnostic normality plots for extracted respiration features
+    config.normality.do_plot = false;                           % diagnostic normality plots for extracted respiration features
 
     %---- PROBLEMS ----
     config.problems.subjects_with_broken_lung_belt = 1:25;      % subjects where lung belt signal should be ignored 
 
     %---- STATIC BASELINE SETTINGS ----
     config.baseline_sec = 60;           % static baseline segment length in seconds
-    config.baseline_location = '5/20';  % It can either be 'first', 'second', '5/20' or 'last' minute of the data.
+    config.baseline_location = '5/20';  % It can either be 'first', 'second', '5/20' or 'last' minute of the data. '5/20' means that it takes from th minute for measurement 1 and 3, and from 20th minute for measurement 2 and 4
 
     %---- ROLLING RESPIRATORY BASELINE SETTINGS ----
     config.rolling_baseline.enabled = true;     % use time-varying respiratory amplitude baseline (sometimes data are unstationary, and this helps. If the data are stationary, the rolling baseline should be similar to static baseline.)
     config.rolling_baseline.win_sec = 360;      % window length for rolling amplitude baseline
-    config.rolling_baseline.lag_sec = 60;       % when computing the rolling baseline at time t, ignore the most recent 30 seconds before t. [t - win_sec - lag_sec, t - lag_sec]
+    config.rolling_baseline.lag_sec = 60;       % when computing the rolling baseline at time t, ignore the most recent X seconds before t. [t - win_sec - lag_sec, t - lag_sec]
     config.rolling_baseline.min_breaths = 10;   % minimum breaths needed for rolling baseline estimate
     config.rolling_baseline.method = 'median';  % statistic used for rolling amplitude baseline
     config.rolling_baseline.do_plot = true;     % save rolling baseline diagnostic plot
@@ -63,7 +63,7 @@ function config = get_config()
     config.resp.qc.enabled = true;              % conservative automatic removal of likely artefact peaks before manual review
     config.resp.qc.min_amp_ratio = 0.25;        % candidate artefact if breath amp is below this fraction of local median
     config.resp.qc.min_prom_ratio = 0.35;       % require prominence to stay above this fraction of local median prominence
-    config.resp.qc.min_ibi_sec = 1.0;           % hard physiologic lower bound for inter-breath interval
+    config.resp.qc.min_ibi_sec = 1.0;           % hard physiologic lower bound for inter-breath interval.
     config.resp.qc.short_ibi_ratio = 0.65;      % also flag peaks that are much too close relative to local rhythm
     config.resp.qc.rhythm_merge_tol = 0.35;     % if two short adjacent intervals merge back to one normal interval, treat as split-breath artefact
     config.resp.qc.noise_window_sec = 8.0;      % local window used to estimate signal noise around a candidate peak
@@ -83,16 +83,6 @@ function config = get_config()
 
     %---- GENERAL DETECTION SETTINGS
     config.grid_step_sec = 1;      % evaluation grid for "state" labels
-
-    %---- MANUAL LABEL EVENT EDITING
-    config.LabelEdit = struct();
-    config.LabelEdit.manual_control = true;      % open final event-interval editor before saving labels
-    config.LabelEdit.apply_saved_edits = true;    % reuse saved manual event edits on rerun, even when GUI is off
-    config.LabelEdit.save_edits = true;           % persist edited event intervals in the subject results folder
-    config.LabelEdit.window_sec = 300;            % visible time span for manual label GUI scrolling
-    config.LabelEdit.min_interval_sec = 1;        % minimum drag interval accepted as a manual event
-    config.LabelEdit.filename_suffix = '_manual_label_events.mat';
-    config.LabelEdit.rewrite_changed_figures = true; % overwrite only label diagnostic images whose intervals changed manually
 
     %---- LABEL 1 - ShB - DETECTION SETTINGS 
     config.ShB = struct();                  % shallow breathing settings
@@ -205,16 +195,25 @@ function config = get_config()
     config.CSR.do_plot = true;                   % save periodic breathing diagnostic plot
 
     % HOW TO REPRESENT RESULTS
-    config.LabelMask = struct();                                                                        % label-mask heatmap figure
-    config.LabelMask.do_plot = true;                                                                    % generate a label-mask summary figure
-    config.LabelMask.save_plot = true;                                                                  % save the label-mask figure to the subject output folder
-    config.LabelMask.use_long_names = true;                                                             % use long dysfunction names on the y-axis instead of only short codes
+    config.LabelMask = struct();                 % label-mask heatmap figure
+    config.LabelMask.do_plot = true;             % generate a label-mask summary figure
+    config.LabelMask.save_plot = true;           % save the label-mask figure to the subject output folder
+    config.LabelMask.use_long_names = true;      % use long dysfunction names on the y-axis instead of only short codes
     config.LabelMask.colormap_anchors = [ ...
         1.00 1.00 1.00; ...
         1.00 0.97 0.84; ...
         0.98 0.74 0.40; ...
-        0.78 0.12 0.12];                                                                               % white/yellow -> orange -> red
+        0.78 0.12 0.12];                         % white/yellow -> orange -> red
 
+    %---- MANUAL LABEL EVENT EDITING
+    config.LabelEdit = struct();
+    config.LabelEdit.manual_control = false;      % *** open final event-interval editor before saving labels
+    config.LabelEdit.apply_saved_edits = false;  % reuse saved manual event edits on rerun, even when GUI is off
+    config.LabelEdit.save_edits = true;          % persist edited event intervals in the subject results folder
+    config.LabelEdit.window_sec = 400;           % *** visible time span for manual label GUI scrolling
+    config.LabelEdit.min_interval_sec = 1;       % minimum drag interval accepted as a manual event
+    config.LabelEdit.filename_suffix = '_manual_label_events.mat';
+    config.LabelEdit.rewrite_changed_figures = true; % overwrite only label diagnostic images whose intervals changed manually
 
     % some additional logic:
     config.subjects(ismember(config.subjects, config.remove_subjects)) = [];

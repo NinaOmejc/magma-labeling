@@ -50,7 +50,7 @@ function fig = plot_label_mask(label_mask, label_names, config)
 
     cmap = build_label_mask_colormap(config);
     colormap(ax, cmap);
-    caxis(ax, [0 1]);
+    caxis(ax, [-0.5 1.5]);
 
     cb = colorbar(ax);
     cb.Ticks = [0 1];
@@ -58,9 +58,9 @@ function fig = plot_label_mask(label_mask, label_names, config)
     ylabel(cb, 'Label state');
 
     hold(ax, 'on');
-    for y = 0.5:1:(n_labels + 0.5)
+    for y = 1.5:1:(n_labels - 0.5)
         plot(ax, xlim(ax), [y, y], '-', ...
-            'Color', [1 1 1] * 0.92, 'LineWidth', 0.8, 'HandleVisibility', 'off');
+            'Color', [0.45 0.45 0.45], 'LineWidth', 1.0, 'HandleVisibility', 'off');
     end
     hold(ax, 'off');
 
@@ -80,20 +80,15 @@ function fig = plot_label_mask(label_mask, label_names, config)
 end
 
 function cmap = build_label_mask_colormap(config)
-    anchors = [ ...
+    cmap = [ ...
         1.00 1.00 1.00; ...
-        1.00 0.97 0.84; ...
-        0.98 0.74 0.40; ...
         0.78 0.12 0.12];
 
-    if isfield(config, 'LabelMask') && isfield(config.LabelMask, 'colormap_anchors') && ...
-            isnumeric(config.LabelMask.colormap_anchors) && size(config.LabelMask.colormap_anchors, 2) == 3
-        anchors = config.LabelMask.colormap_anchors;
+    if isfield(config, 'LabelMask') && isfield(config.LabelMask, 'binary_colors') && ...
+            isnumeric(config.LabelMask.binary_colors) && all(size(config.LabelMask.binary_colors) == [2, 3])
+        cmap = config.LabelMask.binary_colors;
     end
 
-    x = linspace(0, 1, size(anchors, 1));
-    xi = linspace(0, 1, 256);
-    cmap = interp1(x, anchors, xi, 'linear');
     cmap = min(max(cmap, 0), 1);
 end
 

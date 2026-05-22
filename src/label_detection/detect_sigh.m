@@ -23,6 +23,7 @@ function events = detect_sigh(data, baseline, resp_feat, spo2_feat, config)
     diaph_valid = is_valid_breath_signal(resp_feat.diaph, true);
 
     if ~lungs_valid && ~diaph_valid
+        fprintf('Skipping sigh detection: no valid respiratory belt with usable breath amplitudes.\n');
         return;
     end
     

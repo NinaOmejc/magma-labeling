@@ -20,15 +20,22 @@ function resp_feat = extract_respiration_features(data, config)
     end
 
     if isfield(config.resp, 'manual_control') && config.resp.manual_control
-        if is_valid_breath_signal(resp_feat.lungs, false) && is_valid_breath_signal(resp_feat.diaph, false)
+        edit_lungs = is_editable_resp_signal(resp_feat.lungs) && ~is_lung_belt_ignored(config);
+        edit_diaph = is_editable_resp_signal(resp_feat.diaph);
+
+        if edit_lungs || edit_diaph
             [resp_feat.lungs, resp_feat.diaph] = manual_edit_respiration_features(data, resp_feat.lungs, resp_feat.diaph, config);
             if isfield(config.resp, 'do_plot') && config.resp.do_plot
-                save_final_respiration_feature_figure(resp_feat.lungs, config, 'lungs');
-                save_final_respiration_feature_figure(resp_feat.diaph, config, 'diaph');
+                if edit_lungs
+                    save_final_respiration_feature_figure(resp_feat.lungs, config, 'lungs');
+                end
+                if edit_diaph
+                    save_final_respiration_feature_figure(resp_feat.diaph, config, 'diaph');
+                end
             end
         else
             warning('MAGMA:Respiration:ManualSkipped', ...
-                'Manual breath editing requires two extracted respiratory belts and was skipped for this input configuration.');
+                'Manual breath editing requires at least one usable respiratory belt signal and was skipped.');
         end
     end
     

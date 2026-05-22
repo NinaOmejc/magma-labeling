@@ -19,6 +19,7 @@ function shallow_events = detect_shallow_breathing(data, baseline, resp_feat, sp
     diaph_valid = is_valid_breath_signal(resp_feat.diaph, true);
 
     if ~lungs_valid && ~diaph_valid
+        fprintf('Skipping shallowB detection: no valid respiratory belt with usable breath amplitudes.\n');
         shallow_events = empty_events();
         return;
     end

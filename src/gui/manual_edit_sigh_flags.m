@@ -15,16 +15,18 @@ function [flags_lungs, flags_diaph] = manual_edit_sigh_flags(data, bL, bD, flags
     ax1 = subplot(3,1,1); hold(ax1,'on');
     p1 = plot(ax1, t_raw, data(:,idx_lungs), 'k', 'DisplayName', 'Resp-Lungs');
     m1 = plot(ax1, bL.peak_t(flags_lungs), interp1(t_raw, data(:,idx_lungs), bL.peak_t(flags_lungs), 'linear','extrap'), ...
-        'ro', 'MarkerFaceColor','r', 'MarkerSize', 7, 'DisplayName', 'Sigh breaths');
+        'ro', 'MarkerFaceColor','r', 'MarkerSize', 4, 'DisplayName', 'Sigh breaths');
     title(ax1, 'GUI sigh manual editing (lungs)'); ylabel(ax1, 'Resp-Lungs'); grid(ax1,'on');
     update_axis_legend(ax1, [p1; m1], {'Resp-Lungs', 'Sigh breaths'});
 
     ax2 = subplot(3,1,2); hold(ax2,'on');
     p2 = plot(ax2, t_raw, data(:,idx_diaph), 'k', 'DisplayName', 'Resp-Diaphragm');
     m2 = plot(ax2, bD.peak_t(flags_diaph), interp1(t_raw, data(:,idx_diaph), bD.peak_t(flags_diaph), 'linear','extrap'), ...
-        'ro', 'MarkerFaceColor','r', 'MarkerSize', 7, 'DisplayName', 'Sigh breaths');
+        'ro', 'MarkerFaceColor','r', 'MarkerSize', 4, 'DisplayName', 'Sigh breaths');
     title(ax2, 'GUI sigh manual editing (diaphragm)'); ylabel(ax2, 'Resp-Diaphragm'); grid(ax2,'on');
     update_axis_legend(ax2, [p2; m2], {'Resp-Diaphragm', 'Sigh breaths'});
+    ylim(ax1, compute_global_ylim(data(:, idx_lungs)));
+    ylim(ax2, compute_global_ylim(data(:, idx_diaph)));
 
     ax3 = subplot(3,1,3);
     plot_spo2_diagnostic_panel(ax3, data, baseline, spo2_feat, config, 'SpO2 with desaturation thresholds');
@@ -168,5 +170,22 @@ function [flags_lungs, flags_diaph] = manual_edit_sigh_flags(data, bL, bD, flags
             axes_to_align(end+1,1) = ax3;
         end
         align_axes_x_widths(axes_to_align);
+    end
+
+    function y_limits = compute_global_ylim(signal)
+        signal = signal(isfinite(signal));
+        if isempty(signal)
+            y_limits = [-1, 1];
+            return;
+        end
+
+        y_min = min(signal);
+        y_max = max(signal);
+        if y_min == y_max
+            pad = max(1e-3, 0.05 * max(1, abs(y_min)));
+        else
+            pad = max(1e-3, 0.05 * (y_max - y_min));
+        end
+        y_limits = [y_min - pad, y_max + pad];
     end
 end

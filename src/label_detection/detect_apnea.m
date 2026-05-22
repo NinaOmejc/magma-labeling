@@ -57,6 +57,7 @@ function events = detect_apnea(data, baseline, resp_feat, spo2_feat, config)
 
     if ~(lungs_breath_valid || diaph_breath_valid || ...
             (raw_flat_enabled && (lungs_raw_valid || diaph_raw_valid)))
+        fprintf('Skipping apnea detection: no usable respiratory belt evidence for peak-amplitude or raw-flat apnea logic.\n');
         return;
     end
 
@@ -128,7 +129,7 @@ function events = detect_apnea(data, baseline, resp_feat, spo2_feat, config)
             'Visible', config.make_figs_visible);
         sgtitle(['APNEA | Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)])
 
-        subplot(5, 1, 1); hold on
+        subplot(4, 1, 1); hold on
         plot_resp_trace_or_message(t_raw, data, idx_lungs, 'Resp-Lungs');
         shade_mask_on_axis(t_grid, apnea_mask);
         yline(0, ':')
@@ -136,25 +137,14 @@ function events = detect_apnea(data, baseline, resp_feat, spo2_feat, config)
         xlabel('Time (s)'); ylabel('Resp-Lungs'); grid on
         hold off
 
-        subplot(5, 1, 2); hold on
+        subplot(4, 1, 2); hold on
         plot_resp_trace_or_message(t_raw, data, idx_diaph, 'Resp-Diaphragm');
         shade_mask_on_axis(t_grid, apnea_mask);
         title('Combined apnea mask over diaphragm raw signal')
         xlabel('Time (s)'); ylabel('Resp-Diaphragm'); grid on
         hold off
 
-        subplot(5, 1, 3); hold on
-        stairs(t_grid, double(apnea_peak), 'k', 'LineWidth', 1.2)
-        stairs(t_grid, double(apnea_raw), 'b', 'LineWidth', 1.2)
-        stairs(t_grid, double(apnea_mask), 'r', 'LineWidth', 1.4)
-        ylim([-0.05 1.15])
-        shade_mask_on_axis(t_grid, apnea_mask);
-        title('Apnea evidence masks')
-        xlabel('Time (s)'); ylabel('Mask'); grid on
-        legend('peak amplitude', 'raw flat', 'combined', 'Location', 'eastoutside')
-        hold off
-
-        subplot(5, 1, 4); hold on
+        subplot(4, 1, 3); hold on
         lungs_ratio = nan(size(t_grid));
         if lungs_breath_valid
             lungs_ratio = amp_ratio_on_grid(resp_feat.lungs, t_grid, min_dur_sec, ref_lungs);
@@ -177,7 +167,7 @@ function events = detect_apnea(data, baseline, resp_feat, spo2_feat, config)
         legend('lungs ratio', 'diaph ratio', 'thr', 'Location', 'eastoutside')
         hold off
 
-        subplot(5, 1, 5); hold on
+        subplot(4, 1, 4); hold on
         if raw_flat_enabled
             plot(t_grid, raw_diag.lungs.motion_ratio, 'k')
             plot(t_grid, raw_diag.diaph.motion_ratio, 'b')

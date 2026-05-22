@@ -25,6 +25,7 @@ function events = detect_rapid_breathing(data, baseline, resp_feat, spo2_feat, c
     diaph_amp_valid = diaph_valid && is_valid_breath_signal(resp_feat.diaph, true);
 
     if ~lungs_valid && ~diaph_valid
+        fprintf('Skipping rapidB detection: no valid respiratory belt with usable breath timing.\n');
         return;
     end
 
