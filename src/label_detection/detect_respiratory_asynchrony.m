@@ -37,7 +37,7 @@ function msg = rea_skip_reason(skip_code, error_message)
         case 1
             msg = 'missing respiratory belt channel(s).';
         case 2
-            msg = 'lung belt is marked broken for this subject.';
+            msg = 'lung belt is marked missing for this recording.';
         case 3
             msg = 'lungs belt breathing features are invalid.';
         case 4

@@ -14,7 +14,7 @@ function config = make_test_config(output_dir)
     config.overwrite_features = false;
     config.make_figs_visible = 'off';
     config.plot_raw_data = false;
-    config.problems.subjects_with_broken_lung_belt = [];
+    config.problems.missing_lung_belt = zeros(0, 2);
 
     config.detrend.do_plot = false;
     config.resp.do_plot = false;

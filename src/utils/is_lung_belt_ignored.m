@@ -1,15 +1,27 @@
 function tf = is_lung_belt_ignored(config)
-% is_lung_belt_ignored  True when the configured lung/thorax belt is marked broken.
+% is_lung_belt_ignored  True for a configured subject-measurement exclusion.
 
     tf = false;
 
     if ~isfield(config, 'problems') || ...
-            ~isfield(config.problems, 'subjects_with_broken_lung_belt') || ...
-            ~isfield(config, 'subject')
+            ~isfield(config.problems, 'missing_lung_belt') || ...
+            ~isfield(config, 'subject') || ~isfield(config, 'measure')
         return;
     end
 
-    if ~any(config.subject == config.problems.subjects_with_broken_lung_belt)
+    missing_lung_belt = config.problems.missing_lung_belt;
+    if isempty(missing_lung_belt)
+        return;
+    end
+    if ~isnumeric(missing_lung_belt) || size(missing_lung_belt, 2) ~= 2
+        error('MAGMA:Config:InvalidMissingLungBelt', ...
+            'config.problems.missing_lung_belt must be an N-by-2 numeric matrix of [subject, measurement] pairs.');
+    end
+
+    recording_is_excluded = any( ...
+        missing_lung_belt(:, 1) == config.subject & ...
+        missing_lung_belt(:, 2) == config.measure);
+    if ~recording_is_excluded
         return;
     end
 

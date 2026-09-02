@@ -86,7 +86,7 @@ end
 function testBrokenLungBeltLeavesDiaphragmAnalyzable(testCase)
     config = reference_test_config();
     config.subject = 1;
-    config.problems.subjects_with_broken_lung_belt = 1;
+    config.problems.missing_lung_belt = [1 1];
     [t, lungs_amp] = step_series(120, 60, 1.0, 0.5);
     [~, diaph_amp] = step_series(120, 60, 0.8, 1.2);
     resp_ref = compute_respiratory_reference( ...

@@ -4,7 +4,7 @@ function config = get_config()
     config = struct;                                                                                   % main configuration container
     config.path_data_in = 'D:\Projects\MAGMA\raw_data';                                                % *** folder with raw input .dat files
     config.path_results_out = 'D:\Projects\MAGMA\data_analysis\disorder_classification';               % *** root output folder
-    config.subjects = [7];                                                                          % *** subjects to analyze
+    config.subjects = [];                                                                              % *** subjects to analyze
     config.remove_subjects = [3 30 91];                                                                % *** subjects to not analyze
     config.measurements = [1 2];                                                                       % *** measurements to analyze - 1: pre-rehab-pre-stress, 2: pre-rehab-post-stress, 3:post-rehab-pre-stress, 4:post-rehab-post-stress
     config.fs = 200;                                                                                   % native/master sampling frequency (Hz) for all aligned physiological signals
@@ -13,9 +13,9 @@ function config = get_config()
     config.labels = get_labels();                                          % canonical label names and indices
 
                                         % resolution of the saved figures
-    config.make_figs_visible = 'off';                                      % create figures hidden during batch runs, so they dont pop up (for faster run)
+    config.make_figs_visible = 'on';                                      % create figures hidden during batch runs, so they dont pop up (for faster run)
     config.overwrite_results = true;                                       % *** Recompute even if label output already exists
-    config.overwrite_features = true;                                     % *** Recompute respiratory features even if "*_features.mat" exists
+    config.overwrite_features = false;                                     % *** Recompute respiratory features even if "*_features.mat" exists
 
     % plot first X seconds of raw data
     config.plot_raw_data = false;                               % save an overview plot of raw signals
@@ -34,7 +34,9 @@ function config = get_config()
     config.normality.do_plot = false;                           % diagnostic normality plots for extracted respiration features
 
     %---- PROBLEMS ----
-    config.problems.subjects_with_broken_lung_belt = 1:20;      % subjects where lung belt signal should be ignored 
+    config.problems.missing_lung_belt = [ ...                  % known [subject, measurement] recordings without a usable lung belt
+        (1:20)', ones(20, 1); ...
+        (1:20)', 2 * ones(20, 1)];
 
     %---- STATIC BASELINE SETTINGS ----
     config.baseline_sec = 60;           % static baseline segment length in seconds

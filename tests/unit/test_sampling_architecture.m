@@ -82,7 +82,7 @@ end
 function testBrokenLungBeltPreservesMasterIndexing(testCase)
     config = make_test_config();
     config.subject = 1;
-    config.problems.subjects_with_broken_lung_belt = 1;
+    config.problems.missing_lung_belt = [1 1];
     config.detrend.method = 'none';
     data_raw = make_synthetic_master_data(10001, config.fs);
     data_raw(:, config.channels.lungs_idx) = 0;

@@ -25,6 +25,9 @@ for isub = 1:length(config.subjects)
         resp_ref = compute_respiratory_reference(resp_feat, config);
         plot_respiratory_reference(resp_feat, resp_ref, config);
 
+        %temp
+        continue
+
         % COMPUTE BASELINES
         baseline = compute_baseline(data, config);
         baseline = add_rolling_resp_baseline(baseline, resp_feat, size(data,1), config);

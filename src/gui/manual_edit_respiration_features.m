@@ -213,7 +213,7 @@ function [b_l, b_d] = manual_edit_respiration_features(data, b_l, b_d, config)
 
     function msg = lungs_unavailable_message(cfg)
         if is_lung_belt_ignored(cfg)
-            msg = 'Resp-Lungs ignored for this subject';
+            msg = 'Resp-Lungs ignored for this recording';
         else
             msg = 'No editable Resp-Lungs signal';
         end
