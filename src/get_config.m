@@ -7,7 +7,7 @@ function config = get_config()
     config.subjects = [7];                                                                          % *** subjects to analyze
     config.remove_subjects = [3 30 91];                                                                % *** subjects to not analyze
     config.measurements = [1 2];                                                                       % *** measurements to analyze - 1: pre-rehab-pre-stress, 2: pre-rehab-post-stress, 3:post-rehab-pre-stress, 4:post-rehab-post-stress
-    config.fs = 200;                                                                                   % raw/original sampling frequency in Hz
+    config.fs = 200;                                                                                   % native/master sampling frequency (Hz) for all aligned physiological signals
     config.data_columns = {'ECG1', 'ECG2', 'SpO₂', 'Resp-Lungs', 'Blood Pressure', 'Resp-Diaphragm'};  % column names in raw data
     config.input_filename_pattern = 'ECG1_ECG2_SpO2_RespL_BP_RespD_fs200_Sub{subject}_Pom{measure}_DeTr_Norm.dat'; % The generic name of the data files
     config.labels = get_labels();                                          % canonical label names and indices
@@ -22,7 +22,6 @@ function config = get_config()
     config.plot_raw_data_xrange = [1, 10];                      % raw overview x-axis range in seconds
 
     %---- PREPROCESSING ----                
-    config.new_fs = 20;                                         % *** Sampling frequency after preprocessing in Hz
     config.detrend.method = 'hpfilter';                         % 'hpfilter': Butterworth high-pass filter with filtfilt, 'moving_detrend': moving-average trend subtraction, or 'none': no additional detrending.
     config.detrend.signals = {'Resp-Lungs', 'Resp-Diaphragm'};  % *** signals to additionally detrend before feature extraction (in general, all signals are already detrended, this is just additional moving detrend, that can be useful for some noisier data)
     config.detrend.highpass_cutoff = 0.01;                      % high-pass cutoff frequency in Hz
@@ -126,7 +125,7 @@ function config = get_config()
 
     %---- LABEL 5: Respiratory Asynchrony
     config.ReA = struct();                  % respiratory asynchrony settings
-    config.ReA.target_fs = 20;              % downsample target for wavelet phase-coherence analysis
+    config.ReA.analysis_fs = 20;            % local anti-aliased analysis rate; master data and indices remain at config.fs
     config.ReA.f0 = 1;                      % wavelet resolution parameter from Tomislav's script
     config.ReA.fmin = 0.052;                % lower WT frequency bound from Tomislav's script
     config.ReA.low_mid_cut_hz = 0.145;      % low vs respiratory-band split

@@ -11,11 +11,12 @@ function events = detect_slow_breathing(data, baseline, resp_feat, spo2_feat, co
 %   1) Optionally distinguish "slow+deep" vs "slow+shallow" using amplitude ratio.
 %   2) Optionally mark "slow breathing with desaturation" if SpO2 drop >=3% overlaps
 %      slow breathing (with optional delay buffer).
+% Detector grids map to master samples using config.fs.
 
     events = empty_events();
 
     N = size(data,1);
-    t_grid = (0:config.grid_step_sec:(N-1)/config.new_fs)';  % seconds
+    t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';  % seconds
 
     lungs_broken = is_lung_belt_ignored(config);
     lungs_valid = is_valid_breath_signal(resp_feat.lungs, false) && ~lungs_broken;
@@ -70,9 +71,9 @@ function events = detect_slow_breathing(data, baseline, resp_feat, spo2_feat, co
 
     % Sustain the endpoint RR condition before creating events.
     [events_lungs, slow_lungs] = sustained_condition_to_events( ...
-        slow_lungs, t_grid, config.new_fs, N, min_dur_sec, 'slow_breathing_lungs');
+        slow_lungs, t_grid, config.fs, N, min_dur_sec, 'slow_breathing_lungs');
     [events_diaph, slow_diaph] = sustained_condition_to_events( ...
-        slow_diaph, t_grid, config.new_fs, N, min_dur_sec, 'slow_breathing_diaph');
+        slow_diaph, t_grid, config.fs, N, min_dur_sec, 'slow_breathing_diaph');
 
     events = merge_events({events_lungs, events_diaph});
 

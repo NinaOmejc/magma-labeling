@@ -1,7 +1,7 @@
 function [output, config, trend] = preprocess_data(t_series, config)
 % preprocess_data
-% Detrend configured signal columns, then resample all channels to
-% config.new_fs.
+% Detrend configured respiratory belts without changing the master timeline.
+% Output dimensions and sample indices match the native config.fs input.
 
     % -----------------------------
     % Defaults
@@ -188,92 +188,28 @@ function [output, config, trend] = preprocess_data(t_series, config)
         
     end
 
-    [output, trend, config] = resample_preprocessed_data(output, trend, config, sampl_freq);
+    if isvector(output)
+        n_master_samples = numel(output);
+    else
+        n_master_samples = size(output, 1);
+    end
+    config.times = (0:n_master_samples-1)' / sampl_freq;
 end
 
 function signal_cols = resolved_resp_signal_cols(config, fallback_signals)
+    requested = struct('data_columns', {cellstr(string(fallback_signals))});
+    requested = resolve_signal_channels(requested);
+
     signal_cols = [];
-    if isfield(config, 'channels')
-        signal_cols = [config.channels.lungs_idx config.channels.diaph_idx];
-        signal_cols = unique(signal_cols, 'stable');
+    if requested.channels.has_lungs && config.channels.has_lungs
+        signal_cols(end+1) = config.channels.lungs_idx;
     end
+    if requested.channels.has_diaph && config.channels.has_diaph
+        signal_cols(end+1) = config.channels.diaph_idx;
+    end
+    signal_cols = unique(signal_cols, 'stable');
     if isempty(signal_cols)
-        signal_cols = find(ismember(config.data_columns, fallback_signals));
-    end
-    if isempty(signal_cols)
-        error('No respiratory belt columns are available for preprocessing.');
-    end
-end
-
-function [data_out, trend_out, config] = resample_preprocessed_data(data_in, trend_in, config, input_fs)
-% Resample preprocessed data by interpolating each column independently.
-
-    target_fs = input_fs;
-
-    if isfield(config, 'new_fs') && ~isempty(config.new_fs)
-        target_fs = config.new_fs;
-    end
-
-    if ~isfinite(target_fs) || target_fs <= 0
-        error('config.new_fs must be a positive finite sampling rate.');
-    end
-
-    if target_fs > input_fs
-        error('config.new_fs must be <= input_fs for downsampling.');
-    end
-
-    config.raw_fs = input_fs;
-    config.preprocessing.original_fs = input_fs;
-    config.preprocessing.new_fs = target_fs;
-    config.new_fs = target_fs;
-
-    data_out  = resample_by_time(data_in,  input_fs, target_fs);
-    trend_out = resample_by_time(trend_in, input_fs, target_fs);
-
-    n_samples = size(data_out, 1);
-    config.times = (0:n_samples-1)' / target_fs;
-end
-
-
-function y = resample_by_time(x, fs_in, fs_out)
-% Interpolate columns independently onto a new time grid.
-
-    if isempty(x)
-        y = x;
-        return;
-    end
-
-    was_row_vector = isrow(x) && isvector(x);
-
-    if isvector(x)
-        x = x(:);
-    end
-
-    n_in = size(x, 1);
-
-    t_in_end = (n_in - 1) / fs_in;
-    n_out = floor(t_in_end * fs_out) + 1;
-
-    t_in  = (0:n_in-1)' / fs_in;
-    t_out = (0:n_out-1)' / fs_out;
-
-    y = nan(n_out, size(x, 2));
-
-    for c = 1:size(x, 2)
-        xc = x(:, c);
-        valid = isfinite(xc);
-
-        if nnz(valid) >= 2
-            y(:, c) = interp1(t_in(valid), xc(valid), t_out, 'linear', NaN);
-        elseif nnz(valid) == 1
-            y(:, c) = xc(find(valid, 1));
-        else
-            y(:, c) = NaN;
-        end
-    end
-
-    if was_row_vector
-        y = y';
+        error('No configured respiratory belt columns are available for preprocessing.');
     end
 end
 

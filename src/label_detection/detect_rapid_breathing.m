@@ -12,11 +12,12 @@ function events = detect_rapid_breathing(data, baseline, resp_feat, spo2_feat, c
 %   2) rapid_deep    = rapid breathing + 20-35% amplitude increase from baseline.
 %   3) rapid_desat   = rapid breathing + SpO2 desaturation, allowing delayed SpO2.
 %   4) rapid         = rapid breathing without shallow/deep/desat subtype evidence.
+% Detector grids map to master samples using config.fs.
 
     events = empty_events();
 
     N = size(data,1);
-    t_grid = (0:config.grid_step_sec:(N-1)/config.new_fs)';  % seconds
+    t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';  % seconds
 
     lungs_broken = is_lung_belt_ignored(config);
     lungs_valid = is_valid_breath_signal(resp_feat.lungs, false) && ~lungs_broken;
@@ -58,9 +59,9 @@ function events = detect_rapid_breathing(data, baseline, resp_feat, spo2_feat, c
     end
 
     [rapid_events_lungs, rapid_lungs] = sustained_condition_to_events( ...
-        rapid_lungs_rr, t_grid, config.new_fs, N, min_dur_sec, 'rapid_lungs');
+        rapid_lungs_rr, t_grid, config.fs, N, min_dur_sec, 'rapid_lungs');
     [rapid_events_diaph, rapid_diaph] = sustained_condition_to_events( ...
-        rapid_diaph_rr, t_grid, config.new_fs, N, min_dur_sec, 'rapid_diaph');
+        rapid_diaph_rr, t_grid, config.fs, N, min_dur_sec, 'rapid_diaph');
     rapid_events = merge_events({rapid_events_lungs, rapid_events_diaph});
     if isempty(rapid_events)
         return;

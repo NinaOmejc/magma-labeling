@@ -1,9 +1,9 @@
 function diagnostic_signals = compute_label_diagnostic_signals(data, baseline, resp_feat, spo2_feat, config, rea_metrics)
 % compute_label_diagnostic_signals
-% Save detector-adjacent continuous signals for later group comparison.
+% Save detector-adjacent signals on the config.fs master recording timeline.
 
     N = size(data, 1);
-    t_grid = (0:config.grid_step_sec:(N-1)/config.new_fs)';
+    t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';
 
     rapid_win_sec = get_config_value(config, 'RaB', 'min_dur_sec', 30);
     slow_win_sec = get_config_value(config, 'SlB', 'analysis_win_sec', 60);
@@ -111,6 +111,8 @@ function [spo2_grid, spo2_drop_grid] = spo2_on_grid(spo2_feat, baseline, t_grid)
 end
 
 function diagnostic_signals = add_respiratory_asynchrony_diagnostics(diagnostic_signals, rea)
+    diagnostic_signals.resp_asynchrony_analysis_fs = rea.analysis_fs;
+    diagnostic_signals.resp_asynchrony_analysis_n_samples = rea.analysis_n_samples;
     diagnostic_signals.resp_asynchrony_valid_analysis = double(rea.valid_analysis);
     diagnostic_signals.resp_asynchrony_skip_code = double(rea.skip_code);
     diagnostic_signals.resp_asynchrony_min_dur_sec = rea.min_dur_sec;

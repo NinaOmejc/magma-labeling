@@ -1,11 +1,13 @@
 function rea = compute_respiratory_asynchrony_metrics(data, resp_feat, config)
 % compute_respiratory_asynchrony_metrics
-% Wavelet phase-coherence diagnostics for Label 5.
+% Wavelet phase-coherence diagnostics for Label 5. Master inputs and output
+% timing stay at config.fs; only the internal wavelet signals use analysis_fs.
 
     N = size(data, 1);
-    t_grid = (0:config.grid_step_sec:(N-1)/config.new_fs)';
+    t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';
 
     rea = empty_rea_metrics(t_grid, config);
+    rea.master_n_samples = N;
 
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
@@ -42,11 +44,15 @@ function rea = compute_respiratory_asynchrony_metrics(data, resp_feat, config)
     old_default_visibility = get(groot, 'defaultFigureVisible');
     figures_before = findall(groot, 'Type', 'figure');
     target_visibility = target_figure_visibility(config);
-    cleanup_visibility = onCleanup(@() restore_figure_visibility(old_default_visibility, figures_before, target_visibility)); %#ok<NASGU>
+    cleanup_visibility = onCleanup(@() restore_figure_visibility(old_default_visibility, figures_before, target_visibility));
     set(groot, 'defaultFigureVisible', target_visibility);
 
     try
-        [lungs_pc, diaph_pc, fs_pc] = resample_pair_local(lungs_sig, diaph_sig, config.new_fs, rea.target_fs);
+        [lungs_pc, diaph_pc, fs_pc] = resample_respiration_for_analysis( ...
+            lungs_sig, diaph_sig, config.fs, rea.analysis_fs);
+        rea.analysis_fs = fs_pc;
+        rea.analysis_n_samples = numel(lungs_pc);
+        rea.analysis_duration_sec = max(0, rea.analysis_n_samples - 1) / fs_pc;
         fmax = min(rea.fmax_hz, 0.95 * fs_pc / 2);
         if rea.fmin_hz >= fmax
             rea.skip_code = 6;
@@ -125,7 +131,10 @@ function rea = empty_rea_metrics(t_grid, config)
     rea.skip_code = 0;
     rea.error_message = '';
 
-    rea.target_fs = get_config_value(config, 'ReA', 'target_fs', min(config.new_fs, 20));
+    rea.analysis_fs = get_config_value(config, 'ReA', 'analysis_fs', min(config.fs, 20));
+    rea.analysis_n_samples = 0;
+    rea.analysis_duration_sec = 0;
+    rea.master_fs = config.fs;
     rea.fmin_hz = get_config_value(config, 'ReA', 'fmin', 0.052);
     rea.fmax_hz = get_config_value(config, 'ReA', 'fmax', 2.0);
     rea.f0 = get_config_value(config, 'ReA', 'f0', 1);
@@ -169,24 +178,6 @@ function [x, ok] = prepare_resp_signal_local(x)
     if ok
         x = x ./ sx;
     end
-end
-
-function [x1, x2, fs_out] = resample_pair_local(x1, x2, fs_in, target_fs)
-    fs_out = min(target_fs, fs_in);
-    if ~isfinite(fs_out) || fs_out <= 0
-        fs_out = fs_in;
-    end
-
-    if abs(fs_out - fs_in) > 10 * eps(fs_in)
-        [p, q] = rat(fs_out / fs_in, 1e-12);
-        x1 = resample(x1, p, q);
-        x2 = resample(x2, p, q);
-        fs_out = fs_in * p / q;
-    end
-
-    n = min(numel(x1), numel(x2));
-    x1 = x1(1:n);
-    x2 = x2(1:n);
 end
 
 function [WT1, WT2, freq] = align_wavelet_outputs_local(WT1, WT2, freq1, freq2)

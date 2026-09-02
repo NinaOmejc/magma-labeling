@@ -7,11 +7,12 @@ function events = detect_periodic_breathing(data, resp_feat, config)
 % smaller breaths -> larger breaths -> smaller breaths, typically over
 % cycles of about 40-120 s. It uses breath amplitudes, not the slow
 % baseline drift of the raw belt signal.
+% Returned indices remain on the config.fs master timeline.
 
     events = empty_events();
 
     N = size(data, 1);
-    fs = config.new_fs;
+    fs = config.fs;
     cfg = periodic_breathing_config(config);
 
     lungs_broken = is_lung_belt_ignored(config);
@@ -355,7 +356,7 @@ function plot_periodic_breathing_diagnostics( ...
     data, config, events, events_lungs, events_diaph, diag_lungs, diag_diaph, cfg)
 
     N = size(data, 1);
-    t_raw = (0:N-1) / config.new_fs;
+    t_raw = (0:N-1) / config.fs;
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
     end

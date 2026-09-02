@@ -12,6 +12,7 @@ function irregular_events = detect_irregular_breathing(data, resp_feat, config)
 %   - Compute robust CoV = 1.4826 * MAD(IBI) / median(IBI).
 %   - Compute RMSSD = sqrt(mean(diff(IBI).^2)).
 %   - Use config.IrB.detection_metric to choose the detection metric.
+% Detector grids map to master samples using config.fs.
 %   - No breathing pauses allowed in analyzed segment.
 %   - A qualifying rolling analysis window is marked across the window;
 %     only sustained runs of that window mask become labels.
@@ -19,7 +20,7 @@ function irregular_events = detect_irregular_breathing(data, resp_feat, config)
     irregular_events = empty_events();
 
     N = size(data,1);
-    t_grid = (0:config.grid_step_sec:(N-1)/config.new_fs)';
+    t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';
 
     lungs_broken = is_lung_belt_ignored(config);
     lungs_valid = is_valid_breath_signal(resp_feat.lungs, false) && ~lungs_broken;
@@ -72,9 +73,9 @@ function irregular_events = detect_irregular_breathing(data, resp_feat, config)
     end
 
     [irregular_events_lungs, irregular_mask_lungs] = sustained_condition_to_events( ...
-        irregular_condition_lungs, t_grid, config.new_fs, N, min_dur_sec, 'irregular_breathing_lungs');
+        irregular_condition_lungs, t_grid, config.fs, N, min_dur_sec, 'irregular_breathing_lungs');
     [irregular_events_diaph, irregular_mask_diaph] = sustained_condition_to_events( ...
-        irregular_condition_diaph, t_grid, config.new_fs, N, min_dur_sec, 'irregular_breathing_diaph');
+        irregular_condition_diaph, t_grid, config.fs, N, min_dur_sec, 'irregular_breathing_diaph');
 
     irregular_events = merge_events({irregular_events_lungs, irregular_events_diaph});
 

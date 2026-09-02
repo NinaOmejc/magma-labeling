@@ -5,6 +5,7 @@ function [events, rea_metrics] = detect_respiratory_asynchrony(data, baseline_or
 % Uses the wavelet phase-coherence core from Tomislav's script, reduced to
 % the two respiratory belts. The time-localized phase coherence is averaged
 % over three frequency bins and compared against the subject baseline.
+% Local 20 Hz analysis is mapped back to config.fs master-grid events.
 
     if nargin == 2
         config = baseline_or_config;
@@ -23,7 +24,7 @@ function [events, rea_metrics] = detect_respiratory_asynchrony(data, baseline_or
 
     N = size(data, 1);
     [events, rea_mask] = sustained_condition_to_events( ...
-        rea_metrics.low_coherence_mask, rea_metrics.time_sec, config.new_fs, N, ...
+        rea_metrics.low_coherence_mask, rea_metrics.time_sec, config.fs, N, ...
         rea_metrics.min_dur_sec, 'respiratory_asynchrony');
 
     if do_plot
@@ -66,7 +67,7 @@ function plot_respiratory_asynchrony(data, config, t_grid, rea_mask, rea_metrics
     end
     idx_lungs = config.channels.lungs_idx;
     idx_diaph = config.channels.diaph_idx;
-    t_raw = (0:size(data, 1)-1) / config.new_fs;
+    t_raw = (0:size(data, 1)-1) / config.fs;
 
     fig = figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', config.make_figs_visible);
     tl = tiledlayout(5, 1, 'TileSpacing', 'compact', 'Padding', 'compact');

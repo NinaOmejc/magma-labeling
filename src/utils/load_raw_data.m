@@ -1,4 +1,5 @@
 function [data, config, do_analysis] = load_raw_data(config)
+% Load native-rate aligned signals; config.fs defines their master timeline.
 
     [config, input_config] = resolve_signal_channels(config);
 
@@ -48,8 +49,8 @@ function [data, config, do_analysis] = load_raw_data(config)
         end
     end
 
-    % CALCULATE TIMES
-    config.times = (0:size(data,1)-1)/config.fs;
+    % Master sample times stay on the native config.fs timeline.
+    config.times = (0:size(data,1)-1)' / config.fs;
 
     % PLOT RAW DATA
     plot_raw_data(data, config);

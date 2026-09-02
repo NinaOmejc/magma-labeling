@@ -1,6 +1,6 @@
 function rewritten = rewrite_changed_manual_label_figures(data, baseline, resp_feat, spo2_feat, diagnostic_signals, event_sets, edit_info, config)
 % rewrite_changed_manual_label_figures
-% Overwrite only label diagnostic figures whose final event sets changed.
+% Overwrite changed diagnostics using config.fs master sample times.
 
     rewritten = {};
 
@@ -53,7 +53,7 @@ function plot_final_manual_label_figure(data, baseline, resp_feat, spo2_feat, di
         config = resolve_signal_channels(config);
     end
 
-    fs = config.new_fs;
+    fs = config.fs;
     N = size(data, 1);
     t_raw = (0:N-1)' / fs;
 

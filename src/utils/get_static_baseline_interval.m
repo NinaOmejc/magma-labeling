@@ -1,15 +1,13 @@
 function [start_idx, end_idx, start_t, end_t] = get_static_baseline_interval(N, config)
 % get_static_baseline_interval
-% Return the sample interval used for the static baseline.
+% Return the static-baseline sample interval on the config.fs timeline.
 
     start_idx = 1;
     end_idx = 0;
     start_t = NaN;
     end_t = NaN;
 
-    if isfield(config, 'new_fs')
-        fs = config.new_fs;
-    elseif isfield(config, 'fs')
+    if isfield(config, 'fs')
         fs = config.fs;
     else
         fs = NaN;

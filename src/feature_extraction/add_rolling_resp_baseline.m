@@ -1,12 +1,12 @@
 function baseline = add_rolling_resp_baseline(baseline, resp_feat, N, config)
 % add_rolling_resp_baseline
-% Adds time-varying respiratory amplitude references to baseline.
+% Adds time-varying respiratory references on the config.fs master timeline.
 
 if ~isfield(config, 'rolling_baseline') || ~config.rolling_baseline.enabled
     return;
 end
 
-t_grid = (0:config.grid_step_sec:(N-1)/config.new_fs)';
+t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';
 
 win_sec = config.rolling_baseline.win_sec;
 lag_sec = config.rolling_baseline.lag_sec;

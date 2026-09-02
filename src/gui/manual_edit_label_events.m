@@ -5,6 +5,7 @@ function [event_sets, edit_info] = manual_edit_label_events(data, config, event_
 % This editor works at the event level. It can reuse persisted edits on
 % rerun, lets the user drag on a non-shaded region to add an interval, and
 % removes an existing interval when its shade is clicked.
+% Click times and saved sample indices use the config.fs master timeline.
 
     label_defs = manual_label_definitions();
     event_sets = ensure_event_sets(event_sets, label_defs);
@@ -13,7 +14,7 @@ function [event_sets, edit_info] = manual_edit_label_events(data, config, event_
     cfg = label_edit_config(config);
     edit_file = manual_edit_file(config, cfg);
     N = size(data, 1);
-    fs = config.new_fs;
+    fs = config.fs;
     edit_info = init_edit_info(edit_file);
 
     if cfg.apply_saved_edits && exist(edit_file, 'file')
@@ -230,7 +231,7 @@ function event_sets = run_editor(data, config, event_sets, auto_event_sets, labe
         config = resolve_signal_channels(config);
     end
 
-    fs = config.new_fs;
+    fs = config.fs;
     N = size(data, 1);
     t_raw = (0:N-1)' / fs;
     t_end = t_raw(end);

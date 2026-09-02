@@ -11,12 +11,13 @@ function events = detect_sigh(data, baseline, resp_feat, spo2_feat, config)
 %   - otherwise stationary baseline (median breath amplitude)
 %
 % Legacy method (optional): previous-window thresholding.
+% Breath and event times map to master samples using config.fs.
 
     events = empty_events();
 
     N = size(data,1);
-    fs = config.new_fs;
-    t_grid = (0:config.grid_step_sec:(N-1)/config.new_fs)';
+    fs = config.fs;
+    t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';
 
     lungs_broken = is_lung_belt_ignored(config);
     lungs_valid = is_valid_breath_signal(resp_feat.lungs, true) && ~lungs_broken;

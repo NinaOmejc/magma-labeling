@@ -8,12 +8,13 @@ function shallow_events = detect_shallow_breathing(data, baseline, resp_feat, sp
 %   - Amplitude reduction: 20–35% of reference amplitude (60 s analysis windows).
 %   - Duration: sustained >= 30 s.
 %   - No desaturation: SpO2 < 90 OR SpO2 drop >= 3–4% below baseline (baseline from first 30–60 s).
+% Detector grids map to master samples using config.fs.
 
     disp('Starting label detection ...')
 
     % ---- indices ---
     N = size(data,1);
-    t_grid = (0:config.grid_step_sec:(N-1)/config.new_fs)';  % seconds
+    t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';  % seconds
     lungs_broken = is_lung_belt_ignored(config);
     lungs_valid = is_valid_breath_signal(resp_feat.lungs, true) && ~lungs_broken;
     diaph_valid = is_valid_breath_signal(resp_feat.diaph, true);
@@ -60,12 +61,12 @@ function shallow_events = detect_shallow_breathing(data, baseline, resp_feat, sp
     
     % convert sustained grid runs -> events (>=30 s)
     [shallow_events_lungs, ~] = sustained_condition_to_events( ...
-        shallow_mask_lungs_final, t_grid, config.new_fs, N, config.ShB.min_dur_sec, 'shallow_breathing_lungs');
+        shallow_mask_lungs_final, t_grid, config.fs, N, config.ShB.min_dur_sec, 'shallow_breathing_lungs');
     [shallow_events_diaph, ~] = sustained_condition_to_events( ...
-        shallow_mask_diaph_final, t_grid, config.new_fs, N, config.ShB.min_dur_sec, 'shallow_breathing_diaph');
+        shallow_mask_diaph_final, t_grid, config.fs, N, config.ShB.min_dur_sec, 'shallow_breathing_diaph');
     
     shallow_events = merge_events({shallow_events_lungs, shallow_events_diaph});
-    % shallow_mask = events_to_sample_mask(events, N, config.new_fs);
+    % shallow_mask = events_to_sample_mask(events, N, config.fs);
     
     % add a figure
     if config.ShB.do_plot

@@ -1,6 +1,6 @@
 function group_table = build_group_label_table(config_or_results_path)
 % build_group_label_table
-% Join saved subject label files into one group-level CSV summary.
+% Join saved master-timeline label files into one group-level CSV summary.
 %
 % Usage:
 %   build_group_label_table()
@@ -100,12 +100,8 @@ end
 
 function fs = get_results_fs(loaded, config)
     fs = nan;
-    if isfield(loaded, 'config') && isfield(loaded.config, 'new_fs')
-        fs = loaded.config.new_fs;
-    elseif isfield(loaded, 'config') && isfield(loaded.config, 'fs')
+    if isfield(loaded, 'config') && isfield(loaded.config, 'fs')
         fs = loaded.config.fs;
-    elseif isfield(config, 'new_fs')
-        fs = config.new_fs;
     elseif isfield(config, 'fs')
         fs = config.fs;
     end

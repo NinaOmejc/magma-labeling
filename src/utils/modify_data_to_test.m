@@ -6,7 +6,7 @@ function data_modified = modify_data_to_test(data, fs, columns, trange_min, modi
 %
 % Inputs:
 %   data              - data matrix, samples x signals
-%   fs                - sampling frequency in Hz
+%   fs                - master sampling frequency in Hz (config.fs)
 %   columns           - columns to modify, e.g. [5 6]
 %   trange_min        - time range in minutes, e.g. [2 4]
 %   modification_type - string, supports:
@@ -25,7 +25,7 @@ function data_modified = modify_data_to_test(data, fs, columns, trange_min, modi
 %   data_modified     - same size as data, with selected columns modified
 %
 % Example:
-%   data_mod = modify_data_to_test(data, config.new_fs, [5 6], [2 4], ...
+%   data_mod = modify_data_to_test(data, config.fs, [5 6], [2 4], ...
 %       'shallow_breathing', true);
 
     % -----------------------------

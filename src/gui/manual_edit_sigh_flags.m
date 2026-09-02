@@ -1,4 +1,5 @@
 function [flags_lungs, flags_diaph] = manual_edit_sigh_flags(data, bL, bD, flags_lungs, flags_diaph, baseline, spo2_feat, config, window_sec)
+% Edit sigh flags using click times on the config.fs master timeline.
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
     end
@@ -6,7 +7,7 @@ function [flags_lungs, flags_diaph] = manual_edit_sigh_flags(data, bL, bD, flags
     idx_diaph = config.channels.diaph_idx;
     if isempty(idx_lungs) || isempty(idx_diaph), return; end
 
-    fs = config.new_fs;
+    fs = config.fs;
     N = size(data,1);
     t_raw = (0:N-1)/fs;
     window_sec = max(30, window_sec);

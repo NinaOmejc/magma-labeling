@@ -1,8 +1,8 @@
 function b = recompute_respiration_breath_fields(b, x, peak_idx, config)
-% Recompute peak, trough, amplitude, IBI, and RR fields after peak edits.
+% Recompute breath fields after peak edits on the config.fs master timeline.
 
     x = x(:);
-    fs = config.new_fs;
+    fs = config.fs;
 
     peak_idx = peak_idx(:);
     peak_idx = peak_idx(isfinite(peak_idx));

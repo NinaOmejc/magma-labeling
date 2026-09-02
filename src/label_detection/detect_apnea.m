@@ -11,11 +11,12 @@ function events = detect_apnea(data, baseline, resp_feat, spo2_feat, config)
 % If both belts are usable, both must support the apnea evidence. If only
 % one belt is usable, that belt is used alone. Apnea events can optionally
 % be marked with "_desat" when an associated SpO2 desaturation is present.
+% All raw-signal windows and returned sample indices use config.fs.
 
     events = empty_events();
 
     N = size(data, 1);
-    t_grid = (0:config.grid_step_sec:(N-1)/config.new_fs)';  % seconds
+    t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';  % seconds
 
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
@@ -81,7 +82,7 @@ function events = detect_apnea(data, baseline, resp_feat, spo2_feat, config)
             ref_lungs, ref_diaph, amp_ratio_thr, lungs_breath_valid, diaph_breath_valid);
 
         [~, apnea_peak] = sustained_condition_to_events( ...
-            apnea_peak_endpoint, t_grid, config.new_fs, N, min_dur_sec, 'apnea');
+            apnea_peak_endpoint, t_grid, config.fs, N, min_dur_sec, 'apnea');
     end
 
     % ----------------------------
@@ -96,13 +97,13 @@ function events = detect_apnea(data, baseline, resp_feat, spo2_feat, config)
             lungs_raw_valid, diaph_raw_valid, raw_cfg);
 
         [~, apnea_raw] = sustained_condition_to_events( ...
-            apnea_raw_candidate, t_grid, config.new_fs, N, min_dur_sec, 'apnea');
+            apnea_raw_candidate, t_grid, config.fs, N, min_dur_sec, 'apnea');
     end
 
     % Merge evidence paths and convert to sample-level events.
     apnea_mask_candidate = apnea_peak | apnea_raw;
     [events, apnea_mask] = sustained_condition_to_events( ...
-        apnea_mask_candidate, t_grid, config.new_fs, N, min_dur_sec, 'apnea');
+        apnea_mask_candidate, t_grid, config.fs, N, min_dur_sec, 'apnea');
 
     % ----------------------------
     % Optional: mark apnea with desaturation (diagnostic certainty).
@@ -123,7 +124,7 @@ function events = detect_apnea(data, baseline, resp_feat, spo2_feat, config)
     % Optional plot
     % ----------------------------
     if isfield(config, 'Apn') && isfield(config.Apn, 'do_plot') && config.Apn.do_plot
-        t_raw = (0:N-1) / config.new_fs;
+        t_raw = (0:N-1) / config.fs;
 
         figure('Units', 'pixels', 'Position', near_fullscreen_figure_position(), ...
             'Visible', config.make_figs_visible);
@@ -354,7 +355,7 @@ function [mask, diag] = raw_flat_belt_mask(x, config, t_grid, raw_cfg)
     mask = false(size(t_grid));
 
     x = x(:);
-    fs = config.new_fs;
+    fs = config.fs;
     N = numel(x);
 
     if raw_cfg.win_sec <= 0 || N < 3 || numel(t_grid) < 2

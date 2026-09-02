@@ -53,8 +53,7 @@ All main settings are defined in `src/get_config.m`.
 
 Key parameters:
 
-- `config.fs` - raw sampling rate
-- `config.new_fs` - sampling rate after preprocessing
+- `config.fs` - native and master sampling rate for all aligned signals (200 Hz for MAGMA recordings)
 - `config.path_data_in` - input `.dat` file directory
 - `config.path_results_out` - output directory
 - `config.subjects` - subject identifiers to process
@@ -65,6 +64,8 @@ Key parameters:
 - `config.overwrite_results` - recompute labels when a saved label file already exists
 
 Each detector has its own settings block, for example `config.ShB`, `config.IrB`, `config.SlB`, `config.RaB`, `config.ReA`, `config.Des`, `config.Apn`, `config.Sig`, and `config.CSR`.
+
+Preprocessing preserves the native sample count and alignment of every channel. It detrends only the configured respiratory belts. Respiratory-asynchrony analysis alone creates a temporary, anti-aliased 20 Hz representation controlled by `config.ReA.analysis_fs`; its results are mapped back to the 200 Hz master timeline.
 
 Plot behavior is controlled per module:
 

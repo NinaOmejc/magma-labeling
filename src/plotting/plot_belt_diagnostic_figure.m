@@ -1,13 +1,13 @@
 function plot_belt_diagnostic_figure(data, config, t_grid, mask_lungs, mask_diaph, metric_lungs, metric_diaph, opts)
 % plot_belt_diagnostic_figure
-% Shared raw-belt + diagnostic-metric plot for lungs and diaphragm.
+% Shared raw-belt diagnostic figure using config.fs master sample times.
 
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
     end
     idx_lungs = config.channels.lungs_idx;
     idx_diaph = config.channels.diaph_idx;
-    t_raw = (0:size(data,1)-1) / config.new_fs;
+    t_raw = (0:size(data,1)-1) / config.fs;
 
     plot_step_sec = get_opt(opts, 'plot_step_sec', 15);
     metric_lungs_plot = held_median_trace_local(t_grid, metric_lungs, plot_step_sec);

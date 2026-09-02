@@ -1,6 +1,6 @@
 function h = plot_spo2_diagnostic_panel(ax, data, baseline, spo2_feat, config, title_text)
 % plot_spo2_diagnostic_panel
-% Shared SpO2 diagnostic panel with baseline, threshold, and desaturation marks.
+% Shared SpO2 panel using config.fs master sample times.
 
     if nargin < 1 || isempty(ax)
         ax = gca;
@@ -93,7 +93,7 @@ function [t_spo2, spo2] = get_spo2_trace(data, spo2_feat, config)
     end
 
     spo2 = data(:, idx_spo2);
-    t_spo2 = (0:numel(spo2)-1)' / config.new_fs;
+    t_spo2 = (0:numel(spo2)-1)' / config.fs;
 end
 
 function set_spo2_limits(ax, spo2, baseline, floor_thr, drop_thr)

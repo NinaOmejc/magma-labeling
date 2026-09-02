@@ -18,6 +18,7 @@ function b = extract_respiration_feature(x, config, basename)
 % Notes:
 % - For amplitude, we compute trough in each interval [peak(i), peak(i+1)].
 % - Use params.trough_method = 'min' or 'prctile' (default).
+% - Peak/trough times use (sample_idx - 1) / config.fs.
 %
 % Usage:
 %   params = resp_default_params(fs);
@@ -51,13 +52,13 @@ function b = extract_respiration_feature(x, config, basename)
     end
 
     if config.resp.smooth_sec > 0
-        x = smoothdata(x, 'movmean', max(1, round(config.resp.smooth_sec*config.new_fs)));
+        x = smoothdata(x, 'movmean', max(1, round(config.resp.smooth_sec*config.fs)));
     end
     b.x0 = x;
 
     % ---- peaks ----
     [pks, locs, widths, proms] = findpeaks(x, ...
-        'MinPeakDistance', max(1, round(config.resp.min_peak_dist_sec*config.new_fs)), ...
+        'MinPeakDistance', max(1, round(config.resp.min_peak_dist_sec*config.fs)), ...
         'MinPeakProminence', config.resp.min_peak_prom, ...
         'MinPeakHeight', config.resp.min_peak_height);
 
@@ -79,13 +80,13 @@ function b = extract_respiration_feature(x, config, basename)
 
     % ---- optional plotting ----
     if isfield(config.resp, 'do_plot') && config.resp.do_plot
-        t = (1:length(x))/config.new_fs;
+        t = (0:length(x)-1) / config.fs;
         figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', config.make_figs_visible); 
         hold on
         h_signal = plot(t, x, 'DisplayName', 'x0');
-        h_peak = plot(b.peak_idx/config.new_fs, b.peak_val, 'ro', ...
+        h_peak = plot((b.peak_idx - 1) / config.fs, b.peak_val, 'ro', ...
             'MarkerFaceColor', 'r', 'DisplayName', 'peaks');
-        h_trough = plot(b.trough_idx/config.new_fs, b.trough_val, 'bo', ...
+        h_trough = plot((b.trough_idx - 1) / config.fs, b.trough_val, 'bo', ...
             'MarkerFaceColor', 'b', 'DisplayName', 'troughs');
         title(['RESPIRATION ' basename newline 'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)])
         legend_handles = [h_signal; h_peak; h_trough];
@@ -150,7 +151,7 @@ function [peak_idx, qc] = apply_respiration_peak_qc(x, peak_idx, peak_prom, conf
 
         tmp = recompute_respiration_breath_fields(struct(), x, peak_idx, config);
         amp = tmp.amp(:);
-        ibi = diff(peak_idx) / config.new_fs;
+        ibi = diff(peak_idx) / config.fs;
         prom = peak_prom(:);
 
         remove = false(numel(peak_idx), 1);
@@ -208,7 +209,7 @@ function [peak_idx, qc] = apply_respiration_peak_qc(x, peak_idx, peak_prom, conf
 
             low_amp = amp(i) < min_amp_ratio * local_ref;
             low_prom = prom(i) < min_prom_ratio * local_prom_ref;
-            local_noise = estimate_local_peak_noise(x, peak_idx(i), config.new_fs, noise_window_sec);
+            local_noise = estimate_local_peak_noise(x, peak_idx(i), config.fs, noise_window_sec);
             noise_fail = isfinite(local_noise) && prom(i) < noise_prom_mult * local_noise;
 
             if spacing_fail && (rhythm_fail || low_amp || low_prom || noise_fail)
@@ -233,7 +234,7 @@ function [peak_idx, qc] = apply_respiration_peak_qc(x, peak_idx, peak_prom, conf
     end
 
     qc.removed_peak_idx = removed_idx;
-    qc.removed_peak_t = (removed_idx - 1) / config.new_fs;
+    qc.removed_peak_t = (removed_idx - 1) / config.fs;
     qc.removed_reason = removed_reason;
 end
 

@@ -1,4 +1,5 @@
 function resp_feat = extract_respiration_features(data, config)
+% Extract respiratory features using master sample indices at config.fs.
     
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
@@ -55,13 +56,13 @@ function save_final_respiration_feature_figure(b, config, basename)
     end
 
     x = b.x0(:);
-    t = (0:numel(x)-1) / config.new_fs;
+    t = (0:numel(x)-1) / config.fs;
 
     figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', config.make_figs_visible);
     hold on
     h_signal = plot(t, x, 'DisplayName', 'x0');
-    h_peak = plot_breath_markers(b, 'peak', config.new_fs, 'ro', 'r', 'peaks');
-    h_trough = plot_breath_markers(b, 'trough', config.new_fs, 'bo', 'b', 'troughs');
+    h_peak = plot_breath_markers(b, 'peak', config.fs, 'ro', 'r', 'peaks');
+    h_trough = plot_breath_markers(b, 'trough', config.fs, 'bo', 'b', 'troughs');
     title(['FINAL RESPIRATION ' basename newline ...
         'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)])
     legend_handles = [h_signal; h_peak; h_trough];

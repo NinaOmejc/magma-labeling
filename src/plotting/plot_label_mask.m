@@ -1,6 +1,6 @@
 function fig = plot_label_mask(label_mask, label_names, config)
 % plot_label_mask
-% Plot a label-by-time heatmap for the final label mask.
+% Plot sample-level labels against the config.fs master timeline.
 
     fig = [];
 
@@ -17,7 +17,7 @@ function fig = plot_label_mask(label_mask, label_names, config)
         return;
     end
 
-    t_sec = (0:n_samples-1) / config.new_fs;
+    t_sec = (0:n_samples-1) / config.fs;
     row_labels = resolve_row_labels(label_names, config, n_labels);
     fig_height = max(420, 120 + 48 * n_labels);
 
@@ -33,7 +33,7 @@ function fig = plot_label_mask(label_mask, label_names, config)
     if t_sec(end) > 0
         xlim(ax, [0 t_sec(end)]);
     else
-        xlim(ax, [0, 1 / max(config.new_fs, 1)]);
+        xlim(ax, [0, 1 / max(config.fs, 1)]);
     end
     ylim(ax, [0.5, n_labels + 0.5]);
     set(ax, ...
