@@ -1,14 +1,14 @@
 function test_specs = create_artificial_test_data(config, output_dir, source_subject, source_measure, test_subject, trange_min, force_overwrite)
-%CREATE_ARTIFICIAL_TEST_DATA Create one-label artificial raw datasets.
+%CREATE_ARTIFICIAL_TEST_DATA Create target-label artificial raw datasets.
 %
 % The generated files keep the standard raw-data filename convention, so
 % load_raw_data can process them without a special test loader:
 %
 %   ECG1_ECG2_SpO2_RespL_BP_RespD_fs200_Sub0_Pom1_DeTr_Norm.dat
 %   ...
-%   ECG1_ECG2_SpO2_RespL_BP_RespD_fs200_Sub0_Pom10_DeTr_Norm.dat
+%   ECG1_ECG2_SpO2_RespL_BP_RespD_fs200_Sub0_Pom11_DeTr_Norm.dat
 %
-% Measurements 1-10 map to the ten independent canonical labels.
+% Measurements 1-11 map to the eleven independent canonical labels.
 
     if nargin < 2 || isempty(output_dir)
         repo_root = fileparts(fileparts(mfilename('fullpath')));
@@ -111,7 +111,7 @@ function test_specs = build_test_specs(idx_spo2, idx_lungs, idx_diaph)
         'modification_type', '', ...
         'columns', [], ...
         'file', '');
-    test_specs = repmat(template, 10, 1);
+    test_specs = repmat(template, 11, 1);
 
     test_specs(1) = make_spec(1, 'shallowB', 'ShallowBreathing', 'shallow_breathing', resp_columns);
     test_specs(2) = make_spec(2, 'irregB', 'IrregularBreathing', 'irregular_breathing', resp_columns);
@@ -123,6 +123,7 @@ function test_specs = build_test_specs(idx_spo2, idx_lungs, idx_diaph)
     test_specs(8) = make_spec(8, 'sigh', 'Sigh', 'sigh', resp_columns);
     test_specs(9) = make_spec(9, 'CSR', 'PeriodicBreathingCheyneStokesLike', 'periodic_breathing', resp_columns);
     test_specs(10) = make_spec(10, 'deepB', 'DeepBreathing', 'deep_breathing', resp_columns);
+    test_specs(11) = make_spec(11, 'thorDomB', 'ThoracicDominantBreathing', 'thoracic_dominant_breathing', resp_columns);
 end
 
 function spec = make_spec(measure, label_short, label_long, modification_type, columns)

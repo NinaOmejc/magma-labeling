@@ -50,6 +50,14 @@ function diagnostic_signals = compute_label_diagnostic_signals(phys_feat, baseli
     diagnostic_signals.deep_breath_amplitude_ratio_to_reference_lungs = phys_feat.resp.lungs.deep_amp_ratio_session_window_median;
     diagnostic_signals.deep_breath_amplitude_ratio_to_reference_diaph = phys_feat.resp.diaph.deep_amp_ratio_session_window_median;
 
+    balance = phys_feat.resp.thoracoabdominal_balance;
+    diagnostic_signals.thoracic_dominance_available = double(balance.available);
+    diagnostic_signals.thoracic_ratio_window_median = balance.thoracic_ratio_window_median;
+    diagnostic_signals.abdominal_ratio_window_median = balance.abdominal_ratio_window_median;
+    diagnostic_signals.thoracic_to_abdominal_ratio = balance.thoracic_to_abdominal_ratio;
+    diagnostic_signals.thoracic_dominance_log_ratio = balance.thoracic_dominance_log_ratio;
+    diagnostic_signals.thoracic_relative_fraction = balance.thoracic_relative_fraction;
+
     [diagnostic_signals.spo2_percent, diagnostic_signals.spo2_drop_from_baseline_percent] = ...
         spo2_on_grid(spo2_feat, baseline, t_grid);
 

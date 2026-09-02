@@ -45,6 +45,7 @@ function testExampleRecordingRunsAtMasterRate(testCase)
 
     events_ShB = detect_shallow_breathing(data, phys_feat, config);
     events_DeB = detect_deep_breathing(data, phys_feat, config);
+    events_TDB = detect_thoracic_dominant_breathing(data, phys_feat, config);
     events_IrB = detect_irregular_breathing(data, phys_feat, config);
     events_SlB = detect_slow_breathing(data, phys_feat, config);
     events_RaB = detect_rapid_breathing(data, phys_feat, config);
@@ -58,7 +59,7 @@ function testExampleRecordingRunsAtMasterRate(testCase)
 
     events = normalize_event_types_and_meta(merge_events({ ...
         events_ShB, events_IrB, events_SlB, events_RaB, events_ReA, ...
-        events_Des, events_Apn, events_Sigh, events_CSR, events_DeB}));
+        events_Des, events_Apn, events_Sigh, events_CSR, events_DeB, events_TDB}));
     [mask, label_names] = events_to_time_mask(events, size(data,1), config);
     diagnostic = compute_label_diagnostic_signals( ...
         phys_feat, baseline, spo2_feat, config, diagnostics_ReA);

@@ -14,6 +14,7 @@ Detected labels include:
 - Sigh
 - Cheyne-Stokes-like / periodic breathing
 - Deep breathing (relative increased belt excursion)
+- Thoracic-dominant breathing (relative thoracoabdominal excursion dominance)
 
 The pipeline processes multi-channel physiological recordings and saves structured event annotations, label masks, diagnostic signals, features, and figures. Original label definitions are in `Labels.docx`.
 
@@ -64,7 +65,7 @@ Key parameters:
 - `config.make_figs_visible` - show or hide figures during batch runs
 - `config.overwrite_results` - recompute labels when a saved label file already exists
 
-Each detector has its own settings block, for example `config.ShB`, `config.DeB`, `config.IrB`, `config.SlB`, `config.RaB`, `config.ReA`, `config.Des`, `config.Apn`, `config.Sig`, and `config.CSR`.
+Each detector has its own settings block, for example `config.ShB`, `config.DeB`, `config.TDB`, `config.IrB`, `config.SlB`, `config.RaB`, `config.ReA`, `config.Des`, `config.Apn`, `config.Sig`, and `config.CSR`.
 
 Preprocessing preserves the native sample count and alignment of every channel. It detrends only the configured respiratory belts. Respiratory-asynchrony analysis alone creates a temporary, anti-aliased 20 Hz representation controlled by `config.ReA.analysis_fs`; its results are mapped back to the 200 Hz master timeline.
 
@@ -77,6 +78,8 @@ Respiratory belts are uncalibrated. Their raw amplitudes do not represent absolu
 ### Common Physiological Evidence
 
 `compute_physiological_features` deterministically builds `phys_feat` from reviewed `resp_feat`, `resp_ref`, and `spo2_feat`; it does not redetect breaths and has no separate cache. `phys_feat.resp.lungs` and `phys_feat.resp.diaph` preserve the reviewed `peak_idx`, `peak_t`, `amp`, `ibi`, and `rr_bpm` independently. Derived fields include session/global amplitude ratios, configured slow/rapid rate traces, shallow and deep amplitude masks, apnea amplitude-ratio evidence, and irregularity traces. Deep evidence is `amp_ratio_session >= config.DeB.amp_ratio_thr` with no upper cutoff.
+
+`phys_feat.resp.thoracoabdominal_balance` stores cross-belt evidence only when both fixed session references are available. It computes 30-second robust medians `T` and `A` from thoracic and abdominal `amp_ratio_session`, then stores `T/A`, `log(T/A)`, and `T/(T+A)`. `thorDomB` uses the provisional weak-label rule `T/A >= 1.5` sustained for 30 seconds. These are within-record relative excursion measures, not calibrated percent rib-cage contribution or absolute thoracic dominance; a recording that is already thoracic-dominant throughout its reference interval may not be detected.
 
 The alignment convention is explicit: `amp(i)` belongs to peak `i` and the final amplitude may be `NaN` because no following peak closes that excursion. `ibi(i)` and `rr_bpm(i)` describe the interval from peak `i` to peak `i+1`, so they contain one fewer value than the peak arrays. Invalid, non-positive amplitudes remain present in the copied `amp` array but become `NaN` in normalized ratio fields. A missing session reference never falls back to the global reference.
 
@@ -91,7 +94,7 @@ Manual review can be enabled at three levels:
 
 - `config.resp.manual_control` - opens a breath peak editor before label detection. Edited peaks/troughs affect all downstream respiratory labels.
 - `config.Sig.manual_control` - opens the sigh-specific breath-level editor for adding or removing sigh markers.
-- `config.LabelEdit.manual_control` - opens the final event-interval editor after automatic detection and before the final label mask is saved. This editor handles `shallowB`, `deepB`, `irregB`, `slowB`, `rapidB`, `asyncB`, `desat`, `apnea`, and `CSR`; sigh is excluded because it has its own editor.
+- `config.LabelEdit.manual_control` - opens the final event-interval editor after automatic detection and before the final label mask is saved. This editor handles `shallowB`, `deepB`, `thorDomB`, `irregB`, `slowB`, `rapidB`, `asyncB`, `desat`, `apnea`, and `CSR`; sigh is excluded because it has its own editor.
 
 Final manual label edits are controlled by:
 
@@ -125,6 +128,8 @@ config.data_columns = {'Resp'};
 Accepted respiratory aliases include `Resp-Lungs`, `Lungs`, `Thorax`, `Chest`, `Resp-Diaphragm`, `Diaphragm`, `Abdomen`, `Resp`, `RespiratoryBelt`, and `Respiration`.
 Accepted oxygen-saturation aliases include `SpO2`, `SpO₂`, `Spo2`, `SaO2`, and `OxygenSaturation`.
 If only one belt is present, one-belt respiratory labels still run and respiratory asynchrony is skipped. If SpO2 is absent, only independent desaturation detection is skipped.
+
+`results.input_config` distinguishes physical channels from effectively usable belts. The known lung-belt exclusion for subjects 1–20 in M1/M2 reduces the effective belt count to one, so `asyncB` and `thorDomB` are marked unavailable while diaphragm-based labels remain available.
 
 The loader resolves available channels from `config.data_columns` and records the resolved channel configuration in `results.input_config`. This allows the same pipeline and plotting/manual-review interfaces to run on the full MAGMA signal set as well as smaller external files with only the available respiratory and/or SpO2 channels.
 
@@ -165,6 +170,8 @@ results.measure            = config.measure;      % Measurement identifier
 results.events             = sub_events;          % Detected event struct array
 results.mask               = label_mask;          % Sample-level label mask [N x labels]
 results.label_names        = label_names;         % Label names matching mask columns
+results.label_available    = label_available;     % Assessed/available status matching mask columns
+results.label_schema_version = config.label_schema_version; % Explicit canonical-label schema
 results.resp_feat          = resp_feat;           % Respiratory features for lungs and diaphragm
 results.resp_ref           = resp_ref;            % Fixed session/global respiratory references and descriptive QC
 results.phys_feat          = phys_feat;           % Common derived physiological evidence used by detectors
@@ -181,30 +188,35 @@ results.config             = config;              % Full configuration used for 
 
 `results.measure` is the saved measurement identifier.
 
+Saved manual interval edits use schema version 2 and record their editable label names. Version-1 files are migrated by event-set field identity: interval boundaries are preserved, historical compound types are reduced to that field's canonical label, and labels absent from the old file retain their current automatic events rather than being interpreted as manually reviewed negatives.
+
 ## Group-Level Measure Comparability
 
 `build_group_label_table` writes `group_analysis/group_measure_comparability.csv` alongside the group summary. Interpret group outputs in three classes:
 
 - Absolute/comparable across subjects: respiratory rate (bpm), event durations/fractions, SpO2, and timing measures.
 - Within-record normalized: belt amplitude ratios, shallow/deep excursion measures, and the whole-record/session amplitude ratio.
+- Within-record normalized: thoracic-to-abdominal normalized excursion ratio, its log ratio, and thoracic relative fraction.
 - Not safely comparable across subjects: raw belt amplitude or raw session/global belt reference values.
+
+Group label summaries include `label_<name>_available`. An unavailable or historically absent label has availability `0` and `NaN` duration/fraction; an assessed label with no events has availability `1` and zero duration/fraction.
 
 ## Artificial Test Signals
 
-To generate ten artificial one-label datasets from source recording Sub1/M1, run:
+To generate eleven artificial target-label datasets from source recording Sub1/M1, run:
 
 ```matlab
 config = get_config();
 create_artificial_test_data(config);
 ```
 
-This creates ignored local files under `test_data/` named as `Sub0_Pom1` through `Sub0_Pom10`. Measurements map to labels in order: `shallowB`, `irregB`, `slowB`, `rapidB`, `asyncB`, `desat`, `apnea`, `sigh`, `CSR`, and `deepB`. The Deep example scales both respiratory-belt excursions to 1.60 times their template excursion during the default 8–10 minute test interval, without changing respiratory timing or SpO2; that interval is outside the standard M1/M3 session-reference window.
+This creates ignored local files under `test_data/` named as `Sub0_Pom1` through `Sub0_Pom11`. Measurements map to labels in order: `shallowB`, `irregB`, `slowB`, `rapidB`, `asyncB`, `desat`, `apnea`, `sigh`, `CSR`, `deepB`, and `thorDomB`. The Deep example scales both respiratory-belt excursions to 1.60 times their template excursion during the default 8–10 minute test interval, without changing respiratory timing or SpO2; that interval is outside the standard M1/M3 session-reference window. The thoracic-dominance target increases thoracic and decreases abdominal excursion without intentionally changing rate or SpO2. Other independent labels may validly overlap a target label.
 
 ## Event Struct Format
 
 Each event contains:
 
-- `type` - one of the canonical labels: `shallowB`, `irregB`, `slowB`, `rapidB`, `asyncB`, `desat`, `apnea`, `sigh`, `CSR`, `deepB`
+- `type` - one of the canonical labels: `shallowB`, `irregB`, `slowB`, `rapidB`, `asyncB`, `desat`, `apnea`, `sigh`, `CSR`, `deepB`, `thorDomB`
 - `start_idx`, `end_idx` - sample indices
 - `start_t`, `end_t` - event times in seconds
 - `duration` - event duration in seconds

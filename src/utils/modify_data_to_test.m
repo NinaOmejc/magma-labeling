@@ -12,6 +12,7 @@ function data_modified = modify_data_to_test(data, fs, columns, trange_min, modi
 %   modification_type - string, supports:
 %                         'shallow_breathing'
 %                         'deep_breathing'
+%                         'thoracic_dominant_breathing'
 %                         'irregular_breathing'
 %                         'slow_breathing'
 %                         'rapid_breathing'
@@ -83,6 +84,10 @@ function data_modified = modify_data_to_test(data, fs, columns, trange_min, modi
             % threshold without changing the existing respiratory timing.
             data_modified = scale_selected_columns(data_modified, time_sec, trange_mask, columns, fs, 1.60);
 
+        case 'thoracic_dominant_breathing'
+            data_modified = redistribute_thoracoabdominal_excursion( ...
+                data_modified, time_sec, trange_mask, columns, fs);
+
         case 'irregular_breathing'
             data_modified = replace_respiration_with_variable_rate( ...
                 data_modified, time_sec, trange_mask, columns, fs);
@@ -114,6 +119,7 @@ function data_modified = modify_data_to_test(data, fs, columns, trange_min, modi
 
         otherwise
             error(['Unknown modification_type: %s. Supported: shallow_breathing, deep_breathing, ' ...
+                'thoracic_dominant_breathing, ' ...
                 'irregular_breathing, slow_breathing, rapid_breathing, ' ...
                 'respiratory_asynchrony, desaturation, apnea, sigh, periodic_breathing.'], ...
                 modification_type);
@@ -149,6 +155,14 @@ function data_modified = modify_data_to_test(data, fs, columns, trange_min, modi
         end
     end
 
+end
+
+function data_out = redistribute_thoracoabdominal_excursion(data_in, time_sec, mask, columns, fs)
+    if numel(columns) < 2
+        error('thoracic_dominant_breathing requires thoracic and abdominal belt columns.');
+    end
+    data_out = scale_selected_columns(data_in, time_sec, mask, columns(1), fs, 1.50);
+    data_out = scale_selected_columns(data_out, time_sec, mask, columns(2), fs, 0.70);
 end
 
 function data_out = scale_selected_columns(data_in, time_sec, mask, columns, fs, scale)

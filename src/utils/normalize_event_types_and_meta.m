@@ -1,6 +1,6 @@
 function events = normalize_event_types_and_meta(raw_events)
 % normalize_event_types_and_meta
-% Convert detector-specific event names to one of the ten independent
+% Convert detector-specific event names to one of the eleven independent
 % canonical labels and retain only explicit belt provenance.
 %
 % Final schema:
@@ -18,7 +18,7 @@ function events = normalize_event_types_and_meta(raw_events)
         raw_type = required_text_field(raw_events(i), 'type');
         key = normalize_key(raw_type);
         events(i).type = canonical_type(key);
-        events(i).belt = belt_from_key(key);
+        events(i).belt = belt_from_event(key, raw_events(i));
         events(i).start_idx = required_numeric_field(raw_events(i), 'start_idx');
         events(i).end_idx = required_numeric_field(raw_events(i), 'end_idx');
         events(i).start_t = required_numeric_field(raw_events(i), 'start_t');
@@ -78,6 +78,9 @@ function type = canonical_type(key)
         type = 'CSR';
     elseif matches_label(key, {'deep_breathing', 'deepb', 'deb', 'deepbreathing'})
         type = 'deepB';
+    elseif matches_label(key, {'thoracic_dominant_breathing', 'thordomb', ...
+            'thoracicdominantbreathing'})
+        type = 'thorDomB';
     else
         error('MAGMA:Events:UnknownType', ...
             'Unrecognized detector event type "%s".', key);
@@ -97,7 +100,7 @@ function tf = matches_label(key, bases)
     end
 end
 
-function belt = belt_from_key(key)
+function belt = belt_from_event(key, event)
     belt = '';
     if endsWith(key, '_lungs')
         belt = 'lungs';
@@ -105,6 +108,11 @@ function belt = belt_from_key(key)
         belt = 'diaph';
     elseif endsWith(key, '_both')
         belt = 'both';
+    elseif isfield(event, 'belt') && ~isempty(event.belt)
+        incoming = lower(strtrim(char(string(event.belt))));
+        if any(strcmp(incoming, {'lungs', 'diaph', 'both'}))
+            belt = incoming;
+        end
     end
 end
 

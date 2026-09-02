@@ -162,6 +162,17 @@ function plot_diagnostic_panel(ax, diagnostic_signals, resp_feat, events, def, c
                     yline_if_finite(ax, config.DeB.amp_ratio_thr, 'r--', 'Deep threshold');
                 end
 
+            case 'thorDomB'
+                plotted = plot_metric(ax, t, diagnostic_signals, ...
+                    'thoracic_to_abdominal_ratio', [0.85 0.33 0.10], ...
+                    'Thoracic / abdominal normalized excursion');
+                if plotted && isfield(config, 'TDB')
+                    yline_if_finite(ax, config.TDB.dominance_ratio_thr, ...
+                        'r--', 'Operational dominance threshold');
+                    ylabel(ax, 'Within-record ratio');
+                    title(ax, 'Relative thoracoabdominal excursion balance');
+                end
+
             case 'irregB'
                 metric = irregular_metric_name(config);
                 plotted = plot_metric_pair(ax, t, diagnostic_signals, metric.lungs, metric.diaph, ...

@@ -48,6 +48,8 @@ function phys_feat = compute_physiological_features(data, resp_feat, resp_ref, s
         'diaph', phys_feat.resp.diaph.available);
     phys_feat.resp.both_belts_available = ...
         phys_feat.resp.lungs.available && phys_feat.resp.diaph.available;
+    phys_feat.resp.thoracoabdominal_balance = build_thoracoabdominal_balance( ...
+        phys_feat.resp.lungs, phys_feat.resp.diaph, t_grid, cfg);
 
     phys_feat.spo2 = build_spo2_evidence(spo2_feat);
 end
@@ -151,6 +153,66 @@ function spo2 = build_spo2_evidence(spo2_feat)
     if isfield(spo2_feat, 'desat_events')
         spo2.desaturation_events = spo2_feat.desat_events;
     end
+end
+
+function balance = build_thoracoabdominal_balance(lungs, diaph, t_grid, cfg)
+    balance = struct( ...
+        'available', false, ...
+        'analysis_window_sec', cfg.thoracic_balance_win_sec, ...
+        'min_breaths_per_belt', cfg.thoracic_balance_min_breaths, ...
+        'dominance_ratio_threshold', cfg.thoracic_dominance_ratio_thr, ...
+        'thoracic_ratio_window_median', nan(size(t_grid)), ...
+        'abdominal_ratio_window_median', nan(size(t_grid)), ...
+        'thoracic_to_abdominal_ratio', nan(size(t_grid)), ...
+        'thoracic_dominance_log_ratio', nan(size(t_grid)), ...
+        'thoracic_relative_fraction', nan(size(t_grid)), ...
+        'dominance_mask', false(size(t_grid)));
+
+    balance.available = lungs.session_amplitude_available && ...
+        diaph.session_amplitude_available;
+    if ~balance.available
+        return;
+    end
+
+    for i = 1:numel(t_grid)
+        window_end = t_grid(i);
+        window_start = window_end - cfg.thoracic_balance_win_sec;
+        if window_start < 0
+            continue;
+        end
+
+        thoracic_values = values_in_window( ...
+            lungs.peak_t, lungs.amp_ratio_session, window_start, window_end);
+        abdominal_values = values_in_window( ...
+            diaph.peak_t, diaph.amp_ratio_session, window_start, window_end);
+        if numel(thoracic_values) < cfg.thoracic_balance_min_breaths || ...
+                numel(abdominal_values) < cfg.thoracic_balance_min_breaths
+            continue;
+        end
+
+        thoracic_median = median(thoracic_values, 'omitnan');
+        abdominal_median = median(abdominal_values, 'omitnan');
+        if ~isfinite(thoracic_median) || thoracic_median <= 0 || ...
+                ~isfinite(abdominal_median) || abdominal_median <= 0
+            continue;
+        end
+
+        ratio = thoracic_median / abdominal_median;
+        balance.thoracic_ratio_window_median(i) = thoracic_median;
+        balance.abdominal_ratio_window_median(i) = abdominal_median;
+        balance.thoracic_to_abdominal_ratio(i) = ratio;
+        balance.thoracic_dominance_log_ratio(i) = log(ratio);
+        balance.thoracic_relative_fraction(i) = ...
+            thoracic_median / (thoracic_median + abdominal_median);
+        balance.dominance_mask(i) = ratio >= cfg.thoracic_dominance_ratio_thr;
+    end
+end
+
+function values = values_in_window(peak_t, values, start_t, end_t)
+    [peak_t, values] = paired_peak_values(peak_t, values);
+    in_window = peak_t >= start_t & peak_t <= end_t & ...
+        isfinite(values) & values > 0;
+    values = values(in_window);
 end
 
 function belt = empty_belt_evidence(t_grid)
@@ -386,4 +448,7 @@ function cfg = evidence_config(config)
     cfg.rmssd_thr = get_config_value(config, 'IrB', 'rmssd_thr', 0.0);
     cfg.pause_thr_sec = get_config_value(config, 'IrB', 'pause_thr_sec', 10);
     cfg.detection_metric = get_config_value(config, 'IrB', 'detection_metric', 'cov');
+    cfg.thoracic_balance_win_sec = get_config_value(config, 'TDB', 'analysis_win_sec', 30);
+    cfg.thoracic_balance_min_breaths = get_config_value(config, 'TDB', 'min_breaths', 3);
+    cfg.thoracic_dominance_ratio_thr = get_config_value(config, 'TDB', 'dominance_ratio_thr', 1.5);
 end

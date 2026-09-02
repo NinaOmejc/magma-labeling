@@ -18,7 +18,8 @@ function [event_sets, edit_info] = manual_edit_label_events(data, config, event_
     edit_info = init_edit_info(edit_file);
 
     if cfg.apply_saved_edits && exist(edit_file, 'file')
-        loaded = load_manual_event_sets(edit_file, label_defs, config, N, fs);
+        loaded = load_manual_event_sets( ...
+            edit_file, event_sets, label_defs, config, N, fs);
         if ~isempty(loaded)
             event_sets = loaded;
             edit_info.applied_saved_edits = true;
@@ -173,7 +174,7 @@ function edit_file = manual_edit_file(config, cfg)
     edit_file = fullfile(out_dir, sprintf('Sub%d_M%d%s', config.subject, config.measure, suffix));
 end
 
-function loaded_sets = load_manual_event_sets(edit_file, label_defs, config, N, fs)
+function loaded_sets = load_manual_event_sets(edit_file, automatic_sets, label_defs, config, N, fs)
     loaded_sets = [];
     try
         loaded = load(edit_file);
@@ -196,7 +197,30 @@ function loaded_sets = load_manual_event_sets(edit_file, label_defs, config, N, 
         return;
     end
 
-    loaded_sets = ensure_event_sets(loaded.manual_label_event_sets, label_defs);
+    saved_sets = loaded.manual_label_event_sets;
+    if ~isstruct(saved_sets)
+        warning('MAGMA:ManualLabelEdit:InvalidFile', ...
+            'Ignoring manual label edit file with invalid event sets: %s', edit_file);
+        return;
+    end
+
+    % Field identity is authoritative across schema versions. Historical
+    % compound raw types inside e.g. rapidB are migrated to rapidB without
+    % reconstructing former depth/desaturation modifiers. A field absent
+    % from an old file was never reviewed, so keep that label's current
+    % automatic events rather than treating absence as a negative edit.
+    loaded_sets = ensure_event_sets(automatic_sets, label_defs);
+    for i = 1:numel(label_defs)
+        field = label_defs(i).field;
+        if ~isfield(saved_sets, field)
+            continue;
+        end
+        migrated = sanitize_events(saved_sets.(field));
+        for j = 1:numel(migrated)
+            migrated(j).type = label_defs(i).type;
+        end
+        loaded_sets.(field) = migrated;
+    end
 end
 
 function ok = is_valid_manual_meta(meta, config, N, fs)
@@ -215,13 +239,15 @@ function save_manual_event_sets(edit_file, event_sets, label_defs, config, N, fs
 
     manual_label_event_sets = ensure_event_sets(event_sets, label_defs);
     manual_label_edit_meta = struct( ...
-        'version', 1, ...
+        'version', 2, ...
+        'schema_version', 2, ...
         'subject', config.subject, ...
         'measure', config.measure, ...
         'n_samples', N, ...
         'fs', fs, ...
         'data_columns', {config.data_columns}, ...
         'saved_on', char(datetime('now', 'Format', 'yyyy-MM-dd HH:mm:ss')) );
+    manual_label_edit_meta.label_names = {label_defs.type};
 
     save(edit_file, 'manual_label_event_sets', 'manual_label_edit_meta');
 end

@@ -25,11 +25,12 @@ function group_table = build_group_label_table(config_or_results_path)
         mkdir(out_dir);
     end
 
+    canonical_labels = current_canonical_labels(config);
     rows = {};
     all_fields = {};
     for i = 1:numel(files)
         label_file = fullfile(files(i).folder, files(i).name);
-        row = label_file_to_summary_row(label_file, config);
+        row = label_file_to_summary_row(label_file, config, canonical_labels);
         rows{end+1} = row; %#ok<AGROW>
         all_fields = union(all_fields, fieldnames(row), 'stable');
     end
@@ -38,7 +39,7 @@ function group_table = build_group_label_table(config_or_results_path)
         group_table = table();
     else
         rows = fill_missing_fields(rows, all_fields);
-        group_table = struct2table([rows{:}]);
+        group_table = struct2table([rows{:}], 'AsArray', true);
     end
 
     out_csv = fullfile(out_dir, 'group_label_summary.csv');
@@ -49,7 +50,7 @@ function group_table = build_group_label_table(config_or_results_path)
     fprintf('Saved group label summary: %s\n', out_csv);
 end
 
-function row = label_file_to_summary_row(label_file, config)
+function row = label_file_to_summary_row(label_file, config, canonical_labels)
     loaded = load(label_file);
 
     row = struct();
@@ -59,38 +60,88 @@ function row = label_file_to_summary_row(label_file, config)
     row.measure = get_loaded_value(loaded, 'measure', file_measure);
     row.measurement = row.measure;
     row.subject_group = subject_group_for_subject(row.subject, config);
+    row.label_schema_version = char(string( ...
+        get_loaded_value(loaded, 'label_schema_version', 'legacy_unspecified')));
     if isfield(loaded, 'resp_ref')
         row = add_respiratory_reference_summary(row, loaded.resp_ref);
     else
         row = add_respiratory_reference_summary(row, []);
     end
 
-    if isfield(loaded, 'mask') && isfield(loaded, 'label_names')
-        fs = get_results_fs(loaded, config);
-        duration_sec = size(loaded.mask, 1) / fs;
-        row.duration_sec = duration_sec;
-        for j = 1:numel(loaded.label_names)
-            label = matlab.lang.makeValidName(loaded.label_names{j});
-            label_samples = nnz(loaded.mask(:,j) ~= 0);
-            row.(['label_' label '_duration_sec']) = label_samples / fs;
-            if isfinite(duration_sec) && duration_sec > 0
-                row.(['label_' label '_fraction']) = (label_samples / fs) / duration_sec;
-            else
-                row.(['label_' label '_fraction']) = nan;
-            end
-        end
-    else
-        row.duration_sec = nan;
-    end
+    row = add_label_summaries(row, loaded, config, canonical_labels);
 
+    saved_events = empty_events();
     if isfield(loaded, 'events')
-        row = add_event_counts(row, loaded.events);
+        saved_events = loaded.events;
     end
+    row = add_event_counts(row, saved_events, canonical_labels);
 
     if isfield(loaded, 'diagnostic_signals')
         row = add_diagnostic_summaries(row, loaded.diagnostic_signals);
     end
 
+end
+
+function row = add_label_summaries(row, loaded, config, canonical_labels)
+    row.duration_sec = nan;
+    saved_labels = {};
+    if isfield(loaded, 'label_names')
+        saved_labels = cellstr(string(loaded.label_names));
+    end
+    labels = union(canonical_labels, saved_labels, 'stable');
+    available = saved_label_availability(loaded, saved_labels);
+
+    if isfield(loaded, 'mask') && (isnumeric(loaded.mask) || islogical(loaded.mask))
+        fs = get_results_fs(loaded, config);
+        row.duration_sec = size(loaded.mask, 1) / fs;
+    end
+
+    for i = 1:numel(labels)
+        label = labels{i};
+        field_label = matlab.lang.makeValidName(label);
+        available_field = ['label_' field_label '_available'];
+        duration_field = ['label_' field_label '_duration_sec'];
+        fraction_field = ['label_' field_label '_fraction'];
+        row.(available_field) = 0;
+        row.(duration_field) = nan;
+        row.(fraction_field) = nan;
+
+        saved_index = find(strcmp(saved_labels, label), 1);
+        if isempty(saved_index) || saved_index > numel(available) || ...
+                ~available(saved_index) || ~isfield(loaded, 'mask') || ...
+                saved_index > size(loaded.mask, 2)
+            continue;
+        end
+
+        row.(available_field) = 1;
+        fs = get_results_fs(loaded, config);
+        label_samples = nnz(loaded.mask(:, saved_index) ~= 0);
+        row.(duration_field) = label_samples / fs;
+        if isfinite(row.duration_sec) && row.duration_sec > 0
+            row.(fraction_field) = row.(duration_field) / row.duration_sec;
+        end
+    end
+end
+
+function available = saved_label_availability(loaded, saved_labels)
+    available = true(1, numel(saved_labels));
+    if isfield(loaded, 'label_available') && ...
+            (isnumeric(loaded.label_available) || islogical(loaded.label_available)) && ...
+            numel(loaded.label_available) == numel(saved_labels)
+        available = logical(loaded.label_available(:)');
+    elseif isfield(loaded, 'input_config') && isstruct(loaded.input_config) && ...
+            isfield(loaded.input_config, 'running_labels')
+        available = ismember(saved_labels, cellstr(string(loaded.input_config.running_labels)));
+    end
+end
+
+function labels = current_canonical_labels(config)
+    if isfield(config, 'labels') && isfield(config.labels, 'short')
+        labels = {config.labels.short};
+        return;
+    end
+    current_config = get_config();
+    labels = {current_config.labels.short};
 end
 
 function row = add_respiratory_reference_summary(row, resp_ref)
@@ -157,12 +208,18 @@ function out_csv = write_measure_comparability_table(out_dir)
         "belt_amplitude_ratio"; ...
         "shallow_or_deep_excursion_ratio"; ...
         "global_to_session_amplitude_ratio"; ...
+        "thoracic_to_abdominal_ratio"; ...
+        "thoracic_dominance_log_ratio"; ...
+        "thoracic_relative_fraction"; ...
         "raw_belt_amplitude"];
     comparability = [ ...
         "absolute_comparable_across_subjects"; ...
         "absolute_comparable_across_subjects"; ...
         "absolute_comparable_across_subjects"; ...
         "absolute_comparable_across_subjects"; ...
+        "within_record_normalized"; ...
+        "within_record_normalized"; ...
+        "within_record_normalized"; ...
         "within_record_normalized"; ...
         "within_record_normalized"; ...
         "within_record_normalized"; ...
@@ -175,6 +232,9 @@ function out_csv = write_measure_comparability_table(out_dir)
         "unitless_ratio"; ...
         "unitless_ratio"; ...
         "unitless_ratio"; ...
+        "unitless_ratio"; ...
+        "log_unitless_ratio"; ...
+        "unitless_fraction"; ...
         "uncalibrated_belt_units"];
     interpretation = [ ...
         "Absolute respiratory rate"; ...
@@ -184,6 +244,9 @@ function out_csv = write_measure_comparability_table(out_dir)
         "Interpret only relative to the same recording's session reference"; ...
         "Interpret shallow/deep excursion only within the same recording"; ...
         "Whole-record amplitude relative to that recording's session reference"; ...
+        "Ratio of independently session-normalized thoracic and abdominal excursion"; ...
+        "Log of the within-record normalized thoracic/abdominal excursion ratio"; ...
+        "Bounded within-record thoracic share of normalized excursion"; ...
         "Do not compare raw belt magnitude between subjects"];
 
     comparability_table = table(measure_family, comparability, units_or_scale, interpretation);
@@ -218,17 +281,22 @@ function fs = get_results_fs(loaded, config)
     end
 end
 
-function row = add_event_counts(row, events)
-    if isempty(events)
-        return;
+function row = add_event_counts(row, events, canonical_labels)
+    event_types = {};
+    if ~isempty(events) && isfield(events, 'type')
+        event_types = {events.type};
     end
-
-    event_types = unique({events.type}, 'stable');
-    for i = 1:numel(event_types)
-        label = matlab.lang.makeValidName(event_types{i});
-        row.(['events_' label '_count']) = sum(strcmp({events.type}, event_types{i}));
+    labels = union(canonical_labels, unique(event_types, 'stable'), 'stable');
+    for i = 1:numel(labels)
+        field_label = matlab.lang.makeValidName(labels{i});
+        available_field = ['label_' field_label '_available'];
+        count_field = ['events_' field_label '_count'];
+        if isfield(row, available_field) && row.(available_field) == 1
+            row.(count_field) = sum(strcmp(event_types, labels{i}));
+        else
+            row.(count_field) = nan;
+        end
     end
-
 end
 
 function row = add_diagnostic_summaries(row, diagnostic_signals)
@@ -291,14 +359,17 @@ end
 
 function value = missing_value_for_field(name)
     if strcmp(name, 'label_file') || strcmp(name, 'subject_group') || ...
+            strcmp(name, 'label_schema_version') || ...
             strcmp(name, 'change_pattern') || endsWith(name, '_quality') || ...
             endsWith(name, '_action')
         value = '';
     elseif startsWith(name, 'events_') && endsWith(name, '_count')
+        value = nan;
+    elseif startsWith(name, 'label_') && endsWith(name, '_available')
         value = 0;
     elseif startsWith(name, 'label_') && ...
             (endsWith(name, '_duration_sec') || endsWith(name, '_fraction'))
-        value = 0;
+        value = nan;
     else
         value = nan;
     end

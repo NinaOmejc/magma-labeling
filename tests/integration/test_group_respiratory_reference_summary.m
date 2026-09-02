@@ -38,6 +38,12 @@ function testSavedRespiratoryReferenceIsSummarized(testCase)
     verifyEqual(testCase, string(group_table.lungs_reference_action), "retain_data_no_correction");
     verifyEqual(testCase, group_table.label_deepB_duration_sec, 40/200, 'AbsTol', eps);
     verifyEqual(testCase, group_table.label_deepB_fraction, 0.40, 'AbsTol', eps);
+    verifyEqual(testCase, group_table.label_deepB_available, 1);
+    verifyEqual(testCase, group_table.label_thorDomB_available, 0);
+    verifyTrue(testCase, isnan(group_table.label_thorDomB_duration_sec));
+    verifyTrue(testCase, isnan(group_table.label_thorDomB_fraction));
+    verifyTrue(testCase, isnan(group_table.events_thorDomB_count));
+    verifyEqual(testCase, string(group_table.label_schema_version), "legacy_unspecified");
 
     dictionary_file = fullfile(results_root, 'group_analysis', ...
         'group_measure_comparability.csv');
@@ -48,8 +54,40 @@ function testSavedRespiratoryReferenceIsSummarized(testCase)
         dictionary.comparability == "absolute_comparable_across_subjects"));
     verifyTrue(testCase, any(dictionary.measure_family == "belt_amplitude_ratio" & ...
         dictionary.comparability == "within_record_normalized"));
+    verifyTrue(testCase, any(dictionary.measure_family == "thoracic_to_abdominal_ratio" & ...
+        dictionary.comparability == "within_record_normalized"));
     verifyTrue(testCase, any(dictionary.measure_family == "raw_belt_amplitude" & ...
         dictionary.comparability == "not_safely_comparable_across_subjects"));
+end
+
+function testAssessedZeroLabelsRemainDistinctFromUnavailable(testCase)
+    results_root = tempname;
+    subject_dir = fullfile(results_root, 'Sub42_M3');
+    mkdir(subject_dir);
+    cleanup_dir = onCleanup(@() rmdir(results_root, 's'));
+
+    current = get_config();
+    subject = 42;
+    measure = 3;
+    mask = false(100, numel(current.labels));
+    label_names = {current.labels.short};
+    label_available = true(1, numel(label_names));
+    label_schema_version = current.label_schema_version;
+    config = struct('fs', 10);
+    save(fullfile(subject_dir, 'Sub42_M3_labels.mat'), ...
+        'subject', 'measure', 'mask', 'label_names', 'label_available', ...
+        'label_schema_version', 'config');
+
+    group_table = build_group_label_table(results_root);
+    verifyEqual(testCase, group_table.label_deepB_available, 1);
+    verifyEqual(testCase, group_table.label_deepB_duration_sec, 0);
+    verifyEqual(testCase, group_table.label_deepB_fraction, 0);
+    verifyEqual(testCase, group_table.label_thorDomB_available, 1);
+    verifyEqual(testCase, group_table.label_thorDomB_duration_sec, 0);
+    verifyEqual(testCase, group_table.label_thorDomB_fraction, 0);
+    verifyEqual(testCase, group_table.events_thorDomB_count, 0);
+    verifyEqual(testCase, string(group_table.label_schema_version), ...
+        "independent_labels_v2_11class");
 end
 
 function resp_ref = synthetic_saved_reference()

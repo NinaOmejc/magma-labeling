@@ -35,9 +35,14 @@ function [mask, labelNames] = events_to_time_mask(events, N, config)
                 'Event "%s" must have finite scalar start_idx and end_idx.', event_type);
         end
 
-        start_idx = max(1, min(N, round(events(i).start_idx)));
-        end_idx = max(1, min(N, round(events(i).end_idx)));
-        if end_idx >= start_idx && N > 0
+        original_start_idx = round(events(i).start_idx);
+        original_end_idx = round(events(i).end_idx);
+        if N == 0 || original_end_idx < 1 || original_start_idx > N
+            continue;
+        end
+        start_idx = max(1, original_start_idx);
+        end_idx = min(N, original_end_idx);
+        if end_idx >= start_idx
             mask(start_idx:end_idx, label_index) = true;
         end
     end

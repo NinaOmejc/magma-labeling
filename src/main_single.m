@@ -38,6 +38,7 @@ for isub = 1:length(config.subjects)
         % LABEL DETECTIONS        
         events_ShB = detect_shallow_breathing(data, phys_feat, config);
         events_DeB = detect_deep_breathing(data, phys_feat, config);
+        events_TDB = detect_thoracic_dominant_breathing(data, phys_feat, config);
         events_IrB = detect_irregular_breathing(data, phys_feat, config);
         events_SlB = detect_slow_breathing(data, phys_feat, config);
         events_RaB = detect_rapid_breathing(data, phys_feat, config);
@@ -52,6 +53,7 @@ for isub = 1:length(config.subjects)
         event_sets = struct( ...
             'shallowB', events_ShB, ...
             'deepB', events_DeB, ...
+            'thorDomB', events_TDB, ...
             'irregB', events_IrB, ...
             'slowB', events_SlB, ...
             'rapidB', events_RaB, ...
@@ -63,6 +65,7 @@ for isub = 1:length(config.subjects)
         
         events_ShB = event_sets.shallowB;
         events_DeB = event_sets.deepB;
+        events_TDB = event_sets.thorDomB;
         events_IrB = event_sets.irregB;
         events_SlB = event_sets.slowB;
         events_RaB = event_sets.rapidB;
@@ -72,11 +75,18 @@ for isub = 1:length(config.subjects)
         events_CSR = event_sets.CSR;
 
         % JOIN EVENTS FOR SUBJECT, MEASUREMENT
-        sub_events = merge_events({events_ShB, events_IrB, events_SlB, events_RaB, events_ReA, events_Des, events_Apn, events_Sigh, events_CSR, events_DeB});
+        sub_events = merge_events({events_ShB, events_IrB, events_SlB, events_RaB, events_ReA, events_Des, events_Apn, events_Sigh, events_CSR, events_DeB, events_TDB});
         sub_events = normalize_event_types_and_meta(sub_events);
         
         N = size(data,1); 
         [label_mask, label_names] = events_to_time_mask(sub_events, N, config);
+        label_available = ismember(label_names, config.input_config.running_labels);
+        amplitude_available = phys_feat.resp.lungs.session_amplitude_available || ...
+            phys_feat.resp.diaph.session_amplitude_available;
+        label_available(strcmp(label_names, 'shallowB')) = amplitude_available;
+        label_available(strcmp(label_names, 'deepB')) = amplitude_available;
+        label_available(strcmp(label_names, 'thorDomB')) = ...
+            phys_feat.resp.thoracoabdominal_balance.available;
         diagnostic_signals = compute_label_diagnostic_signals( ...
             phys_feat, baseline, spo2_feat, config, diagnostics_ReA);
         rewritten_manual_label_figures = rewrite_changed_manual_label_figures( ...
@@ -89,6 +99,8 @@ for isub = 1:length(config.subjects)
         results.events = sub_events;
         results.mask   = label_mask;
         results.label_names = label_names;
+        results.label_available = label_available;
+        results.label_schema_version = config.label_schema_version;
         results.resp_feat = resp_feat;
         results.resp_ref = resp_ref;
         results.phys_feat = phys_feat;

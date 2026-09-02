@@ -10,6 +10,7 @@ function config = get_config()
     config.fs = 200;                                                                                   % native/master sampling frequency (Hz) for all aligned physiological signals
     config.data_columns = {'ECG1', 'ECG2', 'SpO₂', 'Resp-Lungs', 'Blood Pressure', 'Resp-Diaphragm'};  % column names in raw data
     config.input_filename_pattern = 'ECG1_ECG2_SpO2_RespL_BP_RespD_fs200_Sub{subject}_Pom{measure}_DeTr_Norm.dat'; % The generic name of the data files
+    config.label_schema_version = 'independent_labels_v2_11class';         % explicit saved-output label schema
     config.labels = get_labels();                                          % canonical label names and indices
 
                                         % resolution of the saved figures
@@ -200,6 +201,17 @@ function config = get_config()
     config.DeB.min_dur_sec = 30;                  % sustained deep-amplitude state duration
     config.DeB.do_plot = true;                    % save deep breathing diagnostic plot
 
+    %---- LABEL 11: Thoracic-dominant breathing
+    % Relative thoracoabdominal excursion dominance after normalizing each
+    % uncalibrated belt to its own fixed session reference. The threshold is
+    % an operational weak-label rule, not a validated clinical cutoff.
+    config.TDB = struct();
+    config.TDB.dominance_ratio_thr = 1.5;          % normalized thoracic / normalized abdominal excursion
+    config.TDB.analysis_win_sec = 30;              % common robust-median evidence window
+    config.TDB.min_dur_sec = 30;                   % sustained dominance duration
+    config.TDB.min_breaths = 3;                    % minimum finite positive breaths per belt/window
+    config.TDB.do_plot = true;                     % save relative-balance diagnostic plot
+
     % HOW TO REPRESENT RESULTS
     config.LabelMask = struct();                 % label-mask heatmap figure
     config.LabelMask.do_plot = true;             % generate a label-mask summary figure
@@ -228,9 +240,9 @@ end
 
 
 function labels = get_labels()
-    labels_long = {'ShallowBreathing', 'IrregularBreathing', 'SlowBreathing', 'RapidBreathing', 'RespiratoryAsynchrony', 'Desaturation', 'Apnea', 'Sigh', 'PeriodicBreathingCheyneStokesLike', 'DeepBreathing'};
-    labels_short = {'shallowB', 'irregB', 'slowB', 'rapidB', 'asyncB', 'desat', 'apnea', 'sigh', 'CSR', 'deepB'};
-    labels_idx = 1:10;
+    labels_long = {'ShallowBreathing', 'IrregularBreathing', 'SlowBreathing', 'RapidBreathing', 'RespiratoryAsynchrony', 'Desaturation', 'Apnea', 'Sigh', 'PeriodicBreathingCheyneStokesLike', 'DeepBreathing', 'ThoracicDominantBreathing'};
+    labels_short = {'shallowB', 'irregB', 'slowB', 'rapidB', 'asyncB', 'desat', 'apnea', 'sigh', 'CSR', 'deepB', 'thorDomB'};
+    labels_idx = 1:11;
     labels = struct( ...
         'idx',   num2cell(labels_idx), ...
         'long',  labels_long, ...
