@@ -1,4 +1,4 @@
-function diagnostic_signals = compute_label_diagnostic_signals(data, baseline, resp_feat, spo2_feat, config, rea_metrics)
+function diagnostic_signals = compute_label_diagnostic_signals(data, resp_ref, baseline, resp_feat, spo2_feat, config, rea_metrics)
 % compute_label_diagnostic_signals
 % Save detector-adjacent signals on the config.fs master recording timeline.
 
@@ -38,11 +38,15 @@ function diagnostic_signals = compute_label_diagnostic_signals(data, baseline, r
 
     amp_lungs = median_breath_amplitude_on_grid(resp_feat.lungs, t_grid, amplitude_win_sec);
     amp_diaph = median_breath_amplitude_on_grid(resp_feat.diaph, t_grid, amplitude_win_sec);
-    ref_lungs = get_resp_ref_on_grid(baseline, 'lungs', t_grid);
-    ref_diaph = get_resp_ref_on_grid(baseline, 'diaph', t_grid);
+    [ref_lungs, lungs_ref_available] = get_resp_session_reference(resp_ref, 'lungs');
+    [ref_diaph, diaph_ref_available] = get_resp_session_reference(resp_ref, 'diaph');
 
-    diagnostic_signals.breath_amplitude_median_lungs = amp_lungs;
-    diagnostic_signals.breath_amplitude_median_diaph = amp_diaph;
+    diagnostic_signals.breath_amplitude_median_raw_units_lungs = amp_lungs;
+    diagnostic_signals.breath_amplitude_median_raw_units_diaph = amp_diaph;
+    diagnostic_signals.breath_amplitude_session_reference_raw_units_lungs = ref_lungs;
+    diagnostic_signals.breath_amplitude_session_reference_raw_units_diaph = ref_diaph;
+    diagnostic_signals.breath_amplitude_session_reference_available_lungs = double(lungs_ref_available);
+    diagnostic_signals.breath_amplitude_session_reference_available_diaph = double(diaph_ref_available);
     diagnostic_signals.breath_amplitude_ratio_to_reference_lungs = amp_lungs ./ ref_lungs;
     diagnostic_signals.breath_amplitude_ratio_to_reference_diaph = amp_diaph ./ ref_diaph;
 

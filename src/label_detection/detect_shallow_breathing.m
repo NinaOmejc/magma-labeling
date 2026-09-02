@@ -1,4 +1,4 @@
-function shallow_events = detect_shallow_breathing(data, baseline, resp_feat, spo2_feat, config)
+function shallow_events = detect_shallow_breathing(data, resp_ref, baseline, resp_feat, spo2_feat, config)
 % detect_shallow_breathing
 % Event-based detection of shallow breathing episodes (Label 1).
 %
@@ -16,8 +16,11 @@ function shallow_events = detect_shallow_breathing(data, baseline, resp_feat, sp
     N = size(data,1);
     t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';  % seconds
     lungs_broken = is_lung_belt_ignored(config);
-    lungs_valid = is_valid_breath_signal(resp_feat.lungs, true) && ~lungs_broken;
-    diaph_valid = is_valid_breath_signal(resp_feat.diaph, true);
+    [ref_lungs, lungs_ref_available] = get_resp_session_reference(resp_ref, 'lungs');
+    [ref_diaph, diaph_ref_available] = get_resp_session_reference(resp_ref, 'diaph');
+    lungs_valid = is_valid_breath_signal(resp_feat.lungs, true) && ...
+        ~lungs_broken && lungs_ref_available;
+    diaph_valid = is_valid_breath_signal(resp_feat.diaph, true) && diaph_ref_available;
 
     if ~lungs_valid && ~diaph_valid
         fprintf('Skipping shallowB detection: no valid respiratory belt with usable breath amplitudes.\n');
@@ -25,10 +28,7 @@ function shallow_events = detect_shallow_breathing(data, baseline, resp_feat, sp
         return;
     end
 
-    % ---- shallow condition on grid  ----
-    ref_lungs = get_resp_ref_on_grid(baseline, 'lungs', t_grid);
-    ref_diaph = get_resp_ref_on_grid(baseline, 'diaph', t_grid);
-
+    % ---- shallow condition on grid, using one fixed session reference ----
     shallow_mask_lungs = false(size(t_grid));
     if lungs_valid
         shallow_mask_lungs = compute_shallow_breathing_mask( ...
@@ -73,14 +73,9 @@ function shallow_events = detect_shallow_breathing(data, baseline, resp_feat, sp
 
         ratio_low  = config.ShB.amp_ratio_low;
         ratio_high = config.ShB.amp_ratio_high;
-        rb_enabled = isfield(config,'rolling_baseline') && isfield(config.rolling_baseline,'enabled') && config.rolling_baseline.enabled;
-        if rb_enabled
-            rb_win = config.rolling_baseline.win_sec;
-            rb_lag = config.rolling_baseline.lag_sec;
-            ref_txt = ['Rolling amp ref: win=' num2str(rb_win) 's, lag=' num2str(rb_lag) 's'];
-        else
-            ref_txt = 'Static amp ref';
-        end
+        ref_txt = 'Fixed per-belt protocol/session amplitude reference';
+        ref_lungs_grid = ref_lungs * ones(size(t_grid));
+        ref_diaph_grid = ref_diaph * ones(size(t_grid));
         
         fig = figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', config.make_figs_visible); 
         % ----------------------
@@ -88,8 +83,8 @@ function shallow_events = detect_shallow_breathing(data, baseline, resp_feat, sp
         % ----------------------
         subplot(3,1,1)
         hold on
-        lower_l = ratio_low  * ref_lungs;
-        upper_l = ratio_high * ref_lungs;
+        lower_l = ratio_low  * ref_lungs_grid;
+        upper_l = ratio_high * ref_lungs_grid;
         valid_l = isfinite(t_grid) & isfinite(lower_l) & isfinite(upper_l) & upper_l >= lower_l;
         if any(valid_l)
             patch([t_grid(valid_l); flipud(t_grid(valid_l))], ...
@@ -113,7 +108,7 @@ function shallow_events = detect_shallow_breathing(data, baseline, resp_feat, sp
         end
         title('Lungs Breath Amplitudes')
         xlabel('Time (s)')
-        ylabel('Amplitude')
+        ylabel('Belt excursion (raw units)')
         grid on
         hold off
     
@@ -122,8 +117,8 @@ function shallow_events = detect_shallow_breathing(data, baseline, resp_feat, sp
         % ----------------------
         subplot(3,1,2)
         hold on
-        lower_d = ratio_low  * ref_diaph;
-        upper_d = ratio_high * ref_diaph;
+        lower_d = ratio_low  * ref_diaph_grid;
+        upper_d = ratio_high * ref_diaph_grid;
         valid_d = isfinite(t_grid) & isfinite(lower_d) & isfinite(upper_d) & upper_d >= lower_d;
         if any(valid_d)
             patch([t_grid(valid_d); flipud(t_grid(valid_d))], ...
@@ -149,7 +144,7 @@ function shallow_events = detect_shallow_breathing(data, baseline, resp_feat, sp
         end
         title('Diaphragm Breath Amplitudes')
         xlabel('Time (s)')
-        ylabel('Amplitude')
+        ylabel('Belt excursion (raw units)')
         grid on
         hold off
 

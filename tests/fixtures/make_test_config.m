@@ -22,7 +22,6 @@ function config = make_test_config(output_dir)
     config.resp.qc.enabled = false;
     config.resp_ref.do_plot = false;
     config.normality.do_plot = false;
-    config.rolling_baseline.do_plot = false;
     config.Sig.do_plot = false;
     config.Sig.manual_control = false;
     config.LabelEdit.manual_control = false;

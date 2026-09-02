@@ -4,7 +4,7 @@ function config = get_config()
     config = struct;                                                                                   % main configuration container
     config.path_data_in = 'D:\Projects\MAGMA\raw_data';                                                % *** folder with raw input .dat files
     config.path_results_out = 'D:\Projects\MAGMA\data_analysis\disorder_classification';               % *** root output folder
-    config.subjects = [];                                                                              % *** subjects to analyze
+    config.subjects = [20:60];                                                                              % *** subjects to analyze
     config.remove_subjects = [3 30 91];                                                                % *** subjects to not analyze
     config.measurements = [1 2];                                                                       % *** measurements to analyze - 1: pre-rehab-pre-stress, 2: pre-rehab-post-stress, 3:post-rehab-pre-stress, 4:post-rehab-post-stress
     config.fs = 200;                                                                                   % native/master sampling frequency (Hz) for all aligned physiological signals
@@ -13,7 +13,7 @@ function config = get_config()
     config.labels = get_labels();                                          % canonical label names and indices
 
                                         % resolution of the saved figures
-    config.make_figs_visible = 'on';                                      % create figures hidden during batch runs, so they dont pop up (for faster run)
+    config.make_figs_visible = 'off';                                      % create figures hidden during batch runs, so they dont pop up (for faster run)
     config.overwrite_results = true;                                       % *** Recompute even if label output already exists
     config.overwrite_features = false;                                     % *** Recompute respiratory features even if "*_features.mat" exists
 
@@ -38,17 +38,9 @@ function config = get_config()
         (1:20)', ones(20, 1); ...
         (1:20)', 2 * ones(20, 1)];
 
-    %---- STATIC BASELINE SETTINGS ----
-    config.baseline_sec = 60;           % static baseline segment length in seconds
-    config.baseline_location = '5/20';  % It can either be 'first', 'second', '5/20' or 'last' minute of the data. '5/20' means that it takes from 5th minute for measurement 1 and 3, and from 20th minute for measurement 2 and 4
-
-    %---- ROLLING RESPIRATORY BASELINE SETTINGS ----
-    config.rolling_baseline.enabled = true;    % use time-varying respiratory amplitude baseline (sometimes data are unstationary, and this helps. If the data are stationary, the rolling baseline should be similar to static baseline.)
-    config.rolling_baseline.win_sec = 360;      % window length for rolling amplitude baseline
-    config.rolling_baseline.lag_sec = 60;       % when computing the rolling baseline at time t, ignore the most recent X seconds before t. [t - win_sec - lag_sec, t - lag_sec]
-    config.rolling_baseline.min_breaths = 10;   % minimum breaths needed for rolling baseline estimate
-    config.rolling_baseline.method = 'median';  % statistic used for rolling amplitude baseline
-    config.rolling_baseline.do_plot = true;     % save rolling baseline diagnostic plot
+    %---- STATIC SPO2 / LABEL-SPECIFIC BASELINE SETTINGS ----
+    config.baseline_sec = 60;           % static interval length for SpO2 and label-specific safeguards (not respiratory amplitude normalization)
+    config.baseline_location = '5/20';  % 'first', 'second', '5/20', or 'last'; '5/20' uses minute 5 for M1/M3 and minute 20 for M2/M4
 
     %---- RESPIRATION / BREATHING AMPLITUDE EXTRACTION SETTINGS ----
     config.resp.min_peak_dist_sec = 1.0;    % *** Peak selection; min time between breaths (tune if needed)
@@ -71,13 +63,19 @@ function config = get_config()
     config.resp.qc.local_window_breaths = 7;    % neighboring breaths used for local rhythm/amplitude reference
     
     % manual control of peak detection
-    config.resp.manual_control = true;          % allow click-to-add/remove breath peaks before label detection (it takes time, but important to check the quality of detection, and not blindly follow automatic detection - GUI will appear for editing.)
+    config.resp.manual_control = false;          % allow click-to-add/remove breath peaks before label detection (it takes time, but important to check the quality of detection, and not blindly follow automatic detection - GUI will appear for editing.)
     config.resp.manual_window_sec = 300;        % visible time span for manual breath GUI scrolling
     config.resp.manual_peak_search_sec = 1.0;   % add peak at local maximum within this window around the click
 
-    %---- DIAGNOSTIC RESPIRATORY AMPLITUDE REFERENCE STABILITY ----
-    % These are conservative signal-stability heuristics, not physiological
-    % diagnostic thresholds. Phase 2A results do not affect label detection.
+    %---- RESPIRATORY AMPLITUDE REFERENCE ----
+    % One fixed, per-belt session reference normalizes amplitude-dependent
+    % detectors. Stability findings are descriptive QC warnings only: the
+    % default action is to retain the data without correction.
+    config.resp_ref.session_pre_start_min = 2;   % M1/M3 protocol reference interval start
+    config.resp_ref.session_pre_end_min = 7;     % M1/M3 protocol reference interval end
+    config.resp_ref.session_post_start_min = 18; % M2/M4 protocol reference interval start
+    config.resp_ref.session_post_end_min = 23;   % M2/M4 protocol reference interval end
+    config.resp_ref.session_min_breaths = 10;    % minimum reviewed, finite positive breaths required per belt
     config.resp_ref.edge_window_sec = 300;       % early/late comparison window, capped at one quarter of short recordings
     config.resp_ref.change_trigger_frac = 0.25; % symmetric fractional edge-level difference that triggers one-step inspection
     config.resp_ref.min_segment_breaths = 12;   % minimum valid breaths on each side of a candidate split
@@ -178,7 +176,7 @@ function config = get_config()
     config.Sig.min_abs_ratio = 2.0;             % minimum amplitude/reference ratio for sigh candidates
     config.Sig.iqr_k = 3.5;                     % IQR multiplier for outlier-based sigh detection
     config.Sig.min_gap_sec = 2;                 % minimum time between separate sigh events (check if this condition actually makes sense)
-    config.Sig.manual_control = true;           % allow click-to-add/remove sigh markers in GUI - GUI will appear where sighs can be edited!)
+    config.Sig.manual_control = false;           % allow click-to-add/remove sigh markers in GUI - GUI will appear where sighs can be edited!)
     config.Sig.manual_window_sec = 1200;        % visible time span for manual GUI scrolling
     config.Sig.do_plot = true;                  % save sigh diagnostic plot
         

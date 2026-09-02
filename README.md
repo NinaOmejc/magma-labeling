@@ -45,7 +45,7 @@ addpath(genpath(fullfile(pwd, 'src')));
 run('src/main_single.m')
 ```
 
-`main_single.m` loops over the selected subjects and measurements, loads each recording, preprocesses the data, extracts respiration and SpO2 features, computes baselines, runs all label detectors, builds the label mask, and saves outputs.
+`main_single.m` loops over the selected subjects and measurements, loads each recording, preprocesses the data, extracts respiration and SpO2 features, computes the respiratory and SpO2 references, runs all label detectors, builds the label mask, and saves outputs.
 
 ## Configuration
 
@@ -67,7 +67,11 @@ Each detector has its own settings block, for example `config.ShB`, `config.IrB`
 
 Preprocessing preserves the native sample count and alignment of every channel. It detrends only the configured respiratory belts. Respiratory-asynchrony analysis alone creates a temporary, anti-aliased 20 Hz representation controlled by `config.ReA.analysis_fs`; its results are mapped back to the 200 Hz master timeline.
 
-`config.resp_ref` controls a diagnostic-only analysis of respiratory amplitude stability. It compares reviewed early/late breath amplitudes and can identify at most one persistent step-like change candidate. The saved `results.resp_ref` is not used by any label detector; existing static and rolling baselines remain the detector inputs.
+`config.resp_ref` defines one fixed protocol/session amplitude reference independently for each usable belt. Measurements M1/M3 use reviewed breaths from minutes 2–7; M2/M4 use minutes 18–23. The session median normalizes amplitude-dependent shallow/deep and breath-amplitude apnea logic. Sigh detection intentionally uses the whole-record median because it is a global outlier detector.
+
+`results.resp_ref` also retains whole-record values and early/late stability diagnostics. A step candidate, edge disagreement, or gradual/complex pattern is a descriptive `reference_quality` warning. The default action for every warning is **retain data, no correction**; warnings neither request manual correction nor automatically drift-correct the reference. A session reference becomes unavailable only when its belt lacks enough reviewed, finite positive breaths.
+
+Respiratory belts are uncalibrated. Their raw amplitudes do not represent absolute tidal volume and are not safely comparable between subjects. A globally low-excursion recording can also look normal after within-record normalization, so amplitude ratios must be interpreted as within-record measures.
 
 Plot behavior is controlled per module:
 
@@ -153,12 +157,12 @@ results.events             = sub_events;          % Detected event struct array
 results.mask               = label_mask;          % Sample-level label mask [N x labels]
 results.label_names        = label_names;         % Label names matching mask columns
 results.resp_feat          = resp_feat;           % Respiratory features for lungs and diaphragm
-results.resp_ref           = resp_ref;            % Diagnostic respiratory amplitude-reference stability
+results.resp_ref           = resp_ref;            % Fixed session/global respiratory references and descriptive QC
 results.spo2_feat          = spo2_feat;           % SpO2 features and desaturation candidates
 results.diagnostic_signals = diagnostic_signals;  % Continuous detector-adjacent signals
 results.manual_label_edit  = manual_label_edit;   % Manual edit metadata and changed label list
 results.rewritten_manual_label_figures = rewritten_manual_label_figures; % Figures rewritten after manual interval edits
-results.baseline           = baseline;            % Static and rolling baseline references
+results.baseline           = baseline;            % Static SpO2 and label-specific baseline interval
 results.input_config       = config.input_config; % Resolved channels and skipped/running labels
 results.config             = config;              % Full configuration used for this run
 ```
@@ -166,6 +170,14 @@ results.config             = config;              % Full configuration used for 
 `results.events` and `results.mask` already include accepted manual edits. The separate `Sub*_M*_manual_label_events.mat` file stores the edited per-label event sets before final merging/normalization, so the same human edits can be reused on rerun and compared against newly detected automatic events.
 
 `results.measure` is the saved measurement identifier.
+
+## Group-Level Measure Comparability
+
+`build_group_label_table` writes `group_analysis/group_measure_comparability.csv` alongside the group summary. Interpret group outputs in three classes:
+
+- Absolute/comparable across subjects: respiratory rate (bpm), event durations/fractions, SpO2, and timing measures.
+- Within-record normalized: belt amplitude ratios, shallow/deep excursion measures, and the whole-record/session amplitude ratio.
+- Not safely comparable across subjects: raw belt amplitude or raw session/global belt reference values.
 
 ## Artificial Test Signals
 

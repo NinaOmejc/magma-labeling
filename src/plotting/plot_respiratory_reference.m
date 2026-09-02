@@ -1,7 +1,7 @@
 function fig = plot_respiratory_reference(resp_feat, resp_ref, config)
 % plot_respiratory_reference
-% Plot one diagnostic view of reviewed breath amplitudes and the candidate
-% single or two-level reference. This figure does not affect detectors.
+% Plot the fixed protocol/session reference, whole-record context, and
+% descriptive stability QC. Warnings retain data and do not request correction.
 
     fig = [];
     if ~isfield(config, 'resp_ref') || ~isfield(config.resp_ref, 'do_plot') || ...
@@ -29,11 +29,12 @@ function plot_belt_reference(ax, breaths, belt, belt_name)
     hold(ax, 'on');
     grid(ax, 'on');
     xlabel(ax, 'Breath peak time (s)');
-    ylabel(ax, 'Breath amplitude');
+    ylabel(ax, 'Belt excursion (raw units)');
 
     [peak_t, amp] = valid_amplitudes(breaths);
     if isempty(peak_t)
-        text(ax, 0.5, 0.5, sprintf('%s unavailable | %s', belt_name, belt.quality), ...
+        text(ax, 0.5, 0.5, sprintf('%s unavailable | reference quality: %s', ...
+            belt_name, belt.reference_quality), ...
             'Units', 'normalized', 'HorizontalAlignment', 'center');
         title(ax, belt_name);
         hold(ax, 'off');
@@ -42,10 +43,21 @@ function plot_belt_reference(ax, breaths, belt, belt_name)
 
     h_amp = plot(ax, peak_t, amp, '.-', 'Color', [0.20 0.35 0.70], ...
         'DisplayName', 'reviewed breath amplitude');
+    shade_session_region(ax, belt.session.start_t, belt.session.end_t);
     shade_edge_regions(ax, peak_t, belt.edge_window_sec_used);
 
     handles = gobjects(0);
     handles(end+1) = h_amp;
+    if belt.session.available
+        h_session = yline(ax, belt.session.value, '-', 'Color', [0.45 0.10 0.65], ...
+            'LineWidth', 2, 'DisplayName', 'fixed session median');
+        handles(end+1) = h_session;
+    end
+    if belt.global.available
+        h_global = yline(ax, belt.global.value, ':', 'Color', [0.15 0.15 0.15], ...
+            'LineWidth', 1.5, 'DisplayName', 'whole-record median');
+        handles(end+1) = h_global;
+    end
     if isfinite(belt.start_ref)
         h_start = yline(ax, belt.start_ref, '--', 'Color', [0.10 0.55 0.25], ...
             'DisplayName', 'early median');
@@ -61,20 +73,34 @@ function plot_belt_reference(ax, breaths, belt, belt_name)
         h_change = xline(ax, belt.change_t, 'k--', 'LineWidth', 1.5, ...
             'DisplayName', 'change candidate');
         h_before = plot(ax, [peak_t(1) belt.change_t], [belt.ref_before belt.ref_before], ...
-            'Color', [0.45 0.10 0.65], 'LineWidth', 2, 'DisplayName', 'reference before');
+            'Color', [0.35 0.35 0.35], 'LineWidth', 1.2, 'DisplayName', 'candidate level before');
         h_after = plot(ax, [belt.change_t peak_t(end)], [belt.ref_after belt.ref_after], ...
-            'Color', [0.65 0.10 0.45], 'LineWidth', 2, 'DisplayName', 'reference after');
+            'Color', [0.60 0.30 0.30], 'LineWidth', 1.2, 'DisplayName', 'candidate level after');
         handles = [handles h_change h_before h_after];
     end
 
-    ratio_text = numeric_text(belt.end_to_start_ratio);
-    change_text = numeric_text(belt.change_ratio);
-    title(ax, sprintf('%s | %s | start/end=%s | change=%s | quality=%s', ...
-        belt_name, belt.mode, ratio_text, change_text, belt.quality), ...
+    change_text = 'no';
+    if belt.change_detected
+        change_text = 'yes';
+    end
+    title(ax, sprintf(['%s | session=%s | global/session=%s | reference quality=%s' ...
+        ' | change candidate=%s | action=retain data, no correction'], ...
+        belt_name, numeric_text(belt.session.value), ...
+        numeric_text(belt.global_to_session_ratio), belt.reference_quality, change_text), ...
         'Interpreter', 'none');
     legend(ax, handles(isgraphics(handles)), 'Location', 'eastoutside');
     hold(ax, 'off');
 
+end
+
+function shade_session_region(ax, start_t, end_t)
+    if ~isfinite(start_t) || ~isfinite(end_t) || end_t <= start_t
+        return;
+    end
+    y_limits = robust_plot_limits(ax);
+    patch(ax, [start_t end_t end_t start_t], ...
+        [y_limits(1) y_limits(1) y_limits(2) y_limits(2)], [0.82 0.78 0.96], ...
+        'EdgeColor', 'none', 'FaceAlpha', 0.16, 'HandleVisibility', 'off');
 end
 
 function shade_edge_regions(ax, peak_t, edge_window_sec)

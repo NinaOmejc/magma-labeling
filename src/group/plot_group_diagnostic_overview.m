@@ -3,6 +3,7 @@ function overview = plot_group_diagnostic_overview(config_or_results_path, group
 % Descriptive group-level plots for diagnostic traces and label summaries.
 %
 % This is intended as a first-pass QC/overview, not formal statistics.
+% See group_measure_comparability.csv for cross-subject interpretation.
 % It saves:
 %   1) per-measure time-series overlays across subjects,
 %   2) per-measure boxplots of each subject's within-recording median,
@@ -35,6 +36,8 @@ function overview = plot_group_diagnostic_overview(config_or_results_path, group
 
     overview = struct();
     overview.out_dir = out_dir;
+    overview.measure_comparability_csv = fullfile(results_path, ...
+        'group_analysis', 'group_measure_comparability.csv');
     overview.time_series_files = plot_time_series_overlays(records, specs, config, out_dir);
     overview.diagnostic_median_file = plot_diagnostic_boxplots(group_table, specs, config, out_dir, 'median');
     overview.diagnostic_spread_file = plot_diagnostic_boxplots(group_table, specs, config, out_dir, 'spread');
@@ -82,10 +85,6 @@ function specs = default_diagnostic_signal_specs()
         'diagnostic_resp_asynchrony_phase_coherence_mid', ...
         'Respiratory asynchrony coherence, mid band', 'coherence', 'resp_asynchrony_coherence_mid');
 
-    specs(end+1) = make_signal_spec('baseline.rolling', ...
-        'diaph_amp_ref', ...
-        'baseline_rolling_diaph_amp_ref', ...
-        'Rolling baseline amplitude, diaphragm', 'amplitude reference', 'rolling_baseline_diaph');
 end
 
 function spec = make_signal_spec(source, field, summary_prefix, title_text, ylabel_text, file_stub)
@@ -216,16 +215,6 @@ function [t, y] = load_record_signal(label_file, spec)
             end
             t = loaded.diagnostic_signals.time_sec(:);
             y = loaded.diagnostic_signals.(spec.field)(:);
-
-        case 'baseline.rolling'
-            loaded = load(label_file, 'baseline');
-            if ~isfield(loaded, 'baseline') || ~isfield(loaded.baseline, 'rolling') || ...
-                    ~isfield(loaded.baseline.rolling, 't_grid') || ...
-                    ~isfield(loaded.baseline.rolling, spec.field)
-                return;
-            end
-            t = loaded.baseline.rolling.t_grid(:);
-            y = loaded.baseline.rolling.(spec.field)(:);
 
         otherwise
             return;

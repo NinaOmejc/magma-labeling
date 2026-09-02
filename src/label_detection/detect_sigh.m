@@ -1,14 +1,13 @@
-function events = detect_sigh(data, baseline, resp_feat, spo2_feat, config)
+function events = detect_sigh(data, resp_ref, baseline, resp_feat, spo2_feat, config)
 % detect_sigh
 % Label 8 – Sigh
 %
 % Default method: global nonparametric outlier detection on normalized breath amplitude.
-% ratio = breath_amp / baseline_ref_at_breath
+% ratio = breath_amp / whole-record global breath-amplitude reference
 % sigh if ratio >= prctile(ratio_valid, ratio_prctile)
 %
-% Baseline source:
-%   - rolling baseline, when available and enabled
-%   - otherwise stationary baseline (median breath amplitude)
+% The whole-record reference is intentional for this global outlier method;
+% sustained amplitude labels use the separate fixed session reference.
 %
 % Legacy method (optional): previous-window thresholding.
 % Breath and event times map to master samples using config.fs.
@@ -74,14 +73,14 @@ function events = detect_sigh(data, baseline, resp_feat, spo2_feat, config)
             sigh_lungs = false(size(resp_feat.lungs.peak_t(:)));
             if lungs_valid
                 sigh_lungs = sigh_flags_global_ratio_outlier( ...
-                    resp_feat.lungs, baseline, config, 'lungs_amp_ref', ratio_prctile, ...
+                    resp_feat.lungs, get_global_reference(resp_ref, 'lungs'), ratio_prctile, ...
                     min_abs_ratio, iqr_k, min_gap_sec);
             end
             
             sigh_diaph = false(size(resp_feat.diaph.peak_t(:)));
             if diaph_valid
                 sigh_diaph = sigh_flags_global_ratio_outlier( ...
-                    resp_feat.diaph, baseline, config, 'diaph_amp_ref', ratio_prctile, ...
+                    resp_feat.diaph, get_global_reference(resp_ref, 'diaph'), ratio_prctile, ...
                     min_abs_ratio, iqr_k, min_gap_sec);
             end
     end
@@ -162,7 +161,7 @@ function events = detect_sigh(data, baseline, resp_feat, spo2_feat, config)
 end
 
 function [sigh_flags, local_ref, ratio, ratio_thr] = sigh_flags_global_ratio_outlier( ...
-    b, baseline, config, rolling_field, ratio_prctile, min_abs_ratio, iqr_k, min_gap_sec)
+    b, global_ref, ratio_prctile, min_abs_ratio, iqr_k, min_gap_sec)
     
     peak_t = b.peak_t(:);
     amp = b.amp(:);
@@ -179,18 +178,10 @@ function [sigh_flags, local_ref, ratio, ratio_thr] = sigh_flags_global_ratio_out
         return;
     end
 
-    local_ref = nan(L,1);
-    use_rolling = isfield(config,'rolling_baseline') && isfield(config.rolling_baseline,'enabled') && config.rolling_baseline.enabled && ...
-        isfield(baseline,'rolling') && isfield(baseline.rolling,'t_grid') && isfield(baseline.rolling,rolling_field);
-
-    if use_rolling
-        local_ref = interp1(baseline.rolling.t_grid, baseline.rolling.(rolling_field), peak_t, 'linear', 'extrap');
-    elseif isfield(b,'amp_ref') && isfinite(b.amp_ref) && b.amp_ref > 0
-        local_ref(:) = b.amp_ref;
-    else
-        ref = median(amp, 'omitnan');
-        local_ref(:) = ref;
+    if ~isscalar(global_ref) || ~isfinite(global_ref) || global_ref <= 0
+        global_ref = median(amp(isfinite(amp) & amp > 0), 'omitnan');
     end
+    local_ref = global_ref * ones(L, 1);
 
     ratio = amp ./ local_ref;
     valid = isfinite(ratio) & ratio > 0 & isfinite(amp) & amp > 0 & isfinite(local_ref) & local_ref > 0;
@@ -213,6 +204,19 @@ function [sigh_flags, local_ref, ratio, ratio_thr] = sigh_flags_global_ratio_out
     
     % Optional cleanup: keep only the strongest sigh within min_gap_sec.
     sigh_flags = enforce_min_gap_by_strength(candidate_flags, peak_t, ratio, min_gap_sec);
+end
+
+function value = get_global_reference(resp_ref, belt_name)
+    value = NaN;
+    if ~isstruct(resp_ref) || ~isfield(resp_ref, belt_name)
+        return;
+    end
+    belt = resp_ref.(belt_name);
+    if isstruct(belt) && isfield(belt, 'global') && isstruct(belt.global) && ...
+            isfield(belt.global, 'available') && belt.global.available && ...
+            isfield(belt.global, 'value')
+        value = belt.global.value;
+    end
 end
 
 

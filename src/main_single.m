@@ -21,29 +21,25 @@ for isub = 1:length(config.subjects)
         % EXTRACT OR LOAD FEATURES (manually checked breath peaks/troughs + SpO2)
         resp_feat = load_or_extract_respiratory_features(data, config);
 
-        % DIAGNOSTIC RESPIRATORY AMPLITUDE REFERENCE (not used by detectors)
+        % FIXED PROTOCOL/SESSION RESPIRATORY AMPLITUDE REFERENCE + QC
         resp_ref = compute_respiratory_reference(resp_feat, config);
         plot_respiratory_reference(resp_feat, resp_ref, config);
 
-        %temp
-        continue
-
-        % COMPUTE BASELINES
+        % COMPUTE SPO2 / LABEL-SPECIFIC STATIC BASELINE
         baseline = compute_baseline(data, config);
-        baseline = add_rolling_resp_baseline(baseline, resp_feat, size(data,1), config);
         
         % EXTRACT SPO2 FEATURES
         spo2_feat = extract_spo2_features(data, baseline, config);
 
         % LABEL DETECTIONS        
-        events_ShB = detect_shallow_breathing(data, baseline, resp_feat, spo2_feat, config);
+        events_ShB = detect_shallow_breathing(data, resp_ref, baseline, resp_feat, spo2_feat, config);
         events_IrB = detect_irregular_breathing(data, resp_feat, config);
-        events_SlB = detect_slow_breathing(data, baseline, resp_feat, spo2_feat, config);
-        events_RaB = detect_rapid_breathing(data, baseline, resp_feat, spo2_feat, config);
+        events_SlB = detect_slow_breathing(data, resp_ref, resp_feat, spo2_feat, config);
+        events_RaB = detect_rapid_breathing(data, resp_ref, resp_feat, spo2_feat, config);
         [events_ReA, diagnostics_ReA] = detect_respiratory_asynchrony(data, baseline, resp_feat, config);
         events_Des = detect_desaturation(data, baseline, spo2_feat, config);
-        events_Apn = detect_apnea(data, baseline, resp_feat, spo2_feat, config);
-        events_Sigh = detect_sigh(data, baseline, resp_feat, spo2_feat, config);
+        events_Apn = detect_apnea(data, resp_ref, resp_feat, spo2_feat, config);
+        events_Sigh = detect_sigh(data, resp_ref, baseline, resp_feat, spo2_feat, config);
         events_CSR = detect_periodic_breathing(data, resp_feat, config);
 
         % Optional final manual event-interval editing.
@@ -74,7 +70,7 @@ for isub = 1:length(config.subjects)
         
         N = size(data,1); 
         [label_mask, label_names] = events_to_time_mask(sub_events, N, config);
-        diagnostic_signals = compute_label_diagnostic_signals(data, baseline, resp_feat, spo2_feat, config, diagnostics_ReA);
+        diagnostic_signals = compute_label_diagnostic_signals(data, resp_ref, baseline, resp_feat, spo2_feat, config, diagnostics_ReA);
         rewritten_manual_label_figures = rewrite_changed_manual_label_figures( ...
             data, baseline, resp_feat, spo2_feat, diagnostic_signals, event_sets, manual_label_edit, config);
         plot_label_mask(label_mask, label_names, config);

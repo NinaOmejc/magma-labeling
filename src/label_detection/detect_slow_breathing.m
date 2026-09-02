@@ -1,4 +1,4 @@
-function events = detect_slow_breathing(data, baseline, resp_feat, spo2_feat, config)
+function events = detect_slow_breathing(data, resp_ref, resp_feat, spo2_feat, config)
 % detect_slow_breathing
 % Label 3 – Slow Breathing (Bradypnea)
 %
@@ -21,6 +21,12 @@ function events = detect_slow_breathing(data, baseline, resp_feat, spo2_feat, co
     lungs_broken = is_lung_belt_ignored(config);
     lungs_valid = is_valid_breath_signal(resp_feat.lungs, false) && ~lungs_broken;
     diaph_valid = is_valid_breath_signal(resp_feat.diaph, false);
+    [ref_lungs, lungs_ref_available] = get_resp_session_reference(resp_ref, 'lungs');
+    [ref_diaph, diaph_ref_available] = get_resp_session_reference(resp_ref, 'diaph');
+    lungs_amp_valid = lungs_valid && is_valid_breath_signal(resp_feat.lungs, true) && ...
+        lungs_ref_available;
+    diaph_amp_valid = diaph_valid && is_valid_breath_signal(resp_feat.diaph, true) && ...
+        diaph_ref_available;
 
     if ~lungs_valid && ~diaph_valid
         fprintf('Skipping slowB detection: no valid respiratory belt with usable breath timing.\n');
@@ -80,13 +86,9 @@ function events = detect_slow_breathing(data, baseline, resp_feat, spo2_feat, co
     % ----------------------------
     % Optional: classify slow+shallow vs slow+deep using amplitude ratio
     % ----------------------------
-    if classify_depth
-
-        ref_lungs = get_resp_ref_on_grid(baseline, 'lungs', t_grid);
-        ref_diaph = get_resp_ref_on_grid(baseline, 'diaph', t_grid);
-
+    if classify_depth && (lungs_amp_valid || diaph_amp_valid)
         shallow_amp = compute_amplitude_band_mask( ...
-            resp_feat, lungs_valid, diaph_valid, t_grid, ...
+            resp_feat, lungs_amp_valid, diaph_amp_valid, t_grid, ...
             config.ShB.min_dur_sec, ref_lungs, ref_diaph, ...
             shallow_lo_ratio, shallow_hi_ratio);
 

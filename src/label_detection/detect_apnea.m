@@ -1,4 +1,4 @@
-function events = detect_apnea(data, baseline, resp_feat, spo2_feat, config)
+function events = detect_apnea(data, resp_ref, resp_feat, spo2_feat, config)
 % detect_apnea
 % Label 7 - Apnea
 %
@@ -25,9 +25,13 @@ function events = detect_apnea(data, baseline, resp_feat, spo2_feat, config)
     idx_diaph = config.channels.diaph_idx;
 
     lungs_broken = is_lung_belt_ignored(config);
+    [ref_lungs, lungs_ref_available] = get_resp_session_reference(resp_ref, 'lungs');
+    [ref_diaph, diaph_ref_available] = get_resp_session_reference(resp_ref, 'diaph');
 
-    lungs_breath_valid = is_valid_breath_signal(resp_feat.lungs, true) && ~lungs_broken;
-    diaph_breath_valid = is_valid_breath_signal(resp_feat.diaph, true);
+    lungs_breath_valid = is_valid_breath_signal(resp_feat.lungs, true) && ...
+        ~lungs_broken && lungs_ref_available;
+    diaph_breath_valid = is_valid_breath_signal(resp_feat.diaph, true) && ...
+        diaph_ref_available;
 
     lungs_raw_valid = ~lungs_broken && ~isempty(idx_lungs) && any(isfinite(data(:, idx_lungs)));
     diaph_raw_valid = ~isempty(idx_diaph) && any(isfinite(data(:, idx_diaph)));
@@ -66,15 +70,6 @@ function events = detect_apnea(data, baseline, resp_feat, spo2_feat, config)
     % Peak-amplitude apnea path
     % ----------------------------
     apnea_peak = false(size(t_grid));
-    ref_lungs = get_resp_ref_on_grid(baseline, 'lungs', t_grid);
-    ref_diaph = get_resp_ref_on_grid(baseline, 'diaph', t_grid);
-
-    if lungs_breath_valid
-        lungs_breath_valid = any(isfinite(ref_lungs) & ref_lungs > 0);
-    end
-    if diaph_breath_valid
-        diaph_breath_valid = any(isfinite(ref_diaph) & ref_diaph > 0);
-    end
 
     if lungs_breath_valid || diaph_breath_valid
         apnea_peak_endpoint = apnea_amp_condition_on_grid( ...
@@ -158,12 +153,7 @@ function events = detect_apnea(data, baseline, resp_feat, spo2_feat, config)
         plot(t_grid, diaph_ratio, 'b')
         yline(amp_ratio_thr, 'r--')
         shade_mask_on_axis(t_grid, apnea_mask);
-        if isfield(config, 'rolling_baseline') && isfield(config.rolling_baseline, 'enabled') && config.rolling_baseline.enabled
-            title(sprintf('Peak-amplitude ratios (rolling ref win=%ds, lag=%ds)', ...
-                config.rolling_baseline.win_sec, config.rolling_baseline.lag_sec))
-        else
-            title('Peak-amplitude ratios (static ref)')
-        end
+        title('Peak-amplitude ratios (fixed protocol/session reference)')
         xlabel('Time (s)'); ylabel('Amp ratio'); grid on
         legend('lungs ratio', 'diaph ratio', 'thr', 'Location', 'eastoutside')
         hold off
