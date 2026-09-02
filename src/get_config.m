@@ -4,19 +4,18 @@ function config = get_config()
     config = struct;                                                                                   % main configuration container
     config.path_data_in = 'D:\Projects\MAGMA\raw_data';                                                % *** folder with raw input .dat files
     config.path_results_out = 'D:\Projects\MAGMA\data_analysis\disorder_classification';               % *** root output folder
-    config.subjects = [7 42];                                                                          % *** subjects to analyze
+    config.subjects = [7];                                                                          % *** subjects to analyze
     config.remove_subjects = [3 30 91];                                                                % *** subjects to not analyze
     config.measurements = [1 2];                                                                       % *** measurements to analyze - 1: pre-rehab-pre-stress, 2: pre-rehab-post-stress, 3:post-rehab-pre-stress, 4:post-rehab-post-stress
     config.fs = 200;                                                                                   % raw/original sampling frequency in Hz
     config.data_columns = {'ECG1', 'ECG2', 'SpO₂', 'Resp-Lungs', 'Blood Pressure', 'Resp-Diaphragm'};  % column names in raw data
     config.input_filename_pattern = 'ECG1_ECG2_SpO2_RespL_BP_RespD_fs200_Sub{subject}_Pom{measure}_DeTr_Norm.dat'; % The generic name of the data files
     config.labels = get_labels();                                          % canonical label names and indices
-    config.save_plots = true;                                              % save all plots to the subject output folder
-    config.plot_format     = 'png';         
-    config.plot_dpi        = 150;                                          % resolution of the saved figures
+
+                                        % resolution of the saved figures
     config.make_figs_visible = 'off';                                      % create figures hidden during batch runs, so they dont pop up (for faster run)
     config.overwrite_results = true;                                       % *** Recompute even if label output already exists
-    config.overwrite_features = false;                                     % *** Recompute respiratory features even if "*_features.mat" exists
+    config.overwrite_features = true;                                     % *** Recompute respiratory features even if "*_features.mat" exists
 
     % plot first X seconds of raw data
     config.plot_raw_data = false;                               % save an overview plot of raw signals
@@ -24,26 +23,26 @@ function config = get_config()
 
     %---- PREPROCESSING ----                
     config.new_fs = 20;                                         % *** Sampling frequency after preprocessing in Hz
-    config.detrend.method = 'hpfilter';                         % 'hpfilter': Butterworth high-pass filter with filtfilt or 'moving_detrend', moving-average trend subtraction. 
-    config.detrend.signals = {'Resp-Lungs', 'Resp-Diaphragm'};  % *** signals to additionally detrend before feature extraction (in general, all signals are already detrended by Marcin, this is just additional moving detrend, that can be useful for some noisier data)
+    config.detrend.method = 'hpfilter';                         % 'hpfilter': Butterworth high-pass filter with filtfilt, 'moving_detrend': moving-average trend subtraction, or 'none': no additional detrending.
+    config.detrend.signals = {'Resp-Lungs', 'Resp-Diaphragm'};  % *** signals to additionally detrend before feature extraction (in general, all signals are already detrended, this is just additional moving detrend, that can be useful for some noisier data)
     config.detrend.highpass_cutoff = 0.01;                      % high-pass cutoff frequency in Hz
     config.detrend.hp_edge_pad_sec = 100;                       % reflection padding before filtfilt to reduce edge artifacts
     config.detrend.window_length = 60;                          % moving detrend window length in seconds
-    config.detrend.do_plot = false;                             % save detrending diagnostic plots
+    config.detrend.do_plot = true;                              % save detrending diagnostic plots
     
     config.normality = struct;
     config.normality.method = 'lillie';
     config.normality.do_plot = false;                           % diagnostic normality plots for extracted respiration features
 
     %---- PROBLEMS ----
-    config.problems.subjects_with_broken_lung_belt = 1:25;      % subjects where lung belt signal should be ignored 
+    config.problems.subjects_with_broken_lung_belt = 1:20;      % subjects where lung belt signal should be ignored 
 
     %---- STATIC BASELINE SETTINGS ----
     config.baseline_sec = 60;           % static baseline segment length in seconds
-    config.baseline_location = '5/20';  % It can either be 'first', 'second', '5/20' or 'last' minute of the data. '5/20' means that it takes from th minute for measurement 1 and 3, and from 20th minute for measurement 2 and 4
+    config.baseline_location = '5/20';  % It can either be 'first', 'second', '5/20' or 'last' minute of the data. '5/20' means that it takes from 5th minute for measurement 1 and 3, and from 20th minute for measurement 2 and 4
 
     %---- ROLLING RESPIRATORY BASELINE SETTINGS ----
-    config.rolling_baseline.enabled = true;     % use time-varying respiratory amplitude baseline (sometimes data are unstationary, and this helps. If the data are stationary, the rolling baseline should be similar to static baseline.)
+    config.rolling_baseline.enabled = true;    % use time-varying respiratory amplitude baseline (sometimes data are unstationary, and this helps. If the data are stationary, the rolling baseline should be similar to static baseline.)
     config.rolling_baseline.win_sec = 360;      % window length for rolling amplitude baseline
     config.rolling_baseline.lag_sec = 60;       % when computing the rolling baseline at time t, ignore the most recent X seconds before t. [t - win_sec - lag_sec, t - lag_sec]
     config.rolling_baseline.min_breaths = 10;   % minimum breaths needed for rolling baseline estimate
@@ -51,8 +50,8 @@ function config = get_config()
     config.rolling_baseline.do_plot = true;     % save rolling baseline diagnostic plot
 
     %---- RESPIRATION / BREATHING AMPLITUDE EXTRACTION SETTINGS ----
-    config.resp.min_peak_dist_sec = 1.0;    % Peak selection; min time between breaths (tune if needed)
-    config.resp.min_peak_prom     = 0.2;    % Peak selection; key knob: increase to reduce extra peaks. But then this alters also apnea detection, where the amplitudes are extremely small. Trade-off...
+    config.resp.min_peak_dist_sec = 1.0;    % *** Peak selection; min time between breaths (tune if needed)
+    config.resp.min_peak_prom     = 0.2;    % *** Peak selection; key knob: increase to reduce extra peaks. But then this alters also apnea detection, where the amplitudes are extremely small. Trade-off...
     config.resp.min_peak_height   = -1.0;   % only peaks that have standardized amplitude above "min_peak_height" = -1.0 are allowed.
     config.resp.smooth_sec       = 0.25;    % Pre-processing; light smoothing (seconds); set to 0 to disable
     config.resp.trough_method = 'min';      % Trough selection; 'prctile' or 'min' (default)
@@ -71,7 +70,7 @@ function config = get_config()
     config.resp.qc.local_window_breaths = 7;    % neighboring breaths used for local rhythm/amplitude reference
     
     % manual control of peak detection
-    config.resp.manual_control = false;          % allow click-to-add/remove breath peaks before label detection (it takes time, but important to check the quality of detection, and not blindly follow automatic detection - GUI will appear for editing.)
+    config.resp.manual_control = true;          % allow click-to-add/remove breath peaks before label detection (it takes time, but important to check the quality of detection, and not blindly follow automatic detection - GUI will appear for editing.)
     config.resp.manual_window_sec = 300;        % visible time span for manual breath GUI scrolling
     config.resp.manual_peak_search_sec = 1.0;   % add peak at local maximum within this window around the click
         
@@ -113,7 +112,7 @@ function config = get_config()
     config.SlB.plot_rr_step_sec = 5;      % display RR as held values that can change 12 times/min (60/5). So its averaged over X seconds, here 5 seconds.
     config.SlB.do_plot          = true;   % save slow breathing diagnostic plot
 
-    %---- LABEL 4: RaB 
+    %---- LABEL 4: RaB  (Rapid breathing)
     config.RaB = struct();                                      % rapid breathing settings
     config.RaB.rr_thr_bpm       = 20;                           % mean RR >= 20 bpm
     config.RaB.min_dur_sec      = 30;                           % rolling RR window length and sustained endpoint duration
@@ -128,11 +127,11 @@ function config = get_config()
     %---- LABEL 5: Respiratory Asynchrony
     config.ReA = struct();                  % respiratory asynchrony settings
     config.ReA.target_fs = 20;              % downsample target for wavelet phase-coherence analysis
-    config.ReA.fmin = 0.052;                % lower WT frequency bound from Tomislav's script
-    config.ReA.fmax = 2.0;                  % upper WT frequency bound from Tomislav's script
     config.ReA.f0 = 1;                      % wavelet resolution parameter from Tomislav's script
+    config.ReA.fmin = 0.052;                % lower WT frequency bound from Tomislav's script
     config.ReA.low_mid_cut_hz = 0.145;      % low vs respiratory-band split
     config.ReA.mid_high_cut_hz = 0.6;       % respiratory-band vs high split
+    config.ReA.fmax = 2.0;                  % upper WT frequency bound from Tomislav's script
     config.ReA.tlphcoh_cycles = 10;         % time-localized phase coherence window in cycles
     config.ReA.min_dur_sec = 30;            % sustained low-coherence deviation duration
     config.ReA.baseline_mad_k = 3;          % robust spread multiplier for baseline-relative threshold
@@ -169,7 +168,7 @@ function config = get_config()
     config.Sig.min_abs_ratio = 2.0;             % minimum amplitude/reference ratio for sigh candidates
     config.Sig.iqr_k = 3.5;                     % IQR multiplier for outlier-based sigh detection
     config.Sig.min_gap_sec = 2;                 % minimum time between separate sigh events (check if this condition actually makes sense)
-    config.Sig.manual_control = false;           % allow click-to-add/remove sigh markers in GUI - GUI will appear where sighs can be edited!)
+    config.Sig.manual_control = true;           % allow click-to-add/remove sigh markers in GUI - GUI will appear where sighs can be edited!)
     config.Sig.manual_window_sec = 1200;        % visible time span for manual GUI scrolling
     config.Sig.do_plot = true;                  % save sigh diagnostic plot
         
@@ -197,14 +196,8 @@ function config = get_config()
     % HOW TO REPRESENT RESULTS
     config.LabelMask = struct();                 % label-mask heatmap figure
     config.LabelMask.do_plot = true;             % generate a label-mask summary figure
-    config.LabelMask.save_plot = true;           % save the label-mask figure to the subject output folder
     config.LabelMask.use_long_names = true;      % use long dysfunction names on the y-axis instead of only short codes
-    config.LabelMask.colormap_anchors = [ ...
-        1.00 1.00 1.00; ...
-        1.00 0.97 0.84; ...
-        0.98 0.74 0.40; ...
-        0.78 0.12 0.12];                         % white/yellow -> orange -> red
-
+    
     %---- MANUAL LABEL EVENT EDITING
     config.LabelEdit = struct();
     config.LabelEdit.manual_control = false;      % *** open final event-interval editor before saving labels

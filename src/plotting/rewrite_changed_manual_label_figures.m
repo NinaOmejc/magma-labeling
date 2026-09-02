@@ -34,10 +34,7 @@ function rewritten = rewrite_changed_manual_label_figures(data, baseline, resp_f
 end
 
 function tf = should_rewrite_any(config)
-    tf = isfield(config, 'save_plots') && config.save_plots;
-    if ~tf
-        return;
-    end
+    tf = true;
     if isfield(config, 'LabelEdit') && isfield(config.LabelEdit, 'rewrite_changed_figures')
         tf = logical(config.LabelEdit.rewrite_changed_figures);
     end

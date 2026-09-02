@@ -28,7 +28,7 @@ for isub = 1:length(config.subjects)
         % EXTRACT SPO2 FEATURES
         spo2_feat = extract_spo2_features(data, baseline, config);
 
-        % LABEL DETECTIONS
+        % LABEL DETECTIONS        
         events_ShB = detect_shallow_breathing(data, baseline, resp_feat, spo2_feat, config);
         events_IrB = detect_irregular_breathing(data, resp_feat, config);
         events_SlB = detect_slow_breathing(data, baseline, resp_feat, spo2_feat, config);

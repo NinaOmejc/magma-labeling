@@ -92,8 +92,17 @@ function [output, config, trend] = preprocess_data(t_series, config)
                 trend_data(:, c)  = tr(:);
             end
 
+        case 'none'
+            for c = 1:n_signals
+                x = data(:, c);
+                output_data(:, c) = x;
+                tr = zeros(size(x));
+                tr(~isfinite(x)) = NaN;
+                trend_data(:, c) = tr;
+            end
+
         otherwise
-            error('Unknown method. Use ''hpfilter'' or ''moving_detrend''.');
+            error('Unknown method. Use ''hpfilter'', ''moving_detrend'', or ''none''.');
     end
 
     % -----------------------------

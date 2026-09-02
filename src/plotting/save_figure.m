@@ -1,13 +1,12 @@
-function save_figure(config, base_name, save_matfig)
+function save_figure(config, base_name, save_matfig, output_path)
 % save_current_figure
-% If config.save_plots == true:
-%   - saves current figure as PNG
-%   - closes the figure
-% If false:
-%   - does nothing (figure remains open)
+% Save current figure to the subject output folder and close it.
 
     if nargin < 3 || isempty(save_matfig)
         save_matfig = false;
+    end
+    if nargin < 4
+        output_path = '';
     end
 
     % Resize figure BEFORE saving
@@ -55,43 +54,49 @@ function save_figure(config, base_name, save_matfig)
     strengthen_dashed_lines(fig, dashed_width);
     align_axes_x_widths(allAxes);
 
-    if ~isfield(config,'save_plots') || ~config.save_plots
-        if strcmpi(target_visibility, 'off')
-            close(fig);
+    plot_format = resolve_plot_format(config);
+    if ~isempty(output_path)
+        fullpath = char(string(output_path));
+    else
+        if ~isfield(config,'sub_results_path') || isempty(config.sub_results_path)
+            warning('No results_path defined. Plot not saved.');
+            return;
         end
-        return;   % leave visible figures open for interactive inspection
+
+        fname = sprintf('Sub%d_M%d_%s.%s', ...
+            config.subject, ...
+            config.measure, ...
+            base_name, ...
+            plot_format);
+        fullpath = fullfile(config.sub_results_path, fname);
     end
 
-    if ~isfield(config,'sub_results_path') || isempty(config.sub_results_path)
-        warning('No results_path defined. Plot not saved.');
-        return;
+    out_dir = fileparts(fullpath);
+    if ~isempty(out_dir) && ~isfolder(out_dir)
+        mkdir(out_dir);
     end
 
-    % Ensure folder exists
-    if ~isfolder(config.sub_results_path)
-        mkdir(config.sub_results_path);
-    end
-
-    % Build filename
-    fname = sprintf('Sub%d_M%d_%s.png', ...
-        config.subject, ...
-        config.measure, ...
-        base_name);
-
-    fullpath = fullfile(config.sub_results_path, fname);
+    [full_dir, full_stem, ~] = fileparts(fullpath);
+    fig_sidecar_path = fullfile(full_dir, [full_stem '.fig']);
 
     % Save with high quality
-    
-    if (contains(base_name, 'lungs') && ~contains(base_name, 'baseline') && ~contains(base_name, 'normality')) || ...
-       (contains(base_name, 'diaph') && ~contains(base_name, 'baseline') && ~contains(base_name, 'normality')) || ...
-       save_matfig
-        save_fig_for_direct_open(fig, replace(fullpath, '.png', '.fig'));
+
+    save_fig_sidecar = (contains(base_name, 'lungs') && ~contains(base_name, 'baseline') && ~contains(base_name, 'normality')) || ...
+                       (contains(base_name, 'diaph') && ~contains(base_name, 'baseline') && ~contains(base_name, 'normality')) || ...
+                       save_matfig;
+    if save_fig_sidecar
+        save_fig_for_direct_open(fig, fig_sidecar_path);
+    end
+
+    if strcmpi(plot_format, 'fig')
+        save_fig_for_direct_open(fig, fullpath);
     else
         if ~strcmpi(fig.Visible, target_visibility)
             set(fig, 'Visible', target_visibility);
             drawnow;
         end
-        exportgraphics(fig, fullpath, 'Resolution', config.plot_dpi);
+        dpi = resolve_plot_dpi(config);
+        exportgraphics(fig, fullpath, 'Resolution', dpi);
     end
 
     % Close figure after saving
@@ -139,5 +144,25 @@ function visibility = resolve_target_visibility(config)
     visibility = 'on';
     if isfield(config, 'make_figs_visible') && ~isempty(config.make_figs_visible)
         visibility = char(string(config.make_figs_visible));
+    end
+end
+
+function plot_format = resolve_plot_format(config)
+    plot_format = 'png';
+    if isfield(config, 'plot_format') && ~isempty(config.plot_format)
+        plot_format = lower(strtrim(char(string(config.plot_format))));
+    end
+
+    valid_formats = {'png', 'jpg', 'jpeg', 'tif', 'tiff', 'pdf', 'eps', 'fig'};
+    if ~ismember(plot_format, valid_formats)
+        warning('Unsupported plot format "%s". Falling back to png.', plot_format);
+        plot_format = 'png';
+    end
+end
+
+function dpi = resolve_plot_dpi(config)
+    dpi = 150;
+    if isfield(config, 'plot_dpi') && ~isempty(config.plot_dpi) && isfinite(config.plot_dpi) && config.plot_dpi > 0
+        dpi = config.plot_dpi;
     end
 end

@@ -61,11 +61,15 @@ Key parameters:
 - `config.measurements` - measurement identifiers to process
 - `config.data_columns` - input column names; at least one respiratory belt is required and SpO2 is optional
 - `config.input_filename_pattern` - raw input filename pattern, with `{subject}` and `{measure}` placeholders
-- `config.save_plots` - save detector and diagnostic figures
 - `config.make_figs_visible` - show or hide figures during batch runs
 - `config.overwrite_results` - recompute labels when a saved label file already exists
 
 Each detector has its own settings block, for example `config.ShB`, `config.IrB`, `config.SlB`, `config.RaB`, `config.ReA`, `config.Des`, `config.Apn`, `config.Sig`, and `config.CSR`.
+
+Plot behavior is controlled per module:
+
+- `config.<module>.do_plot = true` generates and saves that module's diagnostic figure(s).
+- `config.<module>.do_plot = false` skips generating/saving that module's diagnostic figure(s).
 
 Manual review can be enabled at three levels:
 

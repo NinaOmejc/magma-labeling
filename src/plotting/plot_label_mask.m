@@ -69,14 +69,8 @@ function fig = plot_label_mask(label_mask, label_names, config)
     ax.GridAlpha = 0.12;
     ax.MinorGridAlpha = 0.08;
 
-    if config.LabelMask.save_plot
-        plot_config = config;
-        plot_config.save_plots = true;
-        save_figure(plot_config, 'label_mask');
-    elseif strcmpi(config.make_figs_visible, 'off')
-        close(fig);
-        fig = [];
-    end
+    save_figure(config, 'label_mask');
+    fig = [];
 end
 
 function cmap = build_label_mask_colormap(config)

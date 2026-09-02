@@ -155,7 +155,7 @@ function saved_files = plot_time_series_overlays(records, specs, config, out_dir
         end
 
         if has_signal
-            file_path = fullfile(out_dir, ['group_timeseries_' specs(i).file_stub '.png']);
+            file_path = group_plot_filename(out_dir, ['group_timeseries_' specs(i).file_stub], config);
             save_group_figure(fig, file_path, config);
             saved_files{end+1} = file_path; %#ok<AGROW>
         else
@@ -323,7 +323,7 @@ function saved_file = plot_diagnostic_boxplots(group_table, specs, config, out_d
         title(ax, plot_specs(i).title, 'Interpreter', 'none');
     end
 
-    saved_file = fullfile(out_dir, ['group_boxplots_diagnostic_' mode '.png']);
+    saved_file = group_plot_filename(out_dir, ['group_boxplots_diagnostic_' mode], config);
     save_group_figure(fig, saved_file, config);
 end
 
@@ -393,7 +393,7 @@ function [label_fraction_file, event_count_file, summary_csv] = plot_label_event
     event_cols = vars(startsWith(vars, 'events_') & endsWith(vars, '_count'));
 
     if ~isempty(label_cols)
-        label_fraction_file = fullfile(out_dir, 'group_label_fraction_heatmap.png');
+        label_fraction_file = group_plot_filename(out_dir, 'group_label_fraction_heatmap', config);
         plot_measure_metric_heatmap(group_table, label_cols, ...
             'Median label fraction by measurement', 'Fraction of recording', ...
             label_fraction_file, config);
@@ -401,7 +401,7 @@ function [label_fraction_file, event_count_file, summary_csv] = plot_label_event
 
     if ~isempty(event_cols)
         event_cols = top_metric_columns(group_table, event_cols, 12);
-        event_count_file = fullfile(out_dir, 'group_event_count_heatmap.png');
+        event_count_file = group_plot_filename(out_dir, 'group_event_count_heatmap', config);
         plot_measure_metric_heatmap(group_table, event_cols, ...
             'Median event count by measurement', 'Event count', ...
             event_count_file, config);
@@ -651,13 +651,25 @@ function fig = make_group_figure(config, figure_name)
 end
 
 function save_group_figure(fig, file_path, config)
-    dpi = 150;
-    if isfield(config, 'plot_dpi') && ~isempty(config.plot_dpi)
-        dpi = config.plot_dpi;
+    save_figure(config, 'group_diagnostic_overview', false, file_path);
+end
+
+function file_path = group_plot_filename(out_dir, file_stem, config)
+    fmt = group_plot_format(config);
+    file_path = fullfile(out_dir, [file_stem '.' fmt]);
+end
+
+function fmt = group_plot_format(config)
+    fmt = 'png';
+    if isfield(config, 'plot_format') && ~isempty(config.plot_format)
+        fmt = lower(strtrim(char(string(config.plot_format))));
     end
 
-    exportgraphics(fig, file_path, 'Resolution', dpi);
-    close(fig);
+    valid_formats = {'png', 'jpg', 'jpeg', 'tif', 'tiff', 'pdf', 'eps', 'fig'};
+    if ~ismember(fmt, valid_formats)
+        warning('Unsupported plot format "%s". Falling back to png.', fmt);
+        fmt = 'png';
+    end
 end
 
 function visibility = resolve_visibility(config)
