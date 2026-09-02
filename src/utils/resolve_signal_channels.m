@@ -71,8 +71,8 @@ function [config, input_config] = resolve_signal_channels(config)
 end
 
 function input_config = build_input_config(channels)
-    all_labels = {'shallowB', 'irregB', 'slowB', 'rapidB', 'asyncB', 'desat', 'apnea', 'sigh', 'CSR'};
-    running = {'shallowB', 'irregB', 'slowB', 'rapidB', 'apnea', 'sigh', 'CSR'};
+    all_labels = {'shallowB', 'irregB', 'slowB', 'rapidB', 'asyncB', 'desat', 'apnea', 'sigh', 'CSR', 'deepB'};
+    running = {'shallowB', 'irregB', 'slowB', 'rapidB', 'apnea', 'sigh', 'CSR', 'deepB'};
     skipped = {};
 
     if channels.resp_count >= 2

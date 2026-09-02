@@ -9,8 +9,8 @@ function events = detect_apnea(data, phys_feat, config)
 %      preprocessed respiration belts, independent of detected breath peaks.
 %
 % If both belts are usable, both must support the apnea evidence. If only
-% one belt is usable, that belt is used alone. Apnea events can optionally
-% be marked with "_desat" when an associated SpO2 desaturation is present.
+% one belt is usable, that belt is used alone. SpO2 does not modify apnea
+% events; coincident desaturation remains a separate label.
 % All raw-signal windows and returned sample indices use config.fs.
 
     events = empty_events();
@@ -38,9 +38,7 @@ function events = detect_apnea(data, phys_feat, config)
     % ----------------------------
     amp_ratio_thr = get_config_value(config, 'Apn', 'amp_ratio_thr', 0.10);
     min_dur_sec = get_config_value(config, 'Apn', 'min_dur_sec', 10);
-    mark_desat = get_config_value(config, 'Apn', 'mark_desat', true);
     raw_flat_enabled = get_config_value(config, 'Apn', 'raw_flat_enabled', true);
-    desat_association_delay_sec = get_config_value(config, 'spo2', 'desat_association_delay_sec', 10);
 
     raw_cfg = struct();
     raw_cfg.win_sec = get_config_value(config, 'Apn', 'raw_flat_win_sec', min_dur_sec);
@@ -110,25 +108,6 @@ function events = detect_apnea(data, phys_feat, config)
     apnea_mask_candidate = apnea_peak | apnea_raw;
     [events, apnea_mask] = sustained_condition_to_events( ...
         apnea_mask_candidate, t_grid, config.fs, N, min_dur_sec, 'apnea');
-
-    % ----------------------------
-    % Optional: mark apnea with desaturation (diagnostic certainty).
-    % A desaturation is associated if it overlaps apnea or starts within
-    % config.spo2.desat_association_delay_sec after apnea.
-    % ----------------------------
-    if mark_desat && isfield(phys_feat, 'spo2') && ...
-            isfield(phys_feat.spo2, 'desaturation_events')
-        % Temporary saved-subtype compatibility. Desaturation remains an
-        % independent phys_feat stream and overlap tagging ends in Phase 4.
-        desat_events = expand_events_for_delayed_overlap( ...
-            phys_feat.spo2.desaturation_events, desat_association_delay_sec);
-
-        for e = 1:numel(events)
-            if events_overlap_any(events(e), desat_events)
-                events(e).type = [events(e).type '_desat'];
-            end
-        end
-    end
 
     % ----------------------------
     % Optional plot

@@ -7,12 +7,12 @@ function diagnostic_signals = compute_label_diagnostic_signals(phys_feat, baseli
     rapid_win_sec = phys_feat.resp.rate_windows_sec.rapid;
     slow_win_sec = phys_feat.resp.rate_windows_sec.slow;
     irregularity_win_sec = get_config_value(config, 'IrB', 'min_dur_sec', 60);
-    amplitude_win_sec = phys_feat.resp.amplitude_windows_sec.state;
+    amplitude_win_sec = phys_feat.resp.amplitude_windows_sec.shallow;
     cov_thr = get_config_value(config, 'IrB', 'cov_thr', 0.3);
     robust_cov_thr = get_config_value(config, 'IrB', 'robust_cov_thr', 0.25);
     rmssd_thr = get_config_value(config, 'IrB', 'rmssd_thr', 0.0);
     pause_thr_sec = get_config_value(config, 'IrB', 'pause_thr_sec', 10);
-    detection_metric = get_config_value(config, 'IrB', 'detection_metric', 'robust_cov');
+    detection_metric = get_config_value(config, 'IrB', 'detection_metric', 'cov');
 
     diagnostic_signals = struct();
     diagnostic_signals.time_sec = t_grid;
@@ -47,6 +47,8 @@ function diagnostic_signals = compute_label_diagnostic_signals(phys_feat, baseli
     diagnostic_signals.breath_amplitude_session_reference_available_diaph = double(phys_feat.resp.diaph.session_reference_available);
     diagnostic_signals.breath_amplitude_ratio_to_reference_lungs = phys_feat.resp.lungs.amp_ratio_session_window_median;
     diagnostic_signals.breath_amplitude_ratio_to_reference_diaph = phys_feat.resp.diaph.amp_ratio_session_window_median;
+    diagnostic_signals.deep_breath_amplitude_ratio_to_reference_lungs = phys_feat.resp.lungs.deep_amp_ratio_session_window_median;
+    diagnostic_signals.deep_breath_amplitude_ratio_to_reference_diaph = phys_feat.resp.diaph.deep_amp_ratio_session_window_median;
 
     [diagnostic_signals.spo2_percent, diagnostic_signals.spo2_drop_from_baseline_percent] = ...
         spo2_on_grid(spo2_feat, baseline, t_grid);

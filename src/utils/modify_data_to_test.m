@@ -11,6 +11,7 @@ function data_modified = modify_data_to_test(data, fs, columns, trange_min, modi
 %   trange_min        - time range in minutes, e.g. [2 4]
 %   modification_type - string, supports:
 %                         'shallow_breathing'
+%                         'deep_breathing'
 %                         'irregular_breathing'
 %                         'slow_breathing'
 %                         'rapid_breathing'
@@ -77,6 +78,11 @@ function data_modified = modify_data_to_test(data, fs, columns, trange_min, modi
             % config.ShB defaults to 0.65-0.80 of reference.
             data_modified = scale_selected_columns(data_modified, time_sec, trange_mask, columns, fs, 0.72);
 
+        case 'deep_breathing'
+            % Increase belt excursion well above the 1.20 session-ratio
+            % threshold without changing the existing respiratory timing.
+            data_modified = scale_selected_columns(data_modified, time_sec, trange_mask, columns, fs, 1.60);
+
         case 'irregular_breathing'
             data_modified = replace_respiration_with_variable_rate( ...
                 data_modified, time_sec, trange_mask, columns, fs);
@@ -107,7 +113,7 @@ function data_modified = modify_data_to_test(data, fs, columns, trange_min, modi
                 data_modified, time_sec, trange_mask, columns, fs);
 
         otherwise
-            error(['Unknown modification_type: %s. Supported: shallow_breathing, ' ...
+            error(['Unknown modification_type: %s. Supported: shallow_breathing, deep_breathing, ' ...
                 'irregular_breathing, slow_breathing, rapid_breathing, ' ...
                 'respiratory_asynchrony, desaturation, apnea, sigh, periodic_breathing.'], ...
                 modification_type);

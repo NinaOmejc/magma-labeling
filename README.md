@@ -13,6 +13,7 @@ Detected labels include:
 - Apnea
 - Sigh
 - Cheyne-Stokes-like / periodic breathing
+- Deep breathing (relative increased belt excursion)
 
 The pipeline processes multi-channel physiological recordings and saves structured event annotations, label masks, diagnostic signals, features, and figures. Original label definitions are in `Labels.docx`.
 
@@ -63,7 +64,7 @@ Key parameters:
 - `config.make_figs_visible` - show or hide figures during batch runs
 - `config.overwrite_results` - recompute labels when a saved label file already exists
 
-Each detector has its own settings block, for example `config.ShB`, `config.IrB`, `config.SlB`, `config.RaB`, `config.ReA`, `config.Des`, `config.Apn`, `config.Sig`, and `config.CSR`.
+Each detector has its own settings block, for example `config.ShB`, `config.DeB`, `config.IrB`, `config.SlB`, `config.RaB`, `config.ReA`, `config.Des`, `config.Apn`, `config.Sig`, and `config.CSR`.
 
 Preprocessing preserves the native sample count and alignment of every channel. It detrends only the configured respiratory belts. Respiratory-asynchrony analysis alone creates a temporary, anti-aliased 20 Hz representation controlled by `config.ReA.analysis_fs`; its results are mapped back to the 200 Hz master timeline.
 
@@ -75,11 +76,11 @@ Respiratory belts are uncalibrated. Their raw amplitudes do not represent absolu
 
 ### Common Physiological Evidence
 
-`compute_physiological_features` deterministically builds `phys_feat` from reviewed `resp_feat`, `resp_ref`, and `spo2_feat`; it does not redetect breaths and has no separate cache. `phys_feat.resp.lungs` and `phys_feat.resp.diaph` preserve the reviewed `peak_idx`, `peak_t`, `amp`, `ibi`, and `rr_bpm` independently. Derived fields include session/global amplitude ratios, configured slow/rapid rate traces, shallow and temporary deep amplitude evidence, apnea amplitude-ratio evidence, and irregularity traces.
+`compute_physiological_features` deterministically builds `phys_feat` from reviewed `resp_feat`, `resp_ref`, and `spo2_feat`; it does not redetect breaths and has no separate cache. `phys_feat.resp.lungs` and `phys_feat.resp.diaph` preserve the reviewed `peak_idx`, `peak_t`, `amp`, `ibi`, and `rr_bpm` independently. Derived fields include session/global amplitude ratios, configured slow/rapid rate traces, shallow and deep amplitude masks, apnea amplitude-ratio evidence, and irregularity traces. Deep evidence is `amp_ratio_session >= config.DeB.amp_ratio_thr` with no upper cutoff.
 
 The alignment convention is explicit: `amp(i)` belongs to peak `i` and the final amplitude may be `NaN` because no following peak closes that excursion. `ibi(i)` and `rr_bpm(i)` describe the interval from peak `i` to peak `i+1`, so they contain one fewer value than the peak arrays. Invalid, non-positive amplitudes remain present in the copied `amp` array but become `NaN` in normalized ratio fields. A missing session reference never falls back to the global reference.
 
-SpO2/desaturation is an independent evidence stream at `phys_feat.spo2`. `phys_feat` contains no combined respiratory+SpO2 features. Phase 3 intentionally preserves the existing saved composite subtype strings for output compatibility; Phase 4 will replace that compatibility logic with independent physiological labels and explicit temporal-overlap analysis.
+SpO2/desaturation is an independent evidence stream at `phys_feat.spo2`. `phys_feat` contains no combined respiratory+SpO2 features. Respiratory labels do not inspect SpO2 to rename or suppress their events; simultaneous phenomena are represented by overlapping independent events and `true` values in multiple mask columns.
 
 Plot behavior is controlled per module:
 
@@ -90,7 +91,7 @@ Manual review can be enabled at three levels:
 
 - `config.resp.manual_control` - opens a breath peak editor before label detection. Edited peaks/troughs affect all downstream respiratory labels.
 - `config.Sig.manual_control` - opens the sigh-specific breath-level editor for adding or removing sigh markers.
-- `config.LabelEdit.manual_control` - opens the final event-interval editor after automatic detection and before the final label mask is saved. This editor handles `shallowB`, `irregB`, `slowB`, `rapidB`, `asyncB`, `desat`, `apnea`, and `CSR`; sigh is excluded because it has its own editor.
+- `config.LabelEdit.manual_control` - opens the final event-interval editor after automatic detection and before the final label mask is saved. This editor handles `shallowB`, `deepB`, `irregB`, `slowB`, `rapidB`, `asyncB`, `desat`, `apnea`, and `CSR`; sigh is excluded because it has its own editor.
 
 Final manual label edits are controlled by:
 
@@ -123,7 +124,7 @@ config.data_columns = {'Resp'};
 
 Accepted respiratory aliases include `Resp-Lungs`, `Lungs`, `Thorax`, `Chest`, `Resp-Diaphragm`, `Diaphragm`, `Abdomen`, `Resp`, `RespiratoryBelt`, and `Respiration`.
 Accepted oxygen-saturation aliases include `SpO2`, `SpO₂`, `Spo2`, `SaO2`, and `OxygenSaturation`.
-If only one belt is present, one-belt respiratory labels still run and respiratory asynchrony is skipped. If SpO2 is absent, desaturation detection and desaturation modifiers are skipped.
+If only one belt is present, one-belt respiratory labels still run and respiratory asynchrony is skipped. If SpO2 is absent, only independent desaturation detection is skipped.
 
 The loader resolves available channels from `config.data_columns` and records the resolved channel configuration in `results.input_config`. This allows the same pipeline and plotting/manual-review interfaces to run on the full MAGMA signal set as well as smaller external files with only the available respiratory and/or SpO2 channels.
 
@@ -190,27 +191,26 @@ results.config             = config;              % Full configuration used for 
 
 ## Artificial Test Signals
 
-To generate nine artificial one-label datasets from source recording Sub1/M1 and validate the detector output, run:
+To generate ten artificial one-label datasets from source recording Sub1/M1, run:
 
 ```matlab
-run('src/main_test_signals.m')
+config = get_config();
+create_artificial_test_data(config);
 ```
 
-This creates ignored local files under `test_data/` named as `Sub0_Pom1` through `Sub0_Pom9`. Measurements map to labels in order: `shallowB`, `irregB`, `slowB`, `rapidB`, `asyncB`, `desat`, `apnea`, `sigh`, and `CSR`. Results are saved under `results/test_signals/`. The script errors if a measurement misses its expected label and reports any additional canonical labels so detector weaknesses remain visible.
+This creates ignored local files under `test_data/` named as `Sub0_Pom1` through `Sub0_Pom10`. Measurements map to labels in order: `shallowB`, `irregB`, `slowB`, `rapidB`, `asyncB`, `desat`, `apnea`, `sigh`, `CSR`, and `deepB`. The Deep example scales both respiratory-belt excursions to 1.60 times their template excursion during the default 8–10 minute test interval, without changing respiratory timing or SpO2; that interval is outside the standard M1/M3 session-reference window.
 
 ## Event Struct Format
 
 Each event contains:
 
-- `type` - one of the main labels: `shallowB`, `irregB`, `slowB`, `rapidB`, `asyncB`, `desat`, `apnea`, `sigh`, `CSR`
-- `subtype` - optional modifier, for example `shallow`, `deep`, or `desat`
-- `desat` - true when the event is associated with desaturation
-- `depth` - `shallow`, `deep`, or empty when not applicable
+- `type` - one of the canonical labels: `shallowB`, `irregB`, `slowB`, `rapidB`, `asyncB`, `desat`, `apnea`, `sigh`, `CSR`, `deepB`
 - `start_idx`, `end_idx` - sample indices
 - `start_t`, `end_t` - event times in seconds
+- `duration` - event duration in seconds
+- `belt` - respiratory provenance: `lungs`, `diaph`, `both`, or empty when not belt-specific
 
-Rapid breathing remains `type = 'rapidB'` in the main mask. Its variants are stored in `subtype`, so a rapid-deep episode is represented as `type = 'rapidB'`, `subtype = 'deep'`.
-Older short event names such as `RaB`, `Apn`, or `Sig` are still accepted by the normalization helper, but new outputs use the longer canonical names.
+Every event represents one phenomenon. For example, concurrent rapid and deep breathing are two overlapping events and two simultaneous `true` mask columns; no compound subtype is created. Older short event names such as `RaB`, `Apn`, or `Sig` remain accepted by the normalization helper, but unrecognized or compound event types are rejected before final mask construction.
 
 ## License
 

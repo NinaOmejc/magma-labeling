@@ -18,7 +18,7 @@ for isub = 1:length(config.subjects)
         % PREPROCESS DATA
         [data, config] = preprocess_data(data_raw, config);
 
-        % EXTRACT OR LOAD FEATURES (manually checked breath peaks/troughs + SpO2)
+        % EXTRACT OR LOAD FEATURES (manually checked breath peaks/troughs)
         resp_feat = load_or_extract_respiratory_features(data, config);
 
         % FIXED PROTOCOL/SESSION RESPIRATORY AMPLITUDE REFERENCE + QC
@@ -36,7 +36,8 @@ for isub = 1:length(config.subjects)
             data, resp_feat, resp_ref, spo2_feat, config);
 
         % LABEL DETECTIONS        
-        events_ShB = detect_shallow_breathing(data, phys_feat, baseline, spo2_feat, config);
+        events_ShB = detect_shallow_breathing(data, phys_feat, config);
+        events_DeB = detect_deep_breathing(data, phys_feat, config);
         events_IrB = detect_irregular_breathing(data, phys_feat, config);
         events_SlB = detect_slow_breathing(data, phys_feat, config);
         events_RaB = detect_rapid_breathing(data, phys_feat, config);
@@ -50,6 +51,7 @@ for isub = 1:length(config.subjects)
         % Sigh is intentionally excluded because it has its own breath-level GUI.
         event_sets = struct( ...
             'shallowB', events_ShB, ...
+            'deepB', events_DeB, ...
             'irregB', events_IrB, ...
             'slowB', events_SlB, ...
             'rapidB', events_RaB, ...
@@ -60,6 +62,7 @@ for isub = 1:length(config.subjects)
         [event_sets, manual_label_edit] = manual_edit_label_events(data, config, event_sets);
         
         events_ShB = event_sets.shallowB;
+        events_DeB = event_sets.deepB;
         events_IrB = event_sets.irregB;
         events_SlB = event_sets.slowB;
         events_RaB = event_sets.rapidB;
@@ -69,7 +72,7 @@ for isub = 1:length(config.subjects)
         events_CSR = event_sets.CSR;
 
         % JOIN EVENTS FOR SUBJECT, MEASUREMENT
-        sub_events = merge_events({events_ShB, events_IrB, events_SlB, events_RaB, events_ReA, events_Des, events_Apn, events_Sigh, events_CSR});
+        sub_events = merge_events({events_ShB, events_IrB, events_SlB, events_RaB, events_ReA, events_Des, events_Apn, events_Sigh, events_CSR, events_DeB});
         sub_events = normalize_event_types_and_meta(sub_events);
         
         N = size(data,1); 

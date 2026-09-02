@@ -36,7 +36,7 @@ function irregular_events = detect_irregular_breathing(data, phys_feat, config)
     rmssd_thr = 0.0;
     min_dur_sec = 60;
     plot_cov_step_sec = 15;
-    detection_metric = 'robust_cov';
+    detection_metric = 'cov';
     do_plot = false;
 
     if isfield(config, 'IrB')

@@ -1,45 +1,44 @@
 function [mask, labelNames] = events_to_time_mask(events, N, config)
 % events_to_time_mask
-% Returns an NxL logical matrix mask(:,j) where mask(t,j)=true
-% if sample t is within any event of label j.
-%
-% Inputs:
-%   events      : struct array with fields type,start_idx,end_idx,...
-%   N           : number of samples
-%   fs          : sampling rate (unused here, kept for interface consistency)
-%   labelNames  : optional cellstr, fixed ordering of labels
-%
-% Outputs:
-%   mask        : [N x L] logical
-%   labelNames  : label names used (ordering)
+% Build an N-by-L logical mask using only the configured canonical labels.
+% Unknown event types are rejected rather than silently adding columns.
 
-    labelNames = {};
-    if nargin >= 3 && isfield(config, 'labels') && isfield(config.labels, 'short')
-        labelNames = {config.labels.short};
+    if nargin < 3 || ~isstruct(config) || ~isfield(config, 'labels') || ...
+            ~isfield(config.labels, 'short')
+        error('MAGMA:Mask:MissingCanonicalLabels', ...
+            'config.labels.short is required to construct the final label mask.');
+    end
+    if ~isnumeric(N) || ~isscalar(N) || ~isfinite(N) || N < 0 || N ~= round(N)
+        error('MAGMA:Mask:InvalidSampleCount', 'N must be a nonnegative integer.');
     end
 
-    if ~isempty(events)
-        eventLabelNames = unique({events.type}, 'stable');
-        if isempty(labelNames)
-            labelNames = eventLabelNames;
-        else
-            extraLabelNames = setdiff(eventLabelNames, labelNames, 'stable');
-            labelNames = [labelNames, extraLabelNames];
+    labelNames = {config.labels.short};
+    if numel(unique(labelNames)) ~= numel(labelNames)
+        error('MAGMA:Mask:DuplicateCanonicalLabel', ...
+            'config.labels.short must contain unique canonical labels.');
+    end
+    mask = false(N, numel(labelNames));
+
+    for i = 1:numel(events)
+        event_type = char(string(events(i).type));
+        label_index = find(strcmp(labelNames, event_type), 1);
+        if isempty(label_index)
+            error('MAGMA:Mask:UnknownEventType', ...
+                'Event type "%s" is not in the configured canonical label set.', event_type);
         end
-    end
-    L = numel(labelNames);
+        if ~isfield(events, 'start_idx') || ~isfield(events, 'end_idx') || ...
+                ~isnumeric(events(i).start_idx) || ~isscalar(events(i).start_idx) || ...
+                ~isfinite(events(i).start_idx) || ...
+                ~isnumeric(events(i).end_idx) || ~isscalar(events(i).end_idx) || ...
+                ~isfinite(events(i).end_idx)
+            error('MAGMA:Mask:InvalidEventInterval', ...
+                'Event "%s" must have finite scalar start_idx and end_idx.', event_type);
+        end
 
-    mask = false(N, L);
-
-    for e = 1:numel(events)
-        j = find(strcmp(labelNames, events(e).type), 1);
-        if isempty(j), continue; end
-
-        start_idx = max(1, min(N, events(e).start_idx));
-        end_idx   = max(1, min(N, events(e).end_idx));
-
-        if end_idx >= start_idx
-            mask(start_idx:end_idx, j) = true;
+        start_idx = max(1, min(N, round(events(i).start_idx)));
+        end_idx = max(1, min(N, round(events(i).end_idx)));
+        if end_idx >= start_idx && N > 0
+            mask(start_idx:end_idx, label_index) = true;
         end
     end
 end

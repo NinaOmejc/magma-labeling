@@ -13,7 +13,7 @@ function [irregular_condition, cov_trace, robust_cov_trace, rmssd_trace, endpoin
     rmssd_trace = nan(size(t_grid));
 
     if nargin < 8 || isempty(detection_metric)
-        detection_metric = 'robust_cov';
+        detection_metric = 'cov';
     elseif isstring(detection_metric)
         detection_metric = char(detection_metric);
     end

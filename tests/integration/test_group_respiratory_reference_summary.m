@@ -11,8 +11,9 @@ function testSavedRespiratoryReferenceIsSummarized(testCase)
 
     subject = 5;
     measure = 2;
-    mask = false(100, 1);
-    label_names = {'shallowB'};
+    mask = false(100, 2);
+    mask(21:60, 2) = true;
+    label_names = {'shallowB', 'deepB'};
     config = struct('fs', 200);
     resp_ref = synthetic_saved_reference();
     save(fullfile(subject_dir, 'Sub5_M2_labels.mat'), ...
@@ -35,6 +36,8 @@ function testSavedRespiratoryReferenceIsSummarized(testCase)
     verifyEqual(testCase, group_table.lungs_global_to_session_ratio, 0.9/1.1, 'AbsTol', eps);
     verifyEqual(testCase, string(group_table.lungs_reference_quality), "step_candidate");
     verifyEqual(testCase, string(group_table.lungs_reference_action), "retain_data_no_correction");
+    verifyEqual(testCase, group_table.label_deepB_duration_sec, 40/200, 'AbsTol', eps);
+    verifyEqual(testCase, group_table.label_deepB_fraction, 0.40, 'AbsTol', eps);
 
     dictionary_file = fullfile(results_root, 'group_analysis', ...
         'group_measure_comparability.csv');

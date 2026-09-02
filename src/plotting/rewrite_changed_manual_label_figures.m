@@ -152,6 +152,16 @@ function plot_diagnostic_panel(ax, diagnostic_signals, resp_feat, events, def, c
                     yline_if_finite(ax, config.ShB.amp_ratio_high, 'r--', 'Upper threshold');
                 end
 
+            case 'deepB'
+                plotted = plot_metric_pair(ax, t, diagnostic_signals, ...
+                    'deep_breath_amplitude_ratio_to_reference_lungs', ...
+                    'deep_breath_amplitude_ratio_to_reference_diaph', ...
+                    'Amplitude ratio to session reference', ...
+                    'Breath excursion evidence for deep breathing');
+                if plotted && isfield(config, 'DeB')
+                    yline_if_finite(ax, config.DeB.amp_ratio_thr, 'r--', 'Deep threshold');
+                end
+
             case 'irregB'
                 metric = irregular_metric_name(config);
                 plotted = plot_metric_pair(ax, t, diagnostic_signals, metric.lungs, metric.diaph, ...
@@ -242,7 +252,7 @@ function plotted = plot_metric(ax, t, diagnostic_signals, field, color, display_
 end
 
 function metric = irregular_metric_name(config)
-    detection_metric = 'robust_cov';
+    detection_metric = 'cov';
     if isfield(config, 'IrB') && isfield(config.IrB, 'detection_metric')
         detection_metric = char(string(config.IrB.detection_metric));
     end

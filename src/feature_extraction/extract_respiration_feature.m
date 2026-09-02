@@ -9,7 +9,9 @@ function b = extract_respiration_feature(x, config, basename)
 %   b.x0                detrended signal
 %   b.peak_idx, b.peak_t, b.peak_val
 %   b.trough_idx, b.trough_t, b.trough_val     (between peak i and i+1)
-%   b.amp                                   (peak(i) - trough(i)) length n_peaks-1
+%   b.amp                 peak(i) - following trough(i), length n_peaks;
+%                         amp(i) belongs to peak i and the final entry is
+%                         NaN because no next peak/trough interval exists
 %   b.ibi                                 inter-breath intervals (seconds)
 %   b.rr_bpm                                instantaneous RR per interval (bpm)
 %   b.rr_mean_bpm                           mean RR in segment

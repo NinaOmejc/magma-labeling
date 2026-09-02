@@ -1,177 +1,127 @@
-function events = normalize_event_types_and_meta(events)
+function events = normalize_event_types_and_meta(raw_events)
 % normalize_event_types_and_meta
-% Convert detector-specific event.type strings into the 9 canonical labels:
-%   shallowB, irregB, slowB, rapidB, asyncB, desat, apnea, sigh, CSR
-% and extract common modifiers:
-%   events(e).subtype  ('lungs'/'diaph'/'both' or modifier+belt composites)
-%   events(e).desat    (true/false)
-%   events(e).depth    ('shallow'/'deep'/'' )
+% Convert detector-specific event names to one of the ten independent
+% canonical labels and retain only explicit belt provenance.
 %
-% This keeps the sample mask on the main label columns while retaining
-% subtype detail in the event table/struct.
-%
-% Example conversions:
-%   'slow_breathing_shallow_desat' -> type='slowB', subtype='shallow', desat=true
-%   'rapid_deep'                   -> type='rapidB', subtype='deep'
-%   'rapid_desat'                  -> type='rapidB', subtype='desat', desat=true
-%   'apnea_desat'                  -> type='apnea', subtype='', desat=true
-%   'desaturation'                 -> type='desat'
-%   'sigh'                         -> type='sigh'
-%   'periodic_breathing_lungs'      -> type='CSR', subtype='lungs'
-%
-% Usage:
-%   sub_events = merge_events({events_ShB,events_IrB,...});
-%   sub_events = normalize_event_types_and_meta(sub_events);
+% Final schema:
+%   type, start_idx, end_idx, start_t, end_t, duration, belt
+% where belt is '', 'lungs', 'diaph', or 'both'. Overlapping events of the
+% same canonical type are merged; overlapping different labels are kept.
 
-    if isempty(events)
+    events = empty_normalized_events();
+    if isempty(raw_events)
         return;
     end
 
-    for e = 1:numel(events)
-
-        % if ~isfield(events(e),'depth') || isempty(events(e).depth)
-        %     events(e).depth = struct();
-        % end
-
-        raw_type = '';
-        if isfield(events(e),'type') && ~isempty(events(e).type)
-            raw_type = events(e).type;
+    events = repmat(normalized_template(), numel(raw_events), 1);
+    for i = 1:numel(raw_events)
+        raw_type = required_text_field(raw_events(i), 'type');
+        key = normalize_key(raw_type);
+        events(i).type = canonical_type(key);
+        events(i).belt = belt_from_key(key);
+        events(i).start_idx = required_numeric_field(raw_events(i), 'start_idx');
+        events(i).end_idx = required_numeric_field(raw_events(i), 'end_idx');
+        events(i).start_t = required_numeric_field(raw_events(i), 'start_t');
+        events(i).end_t = required_numeric_field(raw_events(i), 'end_t');
+        if events(i).end_idx < events(i).start_idx || events(i).end_t < events(i).start_t
+            error('MAGMA:Events:InvalidInterval', ...
+                'Event "%s" has an end before its start.', raw_type);
         end
-
-        % normalize string
-        s = lower(strtrim(raw_type));
-        s = strrep(s, ' ', '_');     % handle "Rapid Breathing" etc
-        s = strrep(s, '-', '_');
-
-        base = map_type_to_base_label(s);
-        modifier = map_modifier(s, base);
-        belt = map_belt(s);
-
-        events(e).desat = contains(s, 'desat');
-        if contains(s, 'shallow')
-            events(e).depth = 'shallow';
-        elseif contains(s, 'deep')
-            events(e).depth = 'deep';
-        else
-            events(e).depth = '';
-        end
-
-        events(e).type = base;
-        events(e).modifier = modifier;
-        events(e).belt = belt;
+        events(i).duration = events(i).end_t - events(i).start_t;
     end
 
     events = merge_normalized_belt_events(events);
-    for e = 1:numel(events)
-        events(e).subtype = compose_subtype(events(e).modifier, events(e).belt);
-    end
-    events = rmfield(events, {'modifier', 'belt'});
 end
 
-% =========================================================
-% Helper: map raw type string -> one of 9 canonical labels
-% =========================================================
-function base = map_type_to_base_label(s)
-    % Shallow breathing
-    if startsWith(s,'shallow_breathing') || any(strcmp(s, {'shb', 'shallowb'})) || ...
-            startsWith(s, 'shb_') || startsWith(s, 'shallowb_') || contains(s,'shallowbreathing')
-        base = 'shallowB';
-        return;
-    end
-
-    % Irregular breathing
-    if startsWith(s,'irregular_breathing') || any(strcmp(s, {'irb', 'irregb'})) || ...
-            startsWith(s, 'irb_') || startsWith(s, 'irregb_') || contains(s,'irregularbreathing')
-        base = 'irregB';
-        return;
-    end
-
-    % Slow breathing (bradypnea)
-    if startsWith(s,'slow_breathing') || any(strcmp(s, {'slb', 'slowb'})) || ...
-            startsWith(s, 'slb_') || startsWith(s, 'slowb_') || contains(s,'slowbreathing')
-        base = 'slowB';
-        return;
-    end
-
-    % Rapid breathing (tachypnea)
-    if strcmp(s,'rapid') || any(strcmp(s, {'rab', 'rapidb'})) || startsWith(s, 'rab_') || ...
-            startsWith(s, 'rapidb_') || strcmp(s,'rapid_breathing') || ...
-            contains(s,'rapidbreathing') || contains(s,'tachypnea') || startsWith(s,'rapid_breathing') || ...
-            startsWith(s,'rapid_')
-        base = 'rapidB';
-        return;
-    end
-
-    % Respiratory asynchrony
-    if startsWith(s,'respiratory_asynchrony') || any(strcmp(s, {'rea', 'asyncb'})) || ...
-            startsWith(s, 'rea_') || startsWith(s, 'asyncb_') || contains(s,'asynchron')
-        base = 'asyncB';
-        return;
-    end
-
-    % Desaturation
-    if startsWith(s,'desaturation') || any(strcmp(s, {'des', 'desat'})) || ...
-            startsWith(s, 'des_') || startsWith(s, 'desat_') || contains(s,'hypoxia')
-        base = 'desat';
-        return;
-    end
-
-    % Apnea
-    if startsWith(s,'apnea') || any(strcmp(s, {'apn', 'apnea'})) || startsWith(s, 'apn_')
-        base = 'apnea';
-        return;
-    end
-
-    % Sigh
-    if startsWith(s,'sigh') || any(strcmp(s, {'sig', 'sigh'})) || startsWith(s, 'sig_')
-        base = 'sigh';
-        return;
-    end
-
-    % Cheyne-Stokes-like / periodic breathing
-    if startsWith(s,'periodic_breathing') || startsWith(s,'cheyne_stokes') || ...
-            strcmp(s,'csr') || startsWith(s, 'csr_') || strcmp(s,'csb') || startsWith(s, 'csb_') || ...
-            contains(s,'periodicbreathing')
-        base = 'CSR';
-        return;
-    end
-
-    % Fallback: keep original (but ideally you never hit this)
-    base = s;
+function template = normalized_template()
+    template = struct( ...
+        'type', '', ...
+        'start_idx', 0, ...
+        'end_idx', 0, ...
+        'start_t', 0, ...
+        'end_t', 0, ...
+        'duration', 0, ...
+        'belt', '');
 end
 
-function modifier = map_modifier(s, base)
-    modifier = '';
-    switch base
-        case {'rapidB', 'slowB'}
-            if contains(s, 'shallow')
-                modifier = 'shallow';
-            elseif contains(s, 'deep')
-                modifier = 'deep';
-            elseif strcmp(base, 'rapidB') && contains(s, 'desat')
-                modifier = 'desat';
+function events = empty_normalized_events()
+    template = normalized_template();
+    events = template([]);
+end
+
+function key = normalize_key(value)
+    key = lower(strtrim(char(string(value))));
+    key = strrep(key, ' ', '_');
+    key = strrep(key, '-', '_');
+end
+
+function type = canonical_type(key)
+    if matches_label(key, {'shallow_breathing', 'shallowb', 'shb', 'shallowbreathing'})
+        type = 'shallowB';
+    elseif matches_label(key, {'irregular_breathing', 'irregb', 'irb', 'irregularbreathing'})
+        type = 'irregB';
+    elseif matches_label(key, {'slow_breathing', 'slowb', 'slb', 'slowbreathing'})
+        type = 'slowB';
+    elseif matches_label(key, {'rapid_breathing', 'rapid', 'rapidb', 'rab', 'rapidbreathing', 'tachypnea'})
+        type = 'rapidB';
+    elseif matches_label(key, {'respiratory_asynchrony', 'asyncb', 'rea', 'respiratoryasynchrony'})
+        type = 'asyncB';
+    elseif matches_label(key, {'desaturation', 'desat', 'des', 'hypoxia'})
+        type = 'desat';
+    elseif matches_label(key, {'apnea', 'apn'})
+        type = 'apnea';
+    elseif matches_label(key, {'sigh', 'sig'})
+        type = 'sigh';
+    elseif matches_label(key, {'periodic_breathing', 'csr', 'csb', ...
+            'cheyne_stokes', 'periodicbreathing', ...
+            'periodicbreathingcheynestokeslike'})
+        type = 'CSR';
+    elseif matches_label(key, {'deep_breathing', 'deepb', 'deb', 'deepbreathing'})
+        type = 'deepB';
+    else
+        error('MAGMA:Events:UnknownType', ...
+            'Unrecognized detector event type "%s".', key);
+    end
+end
+
+function tf = matches_label(key, bases)
+    tf = false;
+    suffixes = {'', '_lungs', '_diaph', '_both'};
+    for i = 1:numel(bases)
+        for j = 1:numel(suffixes)
+            if strcmp(key, [bases{i} suffixes{j}])
+                tf = true;
+                return;
             end
+        end
     end
 end
 
-function belt = map_belt(s)
+function belt = belt_from_key(key)
     belt = '';
-    if contains(s, 'lungs')
+    if endsWith(key, '_lungs')
         belt = 'lungs';
-    elseif contains(s, 'diaph')
+    elseif endsWith(key, '_diaph')
         belt = 'diaph';
+    elseif endsWith(key, '_both')
+        belt = 'both';
     end
 end
 
-function subtype = compose_subtype(modifier, belt)
-    subtype = '';
-    if ~isempty(modifier) && ~isempty(belt)
-        subtype = [modifier '_' belt];
-    elseif ~isempty(modifier)
-        subtype = modifier;
-    elseif ~isempty(belt)
-        subtype = belt;
+function value = required_text_field(event, field)
+    if ~isfield(event, field) || isempty(event.(field))
+        error('MAGMA:Events:MissingField', 'Event is missing required field "%s".', field);
     end
+    value = char(string(event.(field)));
+end
+
+function value = required_numeric_field(event, field)
+    if ~isfield(event, field) || ~isnumeric(event.(field)) || ...
+            ~isscalar(event.(field)) || ~isfinite(event.(field))
+        error('MAGMA:Events:InvalidField', ...
+            'Event field "%s" must be a finite numeric scalar.', field);
+    end
+    value = event.(field);
 end
 
 function events = merge_normalized_belt_events(events)
@@ -180,50 +130,36 @@ function events = merge_normalized_belt_events(events)
     end
 
     types = {events.type}';
-    depths = {events.depth}';
-    modifiers = {events.modifier}';
-    desats = [events.desat]';
     starts = [events.start_t]';
-    idx = (1:numel(events))';
-    T = table(types, depths, modifiers, desats, starts, idx, ...
-        'VariableNames', {'type', 'depth', 'modifier', 'desat', 'start_t', 'idx'});
-    T = sortrows(T, {'type', 'depth', 'modifier', 'desat', 'start_t'});
-    events = events(T.idx);
+    order = (1:numel(events))';
+    T = table(types, starts, order, 'VariableNames', {'type', 'start_t', 'order'});
+    T = sortrows(T, {'type', 'start_t'});
+    events = events(T.order);
 
     out = events(1);
     for i = 2:numel(events)
-        curr = events(i);
-        last = out(end);
-
-        same_type = strcmp(curr.type, last.type);
-        same_depth = strcmp(curr.depth, last.depth);
-        same_desat = isequal(curr.desat, last.desat);
-        same_modifier = strcmp(curr.modifier, last.modifier);
-        close_enough = curr.start_t <= last.end_t;
-
-        if same_type && same_depth && same_desat && same_modifier && close_enough
-            out(end).start_t = min(last.start_t, curr.start_t);
-            out(end).end_t = max(last.end_t, curr.end_t);
-            out(end).start_idx = min(last.start_idx, curr.start_idx);
-            out(end).end_idx = max(last.end_idx, curr.end_idx);
+        current = events(i);
+        previous = out(end);
+        if strcmp(current.type, previous.type) && current.start_t <= previous.end_t
+            out(end).start_idx = min(previous.start_idx, current.start_idx);
+            out(end).end_idx = max(previous.end_idx, current.end_idx);
+            out(end).start_t = min(previous.start_t, current.start_t);
+            out(end).end_t = max(previous.end_t, current.end_t);
             out(end).duration = out(end).end_t - out(end).start_t;
-            out(end).belt = merge_belt_labels(last.belt, curr.belt);
+            out(end).belt = merge_belt_labels(previous.belt, current.belt);
         else
-            out(end+1,1) = curr; %#ok<AGROW>
+            out(end+1, 1) = current; %#ok<AGROW>
         end
     end
-
     events = out;
 end
 
 function belt = merge_belt_labels(a, b)
     if strcmp(a, b) || isempty(b)
         belt = a;
-        return;
-    end
-    if isempty(a)
+    elseif isempty(a)
         belt = b;
-        return;
+    else
+        belt = 'both';
     end
-    belt = 'both';
 end

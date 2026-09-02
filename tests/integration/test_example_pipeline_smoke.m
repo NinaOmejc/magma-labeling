@@ -32,7 +32,7 @@ function testExampleRecordingRunsAtMasterRate(testCase)
     verifyEqual(testCase, numel(resp_feat.lungs.x0), size(data_raw,1));
     verifyEqual(testCase, numel(resp_feat.diaph.x0), size(data_raw,1));
 
-    % Phase-3 end-to-end smoke: common evidence plus every detector. The
+    % End-to-end smoke: common evidence plus every independent detector. The
     % short excerpt may lack the protocol session interval; unavailable
     % amplitude evidence must skip cleanly without changing other streams.
     config.baseline_location = 'first';
@@ -43,7 +43,8 @@ function testExampleRecordingRunsAtMasterRate(testCase)
     phys_feat = compute_physiological_features( ...
         data, resp_feat, resp_ref, spo2_feat, config);
 
-    events_ShB = detect_shallow_breathing(data, phys_feat, baseline, spo2_feat, config);
+    events_ShB = detect_shallow_breathing(data, phys_feat, config);
+    events_DeB = detect_deep_breathing(data, phys_feat, config);
     events_IrB = detect_irregular_breathing(data, phys_feat, config);
     events_SlB = detect_slow_breathing(data, phys_feat, config);
     events_RaB = detect_rapid_breathing(data, phys_feat, config);
@@ -57,7 +58,7 @@ function testExampleRecordingRunsAtMasterRate(testCase)
 
     events = normalize_event_types_and_meta(merge_events({ ...
         events_ShB, events_IrB, events_SlB, events_RaB, events_ReA, ...
-        events_Des, events_Apn, events_Sigh, events_CSR}));
+        events_Des, events_Apn, events_Sigh, events_CSR, events_DeB}));
     [mask, label_names] = events_to_time_mask(events, size(data,1), config);
     diagnostic = compute_label_diagnostic_signals( ...
         phys_feat, baseline, spo2_feat, config, diagnostics_ReA);

@@ -14,7 +14,7 @@ function phys_feat = compute_physiological_features(data, resp_feat, resp_ref, s
     cfg = evidence_config(config);
 
     phys_feat = struct();
-    phys_feat.version = 'phase3_common_physiological_evidence_v1';
+    phys_feat.version = 'phase4_independent_physiological_evidence_v1';
     phys_feat.provenance = struct( ...
         'breath_source', 'reviewed_resp_feat', ...
         'respiratory_reference_source', 'resp_ref', ...
@@ -30,9 +30,11 @@ function phys_feat = compute_physiological_features(data, resp_feat, resp_ref, s
     phys_feat.resp.rate_windows_sec = struct( ...
         'slow', cfg.slow_win_sec, 'rapid', cfg.rapid_win_sec);
     phys_feat.resp.amplitude_windows_sec = struct( ...
-        'state', cfg.amplitude_win_sec, 'apnea', cfg.apnea_win_sec);
+        'shallow', cfg.shallow_win_sec, ...
+        'deep', cfg.deep_win_sec, ...
+        'apnea', cfg.apnea_win_sec);
     phys_feat.resp.shallow_band_ratio = [cfg.shallow_lo_ratio cfg.shallow_hi_ratio];
-    phys_feat.resp.temporary_deep_band_ratio = [cfg.deep_lo_ratio cfg.deep_hi_ratio];
+    phys_feat.resp.deep_ratio_threshold = cfg.deep_ratio_threshold;
 
     lungs_ignored = is_lung_belt_ignored(config);
     phys_feat.resp.lungs = build_belt_evidence( ...
@@ -104,23 +106,24 @@ function belt = build_belt_evidence(source, reference, ignored, t_grid, cfg, con
 
     if belt.session_amplitude_available
         belt.shallow_amplitude_mask = amplitude_band_mask( ...
-            belt.peak_t, belt.amp_ratio_session, t_grid, cfg.amplitude_win_sec, ...
+            belt.peak_t, belt.amp_ratio_session, t_grid, cfg.shallow_win_sec, ...
             cfg.shallow_lo_ratio, cfg.shallow_hi_ratio);
-        % Temporary evidence for current subtype compatibility. Final Deep
-        % label semantics are intentionally deferred to Phase 4.
-        belt.deep_amplitude_mask = amplitude_band_mask( ...
-            belt.peak_t, belt.amp_ratio_session, t_grid, cfg.amplitude_win_sec, ...
-            cfg.deep_lo_ratio, cfg.deep_hi_ratio);
+        belt.deep_amplitude_mask = amplitude_threshold_mask( ...
+            belt.peak_t, belt.amp_ratio_session, t_grid, cfg.deep_win_sec, ...
+            cfg.deep_ratio_threshold);
         [belt.amp_window_median_raw_units, belt.amp_ratio_session_window_median] = ...
             amplitude_window_medians(belt.peak_t, belt.amp, ...
-            belt.amp_ratio_session, t_grid, cfg.amplitude_win_sec, 1);
+            belt.amp_ratio_session, t_grid, cfg.shallow_win_sec, 1);
+        [~, belt.deep_amp_ratio_session_window_median] = ...
+            amplitude_window_medians(belt.peak_t, belt.amp, ...
+            belt.amp_ratio_session, t_grid, cfg.deep_win_sec, 1);
         [~, belt.apnea_amp_ratio_session_window_median] = ...
             amplitude_window_medians(belt.peak_t, belt.amp, ...
             belt.amp_ratio_session, t_grid, cfg.apnea_win_sec, 2);
     elseif belt.amplitude_available
         [belt.amp_window_median_raw_units, ~] = amplitude_window_medians( ...
             belt.peak_t, belt.amp, belt.amp_ratio_session, ...
-            t_grid, cfg.amplitude_win_sec, 1);
+            t_grid, cfg.shallow_win_sec, 1);
     end
 
     if belt.available
@@ -175,6 +178,7 @@ function belt = empty_belt_evidence(t_grid)
         'rate_rapid_window_bpm', nan(size(t_grid)), ...
         'amp_window_median_raw_units', nan(size(t_grid)), ...
         'amp_ratio_session_window_median', nan(size(t_grid)), ...
+        'deep_amp_ratio_session_window_median', nan(size(t_grid)), ...
         'apnea_amp_ratio_session_window_median', nan(size(t_grid)), ...
         'shallow_amplitude_mask', false(size(t_grid)), ...
         'deep_amplitude_mask', false(size(t_grid)), ...
@@ -227,6 +231,25 @@ function mask = amplitude_band_mask(peak_t, ratio, t_grid, win_sec, r_lo, r_hi)
             continue;
         end
         if all(isfinite(values) & values >= r_lo & values <= r_hi)
+            mask(t_grid >= lb & t_grid <= t) = true;
+        end
+    end
+end
+
+function mask = amplitude_threshold_mask(peak_t, ratio, t_grid, win_sec, threshold)
+    mask = false(size(t_grid));
+    [peak_t, ratio] = paired_peak_values(peak_t, ratio);
+    for i = 1:numel(t_grid)
+        t = t_grid(i);
+        lb = t - win_sec;
+        if lb < 0
+            continue;
+        end
+        values = ratio(peak_t <= t & peak_t >= lb);
+        if numel(values) < 3
+            continue;
+        end
+        if all(isfinite(values) & values >= threshold)
             mask(t_grid >= lb & t_grid <= t) = true;
         end
     end
@@ -351,16 +374,16 @@ function cfg = evidence_config(config)
     cfg = struct();
     cfg.slow_win_sec = get_config_value(config, 'SlB', 'analysis_win_sec', 60);
     cfg.rapid_win_sec = get_config_value(config, 'RaB', 'min_dur_sec', 30);
-    cfg.amplitude_win_sec = get_config_value(config, 'ShB', 'min_dur_sec', 30);
+    cfg.shallow_win_sec = get_config_value(config, 'ShB', 'min_dur_sec', 30);
+    cfg.deep_win_sec = get_config_value(config, 'DeB', 'min_dur_sec', 30);
     cfg.apnea_win_sec = get_config_value(config, 'Apn', 'min_dur_sec', 10);
     cfg.shallow_lo_ratio = get_config_value(config, 'ShB', 'amp_ratio_low', 0.65);
     cfg.shallow_hi_ratio = get_config_value(config, 'ShB', 'amp_ratio_high', 0.80);
-    cfg.deep_lo_ratio = get_config_value(config, 'RaB', 'deep_lo_ratio', 1.20);
-    cfg.deep_hi_ratio = get_config_value(config, 'RaB', 'deep_hi_ratio', 1.35);
+    cfg.deep_ratio_threshold = get_config_value(config, 'DeB', 'amp_ratio_thr', 1.20);
     cfg.irregularity_win_sec = get_config_value(config, 'IrB', 'min_dur_sec', 60);
     cfg.cov_thr = get_config_value(config, 'IrB', 'cov_thr', 0.3);
     cfg.robust_cov_thr = get_config_value(config, 'IrB', 'robust_cov_thr', 0.25);
     cfg.rmssd_thr = get_config_value(config, 'IrB', 'rmssd_thr', 0.0);
     cfg.pause_thr_sec = get_config_value(config, 'IrB', 'pause_thr_sec', 10);
-    cfg.detection_metric = get_config_value(config, 'IrB', 'detection_metric', 'robust_cov');
+    cfg.detection_metric = get_config_value(config, 'IrB', 'detection_metric', 'cov');
 end

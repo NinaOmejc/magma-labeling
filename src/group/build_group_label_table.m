@@ -229,15 +229,6 @@ function row = add_event_counts(row, events)
         row.(['events_' label '_count']) = sum(strcmp({events.type}, event_types{i}));
     end
 
-    if isfield(events, 'subtype')
-        subtypes = {events.subtype};
-        subtypes = subtypes(~cellfun(@isempty, subtypes));
-        subtypes = unique(subtypes, 'stable');
-        for i = 1:numel(subtypes)
-            label = matlab.lang.makeValidName(subtypes{i});
-            row.(['subtype_' label '_count']) = sum(strcmp({events.subtype}, subtypes{i}));
-        end
-    end
 end
 
 function row = add_diagnostic_summaries(row, diagnostic_signals)
@@ -303,7 +294,7 @@ function value = missing_value_for_field(name)
             strcmp(name, 'change_pattern') || endsWith(name, '_quality') || ...
             endsWith(name, '_action')
         value = '';
-    elseif (startsWith(name, 'events_') || startsWith(name, 'subtype_')) && endsWith(name, '_count')
+    elseif startsWith(name, 'events_') && endsWith(name, '_count')
         value = 0;
     elseif startsWith(name, 'label_') && ...
             (endsWith(name, '_duration_sec') || endsWith(name, '_fraction'))

@@ -114,7 +114,6 @@ function testShallowDetectorUsesSessionReference(testCase)
     config.fs = 1;
     config.grid_step_sec = 1;
     config.ShB.do_plot = false;
-    config.ShB.exclude_desat = false;
     config.problems.missing_lung_belt = zeros(0, 2);
 
     t = (0:3:600)';
@@ -126,12 +125,10 @@ function testShallowDetectorUsesSessionReference(testCase)
     resp_ref = compute_respiratory_reference(resp_feat, config);
 
     data = zeros(650, 6);
-    baseline = struct();
     spo2_feat = struct('desat_events', empty_events());
     phys_feat = compute_physiological_features( ...
         data, resp_feat, resp_ref, spo2_feat, config);
-    events = detect_shallow_breathing( ...
-        data, phys_feat, baseline, spo2_feat, config);
+    events = detect_shallow_breathing(data, phys_feat, config);
 
     verifyNotEmpty(testCase, events);
     verifyTrue(testCase, any(contains(string({events.type}), 'shallow_breathing_lungs')));
