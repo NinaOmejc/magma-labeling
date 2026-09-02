@@ -1,4 +1,4 @@
-function events = detect_sigh(data, phys_feat, resp_feat, baseline, spo2_feat, config)
+function [events, diagnostics] = detect_sigh(data, phys_feat, resp_feat, baseline, spo2_feat, config)
 % detect_sigh
 % Label 8 – Sigh
 %
@@ -22,6 +22,14 @@ function events = detect_sigh(data, phys_feat, resp_feat, baseline, spo2_feat, c
     diaph = phys_feat.resp.diaph;
     lungs_valid = lungs.global_amplitude_available;
     diaph_valid = diaph.global_amplitude_available;
+    diagnostics = struct( ...
+        'available', lungs_valid || diaph_valid, ...
+        'method', '', ...
+        'ratio_percentile', NaN, ...
+        'minimum_absolute_ratio', NaN, ...
+        'iqr_multiplier', NaN, ...
+        'lungs', empty_sigh_belt_diagnostics(lungs), ...
+        'diaph', empty_sigh_belt_diagnostics(diaph));
 
     if ~lungs_valid && ~diaph_valid
         fprintf('Skipping sigh detection: no valid respiratory belt with usable breath amplitudes.\n');
@@ -65,26 +73,34 @@ function events = detect_sigh(data, phys_feat, resp_feat, baseline, spo2_feat, c
             sigh_lungs = false(size(lungs.peak_t(:)));
             if lungs_valid
                 sigh_lungs = sigh_flags_legacy_60s(lungs, legacy_prev_win_sec, legacy_amp_ratio_thr, legacy_min_prev_breaths);
+                diagnostics.lungs.decision_threshold = legacy_amp_ratio_thr;
             end
             sigh_diaph = false(size(diaph.peak_t(:)));
             if diaph_valid
                 sigh_diaph = sigh_flags_legacy_60s(diaph, legacy_prev_win_sec, legacy_amp_ratio_thr, legacy_min_prev_breaths);
+                diagnostics.diaph.decision_threshold = legacy_amp_ratio_thr;
             end
         otherwise
             sigh_lungs = false(size(lungs.peak_t(:)));
             if lungs_valid
-                sigh_lungs = sigh_flags_global_ratio_outlier( ...
+                [sigh_lungs, ~, diagnostics.lungs.amp_ratio_global, ...
+                    diagnostics.lungs.decision_threshold] = sigh_flags_global_ratio_outlier( ...
                     lungs, ratio_prctile, ...
                     min_abs_ratio, iqr_k, min_gap_sec);
             end
             
             sigh_diaph = false(size(diaph.peak_t(:)));
             if diaph_valid
-                sigh_diaph = sigh_flags_global_ratio_outlier( ...
+                [sigh_diaph, ~, diagnostics.diaph.amp_ratio_global, ...
+                    diagnostics.diaph.decision_threshold] = sigh_flags_global_ratio_outlier( ...
                     diaph, ratio_prctile, ...
                     min_abs_ratio, iqr_k, min_gap_sec);
             end
     end
+    diagnostics.method = char(string(method));
+    diagnostics.ratio_percentile = ratio_prctile;
+    diagnostics.minimum_absolute_ratio = min_abs_ratio;
+    diagnostics.iqr_multiplier = iqr_k;
 
     if manual_control && lungs_valid && diaph_valid
         [sigh_lungs, sigh_diaph] = manual_edit_sigh_flags(data, resp_feat.lungs, resp_feat.diaph, sigh_lungs, sigh_diaph, baseline, spo2_feat, config, manual_window_sec);
@@ -95,6 +111,8 @@ function events = detect_sigh(data, phys_feat, resp_feat, baseline, spo2_feat, c
 
     events_L = sigh_flags_to_events(lungs.peak_t, sigh_lungs, N, fs, 'lungs');
     events_D = sigh_flags_to_events(diaph.peak_t, sigh_diaph, N, fs, 'diaph');
+    diagnostics.lungs.selected_breath_mask = sigh_lungs;
+    diagnostics.diaph.selected_breath_mask = sigh_diaph;
     events = merge_events({events_L, events_D});
 
     if do_plot
@@ -159,6 +177,16 @@ function events = detect_sigh(data, phys_feat, resp_feat, baseline, spo2_feat, c
 
         save_figure(config, 'sigh');
     end
+end
+
+function diagnostics = empty_sigh_belt_diagnostics(belt)
+    diagnostics = struct( ...
+        'available', belt.global_amplitude_available, ...
+        'reference_quality', belt.reference_quality, ...
+        'peak_t', belt.peak_t, ...
+        'amp_ratio_global', belt.amp_ratio_global, ...
+        'decision_threshold', NaN, ...
+        'selected_breath_mask', false(size(belt.peak_t)));
 end
 
 function [sigh_flags, local_ref, ratio, ratio_thr] = sigh_flags_global_ratio_outlier( ...

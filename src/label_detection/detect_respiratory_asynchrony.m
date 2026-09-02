@@ -5,6 +5,9 @@ function [events, rea_metrics] = detect_respiratory_asynchrony(data, baseline_or
 % Uses the wavelet phase-coherence core from Tomislav's script, reduced to
 % the two respiratory belts. The time-localized phase coherence is averaged
 % over three frequency bins and compared against the subject baseline.
+% low_coherence_mask is evidence at the wavelet-localized time point; it is
+% not a complete preceding fixed-duration state window. min_dur_sec is
+% therefore applied directly once to its contiguous low-coherence runs.
 % Local 20 Hz analysis is mapped back to config.fs master-grid events.
 
     if nargin == 2
@@ -54,6 +57,8 @@ function msg = rea_skip_reason(skip_code, error_message)
             else
                 msg = ['wavelet coherence computation failed (' error_message ').'];
             end
+        case 9
+            msg = 'no finite baseline-relative coherence evidence was available.';
         otherwise
             msg = 'input data do not support asynchrony computation.';
     end

@@ -4,6 +4,9 @@ function events = detect_shallow_breathing(data, phys_feat, config)
 % shallow band. Lungs and diaphragm provide independent evidence; either
 % usable belt may generate the label. SpO2 and respiratory rate do not
 % modify shallow-breathing events.
+% A TRUE endpoint means every eligible breath in the preceding analysis
+% window is in-band. phys_feat backfills that window into an inferred state;
+% min_dur_sec is then applied once to that state.
 
     events = empty_events();
     N = size(data, 1);

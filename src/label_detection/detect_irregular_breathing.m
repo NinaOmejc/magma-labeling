@@ -6,7 +6,7 @@ function irregular_events = detect_irregular_breathing(data, phys_feat, config)
 %   Irregular breathing means that durations of consecutive breathing cycles
 %   vary unpredictably and without a clear pattern.
 %
-% Measurements (per 30-60 s segments):
+% Measurements (per config.IrB.analysis_win_sec segments):
 %   - Compute IBI = time between consecutive respiratory peaks.
 %   - Compute CoV = std(IBI) / mean(IBI).
 %   - Compute robust CoV = 1.4826 * MAD(IBI) / median(IBI).
@@ -14,8 +14,9 @@ function irregular_events = detect_irregular_breathing(data, phys_feat, config)
 %   - Use config.IrB.detection_metric to choose the detection metric.
 % Detector grids map to master samples using config.fs.
 %   - No breathing pauses allowed in analyzed segment.
-%   - A qualifying rolling analysis window is marked across the window;
-%     only sustained runs of that window mask become labels.
+%   - A TRUE endpoint describes the complete preceding analysis window.
+%     Qualifying windows are unioned into an inferred state, then
+%     min_dur_sec is applied once to that state.
 
     irregular_events = empty_events();
 
@@ -35,6 +36,7 @@ function irregular_events = detect_irregular_breathing(data, phys_feat, config)
     robust_cov_thr = 0.25;
     rmssd_thr = 0.0;
     min_dur_sec = 60;
+    analysis_win_sec = 60;
     plot_cov_step_sec = 15;
     detection_metric = 'cov';
     do_plot = false;
@@ -44,6 +46,7 @@ function irregular_events = detect_irregular_breathing(data, phys_feat, config)
         if isfield(config.IrB, 'robust_cov_thr'), robust_cov_thr = config.IrB.robust_cov_thr; end
         if isfield(config.IrB, 'rmssd_thr'), rmssd_thr = config.IrB.rmssd_thr; end
         if isfield(config.IrB, 'min_dur_sec'), min_dur_sec = config.IrB.min_dur_sec; end
+        if isfield(config.IrB, 'analysis_win_sec'), analysis_win_sec = config.IrB.analysis_win_sec; end
         if isfield(config.IrB, 'plot_cov_step_sec'), plot_cov_step_sec = config.IrB.plot_cov_step_sec; end
         if isfield(config.IrB, 'detection_metric'), detection_metric = config.IrB.detection_metric; end
         if isfield(config.IrB, 'do_plot'), do_plot = config.IrB.do_plot; end
@@ -95,7 +98,8 @@ function irregular_events = detect_irregular_breathing(data, phys_feat, config)
             'figure_title', ['IRREGULAR BREATHING' newline 'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)], ...
             'event_name', 'Irregular breathing', ...
             'metric_title', 'IBI variability used for irregular detection', ...
-            'metric_detail', sprintf('%g s window, %g s held median, detection=%s%s', min_dur_sec, plot_cov_step_sec, detection_metric, rmssd_suffix), ...
+            'metric_detail', sprintf('%g s analysis window, %g s minimum state, %g s held display, detection=%s%s', ...
+                analysis_win_sec, min_dur_sec, plot_cov_step_sec, detection_metric, rmssd_suffix), ...
             'metric_ylabel', 'IBI variability ratio', ...
             'primary_label', primary_label, ...
             'threshold', primary_thr, ...

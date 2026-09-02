@@ -93,11 +93,20 @@ function rea = compute_respiratory_asynchrony_metrics(data, resp_feat, config)
     rea.baseline_mask = get_baseline_mask_local(t_grid, N, config);
     [rea.thresholds, rea.baselines] = phase_coherence_thresholds_local(rea, rea.baseline_mask);
 
-    dev_high = isfinite(rea.phase_coherence_high) & isfinite(rea.thresholds.high) & ...
+    valid_high = isfinite(rea.phase_coherence_high) & isfinite(rea.thresholds.high);
+    valid_mid = isfinite(rea.phase_coherence_mid) & isfinite(rea.thresholds.mid);
+    valid_low = isfinite(rea.phase_coherence_low) & isfinite(rea.thresholds.low);
+    rea.valid_evidence_mask = valid_high | valid_mid | valid_low;
+    if ~any(rea.valid_evidence_mask)
+        rea.skip_code = 9;
+        return;
+    end
+
+    dev_high = valid_high & ...
         rea.phase_coherence_high < rea.thresholds.high;
-    dev_mid = isfinite(rea.phase_coherence_mid) & isfinite(rea.thresholds.mid) & ...
+    dev_mid = valid_mid & ...
         rea.phase_coherence_mid < rea.thresholds.mid;
-    dev_low = isfinite(rea.phase_coherence_low) & isfinite(rea.thresholds.low) & ...
+    dev_low = valid_low & ...
         rea.phase_coherence_low < rea.thresholds.low;
 
     rea.deviation_bin_count = double(dev_high) + double(dev_mid) + double(dev_low);
@@ -153,6 +162,7 @@ function rea = empty_rea_metrics(t_grid, config)
     rea.baseline_mask = false(size(t_grid));
     rea.deviation_bin_count = nan(size(t_grid));
     rea.low_coherence_mask = false(size(t_grid));
+    rea.valid_evidence_mask = false(size(t_grid));
     rea.baselines = struct('high', nan, 'mid', nan, 'low', nan);
     rea.thresholds = struct('high', nan, 'mid', nan, 'low', nan);
 end

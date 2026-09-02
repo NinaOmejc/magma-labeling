@@ -1,4 +1,4 @@
-function events = detect_periodic_breathing(data, resp_feat, config)
+function [events, diagnostics] = detect_periodic_breathing(data, resp_feat, config)
 % detect_periodic_breathing
 % Label 9 - Cheyne-Stokes-like / periodic breathing.
 %
@@ -7,6 +7,9 @@ function events = detect_periodic_breathing(data, resp_feat, config)
 % smaller breaths -> larger breaths -> smaller breaths, typically over
 % cycles of about 40-120 s. It uses breath amplitudes, not the slow
 % baseline drift of the raw belt signal.
+% Event boundaries run from the first qualifying trough to the last trough
+% of at least min_cycles adjacent qualifying cycles. No additional generic
+% state-duration filter is applied.
 % Returned indices remain on the config.fs master timeline.
 
     events = empty_events();
@@ -14,6 +17,12 @@ function events = detect_periodic_breathing(data, resp_feat, config)
     N = size(data, 1);
     fs = config.fs;
     cfg = periodic_breathing_config(config);
+    diagnostics = struct( ...
+        'available', false, ...
+        'minimum_cycles', cfg.min_cycles, ...
+        'minimum_modulation_ratio', cfg.min_modulation_ratio, ...
+        'lungs', init_periodic_diag(), ...
+        'diaph', init_periodic_diag());
 
     lungs_broken = is_lung_belt_ignored(config);
     lungs_valid = is_valid_breath_signal(resp_feat.lungs, true) && ~lungs_broken;
@@ -39,6 +48,10 @@ function events = detect_periodic_breathing(data, resp_feat, config)
     end
 
     events = merge_events({events_lungs, events_diaph}, cfg.max_cycle_gap_sec);
+    diagnostics.lungs = diag_lungs;
+    diagnostics.diaph = diag_diaph;
+    diagnostics.available = diag_lungs.analysis_available || ...
+        diag_diaph.analysis_available;
 
     if cfg.do_plot
         plot_periodic_breathing_diagnostics( ...
@@ -88,6 +101,7 @@ function [events, diag] = periodic_breathing_events_for_belt(breaths, N, fs, cfg
     [amp_env, amp_norm] = normalized_amplitude_envelope(amp, cfg);
     diag.amp_norm = amp_norm;
     diag.amp_env = amp_env;
+    diag.analysis_available = any(isfinite(amp_env));
 
     cycles = find_periodic_cycles(breath_t, amp_env, cfg);
     diag.cycles = cycles;
@@ -345,6 +359,7 @@ end
 
 function diag = init_periodic_diag()
     diag = struct( ...
+        'analysis_available', false, ...
         'breath_t', [], ...
         'amp', [], ...
         'amp_norm', [], ...

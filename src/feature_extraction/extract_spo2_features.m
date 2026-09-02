@@ -8,6 +8,9 @@ function spo2_feat = extract_spo2_features(data, baseline, config)
 
     spo2_feat = struct();
     spo2_feat.idx_spo2 = config.channels.spo2_idx;
+    spo2_feat.signal_available = false;
+    spo2_feat.baseline_available = false;
+    spo2_feat.detection_available = false;
 
     if isempty(spo2_feat.idx_spo2)
         spo2_feat.t_spo2 = [];
@@ -19,8 +22,13 @@ function spo2_feat = extract_spo2_features(data, baseline, config)
 
     spo2_feat.spo2 = data(:, spo2_feat.idx_spo2);
     spo2_feat.t_spo2 = (0:numel(spo2_feat.spo2)-1) / config.fs;
+    spo2_feat.signal_available = nnz(isfinite(spo2_feat.spo2)) >= 2;
+    spo2_feat.baseline_available = isfield(baseline, 'SpO2_median') && ...
+        isfinite(baseline.SpO2_median);
+    spo2_feat.detection_available = spo2_feat.signal_available && ...
+        spo2_feat.baseline_available;
 
-    if ~isfield(baseline, 'SpO2_median') || ~isfinite(baseline.SpO2_median)
+    if ~spo2_feat.detection_available
         spo2_feat.desat_events = empty_events();
         spo2_feat.is_desat_samples = false(size(spo2_feat.spo2));
         return;

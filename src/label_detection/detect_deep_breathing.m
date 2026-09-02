@@ -4,6 +4,8 @@ function events = detect_deep_breathing(data, phys_feat, config)
 % A reviewed breath is deep when its excursion divided by that belt's fixed
 % session reference is >= config.DeB.amp_ratio_thr. This is an uncalibrated,
 % within-record belt-amplitude state, not absolute tidal volume.
+% A qualifying trailing-window endpoint supports its complete preceding
+% window. min_dur_sec is applied once to the resulting inferred state.
 
     events = empty_events();
     N = size(data, 1);

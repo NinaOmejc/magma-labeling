@@ -96,12 +96,14 @@ function config = get_config()
     config.ShB = struct();                  % shallow breathing settings
     config.ShB.amp_ratio_low    = 0.65;     % lower amplitude ratio bound for shallow breaths (35 % decreased from baseline)
     config.ShB.amp_ratio_high   = 0.80;     % upper amplitude ratio bound for shallow breaths (20 % decreased from baseline)
-    config.ShB.min_dur_sec       = 30;      % minimal duration of shallow breathing to be counted as dysfunction. in seconds
+    config.ShB.analysis_win_sec = 30;       % trailing breath-amplitude analysis window
+    config.ShB.min_dur_sec      = 30;       % minimum inferred shallow-state duration
     config.ShB.do_plot           = true;    % save shallow breathing diagnostic plot
 
     %---- LABEL 2 - IrB - DETECTION SETTINGS 
     config.IrB = struct();              % irregular breathing settings
-    config.IrB.min_dur_sec = 60;        % rolling window length and sustained endpoint duration
+    config.IrB.analysis_win_sec = 60;   % trailing IBI-variability analysis window
+    config.IrB.min_dur_sec = 60;        % minimum inferred irregular-state duration
     config.IrB.cov_thr   = 0.3;         % CoV threshold for irregularity
     config.IrB.robust_cov_thr = 0.25;   % robust CoV threshold: 1.4826*MAD(IBI)/median(IBI)
     config.IrB.detection_metric = 'cov'; % options: 'cov', 'robust_cov', 'either', 'both'
@@ -120,8 +122,9 @@ function config = get_config()
 
     %---- LABEL 4: RaB  (Rapid breathing)
     config.RaB = struct();                                      % rapid breathing settings
+    config.RaB.analysis_win_sec = 30;                           % trailing respiratory-rate analysis window
     config.RaB.rr_thr_bpm       = 20;                           % mean RR >= 20 bpm
-    config.RaB.min_dur_sec      = 30;                           % rolling RR window length and sustained endpoint duration
+    config.RaB.min_dur_sec      = 30;                           % minimum inferred rapid-state duration
     config.RaB.plot_rr_step_sec = 5;                            % display RR as held values at this step size in seconds
     config.RaB.do_plot         = true;                          % save rapid breathing diagnostic plot
 
@@ -148,7 +151,8 @@ function config = get_config()
     %---- LABEL 7: Apnea
     config.Apn = struct();                  % apnea settings
     config.Apn.amp_ratio_thr    = 0.10;     % <=10% of baseline in BOTH belts (if only one belt is working, then consider only one)
-    config.Apn.min_dur_sec      = 10;       % it needs to be sustained for more than X (here 10) seconds
+    config.Apn.amp_analysis_win_sec = 10;   % trailing normalized-amplitude evidence window
+    config.Apn.min_dur_sec      = 10;       % minimum inferred low-motion/pause-state duration
     config.Apn.raw_flat_enabled = true;     % optional second apnea detector based directly on raw belt flatness/low motion, independent of detected breath peaks
     config.Apn.raw_flat_win_sec = 10;       % raw-signal analysis window for flat/low-motion apnea evidence
     config.Apn.raw_flat_ref_win_sec = 60;   % prior raw-signal reference window for normal belt motion
@@ -198,6 +202,7 @@ function config = get_config()
     % within-record state, not an absolute tidal-volume measurement.
     config.DeB = struct();
     config.DeB.amp_ratio_thr = 1.20;              % breath excursion / fixed per-belt session reference
+    config.DeB.analysis_win_sec = 30;             % trailing breath-amplitude analysis window
     config.DeB.min_dur_sec = 30;                  % sustained deep-amplitude state duration
     config.DeB.do_plot = true;                    % save deep breathing diagnostic plot
 

@@ -1,4 +1,4 @@
-function [irregular_condition, cov_trace, robust_cov_trace, rmssd_trace, endpoint_condition] = compute_irregularity_metrics( ...
+function [irregular_condition, cov_trace, robust_cov_trace, rmssd_trace, endpoint_condition, pause_exclusion_mask] = compute_irregularity_metrics( ...
     breaths, t_grid, win_sec, cov_thr, robust_cov_thr, rmssd_thr, pause_thr_sec, detection_metric)
 % compute_irregularity_metrics (irregularity in time)
 % Return an analysis-window irregularity mask, endpoint condition, and
@@ -8,6 +8,7 @@ function [irregular_condition, cov_trace, robust_cov_trace, rmssd_trace, endpoin
 
     irregular_condition = false(size(t_grid));
     endpoint_condition = false(size(t_grid));
+    pause_exclusion_mask = false(size(t_grid));
     cov_trace = nan(size(t_grid));
     robust_cov_trace = nan(size(t_grid));
     rmssd_trace = nan(size(t_grid));
@@ -57,6 +58,7 @@ function [irregular_condition, cov_trace, robust_cov_trace, rmssd_trace, endpoin
 
         has_pause = isfinite(pause_thr_sec) && pause_thr_sec > 0 && ...
             any(ibi_win >= pause_thr_sec);
+        pause_exclusion_mask(i) = has_pause;
 
         mu = mean(ibi_win, 'omitnan');
         sd = std(ibi_win, 0, 'omitnan');

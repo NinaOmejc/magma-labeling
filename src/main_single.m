@@ -44,9 +44,11 @@ for isub = 1:length(config.subjects)
         events_RaB = detect_rapid_breathing(data, phys_feat, config);
         [events_ReA, diagnostics_ReA] = detect_respiratory_asynchrony(data, baseline, resp_feat, config);
         events_Des = detect_desaturation(data, baseline, spo2_feat, config);
-        events_Apn = detect_apnea(data, phys_feat, config);
-        events_Sigh = detect_sigh(data, phys_feat, resp_feat, baseline, spo2_feat, config);
-        events_CSR = detect_periodic_breathing(data, resp_feat, config);
+        [events_Apn, diagnostics_Apn] = detect_apnea(data, phys_feat, config);
+        [events_Sigh, diagnostics_Sigh] = detect_sigh( ...
+            data, phys_feat, resp_feat, baseline, spo2_feat, config);
+        [events_CSR, diagnostics_CSR] = detect_periodic_breathing( ...
+            data, resp_feat, config);
 
         % Optional final manual event-interval editing.
         % Sigh is intentionally excluded because it has its own breath-level GUI.
@@ -80,15 +82,26 @@ for isub = 1:length(config.subjects)
         
         N = size(data,1); 
         [label_mask, label_names] = events_to_time_mask(sub_events, N, config);
-        label_available = ismember(label_names, config.input_config.running_labels);
-        amplitude_available = phys_feat.resp.lungs.session_amplitude_available || ...
-            phys_feat.resp.diaph.session_amplitude_available;
-        label_available(strcmp(label_names, 'shallowB')) = amplitude_available;
-        label_available(strcmp(label_names, 'deepB')) = amplitude_available;
-        label_available(strcmp(label_names, 'thorDomB')) = ...
-            phys_feat.resp.thoracoabdominal_balance.available;
+        [label_available, label_availability_reason] = ...
+            compute_label_availability(label_names, phys_feat, spo2_feat, ...
+                diagnostics_ReA, diagnostics_Apn, diagnostics_Sigh, diagnostics_CSR);
         diagnostic_signals = compute_label_diagnostic_signals( ...
-            phys_feat, baseline, spo2_feat, config, diagnostics_ReA);
+            phys_feat, baseline, spo2_feat, config, diagnostics_ReA, ...
+            diagnostics_Apn, diagnostics_Sigh, diagnostics_CSR);
+        detector_diagnostics = struct( ...
+            'respiratory_asynchrony', diagnostics_ReA, ...
+            'apnea', diagnostics_Apn, ...
+            'sigh', diagnostics_Sigh, ...
+            'periodic_breathing', diagnostics_CSR);
+        label_burden = compute_recording_label_burden( ...
+            label_mask, label_names, label_available, sub_events, config.fs);
+        label_overlap_summary = compute_label_overlap_summary( ...
+            label_mask, label_names, label_available, config.fs);
+        label_evidence_summary = build_label_evidence_summary( ...
+            label_names, label_available, label_availability_reason, ...
+            phys_feat, diagnostic_signals, detector_diagnostics, label_burden);
+        db_phenotype_evidence = build_db_phenotype_evidence( ...
+            label_burden, label_overlap_summary, label_evidence_summary);
         rewritten_manual_label_figures = rewrite_changed_manual_label_figures( ...
             data, baseline, resp_feat, spo2_feat, diagnostic_signals, event_sets, manual_label_edit, config);
         plot_label_mask(label_mask, label_names, config);
@@ -100,12 +113,18 @@ for isub = 1:length(config.subjects)
         results.mask   = label_mask;
         results.label_names = label_names;
         results.label_available = label_available;
+        results.label_availability_reason = label_availability_reason;
         results.label_schema_version = config.label_schema_version;
         results.resp_feat = resp_feat;
         results.resp_ref = resp_ref;
         results.phys_feat = phys_feat;
         results.spo2_feat = spo2_feat;
         results.diagnostic_signals = diagnostic_signals;
+        results.detector_diagnostics = detector_diagnostics;
+        results.label_burden = label_burden;
+        results.label_overlap_summary = label_overlap_summary;
+        results.label_evidence_summary = label_evidence_summary;
+        results.db_phenotype_evidence = db_phenotype_evidence;
         results.manual_label_edit = manual_label_edit;
         results.rewritten_manual_label_figures = rewritten_manual_label_figures;
         results.baseline = baseline;

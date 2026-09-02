@@ -9,7 +9,9 @@ function events_Des = detect_desaturation(data, baseline, spo2_feat, config)
     events_Des = empty_events();
 
     if nargin < 3 || isempty(spo2_feat) || ~isfield(spo2_feat, 'desat_events') || ...
-            ~isfield(spo2_feat, 'idx_spo2') || isempty(spo2_feat.idx_spo2)
+            ~isfield(spo2_feat, 'idx_spo2') || isempty(spo2_feat.idx_spo2) || ...
+            (isfield(spo2_feat, 'detection_available') && ...
+                ~spo2_feat.detection_available)
         fprintf('Skipping desat detection: SpO2 signal/features are unavailable.\n');
         return;
     end

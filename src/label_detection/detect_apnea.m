@@ -1,4 +1,4 @@
-function events = detect_apnea(data, phys_feat, config)
+function [events, diagnostics] = detect_apnea(data, phys_feat, config)
 % detect_apnea
 % Label 7 - Apnea
 %
@@ -11,7 +11,11 @@ function events = detect_apnea(data, phys_feat, config)
 % If both belts are usable, both must support the apnea evidence. If only
 % one belt is usable, that belt is used alone. SpO2 does not modify apnea
 % events; coincident desaturation remains a separate label.
-% All raw-signal windows and returned sample indices use config.fs.
+% A TRUE amplitude endpoint summarizes the preceding amplitude-analysis
+% window; that window is backfilled into the inferred state. Raw-flat
+% diagnostics already mark their supporting window. The two inferred-state
+% paths are unioned and min_dur_sec is applied once. All raw-signal windows
+% and returned sample indices use config.fs.
 
     events = empty_events();
 
@@ -55,6 +59,22 @@ function events = detect_apnea(data, phys_feat, config)
     raw_cfg.hist_band_pad_frac = 0.05;
     raw_cfg.min_ref_sec = min(raw_cfg.ref_win_sec, max(raw_cfg.win_sec, 30));
 
+    diagnostics = struct( ...
+        'available', false, ...
+        'peak_path_available', lungs_breath_valid || diaph_breath_valid, ...
+        'raw_flat_path_available', false, ...
+        'peak_endpoint_mask', false(size(t_grid)), ...
+        'peak_state_mask', false(size(t_grid)), ...
+        'raw_flat_state_mask', false(size(t_grid)), ...
+        'combined_state_mask', false(size(t_grid)), ...
+        'peak_support_belts', support_belts(lungs_breath_valid, diaph_breath_valid), ...
+        'raw_flat_support_belts', '', ...
+        'amp_ratio_threshold', amp_ratio_thr, ...
+        'amp_analysis_window_sec', get_config_value(config, 'Apn', 'amp_analysis_win_sec', min_dur_sec), ...
+        'raw_flat_analysis_window_sec', raw_cfg.win_sec, ...
+        'min_state_duration_sec', min_dur_sec, ...
+        'raw_flat', init_raw_flat_diag(t_grid));
+
     if ~(lungs_breath_valid || diaph_breath_valid || ...
             (raw_flat_enabled && (lungs_raw_valid || diaph_raw_valid)))
         fprintf('Skipping apnea detection: no usable respiratory belt evidence for peak-amplitude or raw-flat apnea logic.\n');
@@ -85,8 +105,10 @@ function events = detect_apnea(data, phys_feat, config)
             apnea_peak_endpoint = diaph_low;
         end
 
-        [~, apnea_peak] = sustained_condition_to_events( ...
-            apnea_peak_endpoint, t_grid, config.fs, N, min_dur_sec, 'apnea');
+        diagnostics.peak_endpoint_mask = apnea_peak_endpoint;
+        apnea_peak = analysis_window_endpoints_to_state_mask( ...
+            apnea_peak_endpoint, t_grid, diagnostics.amp_analysis_window_sec);
+        diagnostics.peak_state_mask = apnea_peak;
     end
 
     % ----------------------------
@@ -100,14 +122,22 @@ function events = detect_apnea(data, phys_feat, config)
             data, config, t_grid, idx_lungs, idx_diaph, ...
             lungs_raw_valid, diaph_raw_valid, raw_cfg);
 
-        [~, apnea_raw] = sustained_condition_to_events( ...
-            apnea_raw_candidate, t_grid, config.fs, N, min_dur_sec, 'apnea');
+        apnea_raw = apnea_raw_candidate;
+        diagnostics.raw_flat = raw_diag;
+        diagnostics.raw_flat_path_available = ...
+            raw_diag.lungs.valid || raw_diag.diaph.valid;
+        diagnostics.raw_flat_support_belts = support_belts( ...
+            raw_diag.lungs.valid, raw_diag.diaph.valid);
+        diagnostics.raw_flat_state_mask = apnea_raw;
     end
 
     % Merge evidence paths and convert to sample-level events.
     apnea_mask_candidate = apnea_peak | apnea_raw;
     [events, apnea_mask] = sustained_condition_to_events( ...
         apnea_mask_candidate, t_grid, config.fs, N, min_dur_sec, 'apnea');
+    diagnostics.combined_state_mask = apnea_mask;
+    diagnostics.available = diagnostics.peak_path_available || ...
+        diagnostics.raw_flat_path_available;
 
     % ----------------------------
     % Optional plot
@@ -179,6 +209,18 @@ function events = detect_apnea(data, phys_feat, config)
         align_axes_x_widths(ax);
 
         save_figure(config, 'apnea');
+    end
+end
+
+function belt = support_belts(use_lungs, use_diaph)
+    if use_lungs && use_diaph
+        belt = 'both';
+    elseif use_lungs
+        belt = 'lungs';
+    elseif use_diaph
+        belt = 'diaph';
+    else
+        belt = '';
     end
 end
 
