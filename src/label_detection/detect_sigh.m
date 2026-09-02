@@ -1,4 +1,4 @@
-function events = detect_sigh(data, resp_ref, baseline, resp_feat, spo2_feat, config)
+function events = detect_sigh(data, phys_feat, resp_feat, baseline, spo2_feat, config)
 % detect_sigh
 % Label 8 – Sigh
 %
@@ -18,9 +18,10 @@ function events = detect_sigh(data, resp_ref, baseline, resp_feat, spo2_feat, co
     fs = config.fs;
     t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';
 
-    lungs_broken = is_lung_belt_ignored(config);
-    lungs_valid = is_valid_breath_signal(resp_feat.lungs, true) && ~lungs_broken;
-    diaph_valid = is_valid_breath_signal(resp_feat.diaph, true);
+    lungs = phys_feat.resp.lungs;
+    diaph = phys_feat.resp.diaph;
+    lungs_valid = lungs.global_amplitude_available;
+    diaph_valid = diaph.global_amplitude_available;
 
     if ~lungs_valid && ~diaph_valid
         fprintf('Skipping sigh detection: no valid respiratory belt with usable breath amplitudes.\n');
@@ -61,26 +62,26 @@ function events = detect_sigh(data, resp_ref, baseline, resp_feat, spo2_feat, co
 
     switch lower(method)
         case 'legacy_60s'
-            sigh_lungs = false(size(resp_feat.lungs.peak_t(:)));
+            sigh_lungs = false(size(lungs.peak_t(:)));
             if lungs_valid
-                sigh_lungs = sigh_flags_legacy_60s(resp_feat.lungs, legacy_prev_win_sec, legacy_amp_ratio_thr, legacy_min_prev_breaths);
+                sigh_lungs = sigh_flags_legacy_60s(lungs, legacy_prev_win_sec, legacy_amp_ratio_thr, legacy_min_prev_breaths);
             end
-            sigh_diaph = false(size(resp_feat.diaph.peak_t(:)));
+            sigh_diaph = false(size(diaph.peak_t(:)));
             if diaph_valid
-                sigh_diaph = sigh_flags_legacy_60s(resp_feat.diaph, legacy_prev_win_sec, legacy_amp_ratio_thr, legacy_min_prev_breaths);
+                sigh_diaph = sigh_flags_legacy_60s(diaph, legacy_prev_win_sec, legacy_amp_ratio_thr, legacy_min_prev_breaths);
             end
         otherwise
-            sigh_lungs = false(size(resp_feat.lungs.peak_t(:)));
+            sigh_lungs = false(size(lungs.peak_t(:)));
             if lungs_valid
                 sigh_lungs = sigh_flags_global_ratio_outlier( ...
-                    resp_feat.lungs, get_global_reference(resp_ref, 'lungs'), ratio_prctile, ...
+                    lungs, ratio_prctile, ...
                     min_abs_ratio, iqr_k, min_gap_sec);
             end
             
-            sigh_diaph = false(size(resp_feat.diaph.peak_t(:)));
+            sigh_diaph = false(size(diaph.peak_t(:)));
             if diaph_valid
                 sigh_diaph = sigh_flags_global_ratio_outlier( ...
-                    resp_feat.diaph, get_global_reference(resp_ref, 'diaph'), ratio_prctile, ...
+                    diaph, ratio_prctile, ...
                     min_abs_ratio, iqr_k, min_gap_sec);
             end
     end
@@ -92,8 +93,8 @@ function events = detect_sigh(data, resp_ref, baseline, resp_feat, spo2_feat, co
             'Manual sigh editing requires two valid respiratory belts and was skipped for this input configuration.');
     end
 
-    events_L = sigh_flags_to_events(resp_feat.lungs.peak_t, sigh_lungs, N, fs, 'lungs');
-    events_D = sigh_flags_to_events(resp_feat.diaph.peak_t, sigh_diaph, N, fs, 'diaph');
+    events_L = sigh_flags_to_events(lungs.peak_t, sigh_lungs, N, fs, 'lungs');
+    events_D = sigh_flags_to_events(diaph.peak_t, sigh_diaph, N, fs, 'diaph');
     events = merge_events({events_L, events_D});
 
     if do_plot
@@ -113,11 +114,11 @@ function events = detect_sigh(data, resp_ref, baseline, resp_feat, spo2_feat, co
         if ~isempty(idx_lungs), h_lungs_trace = plot(t_raw, data(:,idx_lungs), 'k', 'DisplayName', 'Resp-Lungs'); end
         shade_events_on_axis(gca, events_L, 'sigh lungs');
         if ~isempty(idx_lungs)
-            y_lungs_mark = interp1(t_raw, data(:,idx_lungs), resp_feat.lungs.peak_t(sigh_lungs), 'linear', 'extrap');
+            y_lungs_mark = interp1(t_raw, data(:,idx_lungs), lungs.peak_t(sigh_lungs), 'linear', 'extrap');
         else
             y_lungs_mark = nan(sum(sigh_lungs),1);
         end
-        h_lungs_sigh = plot(resp_feat.lungs.peak_t(sigh_lungs), y_lungs_mark, 'ro', 'MarkerFaceColor','r', ...
+        h_lungs_sigh = plot(lungs.peak_t(sigh_lungs), y_lungs_mark, 'ro', 'MarkerFaceColor','r', ...
             'DisplayName', 'Sigh breaths');
         title('Sigh detection (lungs): red dots = sigh breaths')
         add_axis_legend(gca, [h_lungs_trace; h_lungs_sigh], {'Resp-Lungs', 'Sigh breaths'});
@@ -128,11 +129,11 @@ function events = detect_sigh(data, resp_ref, baseline, resp_feat, spo2_feat, co
         if ~isempty(idx_diaph), h_diaph_trace = plot(t_raw, data(:,idx_diaph), 'k', 'DisplayName', 'Resp-Diaphragm'); end
         shade_events_on_axis(gca, events_D, 'sigh diaphragm');
         if ~isempty(idx_diaph)
-            y_diaph_mark = interp1(t_raw, data(:,idx_diaph), resp_feat.diaph.peak_t(sigh_diaph), 'linear', 'extrap');
+            y_diaph_mark = interp1(t_raw, data(:,idx_diaph), diaph.peak_t(sigh_diaph), 'linear', 'extrap');
         else
             y_diaph_mark = nan(sum(sigh_diaph),1);
         end
-        h_diaph_sigh = plot(resp_feat.diaph.peak_t(sigh_diaph), y_diaph_mark, 'ro', 'MarkerFaceColor','r', ...
+        h_diaph_sigh = plot(diaph.peak_t(sigh_diaph), y_diaph_mark, 'ro', 'MarkerFaceColor','r', ...
             'DisplayName', 'Sigh breaths');
         title('Sigh detection (diaphragm): red dots = sigh breaths')
         add_axis_legend(gca, [h_diaph_trace; h_diaph_sigh], {'Resp-Diaphragm', 'Sigh breaths'});
@@ -161,7 +162,7 @@ function events = detect_sigh(data, resp_ref, baseline, resp_feat, spo2_feat, co
 end
 
 function [sigh_flags, local_ref, ratio, ratio_thr] = sigh_flags_global_ratio_outlier( ...
-    b, global_ref, ratio_prctile, min_abs_ratio, iqr_k, min_gap_sec)
+    b, ratio_prctile, min_abs_ratio, iqr_k, min_gap_sec)
     
     peak_t = b.peak_t(:);
     amp = b.amp(:);
@@ -178,12 +179,9 @@ function [sigh_flags, local_ref, ratio, ratio_thr] = sigh_flags_global_ratio_out
         return;
     end
 
-    if ~isscalar(global_ref) || ~isfinite(global_ref) || global_ref <= 0
-        global_ref = median(amp(isfinite(amp) & amp > 0), 'omitnan');
-    end
-    local_ref = global_ref * ones(L, 1);
-
-    ratio = amp ./ local_ref;
+    ratio = b.amp_ratio_global(:);
+    ratio = ratio(1:L);
+    local_ref = b.global_reference_value * ones(L, 1);
     valid = isfinite(ratio) & ratio > 0 & isfinite(amp) & amp > 0 & isfinite(local_ref) & local_ref > 0;
 
     if sum(valid) < 10
@@ -204,19 +202,6 @@ function [sigh_flags, local_ref, ratio, ratio_thr] = sigh_flags_global_ratio_out
     
     % Optional cleanup: keep only the strongest sigh within min_gap_sec.
     sigh_flags = enforce_min_gap_by_strength(candidate_flags, peak_t, ratio, min_gap_sec);
-end
-
-function value = get_global_reference(resp_ref, belt_name)
-    value = NaN;
-    if ~isstruct(resp_ref) || ~isfield(resp_ref, belt_name)
-        return;
-    end
-    belt = resp_ref.(belt_name);
-    if isstruct(belt) && isfield(belt, 'global') && isstruct(belt.global) && ...
-            isfield(belt.global, 'available') && belt.global.available && ...
-            isfield(belt.global, 'value')
-        value = belt.global.value;
-    end
 end
 
 

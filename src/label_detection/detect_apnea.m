@@ -1,4 +1,4 @@
-function events = detect_apnea(data, resp_ref, resp_feat, spo2_feat, config)
+function events = detect_apnea(data, phys_feat, config)
 % detect_apnea
 % Label 7 - Apnea
 %
@@ -16,7 +16,9 @@ function events = detect_apnea(data, resp_ref, resp_feat, spo2_feat, config)
     events = empty_events();
 
     N = size(data, 1);
-    t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';  % seconds
+    t_grid = phys_feat.resp.time_sec;
+    lungs = phys_feat.resp.lungs;
+    diaph = phys_feat.resp.diaph;
 
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
@@ -24,14 +26,9 @@ function events = detect_apnea(data, resp_ref, resp_feat, spo2_feat, config)
     idx_lungs = config.channels.lungs_idx;
     idx_diaph = config.channels.diaph_idx;
 
-    lungs_broken = is_lung_belt_ignored(config);
-    [ref_lungs, lungs_ref_available] = get_resp_session_reference(resp_ref, 'lungs');
-    [ref_diaph, diaph_ref_available] = get_resp_session_reference(resp_ref, 'diaph');
-
-    lungs_breath_valid = is_valid_breath_signal(resp_feat.lungs, true) && ...
-        ~lungs_broken && lungs_ref_available;
-    diaph_breath_valid = is_valid_breath_signal(resp_feat.diaph, true) && ...
-        diaph_ref_available;
+    lungs_broken = lungs.ignored;
+    lungs_breath_valid = lungs.session_amplitude_available;
+    diaph_breath_valid = diaph.session_amplitude_available;
 
     lungs_raw_valid = ~lungs_broken && ~isempty(idx_lungs) && any(isfinite(data(:, idx_lungs)));
     diaph_raw_valid = ~isempty(idx_diaph) && any(isfinite(data(:, idx_diaph)));
@@ -72,9 +69,23 @@ function events = detect_apnea(data, resp_ref, resp_feat, spo2_feat, config)
     apnea_peak = false(size(t_grid));
 
     if lungs_breath_valid || diaph_breath_valid
-        apnea_peak_endpoint = apnea_amp_condition_on_grid( ...
-            resp_feat.lungs, resp_feat.diaph, t_grid, min_dur_sec, ...
-            ref_lungs, ref_diaph, amp_ratio_thr, lungs_breath_valid, diaph_breath_valid);
+        lungs_low = false(size(t_grid));
+        if lungs_breath_valid
+            lungs_low = isfinite(lungs.apnea_amp_ratio_session_window_median) & ...
+                lungs.apnea_amp_ratio_session_window_median <= amp_ratio_thr;
+        end
+        diaph_low = false(size(t_grid));
+        if diaph_breath_valid
+            diaph_low = isfinite(diaph.apnea_amp_ratio_session_window_median) & ...
+                diaph.apnea_amp_ratio_session_window_median <= amp_ratio_thr;
+        end
+        if lungs_breath_valid && diaph_breath_valid
+            apnea_peak_endpoint = lungs_low & diaph_low;
+        elseif lungs_breath_valid
+            apnea_peak_endpoint = lungs_low;
+        else
+            apnea_peak_endpoint = diaph_low;
+        end
 
         [~, apnea_peak] = sustained_condition_to_events( ...
             apnea_peak_endpoint, t_grid, config.fs, N, min_dur_sec, 'apnea');
@@ -105,8 +116,12 @@ function events = detect_apnea(data, resp_ref, resp_feat, spo2_feat, config)
     % A desaturation is associated if it overlaps apnea or starts within
     % config.spo2.desat_association_delay_sec after apnea.
     % ----------------------------
-    if mark_desat && exist('spo2_feat', 'var') && ~isempty(spo2_feat) && isfield(spo2_feat, 'desat_events')
-        desat_events = expand_events_for_delayed_overlap(spo2_feat.desat_events, desat_association_delay_sec);
+    if mark_desat && isfield(phys_feat, 'spo2') && ...
+            isfield(phys_feat.spo2, 'desaturation_events')
+        % Temporary saved-subtype compatibility. Desaturation remains an
+        % independent phys_feat stream and overlap tagging ends in Phase 4.
+        desat_events = expand_events_for_delayed_overlap( ...
+            phys_feat.spo2.desaturation_events, desat_association_delay_sec);
 
         for e = 1:numel(events)
             if events_overlap_any(events(e), desat_events)
@@ -143,11 +158,11 @@ function events = detect_apnea(data, resp_ref, resp_feat, spo2_feat, config)
         subplot(4, 1, 3); hold on
         lungs_ratio = nan(size(t_grid));
         if lungs_breath_valid
-            lungs_ratio = amp_ratio_on_grid(resp_feat.lungs, t_grid, min_dur_sec, ref_lungs);
+            lungs_ratio = lungs.apnea_amp_ratio_session_window_median;
         end
         diaph_ratio = nan(size(t_grid));
         if diaph_breath_valid
-            diaph_ratio = amp_ratio_on_grid(resp_feat.diaph, t_grid, min_dur_sec, ref_diaph);
+            diaph_ratio = diaph.apnea_amp_ratio_session_window_median;
         end
         plot(t_grid, lungs_ratio, 'k')
         plot(t_grid, diaph_ratio, 'b')
@@ -186,103 +201,6 @@ function events = detect_apnea(data, resp_ref, resp_feat, spo2_feat, config)
 
         save_figure(config, 'apnea');
     end
-end
-
-% =========================================================
-% Peak-amplitude helpers
-% =========================================================
-
-function cond = apnea_amp_condition_on_grid(b_l, b_d, t_grid, win_sec, ref_l, ref_d, amp_ratio_thr, use_lungs, use_diaph)
-% If both belts are valid: require BOTH <= threshold.
-% If only one belt is valid: use that belt alone.
-    cond = false(size(t_grid));
-
-    if isscalar(ref_l)
-        ref_l = ref_l * ones(size(t_grid));
-    end
-
-    if isscalar(ref_d)
-        ref_d = ref_d * ones(size(t_grid));
-    end
-
-    [peak_l, amp_l] = breath_amp_vectors(b_l);
-    [peak_d, amp_d] = breath_amp_vectors(b_d);
-
-    for i = 1:numel(t_grid)
-        t = t_grid(i);
-        lb = t - win_sec;
-        if lb < 0
-            continue;
-        end
-        lung_ok = false;
-        diaph_ok = false;
-
-        if use_lungs && isfinite(ref_l(i)) && ref_l(i) > 0
-            a_l = amp_l(peak_l <= t & peak_l >= lb);
-            if numel(a_l) >= 2
-                med_l = median(a_l, 'omitnan');
-                rl = med_l / ref_l(i);
-                lung_ok = isfinite(rl) && rl <= amp_ratio_thr;
-            end
-        end
-
-        if use_diaph && isfinite(ref_d(i)) && ref_d(i) > 0
-            a_d = amp_d(peak_d <= t & peak_d >= lb);
-            if numel(a_d) >= 2
-                med_d = median(a_d, 'omitnan');
-                rd = med_d / ref_d(i);
-                diaph_ok = isfinite(rd) && rd <= amp_ratio_thr;
-            end
-        end
-
-        if use_lungs && use_diaph
-            cond(i) = lung_ok && diaph_ok;
-        elseif use_lungs
-            cond(i) = lung_ok;
-        elseif use_diaph
-            cond(i) = diaph_ok;
-        end
-    end
-end
-
-function ratio = amp_ratio_on_grid(b, t_grid, win_sec, ref_amp)
-% Median amplitude ratio in [t-win_sec, t] for plotting/intuition.
-    ratio = nan(size(t_grid));
-    [peak_t, amp] = breath_amp_vectors(b);
-
-    for i = 1:numel(t_grid)
-        t = t_grid(i);
-        lb = t - win_sec;
-        a = amp(peak_t <= t & peak_t >= lb);
-        if numel(a) < 2
-            continue;
-        end
-        med_a = median(a, 'omitnan');
-        if isscalar(ref_amp)
-            ratio(i) = med_a / ref_amp;
-        else
-            ratio(i) = med_a / ref_amp(i);
-        end
-    end
-end
-
-function [peak_t, amp] = breath_amp_vectors(b)
-    peak_t = [];
-    amp = [];
-
-    if isempty(b) || ~isstruct(b) || ~isfield(b, 'peak_t') || ~isfield(b, 'amp')
-        return;
-    end
-
-    peak_t = b.peak_t(:);
-    amp = b.amp(:);
-    n = min(numel(peak_t), numel(amp));
-    peak_t = peak_t(1:n);
-    amp = amp(1:n);
-
-    valid = isfinite(peak_t) & isfinite(amp) & amp > 0;
-    peak_t = peak_t(valid);
-    amp = amp(valid);
 end
 
 % =========================================================

@@ -1,4 +1,4 @@
-function events = detect_slow_breathing(data, resp_ref, resp_feat, spo2_feat, config)
+function events = detect_slow_breathing(data, phys_feat, config)
 % detect_slow_breathing
 % Label 3 – Slow Breathing (Bradypnea)
 %
@@ -16,17 +16,13 @@ function events = detect_slow_breathing(data, resp_ref, resp_feat, spo2_feat, co
     events = empty_events();
 
     N = size(data,1);
-    t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';  % seconds
-
-    lungs_broken = is_lung_belt_ignored(config);
-    lungs_valid = is_valid_breath_signal(resp_feat.lungs, false) && ~lungs_broken;
-    diaph_valid = is_valid_breath_signal(resp_feat.diaph, false);
-    [ref_lungs, lungs_ref_available] = get_resp_session_reference(resp_ref, 'lungs');
-    [ref_diaph, diaph_ref_available] = get_resp_session_reference(resp_ref, 'diaph');
-    lungs_amp_valid = lungs_valid && is_valid_breath_signal(resp_feat.lungs, true) && ...
-        lungs_ref_available;
-    diaph_amp_valid = diaph_valid && is_valid_breath_signal(resp_feat.diaph, true) && ...
-        diaph_ref_available;
+    t_grid = phys_feat.resp.time_sec;
+    lungs = phys_feat.resp.lungs;
+    diaph = phys_feat.resp.diaph;
+    lungs_valid = lungs.available;
+    diaph_valid = diaph.available;
+    lungs_amp_valid = lungs.session_amplitude_available;
+    diaph_amp_valid = diaph.session_amplitude_available;
 
     if ~lungs_valid && ~diaph_valid
         fprintf('Skipping slowB detection: no valid respiratory belt with usable breath timing.\n');
@@ -36,20 +32,16 @@ function events = detect_slow_breathing(data, resp_ref, resp_feat, spo2_feat, co
     % ----------------------------
     % Config defaults
     % ----------------------------
-    analysis_win_sec = 60;
     rr_thr_bpm       = 10;
     min_dur_sec      = 30;
 
     classify_depth   = true;      % slow+shallow vs slow+deep
-    shallow_lo_ratio = get_config_value(config, 'ShB', 'amp_ratio_low', 0.65);
-    shallow_hi_ratio = get_config_value(config, 'ShB', 'amp_ratio_high', 0.80);
 
     mark_desat       = true;
     desat_association_delay_sec = get_config_value(config, 'spo2', 'desat_association_delay_sec', 10);
     plot_rr_step_sec = 15;
 
     if isfield(config, 'SlB')
-        if isfield(config.SlB, 'analysis_win_sec'), analysis_win_sec = config.SlB.analysis_win_sec; end
         if isfield(config.SlB, 'rr_thr_bpm'),       rr_thr_bpm       = config.SlB.rr_thr_bpm; end
         if isfield(config.SlB, 'min_dur_sec'),      min_dur_sec      = config.SlB.min_dur_sec; end
 
@@ -60,19 +52,21 @@ function events = detect_slow_breathing(data, resp_ref, resp_feat, spo2_feat, co
 
     % ----------------------------
     % Slow RR endpoint condition on grid (lungs/diaph). The metric plotted
-    % at time t is computed from [t-analysis_win_sec, t], so the detection
+    % at time t uses the configured slow-rate window in phys_feat, so the detection
     % mask follows that endpoint trace instead of backfilling the window.
     % ----------------------------
     slow_lungs = false(size(t_grid));
     rr_lungs = nan(size(t_grid));
     if lungs_valid
-        [slow_lungs, rr_lungs] = compute_breath_rate_mask(resp_feat.lungs.peak_t, t_grid, analysis_win_sec, rr_thr_bpm, '<=', false);
+        rr_lungs = lungs.rate_slow_window_bpm;
+        slow_lungs = isfinite(rr_lungs) & rr_lungs <= rr_thr_bpm;
     end
 
     slow_diaph = false(size(t_grid));
     rr_diaph = nan(size(t_grid));
     if diaph_valid
-        [slow_diaph, rr_diaph] = compute_breath_rate_mask(resp_feat.diaph.peak_t, t_grid, analysis_win_sec, rr_thr_bpm, '<=', false);
+        rr_diaph = diaph.rate_slow_window_bpm;
+        slow_diaph = isfinite(rr_diaph) & rr_diaph <= rr_thr_bpm;
     end
 
     % Sustain the endpoint RR condition before creating events.
@@ -87,12 +81,16 @@ function events = detect_slow_breathing(data, resp_ref, resp_feat, spo2_feat, co
     % Optional: classify slow+shallow vs slow+deep using amplitude ratio
     % ----------------------------
     if classify_depth && (lungs_amp_valid || diaph_amp_valid)
-        shallow_amp = compute_amplitude_band_mask( ...
-            resp_feat, lungs_amp_valid, diaph_amp_valid, t_grid, ...
-            config.ShB.min_dur_sec, ref_lungs, ref_diaph, ...
-            shallow_lo_ratio, shallow_hi_ratio);
+        shallow_amp = false(size(t_grid));
+        if lungs_amp_valid
+            shallow_amp = shallow_amp | lungs.shallow_amplitude_mask;
+        end
+        if diaph_amp_valid
+            shallow_amp = shallow_amp | diaph.shallow_amplitude_mask;
+        end
 
-        % Rewrite event types based on majority overlap with amp_shallow
+        % Temporary Phase-3 compatibility block. Depth will become an
+        % independent label in Phase 4; current saved subtype strings remain.
         for e = 1:numel(events)
             g0 = max(1, round(events(e).start_t / config.grid_step_sec) + 1);
             g1 = min(numel(t_grid), round(events(e).end_t   / config.grid_step_sec) + 1);
@@ -111,9 +109,12 @@ function events = detect_slow_breathing(data, resp_ref, resp_feat, spo2_feat, co
     % ----------------------------
     % Optional: mark slow breathing WITH desaturation
     % ----------------------------
-    if mark_desat && exist('spo2_feat','var') && ~isempty(spo2_feat) && isfield(spo2_feat,'desat_events')
-    
-        desat_events = spo2_feat.desat_events;
+    if mark_desat && isfield(phys_feat, 'spo2') && ...
+            isfield(phys_feat.spo2, 'desaturation_events')
+
+        % Temporary compatibility only. Desaturation is independent
+        % evidence in phys_feat and will not be embedded after Phase 4.
+        desat_events = phys_feat.spo2.desaturation_events;
     
         % Allow SpO2 drops that start shortly after the breathing event.
         desat_events = expand_events_for_delayed_overlap(desat_events, desat_association_delay_sec);

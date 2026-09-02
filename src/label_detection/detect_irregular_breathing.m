@@ -1,4 +1,4 @@
-function irregular_events = detect_irregular_breathing(data, resp_feat, config)
+function irregular_events = detect_irregular_breathing(data, phys_feat, config)
 % detect_irregular_breathing
 % Label 2 - Irregular Breathing
 %
@@ -20,11 +20,11 @@ function irregular_events = detect_irregular_breathing(data, resp_feat, config)
     irregular_events = empty_events();
 
     N = size(data,1);
-    t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';
-
-    lungs_broken = is_lung_belt_ignored(config);
-    lungs_valid = is_valid_breath_signal(resp_feat.lungs, false) && ~lungs_broken;
-    diaph_valid = is_valid_breath_signal(resp_feat.diaph, false);
+    t_grid = phys_feat.resp.time_sec;
+    lungs = phys_feat.resp.lungs;
+    diaph = phys_feat.resp.diaph;
+    lungs_valid = lungs.available;
+    diaph_valid = diaph.available;
 
     if ~lungs_valid && ~diaph_valid
         fprintf('Skipping irregB detection: no valid respiratory belt with usable breath timing.\n');
@@ -34,7 +34,6 @@ function irregular_events = detect_irregular_breathing(data, resp_feat, config)
     cov_thr = 0.3;
     robust_cov_thr = 0.25;
     rmssd_thr = 0.0;
-    pause_thr = 10;
     min_dur_sec = 60;
     plot_cov_step_sec = 15;
     detection_metric = 'robust_cov';
@@ -44,7 +43,6 @@ function irregular_events = detect_irregular_breathing(data, resp_feat, config)
         if isfield(config.IrB, 'cov_thr'), cov_thr = config.IrB.cov_thr; end
         if isfield(config.IrB, 'robust_cov_thr'), robust_cov_thr = config.IrB.robust_cov_thr; end
         if isfield(config.IrB, 'rmssd_thr'), rmssd_thr = config.IrB.rmssd_thr; end
-        if isfield(config.IrB, 'pause_thr_sec'), pause_thr = config.IrB.pause_thr_sec; end
         if isfield(config.IrB, 'min_dur_sec'), min_dur_sec = config.IrB.min_dur_sec; end
         if isfield(config.IrB, 'plot_cov_step_sec'), plot_cov_step_sec = config.IrB.plot_cov_step_sec; end
         if isfield(config.IrB, 'detection_metric'), detection_metric = config.IrB.detection_metric; end
@@ -59,8 +57,10 @@ function irregular_events = detect_irregular_breathing(data, resp_feat, config)
     cov_lungs = nan(size(t_grid));
     robust_cov_lungs = nan(size(t_grid));
     if lungs_valid
-        [irregular_condition_lungs, cov_lungs, robust_cov_lungs, ~, irregular_endpoint_lungs] = compute_irregularity_metrics( ...
-            resp_feat.lungs, t_grid, min_dur_sec, cov_thr, robust_cov_thr, rmssd_thr, pause_thr, detection_metric);
+        irregular_condition_lungs = lungs.irregularity.window_mask;
+        irregular_endpoint_lungs = lungs.irregularity.endpoint_mask;
+        cov_lungs = lungs.irregularity.cov;
+        robust_cov_lungs = lungs.irregularity.robust_cov;
     end
 
     irregular_condition_diaph = false(size(t_grid));
@@ -68,8 +68,10 @@ function irregular_events = detect_irregular_breathing(data, resp_feat, config)
     cov_diaph = nan(size(t_grid));
     robust_cov_diaph = nan(size(t_grid));
     if diaph_valid
-        [irregular_condition_diaph, cov_diaph, robust_cov_diaph, ~, irregular_endpoint_diaph] = compute_irregularity_metrics( ...
-            resp_feat.diaph, t_grid, min_dur_sec, cov_thr, robust_cov_thr, rmssd_thr, pause_thr, detection_metric);
+        irregular_condition_diaph = diaph.irregularity.window_mask;
+        irregular_endpoint_diaph = diaph.irregularity.endpoint_mask;
+        cov_diaph = diaph.irregularity.cov;
+        robust_cov_diaph = diaph.irregularity.robust_cov;
     end
 
     [irregular_events_lungs, irregular_mask_lungs] = sustained_condition_to_events( ...

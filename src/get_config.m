@@ -96,7 +96,7 @@ function config = get_config()
     config.ShB.amp_ratio_low    = 0.65;     % lower amplitude ratio bound for shallow breaths (35 % decreased from baseline)
     config.ShB.amp_ratio_high   = 0.80;     % upper amplitude ratio bound for shallow breaths (20 % decreased from baseline)
     config.ShB.min_dur_sec       = 30;      % minimal duration of shallow breathing to be counted as dysfunction. in seconds
-    config.ShB.exclude_desat     = true;    % do not label shallow breathing during desaturation.
+    config.ShB.exclude_desat     = true;    % temporary Phase-3 compatibility; Phase 4 keeps shallow and desaturation independent
     config.ShB.do_plot           = true;    % save shallow breathing diagnostic plot
 
     %---- LABEL 2 - IrB - DETECTION SETTINGS 
@@ -115,8 +115,8 @@ function config = get_config()
     config.SlB.analysis_win_sec = 60;     % rolling analysis window (30–60 s allowed)
     config.SlB.rr_thr_bpm       = 10;     % mean RR <= 10 bpm
     config.SlB.min_dur_sec      = 30;     % sustained >= 30 s
-    config.SlB.classify_depth   = true;   % Depth classification (slow + shallow vs slow + deep)
-    config.SlB.mark_desat        = true;  % Desaturation logic (append "_desat" if overlap)
+    config.SlB.classify_depth   = true;   % temporary subtype compatibility; removed when depth becomes independent in Phase 4
+    config.SlB.mark_desat        = true;  % temporary subtype compatibility; desaturation remains independent evidence
     config.SlB.plot_rr_step_sec = 5;      % display RR as held values that can change 12 times/min (60/5). So its averaged over X seconds, here 5 seconds.
     config.SlB.do_plot          = true;   % save slow breathing diagnostic plot
 
@@ -124,11 +124,11 @@ function config = get_config()
     config.RaB = struct();                                      % rapid breathing settings
     config.RaB.rr_thr_bpm       = 20;                           % mean RR >= 20 bpm
     config.RaB.min_dur_sec      = 30;                           % rolling RR window length and sustained endpoint duration
-    config.RaB.classify_depth   = true;                         % detect rapid shallow/deep subtype modifiers
-    config.RaB.deep_lo_ratio    = 1.20;                         % 20% above baseline
-    config.RaB.deep_hi_ratio    = 1.35;                         % 35% above baseline
-    config.RaB.subtype_min_overlap_frac = 0.5;                  % rapid subtype is assigned only if >= this fraction of the event overlaps shallow/deep amplitude evidence
-    config.RaB.mark_desat      = true;                          % mark rapid subtype as desat if desaturation is associated
+    config.RaB.classify_depth   = true;                         % temporary subtype compatibility; Phase 4 makes rate and depth independent
+    config.RaB.deep_lo_ratio    = 1.20;                         % temporary deep evidence bound; final Deep semantics deferred to Phase 4
+    config.RaB.deep_hi_ratio    = 1.35;                         % temporary deep evidence bound; final Deep semantics deferred to Phase 4
+    config.RaB.subtype_min_overlap_frac = 0.5;                  % temporary subtype overlap rule scheduled for Phase-4 removal
+    config.RaB.mark_desat      = true;                          % temporary subtype compatibility; desaturation remains independent evidence
     config.RaB.plot_rr_step_sec = 5;                            % display RR as held values at this step size in seconds
     config.RaB.do_plot         = true;                          % save rapid breathing diagnostic plot
 
@@ -156,7 +156,7 @@ function config = get_config()
     config.Apn = struct();                  % apnea settings
     config.Apn.amp_ratio_thr    = 0.10;     % <=10% of baseline in BOTH belts (if only one belt is working, then consider only one)
     config.Apn.min_dur_sec      = 10;       % it needs to be sustained for more than X (here 10) seconds
-    config.Apn.mark_desat       = true;     % append "_desat" if a SpO2 drop is associated using config.spo2.desat_association_delay_sec
+    config.Apn.mark_desat       = true;     % temporary subtype compatibility; apnea and desaturation become independent in Phase 4
     config.Apn.raw_flat_enabled = true;     % optional second apnea detector based directly on raw belt flatness/low motion, independent of detected breath peaks
     config.Apn.raw_flat_win_sec = 10;       % raw-signal analysis window for flat/low-motion apnea evidence
     config.Apn.raw_flat_ref_win_sec = 60;   % prior raw-signal reference window for normal belt motion

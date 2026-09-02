@@ -59,7 +59,9 @@ function testDriftDoesNotAlterFixedSessionReference(testCase)
     amp(after) = linspace(2, 1, nnz(after));
 
     resp_ref = compute_respiratory_reference(make_resp_feat(t, amp, [], []), config);
-    [value, available, quality] = get_resp_session_reference(resp_ref, 'lungs');
+    value = resp_ref.lungs.session.value;
+    available = resp_ref.lungs.session.available;
+    quality = resp_ref.lungs.reference_quality;
 
     verifyTrue(testCase, available);
     verifyEqual(testCase, value, 2, 'AbsTol', eps);
@@ -77,7 +79,9 @@ function testStepWarningRetainsUsableReference(testCase)
     amp = [ones(100, 1); 0.5 * ones(100, 1)];
 
     resp_ref = compute_respiratory_reference(make_resp_feat(t, amp, [], []), config);
-    [value, available, quality] = get_resp_session_reference(resp_ref, 'lungs');
+    value = resp_ref.lungs.session.value;
+    available = resp_ref.lungs.session.available;
+    quality = resp_ref.lungs.reference_quality;
 
     verifyTrue(testCase, resp_ref.lungs.change_detected);
     verifyEqual(testCase, quality, 'step_candidate');
@@ -93,7 +97,9 @@ function testInsufficientSessionDoesNotFallBackToGlobal(testCase)
     amp = ones(size(t));
 
     resp_ref = compute_respiratory_reference(make_resp_feat(t, amp, [], []), config);
-    [value, available, quality] = get_resp_session_reference(resp_ref, 'lungs');
+    value = resp_ref.lungs.session.value;
+    available = resp_ref.lungs.session.available;
+    quality = resp_ref.lungs.reference_quality;
 
     verifyTrue(testCase, resp_ref.lungs.global.available);
     verifyFalse(testCase, resp_ref.lungs.session.available);
@@ -122,8 +128,10 @@ function testShallowDetectorUsesSessionReference(testCase)
     data = zeros(650, 6);
     baseline = struct();
     spo2_feat = struct('desat_events', empty_events());
+    phys_feat = compute_physiological_features( ...
+        data, resp_feat, resp_ref, spo2_feat, config);
     events = detect_shallow_breathing( ...
-        data, resp_ref, baseline, resp_feat, spo2_feat, config);
+        data, phys_feat, baseline, spo2_feat, config);
 
     verifyNotEmpty(testCase, events);
     verifyTrue(testCase, any(contains(string({events.type}), 'shallow_breathing_lungs')));

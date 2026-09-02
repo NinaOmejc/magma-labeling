@@ -45,7 +45,7 @@ addpath(genpath(fullfile(pwd, 'src')));
 run('src/main_single.m')
 ```
 
-`main_single.m` loops over the selected subjects and measurements, loads each recording, preprocesses the data, extracts respiration and SpO2 features, computes the respiratory and SpO2 references, runs all label detectors, builds the label mask, and saves outputs.
+`main_single.m` loops over the selected subjects and measurements, loads each recording, preprocesses the data, extracts respiration and SpO2 features, computes the respiratory and SpO2 references, builds common physiological evidence, runs all label detectors, builds the label mask, and saves outputs.
 
 ## Configuration
 
@@ -72,6 +72,14 @@ Preprocessing preserves the native sample count and alignment of every channel. 
 `results.resp_ref` also retains whole-record values and early/late stability diagnostics. A step candidate, edge disagreement, or gradual/complex pattern is a descriptive `reference_quality` warning. The default action for every warning is **retain data, no correction**; warnings neither request manual correction nor automatically drift-correct the reference. A session reference becomes unavailable only when its belt lacks enough reviewed, finite positive breaths.
 
 Respiratory belts are uncalibrated. Their raw amplitudes do not represent absolute tidal volume and are not safely comparable between subjects. A globally low-excursion recording can also look normal after within-record normalization, so amplitude ratios must be interpreted as within-record measures.
+
+### Common Physiological Evidence
+
+`compute_physiological_features` deterministically builds `phys_feat` from reviewed `resp_feat`, `resp_ref`, and `spo2_feat`; it does not redetect breaths and has no separate cache. `phys_feat.resp.lungs` and `phys_feat.resp.diaph` preserve the reviewed `peak_idx`, `peak_t`, `amp`, `ibi`, and `rr_bpm` independently. Derived fields include session/global amplitude ratios, configured slow/rapid rate traces, shallow and temporary deep amplitude evidence, apnea amplitude-ratio evidence, and irregularity traces.
+
+The alignment convention is explicit: `amp(i)` belongs to peak `i` and the final amplitude may be `NaN` because no following peak closes that excursion. `ibi(i)` and `rr_bpm(i)` describe the interval from peak `i` to peak `i+1`, so they contain one fewer value than the peak arrays. Invalid, non-positive amplitudes remain present in the copied `amp` array but become `NaN` in normalized ratio fields. A missing session reference never falls back to the global reference.
+
+SpO2/desaturation is an independent evidence stream at `phys_feat.spo2`. `phys_feat` contains no combined respiratory+SpO2 features. Phase 3 intentionally preserves the existing saved composite subtype strings for output compatibility; Phase 4 will replace that compatibility logic with independent physiological labels and explicit temporal-overlap analysis.
 
 Plot behavior is controlled per module:
 
@@ -158,6 +166,7 @@ results.mask               = label_mask;          % Sample-level label mask [N x
 results.label_names        = label_names;         % Label names matching mask columns
 results.resp_feat          = resp_feat;           % Respiratory features for lungs and diaphragm
 results.resp_ref           = resp_ref;            % Fixed session/global respiratory references and descriptive QC
+results.phys_feat          = phys_feat;           % Common derived physiological evidence used by detectors
 results.spo2_feat          = spo2_feat;           % SpO2 features and desaturation candidates
 results.diagnostic_signals = diagnostic_signals;  % Continuous detector-adjacent signals
 results.manual_label_edit  = manual_label_edit;   % Manual edit metadata and changed label list

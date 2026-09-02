@@ -31,15 +31,19 @@ for isub = 1:length(config.subjects)
         % EXTRACT SPO2 FEATURES
         spo2_feat = extract_spo2_features(data, baseline, config);
 
+        % COMMON PHYSIOLOGICAL EVIDENCE (derived; no peak redetection)
+        phys_feat = compute_physiological_features( ...
+            data, resp_feat, resp_ref, spo2_feat, config);
+
         % LABEL DETECTIONS        
-        events_ShB = detect_shallow_breathing(data, resp_ref, baseline, resp_feat, spo2_feat, config);
-        events_IrB = detect_irregular_breathing(data, resp_feat, config);
-        events_SlB = detect_slow_breathing(data, resp_ref, resp_feat, spo2_feat, config);
-        events_RaB = detect_rapid_breathing(data, resp_ref, resp_feat, spo2_feat, config);
+        events_ShB = detect_shallow_breathing(data, phys_feat, baseline, spo2_feat, config);
+        events_IrB = detect_irregular_breathing(data, phys_feat, config);
+        events_SlB = detect_slow_breathing(data, phys_feat, config);
+        events_RaB = detect_rapid_breathing(data, phys_feat, config);
         [events_ReA, diagnostics_ReA] = detect_respiratory_asynchrony(data, baseline, resp_feat, config);
         events_Des = detect_desaturation(data, baseline, spo2_feat, config);
-        events_Apn = detect_apnea(data, resp_ref, resp_feat, spo2_feat, config);
-        events_Sigh = detect_sigh(data, resp_ref, baseline, resp_feat, spo2_feat, config);
+        events_Apn = detect_apnea(data, phys_feat, config);
+        events_Sigh = detect_sigh(data, phys_feat, resp_feat, baseline, spo2_feat, config);
         events_CSR = detect_periodic_breathing(data, resp_feat, config);
 
         % Optional final manual event-interval editing.
@@ -70,7 +74,8 @@ for isub = 1:length(config.subjects)
         
         N = size(data,1); 
         [label_mask, label_names] = events_to_time_mask(sub_events, N, config);
-        diagnostic_signals = compute_label_diagnostic_signals(data, resp_ref, baseline, resp_feat, spo2_feat, config, diagnostics_ReA);
+        diagnostic_signals = compute_label_diagnostic_signals( ...
+            phys_feat, baseline, spo2_feat, config, diagnostics_ReA);
         rewritten_manual_label_figures = rewrite_changed_manual_label_figures( ...
             data, baseline, resp_feat, spo2_feat, diagnostic_signals, event_sets, manual_label_edit, config);
         plot_label_mask(label_mask, label_names, config);
@@ -83,6 +88,7 @@ for isub = 1:length(config.subjects)
         results.label_names = label_names;
         results.resp_feat = resp_feat;
         results.resp_ref = resp_ref;
+        results.phys_feat = phys_feat;
         results.spo2_feat = spo2_feat;
         results.diagnostic_signals = diagnostic_signals;
         results.manual_label_edit = manual_label_edit;

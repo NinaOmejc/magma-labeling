@@ -1,4 +1,4 @@
-function shallow_events = detect_shallow_breathing(data, resp_ref, baseline, resp_feat, spo2_feat, config)
+function shallow_events = detect_shallow_breathing(data, phys_feat, baseline, spo2_feat, config)
 % detect_shallow_breathing
 % Event-based detection of shallow breathing episodes (Label 1).
 %
@@ -14,13 +14,11 @@ function shallow_events = detect_shallow_breathing(data, resp_ref, baseline, res
 
     % ---- indices ---
     N = size(data,1);
-    t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';  % seconds
-    lungs_broken = is_lung_belt_ignored(config);
-    [ref_lungs, lungs_ref_available] = get_resp_session_reference(resp_ref, 'lungs');
-    [ref_diaph, diaph_ref_available] = get_resp_session_reference(resp_ref, 'diaph');
-    lungs_valid = is_valid_breath_signal(resp_feat.lungs, true) && ...
-        ~lungs_broken && lungs_ref_available;
-    diaph_valid = is_valid_breath_signal(resp_feat.diaph, true) && diaph_ref_available;
+    t_grid = phys_feat.resp.time_sec;
+    lungs = phys_feat.resp.lungs;
+    diaph = phys_feat.resp.diaph;
+    lungs_valid = lungs.session_amplitude_available;
+    diaph_valid = diaph.session_amplitude_available;
 
     if ~lungs_valid && ~diaph_valid
         fprintf('Skipping shallowB detection: no valid respiratory belt with usable breath amplitudes.\n');
@@ -31,22 +29,18 @@ function shallow_events = detect_shallow_breathing(data, resp_ref, baseline, res
     % ---- shallow condition on grid, using one fixed session reference ----
     shallow_mask_lungs = false(size(t_grid));
     if lungs_valid
-        shallow_mask_lungs = compute_shallow_breathing_mask( ...
-            resp_feat.lungs, t_grid, config.ShB.min_dur_sec, ...
-            ref_lungs, config.ShB.amp_ratio_low, config.ShB.amp_ratio_high);
+        shallow_mask_lungs = lungs.shallow_amplitude_mask;
     end
 
     shallow_mask_diaph = false(size(t_grid));
     if diaph_valid
-        shallow_mask_diaph = compute_shallow_breathing_mask( ...
-            resp_feat.diaph, t_grid, config.ShB.min_dur_sec, ...
-            ref_diaph, config.ShB.amp_ratio_low, config.ShB.amp_ratio_high);
+        shallow_mask_diaph = diaph.shallow_amplitude_mask;
     end
 
     % ---- no-desaturation condition on grid ----
     desat_mask = false(size(t_grid));
-    if exist('spo2_feat','var') && ~isempty(spo2_feat) && isfield(spo2_feat, 'desat_events')
-        desat_mask = get_desaturation_mask(spo2_feat.desat_events, t_grid);
+    if isfield(phys_feat, 'spo2') && isfield(phys_feat.spo2, 'desaturation_events')
+        desat_mask = get_desaturation_mask(phys_feat.spo2.desaturation_events, t_grid);
     end
 
     exclude_desat = true;
@@ -74,8 +68,8 @@ function shallow_events = detect_shallow_breathing(data, resp_ref, baseline, res
         ratio_low  = config.ShB.amp_ratio_low;
         ratio_high = config.ShB.amp_ratio_high;
         ref_txt = 'Fixed per-belt protocol/session amplitude reference';
-        ref_lungs_grid = ref_lungs * ones(size(t_grid));
-        ref_diaph_grid = ref_diaph * ones(size(t_grid));
+        ref_lungs_grid = lungs.session_reference_value * ones(size(t_grid));
+        ref_diaph_grid = diaph.session_reference_value * ones(size(t_grid));
         
         fig = figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', config.make_figs_visible); 
         % ----------------------
@@ -95,10 +89,10 @@ function shallow_events = detect_shallow_breathing(data, resp_ref, baseline, res
             plot(t_grid(valid_l), upper_l(valid_l), 'c--', 'LineWidth', 1.6, 'DisplayName', 'Upper threshold');
         end
 
-        if ~isempty(resp_feat.lungs.peak_t) && any(isfinite(resp_feat.lungs.peak_t))
-            scatter(resp_feat.lungs.peak_t, resp_feat.lungs.amp, 'k.', 'DisplayName', 'Amp')
+        if ~isempty(lungs.peak_t) && any(isfinite(lungs.peak_t))
+            scatter(lungs.peak_t, lungs.amp, 'k.', 'DisplayName', 'Amp')
             y_top_l = max([ ...
-                mean(resp_feat.lungs.amp, 'omitnan') + 3*std(resp_feat.lungs.amp, 'omitnan'), ...
+                mean(lungs.amp, 'omitnan') + 3*std(lungs.amp, 'omitnan'), ...
                 max(upper_l(valid_l), [], 'omitnan')], [], 'omitnan');
             if isfinite(y_top_l) && y_top_l > 0
                 ylim([0, 1.05 * y_top_l])
@@ -128,9 +122,9 @@ function shallow_events = detect_shallow_breathing(data, resp_ref, baseline, res
             plot(t_grid(valid_d), lower_d(valid_d), 'm--', 'LineWidth', 1.6, 'DisplayName', 'Lower threshold');
             plot(t_grid(valid_d), upper_d(valid_d), 'c--', 'LineWidth', 1.6, 'DisplayName', 'Upper threshold');
         end
-        scatter(resp_feat.diaph.peak_t, resp_feat.diaph.amp, 'k.', 'DisplayName', 'Amp')
+        scatter(diaph.peak_t, diaph.amp, 'k.', 'DisplayName', 'Amp')
         y_top_d = max([ ...
-            mean(resp_feat.diaph.amp, 'omitnan') + 3*std(resp_feat.diaph.amp, 'omitnan'), ...
+            mean(diaph.amp, 'omitnan') + 3*std(diaph.amp, 'omitnan'), ...
             max(upper_d(valid_d), [], 'omitnan')], [], 'omitnan');
         if isfinite(y_top_d) && y_top_d > 0
             ylim([0, 1.05 * y_top_d])

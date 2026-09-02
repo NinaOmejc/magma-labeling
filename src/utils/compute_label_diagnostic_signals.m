@@ -1,14 +1,13 @@
-function diagnostic_signals = compute_label_diagnostic_signals(data, resp_ref, baseline, resp_feat, spo2_feat, config, rea_metrics)
+function diagnostic_signals = compute_label_diagnostic_signals(phys_feat, baseline, spo2_feat, config, rea_metrics)
 % compute_label_diagnostic_signals
 % Save detector-adjacent signals on the config.fs master recording timeline.
 
-    N = size(data, 1);
-    t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';
+    t_grid = phys_feat.resp.time_sec;
 
-    rapid_win_sec = get_config_value(config, 'RaB', 'min_dur_sec', 30);
-    slow_win_sec = get_config_value(config, 'SlB', 'analysis_win_sec', 60);
+    rapid_win_sec = phys_feat.resp.rate_windows_sec.rapid;
+    slow_win_sec = phys_feat.resp.rate_windows_sec.slow;
     irregularity_win_sec = get_config_value(config, 'IrB', 'min_dur_sec', 60);
-    amplitude_win_sec = get_config_value(config, 'ShB', 'min_dur_sec', 30);
+    amplitude_win_sec = phys_feat.resp.amplitude_windows_sec.state;
     cov_thr = get_config_value(config, 'IrB', 'cov_thr', 0.3);
     robust_cov_thr = get_config_value(config, 'IrB', 'robust_cov_thr', 0.25);
     rmssd_thr = get_config_value(config, 'IrB', 'rmssd_thr', 0.0);
@@ -25,72 +24,38 @@ function diagnostic_signals = compute_label_diagnostic_signals(data, resp_ref, b
     diagnostic_signals.irregularity_detection_metric = detection_metric;
     diagnostic_signals.irregularity_cov_thr = cov_thr;
     diagnostic_signals.irregularity_robust_cov_thr = robust_cov_thr;
+    diagnostic_signals.irregularity_rmssd_thr_sec = rmssd_thr;
+    diagnostic_signals.irregularity_pause_thr_sec = pause_thr_sec;
 
-    diagnostic_signals.breathing_rate_rapid_window_bpm_lungs = breath_rate_trace(resp_feat.lungs, t_grid, rapid_win_sec);
-    diagnostic_signals.breathing_rate_rapid_window_bpm_diaph = breath_rate_trace(resp_feat.diaph, t_grid, rapid_win_sec);
-    diagnostic_signals.breathing_rate_slow_window_bpm_lungs = breath_rate_trace(resp_feat.lungs, t_grid, slow_win_sec);
-    diagnostic_signals.breathing_rate_slow_window_bpm_diaph = breath_rate_trace(resp_feat.diaph, t_grid, slow_win_sec);
+    diagnostic_signals.breathing_rate_rapid_window_bpm_lungs = phys_feat.resp.lungs.rate_rapid_window_bpm;
+    diagnostic_signals.breathing_rate_rapid_window_bpm_diaph = phys_feat.resp.diaph.rate_rapid_window_bpm;
+    diagnostic_signals.breathing_rate_slow_window_bpm_lungs = phys_feat.resp.lungs.rate_slow_window_bpm;
+    diagnostic_signals.breathing_rate_slow_window_bpm_diaph = phys_feat.resp.diaph.rate_slow_window_bpm;
 
-    [~, diagnostic_signals.irregularity_cov_lungs, diagnostic_signals.irregularity_robust_cov_lungs, diagnostic_signals.irregularity_rmssd_sec_lungs] = ...
-        compute_irregularity_metrics(resp_feat.lungs, t_grid, irregularity_win_sec, cov_thr, robust_cov_thr, rmssd_thr, pause_thr_sec, detection_metric);
-    [~, diagnostic_signals.irregularity_cov_diaph, diagnostic_signals.irregularity_robust_cov_diaph, diagnostic_signals.irregularity_rmssd_sec_diaph] = ...
-        compute_irregularity_metrics(resp_feat.diaph, t_grid, irregularity_win_sec, cov_thr, robust_cov_thr, rmssd_thr, pause_thr_sec, detection_metric);
+    diagnostic_signals.irregularity_cov_lungs = phys_feat.resp.lungs.irregularity.cov;
+    diagnostic_signals.irregularity_robust_cov_lungs = phys_feat.resp.lungs.irregularity.robust_cov;
+    diagnostic_signals.irregularity_rmssd_sec_lungs = phys_feat.resp.lungs.irregularity.rmssd_sec;
+    diagnostic_signals.irregularity_cov_diaph = phys_feat.resp.diaph.irregularity.cov;
+    diagnostic_signals.irregularity_robust_cov_diaph = phys_feat.resp.diaph.irregularity.robust_cov;
+    diagnostic_signals.irregularity_rmssd_sec_diaph = phys_feat.resp.diaph.irregularity.rmssd_sec;
 
-    amp_lungs = median_breath_amplitude_on_grid(resp_feat.lungs, t_grid, amplitude_win_sec);
-    amp_diaph = median_breath_amplitude_on_grid(resp_feat.diaph, t_grid, amplitude_win_sec);
-    [ref_lungs, lungs_ref_available] = get_resp_session_reference(resp_ref, 'lungs');
-    [ref_diaph, diaph_ref_available] = get_resp_session_reference(resp_ref, 'diaph');
-
-    diagnostic_signals.breath_amplitude_median_raw_units_lungs = amp_lungs;
-    diagnostic_signals.breath_amplitude_median_raw_units_diaph = amp_diaph;
-    diagnostic_signals.breath_amplitude_session_reference_raw_units_lungs = ref_lungs;
-    diagnostic_signals.breath_amplitude_session_reference_raw_units_diaph = ref_diaph;
-    diagnostic_signals.breath_amplitude_session_reference_available_lungs = double(lungs_ref_available);
-    diagnostic_signals.breath_amplitude_session_reference_available_diaph = double(diaph_ref_available);
-    diagnostic_signals.breath_amplitude_ratio_to_reference_lungs = amp_lungs ./ ref_lungs;
-    diagnostic_signals.breath_amplitude_ratio_to_reference_diaph = amp_diaph ./ ref_diaph;
+    diagnostic_signals.breath_amplitude_median_raw_units_lungs = phys_feat.resp.lungs.amp_window_median_raw_units;
+    diagnostic_signals.breath_amplitude_median_raw_units_diaph = phys_feat.resp.diaph.amp_window_median_raw_units;
+    diagnostic_signals.breath_amplitude_session_reference_raw_units_lungs = phys_feat.resp.lungs.session_reference_value;
+    diagnostic_signals.breath_amplitude_session_reference_raw_units_diaph = phys_feat.resp.diaph.session_reference_value;
+    diagnostic_signals.breath_amplitude_session_reference_available_lungs = double(phys_feat.resp.lungs.session_reference_available);
+    diagnostic_signals.breath_amplitude_session_reference_available_diaph = double(phys_feat.resp.diaph.session_reference_available);
+    diagnostic_signals.breath_amplitude_ratio_to_reference_lungs = phys_feat.resp.lungs.amp_ratio_session_window_median;
+    diagnostic_signals.breath_amplitude_ratio_to_reference_diaph = phys_feat.resp.diaph.amp_ratio_session_window_median;
 
     [diagnostic_signals.spo2_percent, diagnostic_signals.spo2_drop_from_baseline_percent] = ...
         spo2_on_grid(spo2_feat, baseline, t_grid);
 
-    if nargin < 7 || isempty(rea_metrics)
-        rea_metrics = compute_respiratory_asynchrony_metrics(data, resp_feat, config);
+    if nargin < 5 || isempty(rea_metrics)
+        error('MAGMA:Diagnostics:MissingReAMetrics', ...
+            'Respiratory-asynchrony diagnostics must be supplied by the specialized ReA computation.');
     end
     diagnostic_signals = add_respiratory_asynchrony_diagnostics(diagnostic_signals, rea_metrics);
-end
-
-function rr_bpm = breath_rate_trace(breaths, t_grid, win_sec)
-    rr_bpm = nan(size(t_grid));
-    if is_valid_breath_signal(breaths, false)
-        [~, rr_bpm] = compute_breath_rate_mask(breaths.peak_t, t_grid, win_sec, nan, '>=', false);
-    end
-end
-
-function amp_median = median_breath_amplitude_on_grid(breaths, t_grid, win_sec)
-    amp_median = nan(size(t_grid));
-    if ~is_valid_breath_signal(breaths, true)
-        return;
-    end
-
-    peak_t = breaths.peak_t(:);
-    amp = breaths.amp(:);
-    n = min(numel(peak_t), numel(amp));
-    peak_t = peak_t(1:n);
-    amp = amp(1:n);
-
-    for i = 1:numel(t_grid)
-        t = t_grid(i);
-        lb = t - win_sec;
-        if lb < 0
-            continue;
-        end
-
-        amp_win = amp(peak_t >= lb & peak_t <= t);
-        amp_win = amp_win(isfinite(amp_win) & amp_win > 0);
-        if ~isempty(amp_win)
-            amp_median(i) = median(amp_win, 'omitnan');
-        end
-    end
 end
 
 function [spo2_grid, spo2_drop_grid] = spo2_on_grid(spo2_feat, baseline, t_grid)

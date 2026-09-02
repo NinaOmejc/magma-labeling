@@ -1,4 +1,4 @@
-function events = detect_rapid_breathing(data, resp_ref, resp_feat, spo2_feat, config)
+function events = detect_rapid_breathing(data, phys_feat, config)
 % detect_rapid_breathing
 % Label 4 – Rapid Breathing (Tachypnea)
 %
@@ -17,17 +17,13 @@ function events = detect_rapid_breathing(data, resp_ref, resp_feat, spo2_feat, c
     events = empty_events();
 
     N = size(data,1);
-    t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';  % seconds
-
-    lungs_broken = is_lung_belt_ignored(config);
-    lungs_valid = is_valid_breath_signal(resp_feat.lungs, false) && ~lungs_broken;
-    diaph_valid = is_valid_breath_signal(resp_feat.diaph, false);
-    [ref_lungs, lungs_ref_available] = get_resp_session_reference(resp_ref, 'lungs');
-    [ref_diaph, diaph_ref_available] = get_resp_session_reference(resp_ref, 'diaph');
-    lungs_amp_valid = lungs_valid && is_valid_breath_signal(resp_feat.lungs, true) && ...
-        lungs_ref_available;
-    diaph_amp_valid = diaph_valid && is_valid_breath_signal(resp_feat.diaph, true) && ...
-        diaph_ref_available;
+    t_grid = phys_feat.resp.time_sec;
+    lungs = phys_feat.resp.lungs;
+    diaph = phys_feat.resp.diaph;
+    lungs_valid = lungs.available;
+    diaph_valid = diaph.available;
+    lungs_amp_valid = lungs.session_amplitude_available;
+    diaph_amp_valid = diaph.session_amplitude_available;
 
     if ~lungs_valid && ~diaph_valid
         fprintf('Skipping rapidB detection: no valid respiratory belt with usable breath timing.\n');
@@ -37,11 +33,6 @@ function events = detect_rapid_breathing(data, resp_ref, resp_feat, spo2_feat, c
     rr_thr_bpm = get_config_value(config, 'RaB', 'rr_thr_bpm', 20);
     min_dur_sec = get_config_value(config, 'RaB', 'min_dur_sec', 30);
     classify_depth = get_config_value(config, 'RaB', 'classify_depth', true);
-    shallow_lo_ratio = get_config_value(config, 'ShB', 'amp_ratio_low', 0.65);
-    shallow_hi_ratio = get_config_value(config, 'ShB', 'amp_ratio_high', 0.80);
-    deep_lo_ratio = get_config_value(config, 'RaB', 'deep_lo_ratio', 1.20);
-    deep_hi_ratio = get_config_value(config, 'RaB', 'deep_hi_ratio', 1.35);
-    amp_win_sec = get_config_value(config, 'ShB', 'min_dur_sec', min_dur_sec);
     subtype_min_overlap_frac = 0.5;
     mark_desat = get_config_value(config, 'RaB', 'mark_desat', true);
     desat_association_delay_sec = get_config_value(config, 'spo2', 'desat_association_delay_sec', 10);
@@ -53,13 +44,15 @@ function events = detect_rapid_breathing(data, resp_ref, resp_feat, spo2_feat, c
     rapid_lungs_rr = false(size(t_grid));
     rr_lungs = nan(size(t_grid));
     if lungs_valid
-        [rapid_lungs_rr, rr_lungs] = compute_breath_rate_mask(resp_feat.lungs.peak_t, t_grid, min_dur_sec, rr_thr_bpm, '>=', false);
+        rr_lungs = lungs.rate_rapid_window_bpm;
+        rapid_lungs_rr = isfinite(rr_lungs) & rr_lungs >= rr_thr_bpm;
     end
 
     rapid_diaph_rr = false(size(t_grid));
     rr_diaph = nan(size(t_grid));
     if diaph_valid
-        [rapid_diaph_rr, rr_diaph] = compute_breath_rate_mask(resp_feat.diaph.peak_t, t_grid, min_dur_sec, rr_thr_bpm, '>=', false);
+        rr_diaph = diaph.rate_rapid_window_bpm;
+        rapid_diaph_rr = isfinite(rr_diaph) & rr_diaph >= rr_thr_bpm;
     end
 
     [rapid_events_lungs, rapid_lungs] = sustained_condition_to_events( ...
@@ -74,17 +67,23 @@ function events = detect_rapid_breathing(data, resp_ref, resp_feat, spo2_feat, c
     shallow_amp = false(size(t_grid));
     deep_amp = false(size(t_grid));
     if classify_depth && (lungs_amp_valid || diaph_amp_valid)
-        shallow_amp = compute_amplitude_band_mask( ...
-            resp_feat, lungs_amp_valid, diaph_amp_valid, t_grid, amp_win_sec, ...
-            ref_lungs, ref_diaph, shallow_lo_ratio, shallow_hi_ratio);
-        deep_amp = compute_amplitude_band_mask( ...
-            resp_feat, lungs_amp_valid, diaph_amp_valid, t_grid, amp_win_sec, ...
-            ref_lungs, ref_diaph, deep_lo_ratio, deep_hi_ratio);
+        if lungs_amp_valid
+            shallow_amp = shallow_amp | lungs.shallow_amplitude_mask;
+            deep_amp = deep_amp | lungs.deep_amplitude_mask;
+        end
+        if diaph_amp_valid
+            shallow_amp = shallow_amp | diaph.shallow_amplitude_mask;
+            deep_amp = deep_amp | diaph.deep_amplitude_mask;
+        end
     end
 
     desat_events = empty_events();
-    if mark_desat && exist('spo2_feat','var') && ~isempty(spo2_feat) && isfield(spo2_feat,'desat_events')
-        desat_events = expand_events_for_delayed_overlap(spo2_feat.desat_events, desat_association_delay_sec);
+    if mark_desat && isfield(phys_feat, 'spo2') && ...
+            isfield(phys_feat.spo2, 'desaturation_events')
+        % Temporary saved-subtype compatibility. SpO2 remains an
+        % independent evidence stream and this tagging is removed in Phase 4.
+        desat_events = expand_events_for_delayed_overlap( ...
+            phys_feat.spo2.desaturation_events, desat_association_delay_sec);
     end
 
     events = tag_rapid_events(rapid_events, shallow_amp, deep_amp, desat_events, ...
