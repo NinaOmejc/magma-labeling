@@ -1,0 +1,134 @@
+function fig = plot_respiratory_reference(resp_feat, resp_ref, config)
+% plot_respiratory_reference
+% Plot one diagnostic view of reviewed breath amplitudes and the candidate
+% single or two-level reference. This figure does not affect detectors.
+
+    fig = [];
+    if ~isfield(config, 'resp_ref') || ~isfield(config.resp_ref, 'do_plot') || ...
+            ~config.resp_ref.do_plot
+        return;
+    end
+
+    fig = figure('Units', 'pixels', 'Position', near_fullscreen_figure_position(), ...
+        'Visible', config.make_figs_visible, 'Color', 'w');
+    tl = tiledlayout(fig, 2, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
+    title(tl, sprintf('RESPIRATORY AMPLITUDE REFERENCE | Subject %d | Measurement %d', ...
+        config.subject, config.measure));
+
+    ax1 = nexttile(tl);
+    plot_belt_reference(ax1, get_belt(resp_feat, 'lungs'), resp_ref.lungs, 'Resp-Lungs');
+    ax2 = nexttile(tl);
+    plot_belt_reference(ax2, get_belt(resp_feat, 'diaph'), resp_ref.diaph, 'Resp-Diaphragm');
+
+    linkaxes([ax1 ax2], 'x');
+    align_axes_x_widths([ax1 ax2]);
+    save_figure(config, 'respiratory_reference');
+end
+
+function plot_belt_reference(ax, breaths, belt, belt_name)
+    hold(ax, 'on');
+    grid(ax, 'on');
+    xlabel(ax, 'Breath peak time (s)');
+    ylabel(ax, 'Breath amplitude');
+
+    [peak_t, amp] = valid_amplitudes(breaths);
+    if isempty(peak_t)
+        text(ax, 0.5, 0.5, sprintf('%s unavailable | %s', belt_name, belt.quality), ...
+            'Units', 'normalized', 'HorizontalAlignment', 'center');
+        title(ax, belt_name);
+        hold(ax, 'off');
+        return;
+    end
+
+    h_amp = plot(ax, peak_t, amp, '.-', 'Color', [0.20 0.35 0.70], ...
+        'DisplayName', 'reviewed breath amplitude');
+    shade_edge_regions(ax, peak_t, belt.edge_window_sec_used);
+
+    handles = gobjects(0);
+    handles(end+1) = h_amp;
+    if isfinite(belt.start_ref)
+        h_start = yline(ax, belt.start_ref, '--', 'Color', [0.10 0.55 0.25], ...
+            'DisplayName', 'early median');
+        handles(end+1) = h_start;
+    end
+    if isfinite(belt.end_ref)
+        h_end = yline(ax, belt.end_ref, '--', 'Color', [0.80 0.35 0.10], ...
+            'DisplayName', 'late median');
+        handles(end+1) = h_end;
+    end
+
+    if belt.change_detected
+        h_change = xline(ax, belt.change_t, 'k--', 'LineWidth', 1.5, ...
+            'DisplayName', 'change candidate');
+        h_before = plot(ax, [peak_t(1) belt.change_t], [belt.ref_before belt.ref_before], ...
+            'Color', [0.45 0.10 0.65], 'LineWidth', 2, 'DisplayName', 'reference before');
+        h_after = plot(ax, [belt.change_t peak_t(end)], [belt.ref_after belt.ref_after], ...
+            'Color', [0.65 0.10 0.45], 'LineWidth', 2, 'DisplayName', 'reference after');
+        handles = [handles h_change h_before h_after];
+    end
+
+    ratio_text = numeric_text(belt.end_to_start_ratio);
+    change_text = numeric_text(belt.change_ratio);
+    title(ax, sprintf('%s | %s | start/end=%s | change=%s | quality=%s', ...
+        belt_name, belt.mode, ratio_text, change_text, belt.quality), ...
+        'Interpreter', 'none');
+    legend(ax, handles(isgraphics(handles)), 'Location', 'eastoutside');
+    hold(ax, 'off');
+
+end
+
+function shade_edge_regions(ax, peak_t, edge_window_sec)
+    if ~isfinite(edge_window_sec) || edge_window_sec <= 0
+        return;
+    end
+    y_limits = robust_plot_limits(ax);
+    t0 = peak_t(1);
+    t1 = peak_t(end);
+    patch(ax, [t0 t0+edge_window_sec t0+edge_window_sec t0], ...
+        [y_limits(1) y_limits(1) y_limits(2) y_limits(2)], [0.80 0.92 0.82], ...
+        'EdgeColor', 'none', 'FaceAlpha', 0.18, 'HandleVisibility', 'off');
+    patch(ax, [t1-edge_window_sec t1 t1 t1-edge_window_sec], ...
+        [y_limits(1) y_limits(1) y_limits(2) y_limits(2)], [0.98 0.86 0.76], ...
+        'EdgeColor', 'none', 'FaceAlpha', 0.18, 'HandleVisibility', 'off');
+end
+
+function y_limits = robust_plot_limits(ax)
+    y_limits = ylim(ax);
+    if ~all(isfinite(y_limits)) || y_limits(1) == y_limits(2)
+        y_limits = [0 1];
+    end
+end
+
+function [peak_t, amp] = valid_amplitudes(breaths)
+    peak_t = [];
+    amp = [];
+    if isempty(breaths) || ~isstruct(breaths) || ...
+            ~isfield(breaths, 'peak_t') || ~isfield(breaths, 'amp')
+        return;
+    end
+    n = min(numel(breaths.peak_t), numel(breaths.amp));
+    peak_t = breaths.peak_t(1:n);
+    amp = breaths.amp(1:n);
+    peak_t = peak_t(:);
+    amp = amp(:);
+    valid = isfinite(peak_t) & isfinite(amp) & amp > 0;
+    peak_t = peak_t(valid);
+    amp = amp(valid);
+    [peak_t, order] = sort(peak_t, 'ascend');
+    amp = amp(order);
+end
+
+function breaths = get_belt(resp_feat, name)
+    breaths = [];
+    if isstruct(resp_feat) && isfield(resp_feat, name)
+        breaths = resp_feat.(name);
+    end
+end
+
+function value = numeric_text(x)
+    if isfinite(x)
+        value = sprintf('%.3f', x);
+    else
+        value = 'n/a';
+    end
+end

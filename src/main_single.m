@@ -21,6 +21,10 @@ for isub = 1:length(config.subjects)
         % EXTRACT OR LOAD FEATURES (manually checked breath peaks/troughs + SpO2)
         resp_feat = load_or_extract_respiratory_features(data, config);
 
+        % DIAGNOSTIC RESPIRATORY AMPLITUDE REFERENCE (not used by detectors)
+        resp_ref = compute_respiratory_reference(resp_feat, config);
+        plot_respiratory_reference(resp_feat, resp_ref, config);
+
         % COMPUTE BASELINES
         baseline = compute_baseline(data, config);
         baseline = add_rolling_resp_baseline(baseline, resp_feat, size(data,1), config);
@@ -79,6 +83,7 @@ for isub = 1:length(config.subjects)
         results.mask   = label_mask;
         results.label_names = label_names;
         results.resp_feat = resp_feat;
+        results.resp_ref = resp_ref;
         results.spo2_feat = spo2_feat;
         results.diagnostic_signals = diagnostic_signals;
         results.manual_label_edit = manual_label_edit;

@@ -14,11 +14,13 @@ function [lungs_analysis, diaph_analysis, fs_analysis] = resample_respiration_fo
         error('analysis_fs must be a positive finite scalar.');
     end
 
+    if numel(lungs_master) ~= numel(diaph_master)
+        error('MAGMA:RespiratoryAsynchrony:LengthMismatch', ...
+            'Master respiratory signals must have identical sample counts.');
+    end
+
     lungs_analysis = lungs_master(:);
     diaph_analysis = diaph_master(:);
-    n_master = min(numel(lungs_analysis), numel(diaph_analysis));
-    lungs_analysis = lungs_analysis(1:n_master);
-    diaph_analysis = diaph_analysis(1:n_master);
 
     fs_analysis = min(analysis_fs, master_fs);
     if abs(fs_analysis - master_fs) > 10 * eps(master_fs)
@@ -28,7 +30,8 @@ function [lungs_analysis, diaph_analysis, fs_analysis] = resample_respiration_fo
         fs_analysis = master_fs * p / q;
     end
 
-    n_analysis = min(numel(lungs_analysis), numel(diaph_analysis));
-    lungs_analysis = lungs_analysis(1:n_analysis);
-    diaph_analysis = diaph_analysis(1:n_analysis);
+    if numel(lungs_analysis) ~= numel(diaph_analysis)
+        error('MAGMA:RespiratoryAsynchrony:LengthMismatch', ...
+            'Locally resampled respiratory signals have mismatched sample counts.');
+    end
 end

@@ -56,7 +56,13 @@ function row = label_file_to_summary_row(label_file, config)
     [file_subject, file_measure] = parse_subject_measure(label_file);
     row.subject = get_loaded_value(loaded, 'subject', file_subject);
     row.measure = get_loaded_value(loaded, 'measure', file_measure);
+    row.measurement = row.measure;
     row.subject_group = subject_group_for_subject(row.subject, config);
+    if isfield(loaded, 'resp_ref')
+        row = add_respiratory_reference_summary(row, loaded.resp_ref);
+    else
+        row = add_respiratory_reference_summary(row, []);
+    end
 
     if isfield(loaded, 'mask') && isfield(loaded, 'label_names')
         fs = get_results_fs(loaded, config);
@@ -87,6 +93,43 @@ function row = label_file_to_summary_row(label_file, config)
     if isfield(loaded, 'baseline') && isfield(loaded.baseline, 'rolling')
         row = add_numeric_struct_summaries(row, loaded.baseline.rolling, ...
             'baseline_rolling', {'t_grid'});
+    end
+end
+
+function row = add_respiratory_reference_summary(row, resp_ref)
+    row = add_belt_reference_fields(row, resp_ref, 'lungs');
+    row = add_belt_reference_fields(row, resp_ref, 'diaph');
+
+    row.change_pattern = '';
+    if isstruct(resp_ref) && isfield(resp_ref, 'change_pattern')
+        row.change_pattern = char(string(resp_ref.change_pattern));
+    end
+end
+
+function row = add_belt_reference_fields(row, resp_ref, belt_name)
+    prefix = [belt_name '_'];
+    row.([prefix 'start_end_ratio']) = NaN;
+    row.([prefix 'change_detected']) = NaN;
+    row.([prefix 'change_t']) = NaN;
+    row.([prefix 'change_ratio']) = NaN;
+    row.([prefix 'quality']) = '';
+
+    if ~isstruct(resp_ref) || ~isfield(resp_ref, belt_name) || ...
+            ~isstruct(resp_ref.(belt_name))
+        return;
+    end
+    belt = resp_ref.(belt_name);
+    row.([prefix 'start_end_ratio']) = get_struct_value(belt, 'end_to_start_ratio', NaN);
+    row.([prefix 'change_detected']) = double(get_struct_value(belt, 'change_detected', false));
+    row.([prefix 'change_t']) = get_struct_value(belt, 'change_t', NaN);
+    row.([prefix 'change_ratio']) = get_struct_value(belt, 'change_ratio', NaN);
+    row.([prefix 'quality']) = char(string(get_struct_value(belt, 'quality', '')));
+end
+
+function value = get_struct_value(s, name, default_value)
+    value = default_value;
+    if isfield(s, name)
+        value = s.(name);
     end
 end
 

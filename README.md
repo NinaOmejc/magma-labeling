@@ -67,6 +67,8 @@ Each detector has its own settings block, for example `config.ShB`, `config.IrB`
 
 Preprocessing preserves the native sample count and alignment of every channel. It detrends only the configured respiratory belts. Respiratory-asynchrony analysis alone creates a temporary, anti-aliased 20 Hz representation controlled by `config.ReA.analysis_fs`; its results are mapped back to the 200 Hz master timeline.
 
+`config.resp_ref` controls a diagnostic-only analysis of respiratory amplitude stability. It compares reviewed early/late breath amplitudes and can identify at most one persistent step-like change candidate. The saved `results.resp_ref` is not used by any label detector; existing static and rolling baselines remain the detector inputs.
+
 Plot behavior is controlled per module:
 
 - `config.<module>.do_plot = true` generates and saves that module's diagnostic figure(s).
@@ -151,6 +153,7 @@ results.events             = sub_events;          % Detected event struct array
 results.mask               = label_mask;          % Sample-level label mask [N x labels]
 results.label_names        = label_names;         % Label names matching mask columns
 results.resp_feat          = resp_feat;           % Respiratory features for lungs and diaphragm
+results.resp_ref           = resp_ref;            % Diagnostic respiratory amplitude-reference stability
 results.spo2_feat          = spo2_feat;           % SpO2 features and desaturation candidates
 results.diagnostic_signals = diagnostic_signals;  % Continuous detector-adjacent signals
 results.manual_label_edit  = manual_label_edit;   % Manual edit metadata and changed label list

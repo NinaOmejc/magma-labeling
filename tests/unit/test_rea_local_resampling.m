@@ -51,3 +51,9 @@ function testReAMetricsMapBackToMasterDuration(testCase)
         abs(rea.analysis_duration_sec - (n_samples-1)/config.fs), ...
         1/rea.analysis_fs);
 end
+
+function testMismatchedMasterLengthsAreRejected(testCase)
+    verifyError(testCase, @() resample_respiration_for_analysis( ...
+        zeros(100,1), zeros(99,1), 200, 20), ...
+        'MAGMA:RespiratoryAsynchrony:LengthMismatch');
+end

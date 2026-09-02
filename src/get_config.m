@@ -72,6 +72,15 @@ function config = get_config()
     config.resp.manual_control = true;          % allow click-to-add/remove breath peaks before label detection (it takes time, but important to check the quality of detection, and not blindly follow automatic detection - GUI will appear for editing.)
     config.resp.manual_window_sec = 300;        % visible time span for manual breath GUI scrolling
     config.resp.manual_peak_search_sec = 1.0;   % add peak at local maximum within this window around the click
+
+    %---- DIAGNOSTIC RESPIRATORY AMPLITUDE REFERENCE STABILITY ----
+    % These are conservative signal-stability heuristics, not physiological
+    % diagnostic thresholds. Phase 2A results do not affect label detection.
+    config.resp_ref.edge_window_sec = 300;       % early/late comparison window, capped at one quarter of short recordings
+    config.resp_ref.change_trigger_frac = 0.25; % symmetric fractional edge-level difference that triggers one-step inspection
+    config.resp_ref.min_segment_breaths = 12;   % minimum valid breaths on each side of a candidate split
+    config.resp_ref.min_cost_improvement = 0.30;% minimum robust L1 cost improvement for a two-level candidate
+    config.resp_ref.do_plot = true;             % save one diagnostic respiratory-reference figure
         
     %---- SPO2 / DESATURATION FEATURE EXTRACTION
     config.spo2.spo2_floor  = 90;   % absolute threshold (%) if spo2 goes below, its considered desaturation
