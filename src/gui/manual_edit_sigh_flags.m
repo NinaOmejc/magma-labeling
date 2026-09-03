@@ -1,6 +1,6 @@
 function [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags( ...
     data, bL, bD, flags_lungs, flags_diaph, spo2_ref, ...
-    session_reference, spo2_feat, config, window_sec)
+    session_reference, diagnostics_Des, config, window_sec)
 % Edit sigh flags using click times on the config.fs master timeline.
     review_mask = false(size(data,1), 1);
     if ~isfield(config, 'channels')
@@ -34,7 +34,7 @@ function [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags( ...
 
     ax3 = subplot(3,1,3);
     plot_spo2_diagnostic_panel(ax3, data, spo2_ref, session_reference, ...
-        spo2_feat, config, 'SpO2 with desaturation thresholds');
+        diagnostics_Des, config, 'SpO2 with desaturation thresholds');
 
     sgtitle(['GUI SIGH MANUAL EDITING' newline ...
         'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)]);

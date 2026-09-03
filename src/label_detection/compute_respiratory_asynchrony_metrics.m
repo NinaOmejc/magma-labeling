@@ -1,4 +1,4 @@
-function rea = compute_respiratory_asynchrony_metrics(data, resp_feat, session_reference, config)
+function rea = compute_respiratory_asynchrony_metrics(data, resp_cycles, session_reference, config)
 % compute_respiratory_asynchrony_metrics
 % Wavelet phase-coherence diagnostics for Label 10. Master inputs and output
 % timing stay at config.fs; only the internal wavelet signals use analysis_fs.
@@ -26,11 +26,11 @@ function rea = compute_respiratory_asynchrony_metrics(data, resp_feat, session_r
         return;
     end
 
-    if ~isempty(resp_feat) && ~is_valid_breath_signal(resp_feat.lungs, false)
+    if ~isempty(resp_cycles) && ~is_valid_breath_signal(resp_cycles.lungs, false)
         rea.skip_code = 3;
         return;
     end
-    if ~isempty(resp_feat) && ~is_valid_breath_signal(resp_feat.diaph, false)
+    if ~isempty(resp_cycles) && ~is_valid_breath_signal(resp_cycles.diaph, false)
         rea.skip_code = 4;
         return;
     end

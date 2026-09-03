@@ -1,4 +1,4 @@
-function [events, boundary_info] = detect_deep_breathing(data, phys_feat, config)
+function [events, boundary_info] = detect_deep_breathing(data, resp_features, config)
 % detect_deep_breathing
 % Label 2 - sustained relative increase in respiratory-belt excursion.
 % A reviewed breath is deep when its excursion divided by that belt's fixed
@@ -10,9 +10,9 @@ function [events, boundary_info] = detect_deep_breathing(data, phys_feat, config
 
     events = empty_events();
     N = size(data, 1);
-    t_grid = phys_feat.resp.time_sec;
-    lungs = phys_feat.resp.lungs;
-    diaph = phys_feat.resp.diaph;
+    t_grid = resp_features.resp.time_sec;
+    lungs = resp_features.resp.lungs;
+    diaph = resp_features.resp.diaph;
     boundary_info = make_label_boundary_info('deep', ...
         'detect_deep_breathing', 'not_evaluated', empty_events(), ...
         empty_events(), NaN, '', [], [], []);
@@ -73,7 +73,7 @@ function [events, boundary_info] = detect_deep_breathing(data, phys_feat, config
             'localized_mask_diaph', localized_diaph, ...
             'output_name', 'deep_breathing');
         plot_amplitude_state_diagnostic( ...
-            phys_feat, events_lungs, events_diaph, config, opts);
+            resp_features, events_lungs, events_diaph, config, opts);
     end
 end
 

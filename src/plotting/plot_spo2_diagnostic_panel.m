@@ -1,5 +1,5 @@
 function h = plot_spo2_diagnostic_panel( ...
-    ax, data, spo2_ref, session_reference, spo2_feat, config, title_text)
+    ax, data, spo2_ref, session_reference, diagnostics_Des, config, title_text)
 % plot_spo2_diagnostic_panel
 % Shared SpO2 panel using the common session-reference interval and its
 % independently estimated SpO2 reference statistic.
@@ -18,7 +18,7 @@ function h = plot_spo2_diagnostic_panel( ...
     ylabel(ax, 'SpO2 (%)');
     title(ax, title_text);
 
-    [t_spo2, spo2] = get_spo2_trace(data, spo2_feat, config);
+    [t_spo2, spo2] = get_spo2_trace(data, diagnostics_Des, config);
     if isempty(spo2)
         plot(ax, 0, 0, 'w', 'HandleVisibility', 'off');
         ylim(ax, [-1 1]);
@@ -51,8 +51,10 @@ function h = plot_spo2_diagnostic_panel( ...
         'DisplayName', sprintf('%g%% floor', floor_thr));
 
     h.desat_events = gobjects(0);
-    if isstruct(spo2_feat) && isfield(spo2_feat, 'desat_events') && ~isempty(spo2_feat.desat_events)
-        h.desat_events = shade_events_on_axis(ax, spo2_feat.desat_events, 'desaturation');
+    if isstruct(diagnostics_Des) && isfield(diagnostics_Des, 'events') && ...
+            ~isempty(diagnostics_Des.events)
+        h.desat_events = shade_events_on_axis( ...
+            ax, diagnostics_Des.events, 'desaturation');
     end
 
     plot(ax, t_spo2, spo2, 'k', 'HandleVisibility', 'off');
@@ -60,12 +62,15 @@ function h = plot_spo2_diagnostic_panel( ...
     hold(ax, 'off');
 end
 
-function [t_spo2, spo2] = get_spo2_trace(data, spo2_feat, config)
-    if nargin >= 2 && ~isempty(spo2_feat) && isstruct(spo2_feat) && ...
-            isfield(spo2_feat, 'spo2') && isfield(spo2_feat, 't_spo2') && ...
-            ~isempty(spo2_feat.spo2) && ~isempty(spo2_feat.t_spo2)
-        spo2 = spo2_feat.spo2(:);
-        t_spo2 = spo2_feat.t_spo2(:);
+function [t_spo2, spo2] = get_spo2_trace(data, diagnostics_Des, config)
+    if nargin >= 2 && ~isempty(diagnostics_Des) && ...
+            isstruct(diagnostics_Des) && ...
+            isfield(diagnostics_Des, 'spo2') && ...
+            isfield(diagnostics_Des, 'time_sec') && ...
+            ~isempty(diagnostics_Des.spo2) && ...
+            ~isempty(diagnostics_Des.time_sec)
+        spo2 = diagnostics_Des.spo2(:);
+        t_spo2 = diagnostics_Des.time_sec(:);
         n = min(numel(spo2), numel(t_spo2));
         spo2 = spo2(1:n);
         t_spo2 = t_spo2(1:n);

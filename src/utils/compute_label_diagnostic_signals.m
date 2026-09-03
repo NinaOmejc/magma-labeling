@@ -1,14 +1,14 @@
 function diagnostic_signals = compute_label_diagnostic_signals( ...
-    phys_feat, spo2_ref, spo2_feat, config, rea_metrics, apnea_metrics, sigh_metrics, csr_metrics)
+    resp_features, spo2_ref, diagnostics_Des, config, rea_metrics, apnea_metrics, sigh_metrics, csr_metrics)
 % compute_label_diagnostic_signals
 % Save detector-adjacent signals on the config.fs master recording timeline.
 
-    t_grid = phys_feat.resp.time_sec;
+    t_grid = resp_features.resp.time_sec;
 
-    rapid_win_sec = phys_feat.resp.rate_windows_sec.rapid;
-    slow_win_sec = phys_feat.resp.rate_windows_sec.slow;
+    rapid_win_sec = resp_features.resp.rate_windows_sec.rapid;
+    slow_win_sec = resp_features.resp.rate_windows_sec.slow;
     irregularity_win_sec = get_config_value(config, 'IrB', 'analysis_win_sec', 60);
-    amplitude_win_sec = phys_feat.resp.amplitude_windows_sec.shallow;
+    amplitude_win_sec = resp_features.resp.amplitude_windows_sec.shallow;
     cov_thr = get_config_value(config, 'IrB', 'cov_thr', 0.3);
     robust_cov_thr = get_config_value(config, 'IrB', 'robust_cov_thr', 0.25);
     rmssd_thr = get_config_value(config, 'IrB', 'rmssd_thr', 0.0);
@@ -30,78 +30,78 @@ function diagnostic_signals = compute_label_diagnostic_signals( ...
     diagnostic_signals.irregularity_rmssd_thr_sec = rmssd_thr;
     diagnostic_signals.irregularity_pause_thr_sec = pause_thr_sec;
 
-    diagnostic_signals.breathing_rate_rapid_window_bpm_lungs = phys_feat.resp.lungs.rate_rapid_window_bpm;
-    diagnostic_signals.breathing_rate_rapid_window_bpm_diaph = phys_feat.resp.diaph.rate_rapid_window_bpm;
-    diagnostic_signals.breathing_rate_slow_window_bpm_lungs = phys_feat.resp.lungs.rate_slow_window_bpm;
-    diagnostic_signals.breathing_rate_slow_window_bpm_diaph = phys_feat.resp.diaph.rate_slow_window_bpm;
-    diagnostic_signals.rapid_evidence_endpoint_lungs = double(phys_feat.resp.lungs.rate_rapid_endpoint_mask);
-    diagnostic_signals.rapid_evidence_endpoint_diaph = double(phys_feat.resp.diaph.rate_rapid_endpoint_mask);
-    diagnostic_signals.rapid_inferred_state_lungs = double(phys_feat.resp.lungs.rate_rapid_state_mask);
-    diagnostic_signals.rapid_inferred_state_diaph = double(phys_feat.resp.diaph.rate_rapid_state_mask);
-    diagnostic_signals.slow_evidence_endpoint_lungs = double(phys_feat.resp.lungs.rate_slow_endpoint_mask);
-    diagnostic_signals.slow_evidence_endpoint_diaph = double(phys_feat.resp.diaph.rate_slow_endpoint_mask);
-    diagnostic_signals.slow_inferred_state_lungs = double(phys_feat.resp.lungs.rate_slow_state_mask);
-    diagnostic_signals.slow_inferred_state_diaph = double(phys_feat.resp.diaph.rate_slow_state_mask);
+    diagnostic_signals.breathing_rate_rapid_window_bpm_lungs = resp_features.resp.lungs.rate_rapid_window_bpm;
+    diagnostic_signals.breathing_rate_rapid_window_bpm_diaph = resp_features.resp.diaph.rate_rapid_window_bpm;
+    diagnostic_signals.breathing_rate_slow_window_bpm_lungs = resp_features.resp.lungs.rate_slow_window_bpm;
+    diagnostic_signals.breathing_rate_slow_window_bpm_diaph = resp_features.resp.diaph.rate_slow_window_bpm;
+    diagnostic_signals.rapid_evidence_endpoint_lungs = double(resp_features.resp.lungs.rate_rapid_endpoint_mask);
+    diagnostic_signals.rapid_evidence_endpoint_diaph = double(resp_features.resp.diaph.rate_rapid_endpoint_mask);
+    diagnostic_signals.rapid_inferred_state_lungs = double(resp_features.resp.lungs.rate_rapid_state_mask);
+    diagnostic_signals.rapid_inferred_state_diaph = double(resp_features.resp.diaph.rate_rapid_state_mask);
+    diagnostic_signals.slow_evidence_endpoint_lungs = double(resp_features.resp.lungs.rate_slow_endpoint_mask);
+    diagnostic_signals.slow_evidence_endpoint_diaph = double(resp_features.resp.diaph.rate_slow_endpoint_mask);
+    diagnostic_signals.slow_inferred_state_lungs = double(resp_features.resp.lungs.rate_slow_state_mask);
+    diagnostic_signals.slow_inferred_state_diaph = double(resp_features.resp.diaph.rate_slow_state_mask);
     diagnostic_signals.rapid_margin_bpm_lungs = ...
-        phys_feat.resp.lungs.rate_rapid_window_bpm - config.RaB.rr_thr_bpm;
+        resp_features.resp.lungs.rate_rapid_window_bpm - config.RaB.rr_thr_bpm;
     diagnostic_signals.rapid_margin_bpm_diaph = ...
-        phys_feat.resp.diaph.rate_rapid_window_bpm - config.RaB.rr_thr_bpm;
+        resp_features.resp.diaph.rate_rapid_window_bpm - config.RaB.rr_thr_bpm;
     diagnostic_signals.slow_margin_bpm_lungs = ...
-        config.SlB.rr_thr_bpm - phys_feat.resp.lungs.rate_slow_window_bpm;
+        config.SlB.rr_thr_bpm - resp_features.resp.lungs.rate_slow_window_bpm;
     diagnostic_signals.slow_margin_bpm_diaph = ...
-        config.SlB.rr_thr_bpm - phys_feat.resp.diaph.rate_slow_window_bpm;
+        config.SlB.rr_thr_bpm - resp_features.resp.diaph.rate_slow_window_bpm;
 
-    diagnostic_signals.irregularity_cov_lungs = phys_feat.resp.lungs.irregularity.cov;
-    diagnostic_signals.irregularity_robust_cov_lungs = phys_feat.resp.lungs.irregularity.robust_cov;
-    diagnostic_signals.irregularity_rmssd_sec_lungs = phys_feat.resp.lungs.irregularity.rmssd_sec;
-    diagnostic_signals.irregularity_cov_diaph = phys_feat.resp.diaph.irregularity.cov;
-    diagnostic_signals.irregularity_robust_cov_diaph = phys_feat.resp.diaph.irregularity.robust_cov;
-    diagnostic_signals.irregularity_rmssd_sec_diaph = phys_feat.resp.diaph.irregularity.rmssd_sec;
-    diagnostic_signals.irregularity_evidence_endpoint_lungs = double(phys_feat.resp.lungs.irregularity.endpoint_mask);
-    diagnostic_signals.irregularity_evidence_endpoint_diaph = double(phys_feat.resp.diaph.irregularity.endpoint_mask);
-    diagnostic_signals.irregularity_inferred_state_lungs = double(phys_feat.resp.lungs.irregularity.window_mask);
-    diagnostic_signals.irregularity_inferred_state_diaph = double(phys_feat.resp.diaph.irregularity.window_mask);
-    diagnostic_signals.irregularity_pause_exclusion_lungs = double(phys_feat.resp.lungs.irregularity.pause_exclusion_mask);
-    diagnostic_signals.irregularity_pause_exclusion_diaph = double(phys_feat.resp.diaph.irregularity.pause_exclusion_mask);
+    diagnostic_signals.irregularity_cov_lungs = resp_features.resp.lungs.irregularity.cov;
+    diagnostic_signals.irregularity_robust_cov_lungs = resp_features.resp.lungs.irregularity.robust_cov;
+    diagnostic_signals.irregularity_rmssd_sec_lungs = resp_features.resp.lungs.irregularity.rmssd_sec;
+    diagnostic_signals.irregularity_cov_diaph = resp_features.resp.diaph.irregularity.cov;
+    diagnostic_signals.irregularity_robust_cov_diaph = resp_features.resp.diaph.irregularity.robust_cov;
+    diagnostic_signals.irregularity_rmssd_sec_diaph = resp_features.resp.diaph.irregularity.rmssd_sec;
+    diagnostic_signals.irregularity_evidence_endpoint_lungs = double(resp_features.resp.lungs.irregularity.endpoint_mask);
+    diagnostic_signals.irregularity_evidence_endpoint_diaph = double(resp_features.resp.diaph.irregularity.endpoint_mask);
+    diagnostic_signals.irregularity_inferred_state_lungs = double(resp_features.resp.lungs.irregularity.window_mask);
+    diagnostic_signals.irregularity_inferred_state_diaph = double(resp_features.resp.diaph.irregularity.window_mask);
+    diagnostic_signals.irregularity_pause_exclusion_lungs = double(resp_features.resp.lungs.irregularity.pause_exclusion_mask);
+    diagnostic_signals.irregularity_pause_exclusion_diaph = double(resp_features.resp.diaph.irregularity.pause_exclusion_mask);
     [diagnostic_signals.irregularity_selected_metric_lungs, ...
         diagnostic_signals.irregularity_selected_metric_diaph, ...
         diagnostic_signals.irregularity_selected_margin_lungs, ...
         diagnostic_signals.irregularity_selected_margin_diaph] = ...
-        selected_irregularity_evidence(phys_feat, detection_metric, ...
+        selected_irregularity_evidence(resp_features, detection_metric, ...
             cov_thr, robust_cov_thr, rmssd_thr);
 
-    diagnostic_signals.breath_amplitude_median_raw_units_lungs = phys_feat.resp.lungs.amp_window_median_raw_units;
-    diagnostic_signals.breath_amplitude_median_raw_units_diaph = phys_feat.resp.diaph.amp_window_median_raw_units;
-    diagnostic_signals.breath_amplitude_session_reference_raw_units_lungs = phys_feat.resp.lungs.session_reference_value;
-    diagnostic_signals.breath_amplitude_session_reference_raw_units_diaph = phys_feat.resp.diaph.session_reference_value;
-    diagnostic_signals.breath_amplitude_session_reference_available_lungs = double(phys_feat.resp.lungs.session_reference_available);
-    diagnostic_signals.breath_amplitude_session_reference_available_diaph = double(phys_feat.resp.diaph.session_reference_available);
-    diagnostic_signals.breath_amplitude_ratio_to_reference_lungs = phys_feat.resp.lungs.amp_ratio_session_window_median;
-    diagnostic_signals.breath_amplitude_ratio_to_reference_diaph = phys_feat.resp.diaph.amp_ratio_session_window_median;
-    diagnostic_signals.deep_breath_amplitude_ratio_to_reference_lungs = phys_feat.resp.lungs.deep_amp_ratio_session_window_median;
-    diagnostic_signals.deep_breath_amplitude_ratio_to_reference_diaph = phys_feat.resp.diaph.deep_amp_ratio_session_window_median;
-    diagnostic_signals.shallow_evidence_endpoint_lungs = double(phys_feat.resp.lungs.shallow_amplitude_endpoint_mask);
-    diagnostic_signals.shallow_evidence_endpoint_diaph = double(phys_feat.resp.diaph.shallow_amplitude_endpoint_mask);
-    diagnostic_signals.shallow_inferred_state_lungs = double(phys_feat.resp.lungs.shallow_amplitude_mask);
-    diagnostic_signals.shallow_inferred_state_diaph = double(phys_feat.resp.diaph.shallow_amplitude_mask);
-    diagnostic_signals.deep_evidence_endpoint_lungs = double(phys_feat.resp.lungs.deep_amplitude_endpoint_mask);
-    diagnostic_signals.deep_evidence_endpoint_diaph = double(phys_feat.resp.diaph.deep_amplitude_endpoint_mask);
-    diagnostic_signals.deep_inferred_state_lungs = double(phys_feat.resp.lungs.deep_amplitude_mask);
-    diagnostic_signals.deep_inferred_state_diaph = double(phys_feat.resp.diaph.deep_amplitude_mask);
+    diagnostic_signals.breath_amplitude_median_raw_units_lungs = resp_features.resp.lungs.amp_window_median_raw_units;
+    diagnostic_signals.breath_amplitude_median_raw_units_diaph = resp_features.resp.diaph.amp_window_median_raw_units;
+    diagnostic_signals.breath_amplitude_session_reference_raw_units_lungs = resp_features.resp.lungs.session_reference_value;
+    diagnostic_signals.breath_amplitude_session_reference_raw_units_diaph = resp_features.resp.diaph.session_reference_value;
+    diagnostic_signals.breath_amplitude_session_reference_available_lungs = double(resp_features.resp.lungs.session_reference_available);
+    diagnostic_signals.breath_amplitude_session_reference_available_diaph = double(resp_features.resp.diaph.session_reference_available);
+    diagnostic_signals.breath_amplitude_ratio_to_reference_lungs = resp_features.resp.lungs.amp_ratio_session_window_median;
+    diagnostic_signals.breath_amplitude_ratio_to_reference_diaph = resp_features.resp.diaph.amp_ratio_session_window_median;
+    diagnostic_signals.deep_breath_amplitude_ratio_to_reference_lungs = resp_features.resp.lungs.deep_amp_ratio_session_window_median;
+    diagnostic_signals.deep_breath_amplitude_ratio_to_reference_diaph = resp_features.resp.diaph.deep_amp_ratio_session_window_median;
+    diagnostic_signals.shallow_evidence_endpoint_lungs = double(resp_features.resp.lungs.shallow_amplitude_endpoint_mask);
+    diagnostic_signals.shallow_evidence_endpoint_diaph = double(resp_features.resp.diaph.shallow_amplitude_endpoint_mask);
+    diagnostic_signals.shallow_inferred_state_lungs = double(resp_features.resp.lungs.shallow_amplitude_mask);
+    diagnostic_signals.shallow_inferred_state_diaph = double(resp_features.resp.diaph.shallow_amplitude_mask);
+    diagnostic_signals.deep_evidence_endpoint_lungs = double(resp_features.resp.lungs.deep_amplitude_endpoint_mask);
+    diagnostic_signals.deep_evidence_endpoint_diaph = double(resp_features.resp.diaph.deep_amplitude_endpoint_mask);
+    diagnostic_signals.deep_inferred_state_lungs = double(resp_features.resp.lungs.deep_amplitude_mask);
+    diagnostic_signals.deep_inferred_state_diaph = double(resp_features.resp.diaph.deep_amplitude_mask);
     diagnostic_signals.deep_margin_ratio_lungs = ...
-        phys_feat.resp.lungs.deep_amp_ratio_session_window_median - config.DeB.amp_ratio_thr;
+        resp_features.resp.lungs.deep_amp_ratio_session_window_median - config.DeB.amp_ratio_thr;
     diagnostic_signals.deep_margin_ratio_diaph = ...
-        phys_feat.resp.diaph.deep_amp_ratio_session_window_median - config.DeB.amp_ratio_thr;
+        resp_features.resp.diaph.deep_amp_ratio_session_window_median - config.DeB.amp_ratio_thr;
     diagnostic_signals.shallow_lower_margin_ratio_lungs = ...
-        phys_feat.resp.lungs.amp_ratio_session_window_median - config.ShB.amp_ratio_low;
+        resp_features.resp.lungs.amp_ratio_session_window_median - config.ShB.amp_ratio_low;
     diagnostic_signals.shallow_upper_margin_ratio_lungs = ...
-        config.ShB.amp_ratio_high - phys_feat.resp.lungs.amp_ratio_session_window_median;
+        config.ShB.amp_ratio_high - resp_features.resp.lungs.amp_ratio_session_window_median;
     diagnostic_signals.shallow_lower_margin_ratio_diaph = ...
-        phys_feat.resp.diaph.amp_ratio_session_window_median - config.ShB.amp_ratio_low;
+        resp_features.resp.diaph.amp_ratio_session_window_median - config.ShB.amp_ratio_low;
     diagnostic_signals.shallow_upper_margin_ratio_diaph = ...
-        config.ShB.amp_ratio_high - phys_feat.resp.diaph.amp_ratio_session_window_median;
+        config.ShB.amp_ratio_high - resp_features.resp.diaph.amp_ratio_session_window_median;
 
-    balance = phys_feat.resp.thoracoabdominal_balance;
+    balance = resp_features.resp.thoracoabdominal_balance;
     diagnostic_signals.thoracic_dominance_available = double(balance.available);
     diagnostic_signals.thoracic_ratio_window_median = balance.thoracic_ratio_window_median;
     diagnostic_signals.abdominal_ratio_window_median = balance.abdominal_ratio_window_median;
@@ -114,7 +114,7 @@ function diagnostic_signals = compute_label_diagnostic_signals( ...
         balance.thoracic_to_abdominal_ratio - balance.dominance_ratio_threshold;
 
     [diagnostic_signals.spo2_percent, diagnostic_signals.spo2_drop_from_reference_percent] = ...
-        spo2_on_grid(spo2_feat, spo2_ref, t_grid);
+        spo2_on_grid(diagnostics_Des, spo2_ref, t_grid);
 
     if nargin < 5 || isempty(rea_metrics)
         error('MAGMA:Diagnostics:MissingReAMetrics', ...
@@ -171,12 +171,12 @@ function values = cycle_field(cycles, name)
 end
 
 function [metric_lungs, metric_diaph, margin_lungs, margin_diaph] = ...
-    selected_irregularity_evidence(phys_feat, metric_name, cov_thr, robust_thr, rmssd_thr)
+    selected_irregularity_evidence(resp_features, metric_name, cov_thr, robust_thr, rmssd_thr)
 
     [metric_lungs, margin_lungs] = selected_for_belt( ...
-        phys_feat.resp.lungs.irregularity, metric_name, cov_thr, robust_thr, rmssd_thr);
+        resp_features.resp.lungs.irregularity, metric_name, cov_thr, robust_thr, rmssd_thr);
     [metric_diaph, margin_diaph] = selected_for_belt( ...
-        phys_feat.resp.diaph.irregularity, metric_name, cov_thr, robust_thr, rmssd_thr);
+        resp_features.resp.diaph.irregularity, metric_name, cov_thr, robust_thr, rmssd_thr);
 end
 
 function [metric, margin] = selected_for_belt(irregularity, metric_name, cov_thr, robust_thr, rmssd_thr)
@@ -202,16 +202,18 @@ function [metric, margin] = selected_for_belt(irregularity, metric_name, cov_thr
     end
 end
 
-function [spo2_grid, spo2_drop_grid] = spo2_on_grid(spo2_feat, spo2_ref, t_grid)
+function [spo2_grid, spo2_drop_grid] = spo2_on_grid(diagnostics_Des, spo2_ref, t_grid)
     spo2_grid = nan(size(t_grid));
     spo2_drop_grid = nan(size(t_grid));
 
-    if isempty(spo2_feat) || ~isstruct(spo2_feat) || ~isfield(spo2_feat, 't_spo2') || ~isfield(spo2_feat, 'spo2')
+    if isempty(diagnostics_Des) || ~isstruct(diagnostics_Des) || ...
+            ~isfield(diagnostics_Des, 'time_sec') || ...
+            ~isfield(diagnostics_Des, 'spo2')
         return;
     end
 
-    t_spo2 = spo2_feat.t_spo2(:);
-    spo2 = spo2_feat.spo2(:);
+    t_spo2 = diagnostics_Des.time_sec(:);
+    spo2 = diagnostics_Des.spo2(:);
     valid = isfinite(t_spo2) & isfinite(spo2);
     if nnz(valid) < 2
         return;

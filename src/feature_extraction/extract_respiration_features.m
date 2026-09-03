@@ -1,5 +1,5 @@
-function resp_feat = extract_respiration_features(data, config)
-% Extract respiratory features using master sample indices at config.fs.
+function resp_cycles = extract_respiration_features(data, config)
+% Extract respiratory cycles using master sample indices at config.fs.
     
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
@@ -8,30 +8,48 @@ function resp_feat = extract_respiration_features(data, config)
     idx_diaph = config.channels.diaph_idx;
 
     % ---- breath series (peaks + per-breath amplitudes) ----
-    resp_feat = struct();
+    resp_cycles = struct();
     if ~isempty(idx_lungs)
-        resp_feat.lungs = extract_respiration_feature(data(:, idx_lungs), config, 'lungs');
+        resp_cycles.lungs = extract_respiration_feature(data(:, idx_lungs), config, 'lungs');
     else
-        resp_feat.lungs = empty_respiration_feature('lungs');
+        resp_cycles.lungs = empty_respiration_feature('lungs');
     end
     if ~isempty(idx_diaph)
-        resp_feat.diaph = extract_respiration_feature(data(:, idx_diaph), config, 'diaph');
+        resp_cycles.diaph = extract_respiration_feature(data(:, idx_diaph), config, 'diaph');
     else
-        resp_feat.diaph = empty_respiration_feature('diaph');
+        resp_cycles.diaph = empty_respiration_feature('diaph');
     end
 
+    review_status = 'automatic';
+    manual_review_performed = false;
+    manual_edits_made = false;
+
     if isfield(config.resp, 'manual_control') && config.resp.manual_control
-        edit_lungs = is_editable_resp_signal(resp_feat.lungs) && ~is_lung_belt_ignored(config);
-        edit_diaph = is_editable_resp_signal(resp_feat.diaph);
+        edit_lungs = is_editable_resp_signal(resp_cycles.lungs) && ~is_lung_belt_ignored(config);
+        edit_diaph = is_editable_resp_signal(resp_cycles.diaph);
 
         if edit_lungs || edit_diaph
-            [resp_feat.lungs, resp_feat.diaph] = manual_edit_respiration_features(data, resp_feat.lungs, resp_feat.diaph, config);
+            peak_idx_lungs_before = resp_cycles.lungs.peak_idx;
+            peak_idx_diaph_before = resp_cycles.diaph.peak_idx;
+            [resp_cycles.lungs, resp_cycles.diaph] = manual_edit_respiration_features( ...
+                data, resp_cycles.lungs, resp_cycles.diaph, config);
+            manual_review_performed = true;
+            manual_edits_made = ...
+                (edit_lungs && peak_indices_changed( ...
+                    peak_idx_lungs_before, resp_cycles.lungs.peak_idx)) || ...
+                (edit_diaph && peak_indices_changed( ...
+                    peak_idx_diaph_before, resp_cycles.diaph.peak_idx));
+            if manual_edits_made
+                review_status = 'manual_reviewed_edited';
+            else
+                review_status = 'manual_reviewed_unchanged';
+            end
             if isfield(config.resp, 'do_plot') && config.resp.do_plot
                 if edit_lungs
-                    save_final_respiration_feature_figure(resp_feat.lungs, config, 'lungs');
+                    save_final_respiration_feature_figure(resp_cycles.lungs, config, 'lungs');
                 end
                 if edit_diaph
-                    save_final_respiration_feature_figure(resp_feat.diaph, config, 'diaph');
+                    save_final_respiration_feature_figure(resp_cycles.diaph, config, 'diaph');
                 end
             end
         else
@@ -39,6 +57,16 @@ function resp_feat = extract_respiration_features(data, config)
                 'Manual breath editing requires at least one usable respiratory belt signal and was skipped.');
         end
     end
+
+    resp_cycles.provenance = struct( ...
+        'review_status', review_status, ...
+        'manual_review_performed', manual_review_performed, ...
+        'manual_edits_made', manual_edits_made, ...
+        'loaded_from_cache', false);
+end
+
+function tf = peak_indices_changed(before, after)
+    tf = ~isequal(before(:), after(:));
 end
 
 function save_final_respiration_feature_figure(b, config, basename)

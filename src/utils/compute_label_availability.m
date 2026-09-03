@@ -1,5 +1,5 @@
 function [label_available, reason] = compute_label_availability( ...
-    label_names, phys_feat, spo2_feat, rea, apnea, sigh, csr)
+    label_names, resp_features, diagnostics_Des, rea, apnea, sigh, csr)
 % compute_label_availability
 % Central recording-level scientific assessability for canonical labels.
 % input_config only describes whether detector execution can be attempted;
@@ -9,8 +9,8 @@ function [label_available, reason] = compute_label_availability( ...
     label_available = false(1, numel(label_names));
     reason = repmat({'detector_analysis_failed'}, 1, numel(label_names));
 
-    lungs = phys_feat.resp.lungs;
-    diaph = phys_feat.resp.diaph;
+    lungs = resp_features.resp.lungs;
+    diaph = resp_features.resp.diaph;
     any_resp = lungs.available || diaph.available;
     session_amp = lungs.session_amplitude_available || ...
         diaph.session_amplitude_available;
@@ -49,12 +49,12 @@ function [label_available, reason] = compute_label_availability( ...
                     reason{i} = 'respiratory_asynchrony_analysis_invalid';
                 end
             case 'desat'
-                label_available(i) = isfield(phys_feat, 'spo2') && ...
-                    isfield(phys_feat.spo2, 'available') && ...
-                    logical(phys_feat.spo2.available);
+                label_available(i) = isstruct(diagnostics_Des) && ...
+                    isfield(diagnostics_Des, 'detection_available') && ...
+                    logical(diagnostics_Des.detection_available);
                 if label_available(i)
                     reason{i} = 'available';
-                elseif ~has_spo2_signal(spo2_feat)
+                elseif ~has_spo2_signal(diagnostics_Des)
                     reason{i} = 'missing_spo2';
                 else
                     reason{i} = 'invalid_spo2';
@@ -88,7 +88,7 @@ function [label_available, reason] = compute_label_availability( ...
                 end
             case 'thoracic'
                 label_available(i) = ...
-                    phys_feat.resp.thoracoabdominal_balance.available;
+                    resp_features.resp.thoracoabdominal_balance.available;
                 if label_available(i)
                     reason{i} = 'available';
                 elseif ~(lungs.available && diaph.available)
@@ -130,10 +130,10 @@ function tf = diagnostic_available(value)
         isscalar(value.available) && logical(value.available);
 end
 
-function tf = has_spo2_signal(spo2_feat)
-    tf = isstruct(spo2_feat) && isfield(spo2_feat, 'idx_spo2') && ...
-        ~isempty(spo2_feat.idx_spo2) && isfield(spo2_feat, 'spo2') && ...
-        nnz(isfinite(spo2_feat.spo2)) >= 2;
+function tf = has_spo2_signal(diagnostics_Des)
+    tf = isstruct(diagnostics_Des) && ...
+        isfield(diagnostics_Des, 'signal_available') && ...
+        logical(diagnostics_Des.signal_available);
 end
 
 function tf = any_finite(values)

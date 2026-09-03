@@ -1,4 +1,4 @@
-function [irregular_events, boundary_info] = detect_irregular_breathing(data, phys_feat, config)
+function [irregular_events, boundary_info] = detect_irregular_breathing(data, resp_features, config)
 % detect_irregular_breathing
 % Label 5 - Irregular Breathing
 %
@@ -21,9 +21,9 @@ function [irregular_events, boundary_info] = detect_irregular_breathing(data, ph
     irregular_events = empty_events();
 
     N = size(data,1);
-    t_grid = phys_feat.resp.time_sec;
-    lungs = phys_feat.resp.lungs;
-    diaph = phys_feat.resp.diaph;
+    t_grid = resp_features.resp.time_sec;
+    lungs = resp_features.resp.lungs;
+    diaph = resp_features.resp.diaph;
     lungs_valid = lungs.available;
     diaph_valid = diaph.available;
     boundary_info = make_label_boundary_info('irregular', ...

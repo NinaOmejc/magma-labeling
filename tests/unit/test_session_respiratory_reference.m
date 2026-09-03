@@ -88,13 +88,14 @@ function testSpO2ReferenceUsesTheSameInterval(testCase)
     reference = get_session_reference_interval(size(data, 1), config);
 
     spo2_ref = compute_spo2_reference(data, reference, config);
-    spo2_feat = extract_spo2_features(data, spo2_ref, config);
+    [~, diagnostics_Des] = detect_desaturation( ...
+        data, spo2_ref, reference, config);
 
     verifyTrue(testCase, spo2_ref.available);
     verifyEqual(testCase, spo2_ref.median_percent, 96, 'AbsTol', eps);
     verifyEqual(testCase, spo2_ref.n_interval_samples, 180);
     verifyEqual(testCase, spo2_ref.n_valid_samples, 179);
-    verifyTrue(testCase, spo2_feat.reference_available);
+    verifyTrue(testCase, diagnostics_Des.reference_available);
 end
 
 function testUnavailableSpO2DoesNotInvalidateRespiratoryReference(testCase)
@@ -120,12 +121,13 @@ function testSpO2ReferenceNeverFallsBackOutsideInterval(testCase)
     reference = get_session_reference_interval(size(data, 1), config);
 
     spo2_ref = compute_spo2_reference(data, reference, config);
-    spo2_feat = extract_spo2_features(data, spo2_ref, config);
+    [~, diagnostics_Des] = detect_desaturation( ...
+        data, spo2_ref, reference, config);
 
     verifyFalse(testCase, spo2_ref.available);
     verifyEqual(testCase, spo2_ref.quality, 'insufficient_valid_samples');
-    verifyFalse(testCase, spo2_feat.reference_available);
-    verifyFalse(testCase, spo2_feat.detection_available);
+    verifyFalse(testCase, diagnostics_Des.reference_available);
+    verifyFalse(testCase, diagnostics_Des.detection_available);
 end
 
 function testShortRecordingsAreExplicitlyTruncatedOrUnavailable(testCase)
@@ -242,8 +244,8 @@ function testSighKeepsWholeRecordAmplitudeReference(testCase)
     reference = get_session_reference_interval(N, config);
     resp_feat = make_resp_feat(t, amp, [], []);
     resp_ref = compute_respiratory_reference(resp_feat, reference, config);
-    phys = compute_physiological_features( ...
-        zeros(N, 6), resp_feat, resp_ref, struct(), config);
+    phys = compute_respiratory_features( ...
+        zeros(N, 6), resp_feat, resp_ref, config);
 
     verifyEqual(testCase, phys.resp.lungs.session_reference_value, 1, ...
         'AbsTol', eps);

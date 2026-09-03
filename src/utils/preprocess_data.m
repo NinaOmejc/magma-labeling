@@ -129,7 +129,7 @@ function [output, config, trend] = preprocess_data(t_series, config)
     % -----------------------------
     % Optional plotting
     % -----------------------------
-    if do_plot
+    if do_plot && ~strcmpi(method, 'none')
         if isempty(time)
             t = (0:n_samples-1)' ./ sampl_freq;
         else

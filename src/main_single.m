@@ -18,40 +18,37 @@ for isub = 1:length(config.subjects)
         % PREPROCESS DATA
         [data, config] = preprocess_data(data_raw, config);
 
-        % EXTRACT OR LOAD FEATURES (manually checked breath peaks/troughs)
-        resp_feat = load_or_extract_respiratory_features(data, config);
+        % RESPIRATORY CYCLES
+        resp_cycles = load_or_extract_respiratory_cycles(data, config);
 
         % MODALITY-SPECIFIC REFERENCES FROM THE COMMON INTERVAL
         session_reference = get_session_reference_interval(size(data, 1), config);
-        resp_ref = compute_respiratory_reference(resp_feat, session_reference, config);
+        resp_ref = compute_respiratory_reference(resp_cycles, session_reference, config);
         spo2_ref = compute_spo2_reference(data, session_reference, config);
-        plot_respiratory_reference(resp_feat, resp_ref, session_reference, config);
+        plot_session_reference(data, resp_cycles, resp_ref, spo2_ref, session_reference, config);
 
-        % EXTRACT SPO2 FEATURES
-        spo2_feat = extract_spo2_features(data, spo2_ref, config);
-
-        % COMMON PHYSIOLOGICAL EVIDENCE (derived; no peak redetection)
-        phys_feat = compute_physiological_features( ...
-            data, resp_feat, resp_ref, spo2_feat, config);
+        % RESPIRATORY FEATURES (derived; no peak redetection)
+        resp_features = compute_respiratory_features( ...
+            data, resp_cycles, resp_ref, config);
 
         % LABEL DETECTIONS        
-        [events_ShB, boundary_ShB] = detect_shallow_breathing(data, phys_feat, config);
-        [events_DeB, boundary_DeB] = detect_deep_breathing(data, phys_feat, config);
-        [events_TDB, boundary_TDB] = detect_thoracic_dominant_breathing(data, phys_feat, config);
-        [events_IrB, boundary_IrB] = detect_irregular_breathing(data, phys_feat, config);
-        [events_SlB, boundary_SlB] = detect_slow_breathing(data, phys_feat, config);
-        [events_RaB, boundary_RaB] = detect_rapid_breathing(data, phys_feat, config);
+        [events_ShB, boundary_ShB] = detect_shallow_breathing(data, resp_features, config);
+        [events_DeB, boundary_DeB] = detect_deep_breathing(data, resp_features, config);
+        [events_TDB, boundary_TDB] = detect_thoracic_dominant_breathing(data, resp_features, config);
+        [events_IrB, boundary_IrB] = detect_irregular_breathing(data, resp_features, config);
+        [events_SlB, boundary_SlB] = detect_slow_breathing(data, resp_features, config);
+        [events_RaB, boundary_RaB] = detect_rapid_breathing(data, resp_features, config);
         [events_ReA, diagnostics_ReA] = detect_respiratory_asynchrony( ...
-            data, session_reference, resp_feat, config);
-        events_Des = detect_desaturation( ...
-            data, spo2_ref, session_reference, spo2_feat, config);
+            data, session_reference, resp_cycles, config);
+        [events_Des, diagnostics_Des] = detect_desaturation( ...
+            data, spo2_ref, session_reference, config);
         [events_Apn, diagnostics_Apn, boundary_Apn] = detect_apnea( ...
-            data, phys_feat, session_reference, config);
+            data, resp_features, session_reference, config);
         [~, diagnostics_Sigh, sigh_review] = detect_sigh( ...
-            data, phys_feat, resp_feat, spo2_ref, session_reference, ...
-            spo2_feat, config);
+            data, resp_features, resp_cycles, spo2_ref, ...
+            session_reference, diagnostics_Des, config);
         [events_CSR, diagnostics_CSR] = detect_periodic_breathing( ...
-            data, resp_feat, config);
+            data, resp_cycles, config);
 
         % Freeze automatic weak annotations before any interval editing.
         % Sigh is separate because it has its own breath-level GUI, whose
@@ -68,10 +65,8 @@ for isub = 1:length(config.subjects)
             'apnea', events_Apn, ...
             'csr', events_CSR);
         N = size(data,1);
-        [reviewed_event_sets, manual_label_edit] = manual_edit_label_events( ...
-            data, config, weak_event_sets);
-        annotations = assemble_annotation_layers(weak_event_sets, ...
-            reviewed_event_sets, manual_label_edit, sigh_review, N, config);
+        [reviewed_event_sets, manual_label_edit] = manual_edit_label_events(data, config, weak_event_sets);
+        annotations = assemble_annotation_layers(weak_event_sets, reviewed_event_sets, manual_label_edit, sigh_review, N, config);
         events_weak = annotations.events_weak;
         mask_weak = annotations.mask_weak;
         events_reviewed = annotations.events_reviewed;
@@ -80,16 +75,17 @@ for isub = 1:length(config.subjects)
         label_names = annotations.label_names;
 
         [label_available, label_availability_reason] = ...
-            compute_label_availability(label_names, phys_feat, spo2_feat, ...
+            compute_label_availability(label_names, resp_features, diagnostics_Des, ...
                 diagnostics_ReA, diagnostics_Apn, diagnostics_Sigh, diagnostics_CSR);
         [label_assessable_mask, label_assessability_info] = ...
             compute_label_assessable_mask(N, label_names, label_available, ...
-                spo2_feat, diagnostics_ReA, config);
+                diagnostics_Des, diagnostics_ReA, config);
         diagnostic_signals = compute_label_diagnostic_signals( ...
-            phys_feat, spo2_ref, spo2_feat, config, diagnostics_ReA, ...
+            resp_features, spo2_ref, diagnostics_Des, config, diagnostics_ReA, ...
             diagnostics_Apn, diagnostics_Sigh, diagnostics_CSR);
         detector_diagnostics = struct( ...
             'respiratory_asynchrony', diagnostics_ReA, ...
+            'desaturation', diagnostics_Des, ...
             'apnea', diagnostics_Apn, ...
             'sigh', diagnostics_Sigh, ...
             'periodic_breathing', diagnostics_CSR);
@@ -100,7 +96,7 @@ for isub = 1:length(config.subjects)
             mask_weak, label_names, label_available, config.fs, label_assessable_mask);
         label_evidence_summary_weak = build_label_evidence_summary( ...
             label_names, label_available, label_availability_reason, ...
-            phys_feat, diagnostic_signals, detector_diagnostics, label_burden_weak);
+            resp_features, diagnostic_signals, detector_diagnostics, label_burden_weak);
 
         [reviewed_assessable_mask, reviewed_available, reviewed_reasons] = ...
             compute_reviewed_label_availability( ...
@@ -113,7 +109,7 @@ for isub = 1:length(config.subjects)
             mask_reviewed, label_names, reviewed_available, config.fs, ...
             reviewed_assessable_mask);
         label_evidence_summary_reviewed = build_label_evidence_summary( ...
-            label_names, reviewed_available, reviewed_reasons, phys_feat, ...
+            label_names, reviewed_available, reviewed_reasons, resp_features, ...
             diagnostic_signals, detector_diagnostics, label_burden_reviewed);
         db_phenotype_evidence = build_db_phenotype_evidence_bundle( ...
             label_burden_weak, label_overlap_summary_weak, ...
@@ -139,7 +135,7 @@ for isub = 1:length(config.subjects)
             'desat', standard_boundary('desat', 'detect_desaturation', ...
                 events_Des, 'native_spo2_threshold_run', 1/config.fs, 'native_spo2_samples'));
         rewritten_manual_label_figures = rewrite_changed_manual_label_figures( ...
-            data, spo2_ref, session_reference, resp_feat, spo2_feat, ...
+            data, spo2_ref, session_reference, resp_cycles, diagnostics_Des, ...
             diagnostic_signals, reviewed_event_sets, manual_label_edit, config);
         plot_label_mask(mask_weak, label_names, config);
         
@@ -167,12 +163,12 @@ for isub = 1:length(config.subjects)
         results.label_reviewed_availability_reason = reviewed_reasons;
         results.label_reviewed_assessable_mask = reviewed_assessable_mask;
         results.label_schema_version = config.label_schema_version;
-        results.resp_feat = resp_feat;
+        results.resp_cycles = resp_cycles;
         results.resp_ref = resp_ref;
         results.session_reference = session_reference;
         results.spo2_ref = spo2_ref;
-        results.phys_feat = phys_feat;
-        results.spo2_feat = spo2_feat;
+        results.resp_features = resp_features;
+        results.desaturation_diagnostics = diagnostics_Des;
         results.diagnostic_signals = diagnostic_signals;
         results.detector_diagnostics = detector_diagnostics;
         results.label_burden_weak = label_burden_weak;

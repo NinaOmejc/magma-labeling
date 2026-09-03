@@ -12,7 +12,7 @@ function config = get_config()
     config.input_filename_pattern = 'ECG1_ECG2_SpO2_RespL_BP_RespD_fs200_Sub{subject}_Pom{measure}_DeTr_Norm.dat'; % The generic name of the data files
     config.label_schema_version = 'independent_labels_v3_11class';         % explicit saved-output label schema
     config.labels = get_labels();                                          % canonical label names and indices
-    config.make_figs_visible = 'off';                                      % create figures hidden during batch runs, so they dont pop up (for faster run)
+    config.make_figs_visible = 'on';                                      % create figures hidden during batch runs, so they dont pop up (for faster run)
     config.overwrite_results = false;                                      % *** Recompute even if label output already exists
     config.overwrite_features = false;                                     % *** Recompute respiratory features even if "*_features.mat" exists
     
@@ -21,7 +21,7 @@ function config = get_config()
     config.plot_raw_data_xrange = [1, 10];                      % raw overview x-axis range in seconds
 
     %---- PREPROCESSING ----                
-    config.detrend.method = 'hpfilter';                         % 'hpfilter': Butterworth high-pass filter with filtfilt, 'moving_detrend': moving-average trend subtraction, or 'none': no additional detrending.
+    config.detrend.method = 'none';                         % 'hpfilter': Butterworth high-pass filter with filtfilt, 'moving_detrend': moving-average trend subtraction, or 'none': no additional detrending.
     config.detrend.signals = {'Resp-Lungs', 'Resp-Diaphragm'};  % *** signals to additionally detrend before feature extraction (in general, all signals are already detrended, this is just additional moving detrend, that can be useful for some noisier data)
     config.detrend.highpass_cutoff = 0.01;                      % high-pass cutoff frequency in Hz
     config.detrend.hp_edge_pad_sec = 100;                       % reflection padding before filtfilt to reduce edge artifacts
@@ -54,7 +54,7 @@ function config = get_config()
     config.resp.qc.local_window_breaths = 7;    % neighboring breaths used for local rhythm/amplitude reference
     
     % manual control of peak detection
-    config.resp.manual_control = false;          % allow click-to-add/remove breath peaks before label detection (it takes time, but important to check the quality of detection, and not blindly follow automatic detection - GUI will appear for editing.)
+    config.resp.manual_control = true;          % allow click-to-add/remove breath peaks before label detection (it takes time, but important to check the quality of detection, and not blindly follow automatic detection - GUI will appear for editing.)
     config.resp.manual_window_sec = 300;        % visible time span for manual breath GUI scrolling
     config.resp.manual_peak_search_sec = 1.0;   % add peak at local maximum within this window around the click
 
@@ -62,7 +62,7 @@ function config = get_config()
     % One fixed reference time interval per recording supplies independent
     % modality-specific reference statistics. It never supplies one shared
     % numeric normalization value across modalities.
-    config.reference.pre_start_min = 3;          % M1/M3 common reference start
+    config.reference.pre_start_min = 3;          % M1/M3 common reference start ( in minutes! )
     config.reference.pre_end_min = 6;            % M1/M3 common reference end
     config.reference.post_start_min = 19;        % M2/M4 common reference start
     config.reference.post_end_min = 22;          % M2/M4 common reference end

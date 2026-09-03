@@ -1,5 +1,5 @@
 function [events, diagnostics, boundary_info] = detect_apnea( ...
-    data, phys_feat, session_reference, config)
+    data, resp_features, session_reference, config)
 % detect_apnea
 % Label 6 - Apnea
 %
@@ -23,9 +23,9 @@ function [events, diagnostics, boundary_info] = detect_apnea( ...
     events = empty_events();
 
     N = size(data, 1);
-    t_grid = phys_feat.resp.time_sec;
-    lungs = phys_feat.resp.lungs;
-    diaph = phys_feat.resp.diaph;
+    t_grid = resp_features.resp.time_sec;
+    lungs = resp_features.resp.lungs;
+    diaph = resp_features.resp.diaph;
     boundary_info = make_label_boundary_info('apnea', 'detect_apnea', ...
         'not_evaluated', empty_events(), empty_events(), NaN, '', [], [], []);
 

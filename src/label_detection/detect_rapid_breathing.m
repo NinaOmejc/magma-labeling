@@ -1,4 +1,4 @@
-function [events, boundary_info] = detect_rapid_breathing(data, phys_feat, config)
+function [events, boundary_info] = detect_rapid_breathing(data, resp_features, config)
 % detect_rapid_breathing
 % Label 4 - 60/mean(IBI) in the full trailing analysis window is at or above
 % the configured threshold. The window confirms an event; reviewed
@@ -10,9 +10,9 @@ function [events, boundary_info] = detect_rapid_breathing(data, phys_feat, confi
 
     events = empty_events();
     N = size(data, 1);
-    t_grid = phys_feat.resp.time_sec;
-    lungs = phys_feat.resp.lungs;
-    diaph = phys_feat.resp.diaph;
+    t_grid = resp_features.resp.time_sec;
+    lungs = resp_features.resp.lungs;
+    diaph = resp_features.resp.diaph;
     boundary_info = make_label_boundary_info('rapid', ...
         'detect_rapid_breathing', 'not_evaluated', empty_events(), ...
         empty_events(), NaN, '', [], [], []);

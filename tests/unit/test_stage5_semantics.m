@@ -4,9 +4,9 @@ function tests = test_stage5_semantics
 end
 
 function testEvidenceVersionAndCanonicalOrder(testCase)
-    [data, resp_feat, resp_ref, spo2_feat, config] = physiological_fixture();
-    phys = compute_physiological_features(data, resp_feat, resp_ref, spo2_feat, config);
-    verifyEqual(testCase, phys.version, 'independent_physiological_evidence_v4');
+    [data, resp_feat, resp_ref, diagnostics_Des, config] = physiological_fixture();
+    phys = compute_respiratory_features(data, resp_feat, resp_ref, config);
+    verifyEqual(testCase, phys.version, 'independent_respiratory_evidence_v5');
     verifyEqual(testCase, {config.labels.short}, ...
         {'shallow', 'deep', 'slow', 'rapid', 'irregular', 'apnea', ...
          'sigh', 'csr', 'thoracic', 'async', 'desat'});
@@ -155,7 +155,6 @@ function testEvidenceAwareAvailabilityAndReasonOrder(testCase)
     [names, phys, spo2, rea, apnea, sigh, csr] = availability_fixture();
     rea.valid_analysis = false;
     rea.skip_code = 5;
-    phys.spo2.available = false;
     spo2.detection_available = false;
     [available, reasons] = compute_label_availability( ...
         names, phys, spo2, rea, apnea, sigh, csr);
@@ -289,7 +288,7 @@ function belt = empty_detector_belt(t)
             'pause_exclusion_mask', false(size(t))));
 end
 
-function [data, resp_feat, resp_ref, spo2_feat, config] = physiological_fixture()
+function [data, resp_feat, resp_ref, diagnostics_Des, config] = physiological_fixture()
     config = stage_config();
     config.fs = 2;
     config.grid_step_sec = 1;
@@ -304,8 +303,8 @@ function [data, resp_feat, resp_ref, spo2_feat, config] = physiological_fixture(
         'reference_quality', 'good');
     resp_ref = struct('lungs', reference, 'diaph', reference);
     data = zeros(201, 6);
-    spo2_feat = struct('spo2', 97 * ones(201,1), ...
-        'desat_events', empty_events());
+    diagnostics_Des = struct('spo2', 97 * ones(201,1), ...
+        'events', empty_events());
 end
 
 function [names, phys, spo2, rea, apnea, sigh, csr] = availability_fixture()
@@ -321,9 +320,8 @@ function [names, phys, spo2, rea, apnea, sigh, csr] = availability_fixture()
     belt.irregularity.cov(61:end) = 0.1;
     balance = struct('available', true);
     phys = struct('resp', struct('lungs', belt, 'diaph', belt, ...
-        'thoracoabdominal_balance', balance), ...
-        'spo2', struct('available', true));
-    spo2 = struct('idx_spo2', 3, 'spo2', 97*ones(101,1), ...
+        'thoracoabdominal_balance', balance));
+    spo2 = struct('signal_available', true, ...
         'detection_available', true);
     rea = struct('valid_analysis', true, 'skip_code', 0);
     apnea = struct('available', true);

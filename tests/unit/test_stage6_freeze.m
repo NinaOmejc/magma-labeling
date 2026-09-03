@@ -436,7 +436,8 @@ function testCompleteAndPartialAssessability(testCase)
     config = stage6_config();
     names = {config.labels.short};
     N = 10;
-    spo2.spo2 = 97 * ones(N,1); spo2.spo2(4:5) = NaN;
+    spo2.valid_sample_mask = true(N,1);
+    spo2.valid_sample_mask(4:5) = false;
     rea = struct('time_sec', (0:9)', ...
         'valid_evidence_mask', [false; true(7,1); false; false]);
     [mask, info] = compute_label_assessable_mask( ...
@@ -448,7 +449,7 @@ function testCompleteAndPartialAssessability(testCase)
 
     unavailable = true(1,11); unavailable(strcmp(names,'thoracic')) = false;
     complete = compute_label_assessable_mask(N, names, unavailable, ...
-        struct('spo2',97*ones(N,1)), rea, config);
+        struct('valid_sample_mask',true(N,1)), rea, config);
     verifyFalse(testCase, any(complete(:, strcmp(names,'thoracic'))));
 end
 
@@ -481,7 +482,7 @@ function testReviewedAsyncRequiresValidReviewedReaSamples(testCase)
     names = {config.labels.short};
     N = 6;
     async = strcmp(names, 'async');
-    spo2 = struct('spo2', 97 * ones(N,1));
+    spo2 = struct('valid_sample_mask', true(N,1));
     rea = struct('time_sec', (0:N-1)', ...
         'valid_evidence_mask', [false; false; true; true; true; true]);
     assessable = compute_label_assessable_mask( ...
@@ -590,7 +591,7 @@ function testHdf5RoundTripPreservesOrderMasksNaNsAndRespiration(testCase)
         '/labels/reviewed_assessable_mask')), ...
         results.label_reviewed_assessable_mask);
     verifyEqual(testCase, h5read(filename, '/resp/lungs/peak_idx'), ...
-        results.phys_feat.resp.lungs.peak_idx);
+        results.resp_features.resp.lungs.peak_idx);
 end
 
 function testExternalClinicalPhenotypeValuesRemainUnknown(testCase)
@@ -740,7 +741,7 @@ function results = export_fixture(config, N)
     results.subject = 999;
     results.measure = 1;
     results.config = config;
-    results.phys_feat = struct('version', 'independent_physiological_evidence_v4', ...
+    results.resp_features = struct('version', 'independent_respiratory_evidence_v5', ...
         'resp', struct('lungs', belt, 'diaph', belt));
     results.session_reference = get_session_reference_interval(N, config);
     reference = struct('session', struct('value', 1, 'available', true), ...

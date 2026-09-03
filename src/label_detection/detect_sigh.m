@@ -1,5 +1,6 @@
 function [events, diagnostics, review_info] = detect_sigh( ...
-    data, phys_feat, resp_feat, spo2_ref, session_reference, spo2_feat, config)
+    data, resp_features, resp_cycles, spo2_ref, session_reference, ...
+    diagnostics_Des, config)
 % detect_sigh
 % Label 7 – Sigh
 %
@@ -19,8 +20,8 @@ function [events, diagnostics, review_info] = detect_sigh( ...
     fs = config.fs;
     t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';
 
-    lungs = phys_feat.resp.lungs;
-    diaph = phys_feat.resp.diaph;
+    lungs = resp_features.resp.lungs;
+    diaph = resp_features.resp.diaph;
     lungs_valid = lungs.global_amplitude_available;
     diaph_valid = diaph.global_amplitude_available;
     diagnostics = struct( ...
@@ -125,8 +126,8 @@ function [events, diagnostics, review_info] = detect_sigh( ...
 
     if manual_control && lungs_valid && diaph_valid
         [sigh_lungs, sigh_diaph, sigh_review_mask] = manual_edit_sigh_flags( ...
-            data, resp_feat.lungs, resp_feat.diaph, sigh_lungs, sigh_diaph, ...
-            spo2_ref, session_reference, spo2_feat, config, manual_window_sec);
+            data, resp_cycles.lungs, resp_cycles.diaph, sigh_lungs, sigh_diaph, ...
+            spo2_ref, session_reference, diagnostics_Des, config, manual_window_sec);
         review_info.reviewed = true;
         review_info.review_scope = 'explicitly_viewed_regions_sigh_breaths_both_belts';
         review_info.review_mask = sigh_review_mask;
@@ -202,7 +203,7 @@ function [events, diagnostics, review_info] = detect_sigh( ...
         % ----------------------
         ax3 = subplot(3,1,3);
         plot_spo2_diagnostic_panel(ax3, data, spo2_ref, session_reference, ...
-            spo2_feat, config, 'SpO2 with desaturation thresholds');
+            diagnostics_Des, config, 'SpO2 with desaturation thresholds');
     
         linkaxes([ax1 ax2 ax3], 'x');
         xlim(ax1, [0 t_grid(end)]);

@@ -1,5 +1,5 @@
 function rewritten = rewrite_changed_manual_label_figures( ...
-    data, spo2_ref, session_reference, resp_feat, spo2_feat, ...
+    data, spo2_ref, session_reference, resp_cycles, diagnostics_Des, ...
     diagnostic_signals, event_sets, edit_info, config)
 % rewrite_changed_manual_label_figures
 % Overwrite changed diagnostics using config.fs master sample times.
@@ -29,7 +29,7 @@ function rewritten = rewrite_changed_manual_label_figures( ...
         end
 
         plot_final_manual_label_figure( ...
-            data, spo2_ref, session_reference, resp_feat, spo2_feat, ...
+            data, spo2_ref, session_reference, resp_cycles, diagnostics_Des, ...
             diagnostic_signals, event_sets.(def.field), def, config);
         rewritten{end+1} = def.plot_name; %#ok<AGROW>
         fprintf('Rewrote manual-edited label figure: %s\n', def.plot_name);
@@ -52,7 +52,7 @@ function tf = should_rewrite_label(config, def)
 end
 
 function plot_final_manual_label_figure( ...
-    data, spo2_ref, session_reference, resp_feat, spo2_feat, ...
+    data, spo2_ref, session_reference, resp_cycles, diagnostics_Des, ...
     diagnostic_signals, events, def, config)
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
@@ -78,10 +78,10 @@ function plot_final_manual_label_figure( ...
 
     ax3 = nexttile(tl);
     plot_spo2_panel(ax3, t_raw, data, spo2_ref, session_reference, ...
-        spo2_feat, config, events);
+        diagnostics_Des, config, events);
 
     ax4 = nexttile(tl);
-    plot_diagnostic_panel(ax4, diagnostic_signals, resp_feat, events, def, config);
+    plot_diagnostic_panel(ax4, diagnostic_signals, resp_cycles, events, def, config);
 
     ax = [ax1 ax2 ax3 ax4];
     linkaxes(ax, 'x');
@@ -110,21 +110,25 @@ function plot_signal_panel(ax, t_raw, data, idx, events, title_text, y_text)
 end
 
 function plot_spo2_panel( ...
-    ax, t_raw, data, spo2_ref, session_reference, spo2_feat, config, events)
+    ax, t_raw, data, spo2_ref, session_reference, diagnostics_Des, config, events)
     hold(ax, 'on');
+    spo2 = [];
+    if isstruct(diagnostics_Des) && isfield(diagnostics_Des, 'spo2') && ...
+            numel(diagnostics_Des.spo2) == numel(t_raw)
+        spo2 = diagnostics_Des.spo2(:);
+    end
     idx = [];
     if isfield(config, 'channels')
         idx = config.channels.spo2_idx;
     end
-    if isempty(idx) && isfield(spo2_feat, 'idx_spo2')
-        idx = spo2_feat.idx_spo2;
+    if isempty(spo2) && ~isempty(idx)
+        spo2 = data(:, idx);
     end
-
-    if isempty(idx)
+    if isempty(spo2)
         text(ax, 0.5, 0.5, 'SpO2 channel not found', ...
             'Units', 'normalized', 'HorizontalAlignment', 'center');
     else
-        plot(ax, t_raw, data(:, idx), 'k', 'DisplayName', 'SpO2');
+        plot(ax, t_raw, spo2, 'k', 'DisplayName', 'SpO2');
         shade_session_reference_on_axis( ...
             ax, session_reference, 'common session-reference interval');
         if isfield(spo2_ref, 'median_percent') && isfinite(spo2_ref.median_percent)
@@ -144,7 +148,7 @@ function plot_spo2_panel( ...
     grid(ax, 'on');
 end
 
-function plot_diagnostic_panel(ax, diagnostic_signals, resp_feat, events, def, config)
+function plot_diagnostic_panel(ax, diagnostic_signals, resp_cycles, events, def, config)
     hold(ax, 'on');
     plotted = false;
 
@@ -223,7 +227,7 @@ function plot_diagnostic_panel(ax, diagnostic_signals, resp_feat, events, def, c
     end
 
     if ~plotted && strcmp(def.field, 'apnea')
-        plotted = plot_resp_amplitude(ax, resp_feat);
+        plotted = plot_resp_amplitude(ax, resp_cycles);
     end
 
     if ~plotted
@@ -313,19 +317,19 @@ function plotted = plot_async_metrics(ax, t, diagnostic_signals)
     end
 end
 
-function plotted = plot_resp_amplitude(ax, resp_feat)
+function plotted = plot_resp_amplitude(ax, resp_cycles)
     plotted = false;
-    if isfield(resp_feat, 'lungs') && isfield(resp_feat.lungs, 'peak_t') && isfield(resp_feat.lungs, 'amp') && ...
-            ~isempty(resp_feat.lungs.peak_t) && ~isempty(resp_feat.lungs.amp)
-        n = min(numel(resp_feat.lungs.peak_t), numel(resp_feat.lungs.amp));
-        scatter(ax, resp_feat.lungs.peak_t(1:n), resp_feat.lungs.amp(1:n), 8, ...
+    if isfield(resp_cycles, 'lungs') && isfield(resp_cycles.lungs, 'peak_t') && isfield(resp_cycles.lungs, 'amp') && ...
+            ~isempty(resp_cycles.lungs.peak_t) && ~isempty(resp_cycles.lungs.amp)
+        n = min(numel(resp_cycles.lungs.peak_t), numel(resp_cycles.lungs.amp));
+        scatter(ax, resp_cycles.lungs.peak_t(1:n), resp_cycles.lungs.amp(1:n), 8, ...
             [0.00 0.35 0.85], 'filled', 'DisplayName', 'Lungs amplitude');
         plotted = true;
     end
-    if isfield(resp_feat, 'diaph') && isfield(resp_feat.diaph, 'peak_t') && isfield(resp_feat.diaph, 'amp') && ...
-            ~isempty(resp_feat.diaph.peak_t) && ~isempty(resp_feat.diaph.amp)
-        n = min(numel(resp_feat.diaph.peak_t), numel(resp_feat.diaph.amp));
-        scatter(ax, resp_feat.diaph.peak_t(1:n), resp_feat.diaph.amp(1:n), 8, ...
+    if isfield(resp_cycles, 'diaph') && isfield(resp_cycles.diaph, 'peak_t') && isfield(resp_cycles.diaph, 'amp') && ...
+            ~isempty(resp_cycles.diaph.peak_t) && ~isempty(resp_cycles.diaph.amp)
+        n = min(numel(resp_cycles.diaph.peak_t), numel(resp_cycles.diaph.amp));
+        scatter(ax, resp_cycles.diaph.peak_t(1:n), resp_cycles.diaph.amp(1:n), 8, ...
             [0.85 0.33 0.10], 'filled', 'DisplayName', 'Diaphragm amplitude');
         plotted = true;
     end

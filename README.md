@@ -202,8 +202,8 @@ The most important result fields include:
 - reviewed availability: `results.label_reviewed_available`, `results.label_reviewed_assessable_mask`
 - common temporal reference: `results.session_reference`
 - modality-specific references: `results.resp_ref`, `results.spo2_ref`, plus ReA and raw-apnea reference provenance in `results.detector_diagnostics`
-- respiratory features: `results.resp_feat`
-- physiological evidence: `results.phys_feat`
+- respiratory cycles: `results.resp_cycles`
+- respiratory features: `results.resp_features`
 - event-boundary information: `results.event_boundary_info`
 - burden/overlap summaries
 - DB phenotype evidence
@@ -211,7 +211,7 @@ The most important result fields include:
 
 Additional detector diagnostics and intermediate evidence can be inspected directly in the saved `results` structure or in the HDF5 hierarchy.
 
-The HDF5 export schema is `magma_ml_hdf5_v2`. It stores the common metadata once under `/session_reference`, the independent respiratory-belt statistics under `/resp_reference`, and the SpO2 statistic under `/spo2_reference`. ReA and raw-apnea reference quality and statistics remain with their detector/physiological diagnostics. The MAT output preserves the same distinction.
+The HDF5 export schema is `magma_ml_hdf5_v2`. It stores the common metadata once under `/session_reference`, the independent respiratory-belt statistics under `/resp_reference`, and the SpO2 statistic under `/spo2_reference`. ReA, desaturation, and raw-apnea diagnostics remain with their detectors. The MAT output preserves the same distinction.
 
 Group-level summaries are written under the `group_analysis/` output directory. `cohort_localized_boundary_qc.csv` preserves every localized-run duration and duration shortfall; `cohort_label_qc_summary.csv` aggregates rejected-run counts, medians, upper tails, maxima, and the smallest shortfall per label. These outputs are descriptive QC and never change thresholds automatically.
 

@@ -1,6 +1,6 @@
-function resp_ref = compute_respiratory_reference(resp_feat, session_reference, config)
+function resp_ref = compute_respiratory_reference(resp_cycles, session_reference, config)
 % compute_respiratory_reference
-% Compute one respiratory-excursion reference per belt from reviewed breaths
+% Compute one respiratory-excursion reference per belt from detected cycles
 % in the common session physiological reference interval. Whole-record and
 % stability diagnostics remain descriptive. Warnings retain the session
 % value and never trigger automatic correction.
@@ -8,16 +8,17 @@ function resp_ref = compute_respiratory_reference(resp_feat, session_reference, 
     cfg = respiratory_reference_config(config);
     validate_session_reference(session_reference);
 
-    lungs = get_belt_features(resp_feat, 'lungs');
+    lungs = get_belt_features(resp_cycles, 'lungs');
     if is_lung_belt_ignored(config)
         lungs = [];
     end
 
+    diaph = get_belt_features(resp_cycles, 'diaph');
+
     resp_ref = struct();
     resp_ref.default_warning_action = 'retain_data_no_correction';
     resp_ref.lungs = analyze_belt(lungs, cfg, session_reference);
-    resp_ref.diaph = analyze_belt( ...
-        get_belt_features(resp_feat, 'diaph'), cfg, session_reference);
+    resp_ref.diaph = analyze_belt(diaph, cfg, session_reference);
     resp_ref = add_belt_agreement(resp_ref, cfg);
 end
 
@@ -315,10 +316,10 @@ function tf = belt_is_analyzable(belt)
         ~strcmp(belt.quality, 'insufficient_edge_breaths');
 end
 
-function breaths = get_belt_features(resp_feat, name)
+function breaths = get_belt_features(resp_cycles, name)
     breaths = [];
-    if isstruct(resp_feat) && isfield(resp_feat, name)
-        breaths = resp_feat.(name);
+    if isstruct(resp_cycles) && isfield(resp_cycles, name)
+        breaths = resp_cycles.(name);
     end
 end
 

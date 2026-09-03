@@ -1,8 +1,8 @@
-function fig = plot_respiratory_reference( ...
-    resp_feat, resp_ref, session_reference, config)
-% plot_respiratory_reference
-% Plot respiratory excursion statistics from the common session-reference
-% interval, whole-record context, and descriptive stability QC.
+function fig = plot_session_reference( ...
+    data, resp_cycles, resp_ref, spo2_ref, session_reference, config)
+% plot_session_reference
+% Plot modality-specific respiratory and SpO2 statistics from the common
+% session physiological reference interval.
 
     fig = [];
     if ~isfield(config, 'reference') || ...
@@ -12,20 +12,22 @@ function fig = plot_respiratory_reference( ...
 
     fig = figure('Units', 'pixels', 'Position', near_fullscreen_figure_position(), ...
         'Visible', config.make_figs_visible, 'Color', 'w');
-    tl = tiledlayout(fig, 2, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
-    title(tl, sprintf('RESPIRATORY AMPLITUDE REFERENCE | Subject %d | Measurement %d', ...
+    tl = tiledlayout(fig, 3, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
+    title(tl, sprintf('SESSION PHYSIOLOGICAL REFERENCE | Subject %d | Measurement %d', ...
         config.subject, config.measure));
 
     ax1 = nexttile(tl);
-    plot_belt_reference(ax1, get_belt(resp_feat, 'lungs'), ...
+    plot_belt_reference(ax1, get_belt(resp_cycles, 'lungs'), ...
         resp_ref.lungs, session_reference, 'Resp-Lungs');
     ax2 = nexttile(tl);
-    plot_belt_reference(ax2, get_belt(resp_feat, 'diaph'), ...
+    plot_belt_reference(ax2, get_belt(resp_cycles, 'diaph'), ...
         resp_ref.diaph, session_reference, 'Resp-Diaphragm');
+    ax3 = nexttile(tl);
+    plot_spo2_reference(ax3, data, spo2_ref, session_reference, config);
 
-    linkaxes([ax1 ax2], 'x');
-    align_axes_x_widths([ax1 ax2]);
-    save_figure(config, 'respiratory_reference');
+    linkaxes([ax1 ax2 ax3], 'x');
+    align_axes_x_widths([ax1 ax2 ax3]);
+    save_figure(config, 'session_reference');
 end
 
 function plot_belt_reference(ax, breaths, belt, session_reference, belt_name)
@@ -97,6 +99,52 @@ function plot_belt_reference(ax, breaths, belt, session_reference, belt_name)
 
 end
 
+function plot_spo2_reference(ax, data, spo2_ref, session_reference, config)
+    hold(ax, 'on');
+    grid(ax, 'on');
+    xlabel(ax, 'Time (s)');
+    ylabel(ax, 'SpO2 (%)');
+
+    quality = 'not_evaluated';
+    if isstruct(spo2_ref) && isfield(spo2_ref, 'quality')
+        quality = char(string(spo2_ref.quality));
+    end
+    title(ax, sprintf('SpO2 | reference quality=%s', quality), ...
+        'Interpreter', 'none');
+
+    if ~isfield(config, 'channels')
+        config = resolve_signal_channels(config);
+    end
+    idx_spo2 = config.channels.spo2_idx;
+    if isempty(idx_spo2) || isempty(data) || idx_spo2 > size(data, 2)
+        text(ax, 0.5, 0.5, 'SpO2 unavailable', 'Units', 'normalized', ...
+            'HorizontalAlignment', 'center');
+        hold(ax, 'off');
+        return;
+    end
+
+    spo2 = data(:, idx_spo2);
+    if ~any(isfinite(spo2))
+        text(ax, 0.5, 0.5, 'SpO2 unavailable', 'Units', 'normalized', ...
+            'HorizontalAlignment', 'center');
+        hold(ax, 'off');
+        return;
+    end
+
+    t = (0:numel(spo2)-1)' / config.fs;
+    h_spo2 = plot(ax, t, spo2, 'k', 'DisplayName', 'SpO2');
+    shade_session_reference_on_axis( ...
+        ax, session_reference, 'common session-reference interval');
+    handles = h_spo2;
+    if isstruct(spo2_ref) && isfield(spo2_ref, 'median_percent') && ...
+            isfinite(spo2_ref.median_percent)
+        handles(end+1) = yline(ax, spo2_ref.median_percent, 'k--', ...
+            'LineWidth', 1.5, 'DisplayName', 'session SpO2 reference median');
+    end
+    legend(ax, handles, 'Location', 'eastoutside');
+    hold(ax, 'off');
+end
+
 function shade_edge_regions(ax, peak_t, edge_window_sec)
     if ~isfinite(edge_window_sec) || edge_window_sec <= 0
         return;
@@ -138,10 +186,10 @@ function [peak_t, amp] = valid_amplitudes(breaths)
     amp = amp(order);
 end
 
-function breaths = get_belt(resp_feat, name)
+function breaths = get_belt(resp_cycles, name)
     breaths = [];
-    if isstruct(resp_feat) && isfield(resp_feat, name)
-        breaths = resp_feat.(name);
+    if isstruct(resp_cycles) && isfield(resp_cycles, name)
+        breaths = resp_cycles.(name);
     end
 end
 

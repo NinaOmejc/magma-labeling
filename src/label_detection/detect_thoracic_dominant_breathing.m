@@ -1,4 +1,4 @@
-function [events, boundary_info] = detect_thoracic_dominant_breathing(data, phys_feat, config)
+function [events, boundary_info] = detect_thoracic_dominant_breathing(data, resp_features, config)
 % detect_thoracic_dominant_breathing
 % Label 9 - sustained relative thoracoabdominal excursion dominance.
 % Both belts and both fixed per-belt session references are required. This
@@ -9,7 +9,7 @@ function [events, boundary_info] = detect_thoracic_dominant_breathing(data, phys
 % carries analysis-window-scale onset/offset uncertainty.
 
     events = empty_events();
-    evidence = phys_feat.resp.thoracoabdominal_balance;
+    evidence = resp_features.resp.thoracoabdominal_balance;
     boundary_info = make_label_boundary_info('thoracic', ...
         'detect_thoracic_dominant_breathing', 'not_evaluated', ...
         empty_events(), empty_events(), NaN, '', [], [], []);
@@ -24,7 +24,7 @@ function [events, boundary_info] = detect_thoracic_dominant_breathing(data, phys
         state_mask = evidence.dominance_mask;
     end
     [events, dominance_mask] = sustained_condition_to_events( ...
-        state_mask, phys_feat.resp.time_sec, config.fs, ...
+        state_mask, resp_features.resp.time_sec, config.fs, ...
         size(data, 1), config.TDB.min_dur_sec, ...
         'thoracic_dominant_breathing');
     analysis_window_sec = get_config_value( ...
@@ -42,6 +42,6 @@ function [events, boundary_info] = detect_thoracic_dominant_breathing(data, phys
 
     if config.TDB.do_plot
         plot_thoracic_dominance_diagnostic( ...
-            phys_feat.resp.time_sec, evidence, dominance_mask, events, config);
+            resp_features.resp.time_sec, evidence, dominance_mask, events, config);
     end
 end

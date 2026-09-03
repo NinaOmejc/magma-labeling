@@ -1,9 +1,9 @@
-function plot_amplitude_state_diagnostic(phys_feat, events_lungs, events_diaph, config, opts)
+function plot_amplitude_state_diagnostic(resp_features, events_lungs, events_diaph, config, opts)
 % plot_amplitude_state_diagnostic
-% Show raw and session-normalized reviewed breath excursions per belt.
+% Show raw and session-normalized respiratory-cycle excursions per belt.
 
-    lungs = phys_feat.resp.lungs;
-    diaph = phys_feat.resp.diaph;
+    lungs = resp_features.resp.lungs;
+    diaph = resp_features.resp.diaph;
 
     fig = figure('Units', 'pixels', 'Position', near_fullscreen_figure_position(), ...
         'Visible', config.make_figs_visible, 'Color', 'w');
@@ -11,7 +11,7 @@ function plot_amplitude_state_diagnostic(phys_feat, events_lungs, events_diaph, 
     title(tl, [opts.figure_title newline ...
         'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)])
 
-    t_grid = phys_feat.resp.time_sec;
+    t_grid = resp_features.resp.time_sec;
     candidate_lungs = get_option(opts, 'candidate_mask_lungs', []);
     candidate_diaph = get_option(opts, 'candidate_mask_diaph', []);
     localized_lungs = get_option(opts, 'localized_mask_lungs', []);
@@ -34,8 +34,8 @@ function plot_amplitude_state_diagnostic(phys_feat, events_lungs, events_diaph, 
 
     ax = [ax1 ax2 ax3 ax4];
     linkaxes(ax, 'x');
-    if ~isempty(phys_feat.resp.time_sec)
-        xlim(ax1, [0 phys_feat.resp.time_sec(end)]);
+    if ~isempty(resp_features.resp.time_sec)
+        xlim(ax1, [0 resp_features.resp.time_sec(end)]);
     end
     align_axes_x_widths(ax);
     set(fig, 'Visible', config.make_figs_visible);

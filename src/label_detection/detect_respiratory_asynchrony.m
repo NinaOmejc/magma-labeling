@@ -1,5 +1,5 @@
 function [events, rea_metrics] = detect_respiratory_asynchrony( ...
-    data, session_reference, resp_feat, config)
+    data, session_reference, resp_cycles, config)
 % detect_respiratory_asynchrony
 % Label 10 - Respiratory Asynchrony / Dyssynchrony.
 %
@@ -14,7 +14,7 @@ function [events, rea_metrics] = detect_respiratory_asynchrony( ...
 
     events = empty_events();
     rea_metrics = compute_respiratory_asynchrony_metrics( ...
-        data, resp_feat, session_reference, config);
+        data, resp_cycles, session_reference, config);
 
     if ~rea_metrics.valid_analysis
         fprintf('Skipping async detection: %s\n', rea_skip_reason(rea_metrics.skip_code, rea_metrics.error_message));

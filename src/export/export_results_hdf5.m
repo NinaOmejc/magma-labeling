@@ -20,19 +20,19 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
     write_numeric(filename, '/signals/preprocessed', signals_preprocessed);
     write_numeric(filename, '/time', (0:N-1)' / fs);
 
-    write_resp_belt(filename, '/resp/lungs', results.phys_feat.resp.lungs);
-    write_resp_belt(filename, '/resp/diaph', results.phys_feat.resp.diaph);
+    write_resp_belt(filename, '/resp/lungs', results.resp_features.resp.lungs);
+    write_resp_belt(filename, '/resp/diaph', results.resp_features.resp.diaph);
     write_value(filename, '/session_reference', results.session_reference);
     write_value(filename, '/resp_reference/lungs', results.resp_ref.lungs);
     write_value(filename, '/resp_reference/diaph', results.resp_ref.diaph);
     write_value(filename, '/spo2_reference', results.spo2_ref);
-    write_value(filename, '/phys_features', results.phys_feat);
+    write_value(filename, '/resp_features', results.resp_features);
     if isfield(results, 'diagnostic_signals')
-        write_value(filename, '/phys_features/detector_signals', ...
+        write_value(filename, '/resp_features/detector_signals', ...
             results.diagnostic_signals);
     end
     if isfield(results, 'detector_diagnostics')
-        write_value(filename, '/phys_features/detector_diagnostics', ...
+        write_value(filename, '/resp_features/detector_diagnostics', ...
             results.detector_diagnostics);
     end
 
@@ -73,7 +73,7 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
     write_numeric(filename, '/meta/measurement', results.measure);
     write_numeric(filename, '/meta/fs', fs);
     write_text(filename, '/meta/label_schema_version', results.label_schema_version);
-    write_text(filename, '/meta/phys_feat_version', results.phys_feat.version);
+    write_text(filename, '/meta/resp_features_version', results.resp_features.version);
     write_text(filename, '/meta/annotation_schema_version', results.annotation_schema_version);
     write_text(filename, '/meta/export_schema_version', results.export_schema_version);
     write_text(filename, '/meta/upstream_input_preprocessing', ...
@@ -84,7 +84,7 @@ function validate_export_inputs(filename, results, raw, preprocessed)
     if isempty(filename)
         error('MAGMA:HDF5:InvalidFilename', 'A nonempty output filename is required.');
     end
-    required = {'config', 'phys_feat', 'session_reference', 'resp_ref', ...
+    required = {'config', 'resp_features', 'session_reference', 'resp_ref', ...
         'spo2_ref', 'label_names', ...
         'label_available', 'label_availability_reason', 'label_assessable_mask', ...
         'mask_weak', 'mask_reviewed', 'gold_review_mask', 'review_status', ...

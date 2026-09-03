@@ -1,5 +1,5 @@
 function tests = test_feature_cache
-% Test F for respiratory-feature cache invalidation and reuse.
+% Test F for respiratory-cycle cache invalidation and reuse.
     tests = functiontests(localfunctions);
 end
 
@@ -21,11 +21,11 @@ function testOldTwentyHertzCacheIsRejected(testCase)
     cache_file = fullfile(output_dir, config.sub_features_filename);
     save(cache_file, 'resp_feat', 'feature_cache_meta');
 
-    actual = load_or_extract_respiratory_features(data, config);
+    actual = load_or_extract_respiratory_cycles(data, config);
     saved = load(cache_file, 'feature_cache_meta');
 
     verifyNotEqual(testCase, actual.lungs.peak_idx, resp_feat.lungs.peak_idx);
-    verifyEqual(testCase, saved.feature_cache_meta.cache_version, 6);
+    verifyEqual(testCase, saved.feature_cache_meta.cache_version, 7);
     verifyEqual(testCase, saved.feature_cache_meta.fs, 200);
     verifyEqual(testCase, saved.feature_cache_meta.measurement, config.measure);
     verifyEqual(testCase, saved.feature_cache_meta.n_samples, size(data,1));
@@ -38,11 +38,16 @@ function testCompatibleMasterRateCacheIsReused(testCase)
     config = make_test_config(output_dir);
     data = make_synthetic_master_data(10001, config.fs);
 
-    expected = load_or_extract_respiratory_features(data, config);
+    expected = load_or_extract_respiratory_cycles(data, config);
     incompatible_signal = zeros(size(data));
-    actual = load_or_extract_respiratory_features(incompatible_signal, config);
+    actual = load_or_extract_respiratory_cycles(incompatible_signal, config);
 
-    verifyEqual(testCase, actual, expected);
+    verifyEqual(testCase, actual.lungs, expected.lungs);
+    verifyEqual(testCase, actual.diaph, expected.diaph);
+    verifyEqual(testCase, actual.provenance.review_status, ...
+        expected.provenance.review_status);
+    verifyFalse(testCase, expected.provenance.loaded_from_cache);
+    verifyTrue(testCase, actual.provenance.loaded_from_cache);
 end
 
 function resp_feat = sentinel_resp_feat(n_samples)

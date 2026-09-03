@@ -1,4 +1,4 @@
-function [events, diagnostics] = detect_periodic_breathing(data, resp_feat, config)
+function [events, diagnostics] = detect_periodic_breathing(data, resp_cycles, config)
 % detect_periodic_breathing
 % Label 8 - Cheyne-Stokes-like / periodic breathing.
 %
@@ -25,8 +25,8 @@ function [events, diagnostics] = detect_periodic_breathing(data, resp_feat, conf
         'diaph', init_periodic_diag());
 
     lungs_broken = is_lung_belt_ignored(config);
-    lungs_valid = is_valid_breath_signal(resp_feat.lungs, true) && ~lungs_broken;
-    diaph_valid = is_valid_breath_signal(resp_feat.diaph, true);
+    lungs_valid = is_valid_breath_signal(resp_cycles.lungs, true) && ~lungs_broken;
+    diaph_valid = is_valid_breath_signal(resp_cycles.diaph, true);
 
     if ~lungs_valid && ~diaph_valid
         fprintf('Skipping CSR detection: no valid respiratory belt with usable breath amplitudes.\n');
@@ -37,14 +37,14 @@ function [events, diagnostics] = detect_periodic_breathing(data, resp_feat, conf
     diag_lungs = init_periodic_diag();
     if lungs_valid
         [events_lungs, diag_lungs] = periodic_breathing_events_for_belt( ...
-            resp_feat.lungs, N, fs, cfg, 'lungs');
+            resp_cycles.lungs, N, fs, cfg, 'lungs');
     end
 
     events_diaph = empty_events();
     diag_diaph = init_periodic_diag();
     if diaph_valid
         [events_diaph, diag_diaph] = periodic_breathing_events_for_belt( ...
-            resp_feat.diaph, N, fs, cfg, 'diaph');
+            resp_cycles.diaph, N, fs, cfg, 'diaph');
     end
 
     events = merge_events({events_lungs, events_diaph}, cfg.max_cycle_gap_sec);

@@ -30,10 +30,10 @@ end
 
 function testDeepThresholdHasNoUpperCutoffAndUsesSessionReference(testCase)
     state_ratios = repmat([1.20; 1.60; 2.00], 9, 1);
-    [data, resp_feat, resp_ref, spo2_feat, config] = ...
+    [data, resp_feat, resp_ref, diagnostics_Des, config] = ...
         amplitude_fixture(state_ratios, state_ratios, 2, 10, 4, 20);
-    phys_feat = compute_physiological_features( ...
-        data, resp_feat, resp_ref, spo2_feat, config);
+    phys_feat = compute_respiratory_features( ...
+        data, resp_feat, resp_ref, config);
     events = detect_deep_breathing(data, phys_feat, config);
 
     verifyNotEmpty(testCase, events);
@@ -56,23 +56,23 @@ end
 
 function testRatioBelowDeepThresholdIsNotDeep(testCase)
     state_ratios = 1.10 * ones(20, 1);
-    [data, resp_feat, resp_ref, spo2_feat, config] = ...
+    [data, resp_feat, resp_ref, diagnostics_Des, config] = ...
         amplitude_fixture(state_ratios, state_ratios, 2, 3, 2, 3);
-    phys_feat = compute_physiological_features( ...
-        data, resp_feat, resp_ref, spo2_feat, config);
+    phys_feat = compute_respiratory_features( ...
+        data, resp_feat, resp_ref, config);
     verifyFalse(testCase, any(phys_feat.resp.lungs.deep_amplitude_mask));
     verifyEmpty(testCase, detect_deep_breathing(data, phys_feat, config));
 end
 
 function testMissingLungBeltUsesDiaphragmForDeep(testCase)
     state_ratios = 1.60 * ones(20, 1);
-    [data, resp_feat, resp_ref, spo2_feat, config] = ...
+    [data, resp_feat, resp_ref, diagnostics_Des, config] = ...
         amplitude_fixture(state_ratios, state_ratios, 2, 7, 2, 7);
     config.subject = 7;
     config.measure = 1;
     config.problems.missing_lung_belt = [7 1];
-    phys_feat = compute_physiological_features( ...
-        data, resp_feat, resp_ref, spo2_feat, config);
+    phys_feat = compute_respiratory_features( ...
+        data, resp_feat, resp_ref, config);
     events = detect_deep_breathing(data, phys_feat, config);
 
     verifyTrue(testCase, phys_feat.resp.lungs.ignored);
@@ -85,7 +85,7 @@ end
 function testThoracicBalanceUsesIndependentSessionNormalization(testCase)
     [data_a, resp_a, ref_a, spo2_a, config_a] = ...
         amplitude_fixture(ones(20, 1), ones(20, 1), 2, 10, 2, 10);
-    phys_a = compute_physiological_features(data_a, resp_a, ref_a, spo2_a, config_a);
+    phys_a = compute_respiratory_features(data_a, resp_a, ref_a, config_a);
     balance_a = phys_a.resp.thoracoabdominal_balance;
     finite_a = isfinite(balance_a.thoracic_to_abdominal_ratio);
 
@@ -102,24 +102,24 @@ function testThoracicBalanceUsesIndependentSessionNormalization(testCase)
 
     [data_b, resp_b, ref_b, spo2_b, config_b] = ...
         amplitude_fixture(ones(20, 1), ones(20, 1), 20, 0.5, 20, 0.5);
-    phys_b = compute_physiological_features(data_b, resp_b, ref_b, spo2_b, config_b);
+    phys_b = compute_respiratory_features(data_b, resp_b, ref_b, config_b);
     verifyTrue(testCase, isequaln( ...
         phys_b.resp.thoracoabdominal_balance.thoracic_to_abdominal_ratio, ...
         balance_a.thoracic_to_abdominal_ratio));
 end
 
 function testThoracicDominanceThresholdAndContinuousEvidence(testCase)
-    [data, resp_feat, resp_ref, spo2_feat, config] = ...
+    [data, resp_feat, resp_ref, diagnostics_Des, config] = ...
         amplitude_fixture(1.40 * ones(20, 1), ones(20, 1), 2, 9, 2, 9);
-    phys_feat = compute_physiological_features( ...
-        data, resp_feat, resp_ref, spo2_feat, config);
+    phys_feat = compute_respiratory_features( ...
+        data, resp_feat, resp_ref, config);
     verifyFalse(testCase, any(phys_feat.resp.thoracoabdominal_balance.dominance_mask));
     verifyEmpty(testCase, detect_thoracic_dominant_breathing(data, phys_feat, config));
 
-    [data, resp_feat, resp_ref, spo2_feat, config] = ...
+    [data, resp_feat, resp_ref, diagnostics_Des, config] = ...
         amplitude_fixture(1.80 * ones(20, 1), ones(20, 1), 2, 9, 2, 9);
-    phys_feat = compute_physiological_features( ...
-        data, resp_feat, resp_ref, spo2_feat, config);
+    phys_feat = compute_respiratory_features( ...
+        data, resp_feat, resp_ref, config);
     balance = phys_feat.resp.thoracoabdominal_balance;
     grid_index = find(phys_feat.resp.time_sec == 100, 1);
     verifyEqual(testCase, balance.thoracic_to_abdominal_ratio(grid_index), 1.8, 'AbsTol', 1e-12);
@@ -133,19 +133,19 @@ function testThoracicDominanceThresholdAndContinuousEvidence(testCase)
 end
 
 function testThoracicDominanceHasNoOneBeltFallback(testCase)
-    [data, resp_feat, resp_ref, spo2_feat, config] = ...
+    [data, resp_feat, resp_ref, diagnostics_Des, config] = ...
         amplitude_fixture(1.80 * ones(20, 1), ones(20, 1), 2, 9, 2, 9);
     config.subject = 7;
     config.measure = 1;
     config.problems.missing_lung_belt = [7 1; 7 2];
-    phys_feat = compute_physiological_features( ...
-        data, resp_feat, resp_ref, spo2_feat, config);
+    phys_feat = compute_respiratory_features( ...
+        data, resp_feat, resp_ref, config);
     verifyFalse(testCase, phys_feat.resp.thoracoabdominal_balance.available);
     verifyEmpty(testCase, detect_thoracic_dominant_breathing(data, phys_feat, config));
 
     config.measure = 3;
-    phys_feat = compute_physiological_features( ...
-        data, resp_feat, resp_ref, spo2_feat, config);
+    phys_feat = compute_respiratory_features( ...
+        data, resp_feat, resp_ref, config);
     verifyFalse(testCase, phys_feat.resp.lungs.ignored);
     verifyTrue(testCase, phys_feat.resp.thoracoabdominal_balance.available);
 end
@@ -180,7 +180,11 @@ function testIndependentDetectorsAndOverlappingMask(testCase)
     rapid = detect_rapid_breathing(data, phys_feat, config);
     session_reference = get_session_reference_interval(size(data,1), config);
     apnea = detect_apnea(data, phys_feat, session_reference, config);
-    desat = phys_feat.spo2.desaturation_events;
+    data(:, config.channels.spo2_idx) = 97;
+    data(31:101, config.channels.spo2_idx) = 85;
+    spo2_ref = struct('available', true, 'median_percent', 97, ...
+        'quality', 'good');
+    desat = detect_desaturation(data, spo2_ref, session_reference, config);
 
     verifyNotEmpty(testCase, shallow);
     verifyNotEmpty(testCase, deep);
@@ -376,7 +380,7 @@ function testIrregularityMoveAndFallbacks(testCase)
         'compute_irregularity_metrics.m')));
 
     files = { ...
-        fullfile(repo_root, 'src', 'feature_extraction', 'compute_physiological_features.m'), ...
+        fullfile(repo_root, 'src', 'feature_extraction', 'compute_respiratory_features.m'), ...
         fullfile(repo_root, 'src', 'feature_extraction', 'compute_irregularity_metrics.m'), ...
         fullfile(repo_root, 'src', 'label_detection', 'detect_irregular_breathing.m'), ...
         fullfile(repo_root, 'src', 'utils', 'compute_label_diagnostic_signals.m'), ...
@@ -397,7 +401,7 @@ function testRespiratoryAmplitudeDocumentationMatchesAlignment(testCase)
     verifyTrue(testCase, contains(source, 'final entry is'));
 end
 
-function [data, resp_feat, resp_ref, spo2_feat, config] = amplitude_fixture( ...
+function [data, resp_feat, resp_ref, diagnostics_Des, config] = amplitude_fixture( ...
     state_ratios_lungs, state_ratios_diaph, session_lungs, session_diaph, global_lungs, global_diaph)
 
     config = make_test_config();
@@ -426,7 +430,7 @@ function [data, resp_feat, resp_ref, spo2_feat, config] = amplitude_fixture( ...
     resp_ref = struct();
     resp_ref.lungs = belt_reference(session_lungs, global_lungs);
     resp_ref.diaph = belt_reference(session_diaph, global_diaph);
-    spo2_feat = struct('spo2', 97 * ones(N, 1), 'desat_events', empty_events());
+    diagnostics_Des = struct('spo2', 97 * ones(N, 1), 'events', empty_events());
 end
 
 function values = repeat_to_length(values, n)
@@ -496,8 +500,6 @@ function [data, phys_feat, config] = detector_fixture()
         'dominance_state_mask', state, 'dominance_mask', state);
     phys_feat.resp = struct('time_sec', t_grid, 'lungs', lungs, ...
         'diaph', diaph, 'thoracoabdominal_balance', balance);
-    phys_feat.spo2 = struct('available', true, ...
-        'desaturation_events', make_event('desaturation', 30, 100, config.fs));
 end
 
 function values = replace_where(values, mask, replacement)
