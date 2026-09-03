@@ -41,8 +41,12 @@ function sub_events = merge_events(event_lists, merge_gap_sec)
         close_enough = curr.start_t <= (last.end_t + merge_gap_sec);
 
         if same_type && close_enough
+            sub_events(end).start_t = min(last.start_t, curr.start_t);
+            sub_events(end).start_idx = min(last.start_idx, curr.start_idx);
             sub_events(end).end_t   = max(last.end_t, curr.end_t);
             sub_events(end).end_idx = max(last.end_idx, curr.end_idx);
+            sub_events(end).duration = ...
+                sub_events(end).end_t - sub_events(end).start_t;
 
             % optional: if you later add meta, you can merge it here too
         else

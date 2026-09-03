@@ -11,7 +11,7 @@ function mask = events_to_sample_mask(events, N, fs)
             e = round(events(k).end_idx);
         else
             s = round(events(k).start_t*fs)+1;
-            e = round(events(k).end_t*fs)+1;
+            e = round(events(k).end_t*fs);
         end
 
         s = max(1, min(N, s));

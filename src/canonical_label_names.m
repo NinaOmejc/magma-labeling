@@ -1,5 +1,5 @@
 function names = canonical_label_names()
-% canonical_label_names  Frozen Stage-6 elementary-label column order.
-    names = {'shallowB', 'irregB', 'slowB', 'rapidB', 'asyncB', ...
-        'desat', 'apnea', 'sigh', 'CSR', 'deepB', 'thorDomB'};
+% canonical_label_names  Frozen v3 elementary-label column order.
+    names = {'shallow', 'deep', 'slow', 'rapid', 'irregular', ...
+        'apnea', 'sigh', 'csr', 'thoracic', 'async', 'desat'};
 end

@@ -84,10 +84,10 @@ function input_config = build_input_config(channels, config)
 
     running = {};
     if effective_resp_count >= 1
-        running = all_labels(~ismember(all_labels, {'asyncB','thorDomB','desat'}));
+        running = all_labels(~ismember(all_labels, {'async','thoracic','desat'}));
     end
     if effective_resp_count >= 2
-        running = [running, {'asyncB', 'thorDomB'}];
+        running = [running, {'async', 'thoracic'}];
     end
     if channels.has_spo2
         running{end+1} = 'desat';

@@ -25,19 +25,19 @@ function [label_available, reason] = compute_label_availability( ...
     for i = 1:numel(label_names)
         name = label_names{i};
         switch name
-            case {'shallowB', 'deepB'}
+            case {'shallow', 'deep'}
                 [label_available(i), reason{i}] = amplitude_availability( ...
                     session_amp, any_resp);
-            case 'irregB'
+            case 'irregular'
                 [label_available(i), reason{i}] = respiratory_feature_availability( ...
                     irregular, any_resp);
-            case 'slowB'
+            case 'slow'
                 [label_available(i), reason{i}] = respiratory_feature_availability( ...
                     rate_slow, any_resp);
-            case 'rapidB'
+            case 'rapid'
                 [label_available(i), reason{i}] = respiratory_feature_availability( ...
                     rate_rapid, any_resp);
-            case 'asyncB'
+            case 'async'
                 label_available(i) = isstruct(rea) && ...
                     isfield(rea, 'valid_analysis') && logical(rea.valid_analysis);
                 if label_available(i)
@@ -77,7 +77,7 @@ function [label_available, reason] = compute_label_availability( ...
                 else
                     reason{i} = 'insufficient_resp_features';
                 end
-            case 'CSR'
+            case 'csr'
                 label_available(i) = diagnostic_available(csr);
                 if label_available(i)
                     reason{i} = 'available';
@@ -86,7 +86,7 @@ function [label_available, reason] = compute_label_availability( ...
                 else
                     reason{i} = 'insufficient_resp_features';
                 end
-            case 'thorDomB'
+            case 'thoracic'
                 label_available(i) = ...
                     phys_feat.resp.thoracoabdominal_balance.available;
                 if label_available(i)

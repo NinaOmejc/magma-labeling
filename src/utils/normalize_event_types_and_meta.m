@@ -1,12 +1,19 @@
-function events = normalize_event_types_and_meta(raw_events)
+function events = normalize_event_types_and_meta(raw_events, fs)
 % normalize_event_types_and_meta
 % Convert detector-specific event names to one of the eleven independent
 % canonical labels and retain only explicit belt provenance.
 %
 % Final schema:
 %   type, start_idx, end_idx, start_t, end_t, duration, belt
-% where belt is '', 'lungs', 'diaph', or 'both'. Overlapping events of the
+% where belt is '', 'lungs', 'diaph', or 'both'. Times are half-open:
+% [start_t,end_t), while start_idx:end_idx are included samples. When fs is
+% supplied, indices are authoritative and canonical times are recomputed.
+% Overlapping events of the
 % same canonical type are merged; overlapping different labels are kept.
+
+    if nargin < 2
+        fs = [];
+    end
 
     events = empty_normalized_events();
     if isempty(raw_events)
@@ -19,15 +26,27 @@ function events = normalize_event_types_and_meta(raw_events)
         key = normalize_key(raw_type);
         events(i).type = canonical_type(key);
         events(i).belt = belt_from_event(key, raw_events(i));
-        events(i).start_idx = required_numeric_field(raw_events(i), 'start_idx');
-        events(i).end_idx = required_numeric_field(raw_events(i), 'end_idx');
-        events(i).start_t = required_numeric_field(raw_events(i), 'start_t');
-        events(i).end_t = required_numeric_field(raw_events(i), 'end_t');
-        if events(i).end_idx < events(i).start_idx || events(i).end_t < events(i).start_t
+        events(i).start_idx = round(required_numeric_field(raw_events(i), 'start_idx'));
+        events(i).end_idx = round(required_numeric_field(raw_events(i), 'end_idx'));
+        if events(i).end_idx < events(i).start_idx
             error('MAGMA:Events:InvalidInterval', ...
                 'Event "%s" has an end before its start.', raw_type);
         end
-        events(i).duration = events(i).end_t - events(i).start_t;
+        if isempty(fs)
+            events(i).start_t = required_numeric_field(raw_events(i), 'start_t');
+            events(i).end_t = required_numeric_field(raw_events(i), 'end_t');
+            if events(i).end_t < events(i).start_t
+                error('MAGMA:Events:InvalidInterval', ...
+                    'Event "%s" has an end before its start.', raw_type);
+            end
+            events(i).duration = events(i).end_t - events(i).start_t;
+        else
+            validate_fs(fs);
+            events(i).start_t = (events(i).start_idx - 1) / fs;
+            events(i).end_t = events(i).end_idx / fs;
+            events(i).duration = ...
+                (events(i).end_idx - events(i).start_idx + 1) / fs;
+        end
     end
 
     events = merge_normalized_belt_events(events);
@@ -57,15 +76,15 @@ end
 
 function type = canonical_type(key)
     if matches_label(key, {'shallow_breathing', 'shallowb', 'shb', 'shallowbreathing'})
-        type = 'shallowB';
+        type = 'shallow';
     elseif matches_label(key, {'irregular_breathing', 'irregb', 'irb', 'irregularbreathing'})
-        type = 'irregB';
+        type = 'irregular';
     elseif matches_label(key, {'slow_breathing', 'slowb', 'slb', 'slowbreathing'})
-        type = 'slowB';
+        type = 'slow';
     elseif matches_label(key, {'rapid_breathing', 'rapid', 'rapidb', 'rab', 'rapidbreathing', 'tachypnea'})
-        type = 'rapidB';
+        type = 'rapid';
     elseif matches_label(key, {'respiratory_asynchrony', 'asyncb', 'rea', 'respiratoryasynchrony'})
-        type = 'asyncB';
+        type = 'async';
     elseif matches_label(key, {'desaturation', 'desat', 'des', 'hypoxia'})
         type = 'desat';
     elseif matches_label(key, {'apnea', 'apn'})
@@ -75,15 +94,22 @@ function type = canonical_type(key)
     elseif matches_label(key, {'periodic_breathing', 'csr', 'csb', ...
             'cheyne_stokes', 'periodicbreathing', ...
             'periodicbreathingcheynestokeslike'})
-        type = 'CSR';
+        type = 'csr';
     elseif matches_label(key, {'deep_breathing', 'deepb', 'deb', 'deepbreathing'})
-        type = 'deepB';
+        type = 'deep';
     elseif matches_label(key, {'thoracic_dominant_breathing', 'thordomb', ...
             'thoracicdominantbreathing'})
-        type = 'thorDomB';
+        type = 'thoracic';
     else
         error('MAGMA:Events:UnknownType', ...
             'Unrecognized detector event type "%s".', key);
+    end
+end
+
+function validate_fs(fs)
+    if ~isnumeric(fs) || ~isscalar(fs) || ~isfinite(fs) || fs <= 0
+        error('MAGMA:Events:InvalidSamplingRate', ...
+            'fs must be a finite positive numeric scalar.');
     end
 end
 

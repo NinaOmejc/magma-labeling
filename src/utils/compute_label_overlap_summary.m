@@ -40,8 +40,8 @@ function summary = compute_label_overlap_summary( ...
         error('MAGMA:Overlap:InvalidSamplingRate', ...
             'fs must be a finite positive numeric scalar.');
     end
-    required = {'rapidB', 'deepB', 'sigh', 'irregB', ...
-        'apnea', 'desat', 'thorDomB', 'asyncB'};
+    required = {'rapid', 'deep', 'sigh', 'irregular', ...
+        'apnea', 'desat', 'thoracic', 'async'};
     missing = required(~ismember(required, label_names));
     if ~isempty(missing)
         error('MAGMA:Overlap:MissingRequiredLabel', ...
@@ -71,10 +71,10 @@ function summary = compute_label_overlap_summary( ...
 
     summary = struct();
     summary.version = 'prespecified_elementary_label_overlaps_v1';
-    summary.rapid_deep = pair_summary('rapidB', 'deepB');
-    summary.sigh_irregular = pair_summary('sigh', 'irregB');
+    summary.rapid_deep = pair_summary('rapid', 'deep');
+    summary.sigh_irregular = pair_summary('sigh', 'irregular');
     summary.apnea_desaturation = pair_summary('apnea', 'desat');
-    summary.thoracic_dominance_asynchrony = pair_summary('thorDomB', 'asyncB');
+    summary.thoracic_dominance_asynchrony = pair_summary('thoracic', 'async');
 
     function out = pair_summary(a_name, b_name)
         ia = find(strcmp(label_names, a_name), 1);

@@ -10,7 +10,7 @@ function config = get_config()
     config.fs = 200;                                                                                   % native/master sampling frequency (Hz) for all aligned physiological signals
     config.data_columns = {'ECG1', 'ECG2', 'SpO₂', 'Resp-Lungs', 'Blood Pressure', 'Resp-Diaphragm'};  % column names in raw data
     config.input_filename_pattern = 'ECG1_ECG2_SpO2_RespL_BP_RespD_fs200_Sub{subject}_Pom{measure}_DeTr_Norm.dat'; % The generic name of the data files
-    config.label_schema_version = 'independent_labels_v2_11class';         % explicit saved-output label schema
+    config.label_schema_version = 'independent_labels_v3_11class';         % explicit saved-output label schema
     config.labels = get_labels();                                          % canonical label names and indices
 
                                         % resolution of the saved figures
@@ -255,7 +255,7 @@ end
 
 
 function labels = get_labels()
-    labels_long = {'ShallowBreathing', 'IrregularBreathing', 'SlowBreathing', 'RapidBreathing', 'RespiratoryAsynchrony', 'Desaturation', 'Apnea', 'Sigh', 'PeriodicBreathingCheyneStokesLike', 'DeepBreathing', 'ThoracicDominantBreathing'};
+    labels_long = {'ShallowBreathing', 'DeepBreathing', 'SlowBreathing', 'RapidBreathing', 'IrregularBreathing', 'Apnea', 'Sigh', 'PeriodicBreathingCheyneStokesLike', 'ThoracicDominantBreathing', 'RespiratoryAsynchrony', 'Desaturation'};
     labels_short = canonical_label_names();
     labels_idx = 1:11;
     labels = struct( ...

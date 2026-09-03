@@ -10,13 +10,13 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events(data, confi
 % Click times and saved sample indices use the config.fs master timeline.
 
     label_defs = manual_label_definitions();
-    weak_event_sets = ensure_event_sets(weak_event_sets, label_defs);
+    N = size(data, 1);
+    fs = config.fs;
+    weak_event_sets = ensure_event_sets(weak_event_sets, label_defs, fs, N);
     reviewed_event_sets = weak_event_sets;
 
     cfg = label_edit_config(config);
     edit_file = manual_edit_file(config, cfg);
-    N = size(data, 1);
-    fs = config.fs;
     edit_info = init_edit_info(edit_file);
     reviewed_fields = {};
     review_coverage_mask = false(N, numel(label_defs));
@@ -153,21 +153,30 @@ function T = event_signature_table(events)
     T = sortrows(T, {'type', 'start_idx', 'end_idx', 'start_t', 'end_t'});
 end
 
-function event_sets = ensure_event_sets(event_sets, label_defs)
-    if nargin < 1 || isempty(event_sets) || ~isstruct(event_sets)
-        event_sets = struct();
+function event_sets = ensure_event_sets(source_sets, label_defs, fs, N)
+    if nargin < 3, fs = []; end
+    if nargin < 4, N = []; end
+    event_sets = struct();
+    if nargin < 1 || isempty(source_sets) || ~isstruct(source_sets)
+        source_sets = struct();
     end
+    source_fields = fieldnames(source_sets);
+    mapped_fields = canonicalize_label_names(source_fields);
     for i = 1:numel(label_defs)
         field = label_defs(i).field;
-        if ~isfield(event_sets, field) || isempty(event_sets.(field))
+        source_index = find(strcmp(mapped_fields, field), 1);
+        if isempty(source_index) || isempty(source_sets.(source_fields{source_index}))
             event_sets.(field) = empty_events();
         else
-            event_sets.(field) = sanitize_events(event_sets.(field));
+            event_sets.(field) = sanitize_events( ...
+                source_sets.(source_fields{source_index}), fs, N);
         end
     end
 end
 
-function events = sanitize_events(events)
+function events = sanitize_events(events, fs, N)
+    if nargin < 2, fs = []; end
+    if nargin < 3, N = []; end
     if isempty(events)
         events = empty_events();
         return;
@@ -184,11 +193,22 @@ function events = sanitize_events(events)
 
     for i = 1:numel(events)
         out(i).type = char(string(get_event_field(events(i), 'type', '')));
-        out(i).start_idx = get_event_field(events(i), 'start_idx', 1);
-        out(i).end_idx = get_event_field(events(i), 'end_idx', out(i).start_idx);
-        out(i).start_t = get_event_field(events(i), 'start_t', 0);
-        out(i).end_t = get_event_field(events(i), 'end_t', out(i).start_t);
-        out(i).duration = max(0, out(i).end_t - out(i).start_t);
+        out(i).start_idx = round(get_event_field(events(i), 'start_idx', 1));
+        out(i).end_idx = round(get_event_field(events(i), 'end_idx', out(i).start_idx));
+        if ~isempty(N)
+            out(i).start_idx = max(1, min(N, out(i).start_idx));
+            out(i).end_idx = max(out(i).start_idx, min(N, out(i).end_idx));
+        end
+        if isempty(fs)
+            out(i).start_t = get_event_field(events(i), 'start_t', 0);
+            out(i).end_t = get_event_field(events(i), 'end_t', out(i).start_t);
+            out(i).duration = max(0, out(i).end_t - out(i).start_t);
+        else
+            out(i).start_t = (out(i).start_idx - 1) / fs;
+            out(i).end_t = out(i).end_idx / fs;
+            out(i).duration = ...
+                (out(i).end_idx - out(i).start_idx + 1) / fs;
+        end
     end
 end
 
@@ -254,13 +274,16 @@ function [loaded_sets, reviewed_fields, schema_version, review_coverage_mask] = 
     % reconstructing former depth/desaturation modifiers. A field absent
     % from an old file was never reviewed, so keep that label's current
     % automatic events rather than treating absence as a negative edit.
-    loaded_sets = ensure_event_sets(automatic_sets, label_defs);
+    loaded_sets = ensure_event_sets(automatic_sets, label_defs, fs, N);
+    saved_fields = fieldnames(saved_sets);
+    mapped_saved_fields = canonicalize_label_names(saved_fields);
     for i = 1:numel(label_defs)
         field = label_defs(i).field;
-        if ~isfield(saved_sets, field)
+        saved_index = find(strcmp(mapped_saved_fields, field), 1);
+        if isempty(saved_index)
             continue;
         end
-        migrated = sanitize_events(saved_sets.(field));
+        migrated = sanitize_events(saved_sets.(saved_fields{saved_index}), fs, N);
         for j = 1:numel(migrated)
             migrated(j).type = label_defs(i).type;
         end
@@ -293,12 +316,12 @@ function save_manual_event_sets(edit_file, weak_event_sets, reviewed_event_sets,
         mkdir(out_dir);
     end
 
-    manual_label_weak_event_sets = ensure_event_sets(weak_event_sets, label_defs);
-    manual_label_event_sets = ensure_event_sets(reviewed_event_sets, label_defs);
+    manual_label_weak_event_sets = ensure_event_sets(weak_event_sets, label_defs, fs, N);
+    manual_label_event_sets = ensure_event_sets(reviewed_event_sets, label_defs, fs, N);
     manual_label_review_mask = logical(review_coverage_mask);
     manual_label_edit_meta = struct( ...
-        'version', 3, ...
-        'schema_version', 3, ...
+        'version', 4, ...
+        'schema_version', 4, ...
         'subject', config.subject, ...
         'measure', config.measure, ...
         'n_samples', N, ...
@@ -529,7 +552,7 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
             return;
         end
 
-        remove = [events.start_t] <= t_click & [events.end_t] >= t_click;
+        remove = [events.start_t] <= t_click & [events.end_t] > t_click;
         if ~any(remove) && fallback_index >= 1 && fallback_index <= numel(events)
             remove(fallback_index) = true;
         end
@@ -655,7 +678,7 @@ end
 
 function ev = make_event(event_type, start_t, end_t, N, fs)
     start_idx = max(1, min(N, round(start_t * fs) + 1));
-    end_idx = max(1, min(N, round(end_t * fs) + 1));
+    end_idx = max(start_idx, min(N, round(end_t * fs)));
     if end_idx < start_idx
         tmp = start_idx;
         start_idx = end_idx;
@@ -663,14 +686,14 @@ function ev = make_event(event_type, start_t, end_t, N, fs)
     end
 
     start_t = (start_idx - 1) / fs;
-    end_t = (end_idx - 1) / fs;
+    end_t = end_idx / fs;
     ev = struct( ...
         'type', event_type, ...
         'start_idx', start_idx, ...
         'end_idx', end_idx, ...
         'start_t', start_t, ...
         'end_t', end_t, ...
-        'duration', end_t - start_t);
+        'duration', (end_idx - start_idx + 1) / fs);
 end
 
 function events = sort_events_by_time(events)

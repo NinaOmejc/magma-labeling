@@ -14,7 +14,7 @@ function annotations = assemble_annotation_layers( ...
         weak_parts{i} = field_events(weak_event_sets, defs(i).field);
     end
     weak_parts{end} = field_events(sigh_review, 'weak_events');
-    events_weak = normalize_event_types_and_meta(merge_events(weak_parts));
+    events_weak = normalize_event_types_and_meta(merge_events(weak_parts), config.fs);
     [mask_weak, mask_names] = events_to_time_mask(events_weak, N, config);
     if ~isequal(mask_names, label_names)
         error('MAGMA:Annotations:LabelOrder', ...
@@ -57,7 +57,8 @@ function annotations = assemble_annotation_layers( ...
         end
     end
 
-    working_events_reviewed = normalize_event_types_and_meta(merge_events(reviewed_parts));
+    working_events_reviewed = normalize_event_types_and_meta( ...
+        merge_events(reviewed_parts), config.fs);
     mask_reviewed = events_to_time_mask(working_events_reviewed, N, config);
     mask_reviewed = mask_reviewed & gold_review_mask;
     events_reviewed = label_mask_to_events(mask_reviewed, label_names, config.fs);
