@@ -12,12 +12,11 @@ function config = get_config()
     config.input_filename_pattern = 'ECG1_ECG2_SpO2_RespL_BP_RespD_fs200_Sub{subject}_Pom{measure}_DeTr_Norm.dat'; % The generic name of the data files
     config.label_schema_version = 'independent_labels_v3_11class';         % explicit saved-output label schema
     config.labels = get_labels();                                          % canonical label names and indices
-
     config.make_figs_visible = 'off';                                      % create figures hidden during batch runs, so they dont pop up (for faster run)
-    config.overwrite_results = true;                                       % *** Recompute even if label output already exists
+    config.overwrite_results = false;                                      % *** Recompute even if label output already exists
     config.overwrite_features = false;                                     % *** Recompute respiratory features even if "*_features.mat" exists
-
-    % plot first X seconds of raw data
+    
+    % FIRST CHECK: plot [X1, X2] seconds of raw data
     config.plot_raw_data = false;                               % save an overview plot of raw signals
     config.plot_raw_data_xrange = [1, 10];                      % raw overview x-axis range in seconds
 

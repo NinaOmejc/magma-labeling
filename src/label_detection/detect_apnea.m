@@ -4,8 +4,8 @@ function [events, diagnostics, boundary_info] = detect_apnea( ...
 % Label 6 - Apnea
 %
 % Evidence paths:
-%   1) Peak-amplitude path: breath amplitudes <= threshold relative to the
-%      respiratory amplitude reference.
+%   1) Peak-amplitude path: every usable breath in the analysis window is
+%      <= threshold relative to the respiratory amplitude reference.
 %   2) Optional raw-flat path: direct low-motion/plateau detection on the
 %      preprocessed respiration belts, independent of detected breath peaks.
 %      Its raw motion/slope anchor is estimated from the common session
@@ -96,14 +96,12 @@ function [events, diagnostics, boundary_info] = detect_apnea( ...
 
     if lungs_breath_valid || diaph_breath_valid
         lungs_low = false(size(t_grid));
-        if lungs_breath_valid
-            lungs_low = isfinite(lungs.apnea_amp_ratio_session_window_median) & ...
-                lungs.apnea_amp_ratio_session_window_median <= amp_ratio_thr;
+        if lungs_breath_valid && isfield(lungs, 'apnea_amplitude_endpoint_mask')
+            lungs_low = logical(lungs.apnea_amplitude_endpoint_mask);
         end
         diaph_low = false(size(t_grid));
-        if diaph_breath_valid
-            diaph_low = isfinite(diaph.apnea_amp_ratio_session_window_median) & ...
-                diaph.apnea_amp_ratio_session_window_median <= amp_ratio_thr;
+        if diaph_breath_valid && isfield(diaph, 'apnea_amplitude_endpoint_mask')
+            diaph_low = logical(diaph.apnea_amplitude_endpoint_mask);
         end
         if lungs_breath_valid && diaph_breath_valid
             apnea_peak_endpoint = lungs_low & diaph_low;
