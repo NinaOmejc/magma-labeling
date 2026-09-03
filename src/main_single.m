@@ -36,23 +36,24 @@ for isub = 1:length(config.subjects)
             data, resp_feat, resp_ref, spo2_feat, config);
 
         % LABEL DETECTIONS        
-        events_ShB = detect_shallow_breathing(data, phys_feat, config);
-        events_DeB = detect_deep_breathing(data, phys_feat, config);
-        events_TDB = detect_thoracic_dominant_breathing(data, phys_feat, config);
-        events_IrB = detect_irregular_breathing(data, phys_feat, config);
-        events_SlB = detect_slow_breathing(data, phys_feat, config);
-        events_RaB = detect_rapid_breathing(data, phys_feat, config);
+        [events_ShB, boundary_ShB] = detect_shallow_breathing(data, phys_feat, config);
+        [events_DeB, boundary_DeB] = detect_deep_breathing(data, phys_feat, config);
+        [events_TDB, boundary_TDB] = detect_thoracic_dominant_breathing(data, phys_feat, config);
+        [events_IrB, boundary_IrB] = detect_irregular_breathing(data, phys_feat, config);
+        [events_SlB, boundary_SlB] = detect_slow_breathing(data, phys_feat, config);
+        [events_RaB, boundary_RaB] = detect_rapid_breathing(data, phys_feat, config);
         [events_ReA, diagnostics_ReA] = detect_respiratory_asynchrony(data, baseline, resp_feat, config);
         events_Des = detect_desaturation(data, baseline, spo2_feat, config);
-        [events_Apn, diagnostics_Apn] = detect_apnea(data, phys_feat, config);
-        [events_Sigh, diagnostics_Sigh] = detect_sigh( ...
+        [events_Apn, diagnostics_Apn, boundary_Apn] = detect_apnea(data, phys_feat, config);
+        [~, diagnostics_Sigh, sigh_review] = detect_sigh( ...
             data, phys_feat, resp_feat, baseline, spo2_feat, config);
         [events_CSR, diagnostics_CSR] = detect_periodic_breathing( ...
             data, resp_feat, config);
 
-        % Optional final manual event-interval editing.
-        % Sigh is intentionally excluded because it has its own breath-level GUI.
-        event_sets = struct( ...
+        % Freeze automatic weak annotations before any interval editing.
+        % Sigh is separate because it has its own breath-level GUI, whose
+        % automatic candidates are retained in sigh_review.weak_events.
+        weak_event_sets = struct( ...
             'shallowB', events_ShB, ...
             'deepB', events_DeB, ...
             'thorDomB', events_TDB, ...
@@ -63,28 +64,24 @@ for isub = 1:length(config.subjects)
             'desat', events_Des, ...
             'apnea', events_Apn, ...
             'CSR', events_CSR);
-        [event_sets, manual_label_edit] = manual_edit_label_events(data, config, event_sets);
-        
-        events_ShB = event_sets.shallowB;
-        events_DeB = event_sets.deepB;
-        events_TDB = event_sets.thorDomB;
-        events_IrB = event_sets.irregB;
-        events_SlB = event_sets.slowB;
-        events_RaB = event_sets.rapidB;
-        events_ReA = event_sets.asyncB;
-        events_Des = event_sets.desat;
-        events_Apn = event_sets.apnea;
-        events_CSR = event_sets.CSR;
+        N = size(data,1);
+        [reviewed_event_sets, manual_label_edit] = manual_edit_label_events( ...
+            data, config, weak_event_sets);
+        annotations = assemble_annotation_layers(weak_event_sets, ...
+            reviewed_event_sets, manual_label_edit, sigh_review, N, config);
+        events_weak = annotations.events_weak;
+        mask_weak = annotations.mask_weak;
+        events_reviewed = annotations.events_reviewed;
+        mask_reviewed = annotations.mask_reviewed;
+        gold_review_mask = annotations.gold_review_mask;
+        label_names = annotations.label_names;
 
-        % JOIN EVENTS FOR SUBJECT, MEASUREMENT
-        sub_events = merge_events({events_ShB, events_IrB, events_SlB, events_RaB, events_ReA, events_Des, events_Apn, events_Sigh, events_CSR, events_DeB, events_TDB});
-        sub_events = normalize_event_types_and_meta(sub_events);
-        
-        N = size(data,1); 
-        [label_mask, label_names] = events_to_time_mask(sub_events, N, config);
         [label_available, label_availability_reason] = ...
             compute_label_availability(label_names, phys_feat, spo2_feat, ...
                 diagnostics_ReA, diagnostics_Apn, diagnostics_Sigh, diagnostics_CSR);
+        [label_assessable_mask, label_assessability_info] = ...
+            compute_label_assessable_mask(N, label_names, label_available, ...
+                spo2_feat, diagnostics_ReA, config);
         diagnostic_signals = compute_label_diagnostic_signals( ...
             phys_feat, baseline, spo2_feat, config, diagnostics_ReA, ...
             diagnostics_Apn, diagnostics_Sigh, diagnostics_CSR);
@@ -93,27 +90,77 @@ for isub = 1:length(config.subjects)
             'apnea', diagnostics_Apn, ...
             'sigh', diagnostics_Sigh, ...
             'periodic_breathing', diagnostics_CSR);
-        label_burden = compute_recording_label_burden( ...
-            label_mask, label_names, label_available, sub_events, config.fs);
-        label_overlap_summary = compute_label_overlap_summary( ...
-            label_mask, label_names, label_available, config.fs);
-        label_evidence_summary = build_label_evidence_summary( ...
+        label_burden_weak = compute_recording_label_burden( ...
+            mask_weak, label_names, label_available, events_weak, config.fs, ...
+            label_assessable_mask);
+        label_overlap_summary_weak = compute_label_overlap_summary( ...
+            mask_weak, label_names, label_available, config.fs, label_assessable_mask);
+        label_evidence_summary_weak = build_label_evidence_summary( ...
             label_names, label_available, label_availability_reason, ...
-            phys_feat, diagnostic_signals, detector_diagnostics, label_burden);
-        db_phenotype_evidence = build_db_phenotype_evidence( ...
-            label_burden, label_overlap_summary, label_evidence_summary);
+            phys_feat, diagnostic_signals, detector_diagnostics, label_burden_weak);
+
+        reviewed_available = label_available & any(gold_review_mask, 1);
+        reviewed_assessable_mask = label_assessable_mask & gold_review_mask;
+        reviewed_reasons = label_availability_reason;
+        reviewed_reasons(~any(gold_review_mask, 1)) = {'unreviewed'};
+        label_burden_reviewed = compute_recording_label_burden( ...
+            mask_reviewed, label_names, reviewed_available, events_reviewed, ...
+            config.fs, reviewed_assessable_mask);
+        label_overlap_summary_reviewed = compute_label_overlap_summary( ...
+            mask_reviewed, label_names, reviewed_available, config.fs, ...
+            reviewed_assessable_mask);
+        label_evidence_summary_reviewed = build_label_evidence_summary( ...
+            label_names, reviewed_available, reviewed_reasons, phys_feat, ...
+            diagnostic_signals, detector_diagnostics, label_burden_reviewed);
+        db_phenotype_evidence = build_db_phenotype_evidence_bundle( ...
+            label_burden_weak, label_overlap_summary_weak, ...
+            label_evidence_summary_weak, label_burden_reviewed, ...
+            label_overlap_summary_reviewed, label_evidence_summary_reviewed);
+
+        event_boundary_info = struct( ...
+            'version', 'label_boundary_provenance_v1', ...
+            'shallowB', boundary_ShB, 'irregB', boundary_IrB, ...
+            'slowB', boundary_SlB, 'rapidB', boundary_RaB, ...
+            'asyncB', standard_boundary('asyncB', 'detect_respiratory_asynchrony', ...
+                events_ReA, 'specialized_local_phase_coherence', NaN, ...
+                'time_localized_wavelet_phase_coherence'), ...
+            'desat', standard_boundary('desat', 'detect_desaturation', ...
+                events_Des, 'native_spo2_threshold_run', 1/config.fs, 'native_spo2_samples'), ...
+            'apnea', boundary_Apn, ...
+            'sigh', standard_boundary('sigh', 'detect_sigh', ...
+                sigh_review.weak_events, 'reviewed_breath_midpoint_cell', 1/config.fs, ...
+                'automatic_sigh_candidate_breath'), ...
+            'CSR', standard_boundary('CSR', 'detect_periodic_breathing', ...
+                events_CSR, 'cycle_trough_to_trough', 1/config.fs, ...
+                'breath_amplitude_envelope_cycles'), ...
+            'deepB', boundary_DeB, 'thorDomB', boundary_TDB);
         rewritten_manual_label_figures = rewrite_changed_manual_label_figures( ...
-            data, baseline, resp_feat, spo2_feat, diagnostic_signals, event_sets, manual_label_edit, config);
-        plot_label_mask(label_mask, label_names, config);
+            data, baseline, resp_feat, spo2_feat, diagnostic_signals, reviewed_event_sets, manual_label_edit, config);
+        plot_label_mask(mask_weak, label_names, config);
         
         % SAVE
+        results = struct();
         results.subject = config.subject;
         results.measure = config.measure;
-        results.events = sub_events;
-        results.mask   = label_mask;
+        results.annotation_schema_version = annotations.version;
+        results.events_weak = events_weak;
+        results.mask_weak = mask_weak;
+        results.events_reviewed = events_reviewed;
+        results.mask_reviewed = mask_reviewed;
+        results.gold_review_mask = gold_review_mask;
+        results.review_status = annotations.review_status;
+        results.review_scope = annotations.review_scope;
+        % Backward-compatible aliases now point to immutable weak labels.
+        results.events = events_weak;
+        results.mask = mask_weak;
         results.label_names = label_names;
         results.label_available = label_available;
         results.label_availability_reason = label_availability_reason;
+        results.label_assessable_mask = label_assessable_mask;
+        results.label_assessability_info = label_assessability_info;
+        results.label_reviewed_available = reviewed_available;
+        results.label_reviewed_availability_reason = reviewed_reasons;
+        results.label_reviewed_assessable_mask = reviewed_assessable_mask;
         results.label_schema_version = config.label_schema_version;
         results.resp_feat = resp_feat;
         results.resp_ref = resp_ref;
@@ -121,19 +168,51 @@ for isub = 1:length(config.subjects)
         results.spo2_feat = spo2_feat;
         results.diagnostic_signals = diagnostic_signals;
         results.detector_diagnostics = detector_diagnostics;
-        results.label_burden = label_burden;
-        results.label_overlap_summary = label_overlap_summary;
-        results.label_evidence_summary = label_evidence_summary;
+        results.label_burden_weak = label_burden_weak;
+        results.label_burden_reviewed = label_burden_reviewed;
+        results.label_overlap_summary_weak = label_overlap_summary_weak;
+        results.label_overlap_summary_reviewed = label_overlap_summary_reviewed;
+        results.label_evidence_summary_weak = label_evidence_summary_weak;
+        results.label_evidence_summary_reviewed = label_evidence_summary_reviewed;
+        % Backward-compatible summary aliases use weak provenance.
+        results.label_burden = label_burden_weak;
+        results.label_overlap_summary = label_overlap_summary_weak;
+        results.label_evidence_summary = label_evidence_summary_weak;
         results.db_phenotype_evidence = db_phenotype_evidence;
+        results.event_boundary_info = event_boundary_info;
         results.manual_label_edit = manual_label_edit;
+        results.manual_sigh_review = sigh_review;
         results.rewritten_manual_label_figures = rewritten_manual_label_figures;
         results.baseline = baseline;
         results.input_config = config.input_config;
         results.config = config;
+        results.export_schema_version = get_config_value( ...
+            config, 'HDF5', 'export_schema_version', 'magma_ml_hdf5_v1');
+        results.upstream_input_preprocessing = get_config_value( ...
+            config, 'HDF5', 'upstream_input_preprocessing', ...
+            'external / not fully documented');
         save(fullfile(config.sub_results_path, config.sub_results_filename), '-struct', 'results');
+        if get_config_value(config, 'HDF5', 'enabled', true)
+            hdf5_suffix = get_config_value(config, 'HDF5', ...
+                'filename_suffix', '_labels.h5');
+            hdf5_filename = fullfile(config.sub_results_path, ...
+                sprintf('Sub%d_M%d%s', config.subject, config.measure, hdf5_suffix));
+            export_results_hdf5(hdf5_filename, results, data_raw, data);
+        end
         
         disp(['Successfully finished label detection for: Sub ' num2str(config.subject) ' | Measurement: ' num2str(config.measure) ])
     end
 end
 
 save([config.path_results_out, filesep, 'analysis_configuration.mat'], "config")
+
+function info = standard_boundary(label, detector, events, method, uncertainty, source)
+    info = make_label_boundary_info(label, detector, method, events, events, ...
+        uncertainty, source, [], [], []);
+    if isnan(uncertainty)
+        info.temporal_resolution_note = ...
+            'detector-specific timing; no unsupported scalar uncertainty assigned';
+    else
+        info.temporal_resolution_note = '';
+    end
+end

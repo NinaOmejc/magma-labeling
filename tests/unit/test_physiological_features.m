@@ -165,7 +165,7 @@ function testShallowAndApneaEventsMatchPreviousEvidence(testCase)
 
     phys_feat = compute_physiological_features( ...
         data, resp_feat, resp_ref, spo2_feat, config);
-    actual_shallow = detect_shallow_breathing(data, phys_feat, config);
+    [actual_shallow, shallow_boundary] = detect_shallow_breathing(data, phys_feat, config);
     t_grid = phys_feat.resp.time_sec;
     expected_lungs_mask = legacy_amplitude_band_mask( ...
         resp_feat.lungs, t_grid, config.ShB.analysis_win_sec, 2, ...
@@ -180,7 +180,7 @@ function testShallowAndApneaEventsMatchPreviousEvidence(testCase)
         expected_diaph_mask, t_grid, config.fs, size(data,1), ...
         config.ShB.min_dur_sec, 'shallow_breathing_diaph');
     expected_shallow = merge_events({expected_lungs, expected_diaph});
-    verifyEventEvidenceEqual(testCase, actual_shallow, expected_shallow);
+    verifyLocalizedEventEvidence(testCase, actual_shallow, expected_shallow, shallow_boundary);
 
     low_lungs = resp_feat.lungs.peak_t >= 300 & resp_feat.lungs.peak_t <= 350;
     low_diaph = resp_feat.diaph.peak_t >= 300 & resp_feat.diaph.peak_t <= 350;
@@ -188,7 +188,7 @@ function testShallowAndApneaEventsMatchPreviousEvidence(testCase)
     resp_feat.diaph.amp(low_diaph) = 0.2;
     phys_feat = compute_physiological_features( ...
         data, resp_feat, resp_ref, spo2_feat, config);
-    actual_apnea = detect_apnea(data, phys_feat, config);
+    [actual_apnea, ~, apnea_boundary] = detect_apnea(data, phys_feat, config);
 
     lungs_ratio = legacy_apnea_ratio_trace( ...
         resp_feat.lungs, t_grid, config.Apn.amp_analysis_win_sec, 2);
@@ -201,7 +201,7 @@ function testShallowAndApneaEventsMatchPreviousEvidence(testCase)
     [expected_apnea, ~] = sustained_condition_to_events( ...
         peak_mask, t_grid, config.fs, size(data,1), ...
         config.Apn.min_dur_sec, 'apnea');
-    verifyEventEvidenceEqual(testCase, actual_apnea, expected_apnea);
+    verifyLocalizedEventEvidence(testCase, actual_apnea, expected_apnea, apnea_boundary);
 end
 
 function testMigratedDetectorsDoNotOwnPeakDetectionOrReferenceDivision(testCase)
@@ -234,6 +234,15 @@ function verifyEventEvidenceEqual(testCase, actual, expected)
     verifyEqual(testCase, string({actual.type})', string({expected.type})');
     verifyEqual(testCase, [actual.start_idx]', [expected.start_idx]');
     verifyEqual(testCase, [actual.end_idx]', [expected.end_idx]');
+end
+
+function verifyLocalizedEventEvidence(testCase, actual, expected, boundary)
+    verifyEqual(testCase, string({actual.type})', string({expected.type})');
+    verifyNumElements(testCase, boundary.events, numel(expected));
+    verifyEqual(testCase, [boundary.events.candidate_start_t]', [expected.start_t]');
+    verifyEqual(testCase, [boundary.events.candidate_end_t]', [expected.end_t]');
+    verifyGreaterThanOrEqual(testCase, [actual.start_t]', [expected.start_t]');
+    verifyLessThanOrEqual(testCase, [actual.end_t]', [expected.end_t]');
 end
 
 function [data, resp_feat, resp_ref, spo2_feat, config] = feature_fixture()

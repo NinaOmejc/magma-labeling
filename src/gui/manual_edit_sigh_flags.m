@@ -1,5 +1,6 @@
-function [flags_lungs, flags_diaph] = manual_edit_sigh_flags(data, bL, bD, flags_lungs, flags_diaph, baseline, spo2_feat, config, window_sec)
+function [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags(data, bL, bD, flags_lungs, flags_diaph, baseline, spo2_feat, config, window_sec)
 % Edit sigh flags using click times on the config.fs master timeline.
+    review_mask = false(size(data,1), 1);
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
     end
@@ -37,6 +38,7 @@ function [flags_lungs, flags_diaph] = manual_edit_sigh_flags(data, bL, bD, flags
 
     linkaxes([ax1 ax2 ax3],'x');
     xlim(ax1, [0 min(window_sec,t_raw(end))]);
+    mark_current_view_reviewed();
     align_sigh_axes();
 
     uicontrol(fh, 'Style','slider', 'Units','normalized', 'Position',[0.1 0.01 0.8 0.03], ...
@@ -60,6 +62,15 @@ function [flags_lungs, flags_diaph] = manual_edit_sigh_flags(data, bL, bD, flags
 
     function set_xlim(x0)
         xlim(ax1, [x0 min(x0+window_sec, t_raw(end))]);
+        mark_current_view_reviewed();
+    end
+
+    function mark_current_view_reviewed()
+        if ~isgraphics(ax1), return; end
+        limits = xlim(ax1);
+        start_idx = max(1, min(N, floor(limits(1) * fs) + 1));
+        end_idx = max(start_idx, min(N, ceil(limits(2) * fs) + 1));
+        review_mask(start_idx:end_idx) = true;
     end
 
     function edit_flag(evt, ax, belt, target)

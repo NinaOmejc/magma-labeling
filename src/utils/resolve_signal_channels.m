@@ -84,8 +84,7 @@ function input_config = build_input_config(channels, config)
 
     running = {};
     if effective_resp_count >= 1
-        running = {'shallowB', 'irregB', 'slowB', 'rapidB', ...
-            'apnea', 'sigh', 'CSR', 'deepB'};
+        running = all_labels(~ismember(all_labels, {'asyncB','thorDomB','desat'}));
     end
     if effective_resp_count >= 2
         running = [running, {'asyncB', 'thorDomB'}];

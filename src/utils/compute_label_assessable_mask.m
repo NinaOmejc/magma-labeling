@@ -1,0 +1,63 @@
+function [assessable_mask, info] = compute_label_assessable_mask( ...
+    N, label_names, label_available, spo2_feat, rea_diagnostics, config)
+% compute_label_assessable_mask
+% Label-aligned sample-level assessability. Only unambiguous partial gaps
+% are encoded: non-finite SpO2 samples for desaturation and invalid local
+% wavelet evidence for respiratory asynchrony. Other respiratory detectors
+% retain recording-level assessability: an estimator being undefined before
+% its first complete rolling window does not make the underlying physiology
+% unavailable.
+
+    label_names = cellstr(string(label_names));
+    label_available = logical(label_available(:)');
+    if ~isscalar(N) || ~isnumeric(N) || ~isfinite(N) || N < 0 || N ~= round(N)
+        error('MAGMA:Assessability:InvalidSampleCount', ...
+            'N must be a finite nonnegative integer.');
+    end
+    if numel(label_available) ~= numel(label_names)
+        error('MAGMA:Assessability:LabelAlignment', ...
+            'label_names and label_available must have equal lengths.');
+    end
+    assessable_mask = repmat(label_available, N, 1);
+
+    desat_idx = find(strcmp(label_names, 'desat'), 1);
+    if ~isempty(desat_idx) && label_available(desat_idx) && ...
+            isstruct(spo2_feat) && isfield(spo2_feat, 'spo2') && ...
+            numel(spo2_feat.spo2) == N
+        assessable_mask(:, desat_idx) = isfinite(spo2_feat.spo2(:));
+    end
+
+    async_idx = find(strcmp(label_names, 'asyncB'), 1);
+    if ~isempty(async_idx) && label_available(async_idx) && ...
+            isstruct(rea_diagnostics) && ...
+            isfield(rea_diagnostics, 'valid_evidence_mask') && ...
+            isfield(rea_diagnostics, 'time_sec')
+        assessable_mask(:, async_idx) = grid_to_master_mask( ...
+            rea_diagnostics.valid_evidence_mask, rea_diagnostics.time_sec, ...
+            N, config.fs);
+    end
+
+    info = struct( ...
+        'version', 'label_assessability_v1', ...
+        'partial_labels', {{'desat', 'asyncB'}}, ...
+        'desat_rule', 'finite_native_spo2_sample_and_recording_level_detection_available', ...
+        'async_rule', 'nearest_master_sample_projection_of_valid_local_coherence_evidence', ...
+        'other_labels_rule', ['recording_level_availability; an incomplete initial ' ...
+            'rolling window is estimator latency, not physiological unassessability']);
+end
+
+function master_mask = grid_to_master_mask(grid_mask, t_grid, N, fs)
+    grid_mask = logical(grid_mask(:));
+    t_grid = t_grid(:);
+    if numel(grid_mask) ~= numel(t_grid) || isempty(t_grid)
+        error('MAGMA:Assessability:ReAGridAlignment', ...
+            'ReA valid_evidence_mask and time_sec must align.');
+    end
+    if any(~isfinite(t_grid)) || any(diff(t_grid) <= 0)
+        error('MAGMA:Assessability:ReAGridTime', ...
+            'ReA time_sec must be finite and strictly increasing.');
+    end
+    master_t = (0:N-1)' / fs;
+    master_mask = interp1(t_grid, double(grid_mask), master_t, ...
+        'nearest', 0) ~= 0;
+end

@@ -1,8 +1,9 @@
-function events = detect_slow_breathing(data, phys_feat, config)
+function [events, boundary_info] = detect_slow_breathing(data, phys_feat, config)
 % detect_slow_breathing
-% Label 3 - mean respiratory rate <= the configured threshold. Each TRUE
-% endpoint summarizes the preceding analysis_win_sec; its complete window
-% supports the inferred state. min_dur_sec is applied once to that state.
+% Label 3 - mean respiratory rate <= the configured threshold. The rolling
+% window confirms an event; reviewed breathwise RR localizes its boundary.
+% A qualifying aggregate window is not treated as proof that every sample
+% in the preceding window was slow.
 % Rate is evaluated independently per usable belt; amplitude and SpO2 do
 % not modify slow-breathing events.
 
@@ -11,6 +12,9 @@ function events = detect_slow_breathing(data, phys_feat, config)
     t_grid = phys_feat.resp.time_sec;
     lungs = phys_feat.resp.lungs;
     diaph = phys_feat.resp.diaph;
+    boundary_info = make_label_boundary_info('slowB', ...
+        'detect_slow_breathing', 'not_evaluated', empty_events(), ...
+        empty_events(), NaN, '', [], [], []);
 
     if ~lungs.available && ~diaph.available
         fprintf('Skipping slowB detection: no valid respiratory belt with usable breath timing.\n');
@@ -18,11 +22,13 @@ function events = detect_slow_breathing(data, phys_feat, config)
     end
 
     rr_thr_bpm = get_config_value(config, 'SlB', 'rr_thr_bpm', 10);
+    analysis_win_sec = get_config_value(config, 'SlB', 'analysis_win_sec', 60);
     min_dur_sec = get_config_value(config, 'SlB', 'min_dur_sec', 30);
     plot_rr_step_sec = get_config_value(config, 'SlB', 'plot_rr_step_sec', 15);
 
     rr_lungs = nan(size(t_grid));
     slow_lungs_state = false(size(t_grid));
+    slow_lungs_endpoint = false(size(t_grid));
     if lungs.available
         rr_lungs = lungs.rate_slow_window_bpm;
         slow_lungs_endpoint = isfinite(rr_lungs) & rr_lungs <= rr_thr_bpm;
@@ -30,12 +36,13 @@ function events = detect_slow_breathing(data, phys_feat, config)
             slow_lungs_state = lungs.rate_slow_state_mask;
         else
             slow_lungs_state = analysis_window_endpoints_to_state_mask( ...
-                slow_lungs_endpoint, t_grid, phys_feat.resp.rate_windows_sec.slow);
+                slow_lungs_endpoint, t_grid, analysis_win_sec);
         end
     end
 
     rr_diaph = nan(size(t_grid));
     slow_diaph_state = false(size(t_grid));
+    slow_diaph_endpoint = false(size(t_grid));
     if diaph.available
         rr_diaph = diaph.rate_slow_window_bpm;
         slow_diaph_endpoint = isfinite(rr_diaph) & rr_diaph <= rr_thr_bpm;
@@ -43,17 +50,34 @@ function events = detect_slow_breathing(data, phys_feat, config)
             slow_diaph_state = diaph.rate_slow_state_mask;
         else
             slow_diaph_state = analysis_window_endpoints_to_state_mask( ...
-                slow_diaph_endpoint, t_grid, phys_feat.resp.rate_windows_sec.slow);
+                slow_diaph_endpoint, t_grid, analysis_win_sec);
         end
     end
 
-    [events_lungs, slow_lungs] = sustained_condition_to_events( ...
+    [candidate_lungs, slow_lungs_candidate] = sustained_condition_to_events( ...
         slow_lungs_state, t_grid, config.fs, N, min_dur_sec, ...
         'slow_breathing_lungs');
-    [events_diaph, slow_diaph] = sustained_condition_to_events( ...
+    [candidate_diaph, slow_diaph_candidate] = sustained_condition_to_events( ...
         slow_diaph_state, t_grid, config.fs, N, min_dur_sec, ...
         'slow_breathing_diaph');
+    [events_lungs, records_lungs] = localize_confirmed_breath_events( ...
+        candidate_lungs, lungs, N, config.fs, 'slow_breathing_lungs', ...
+        'rate_le', NaN, rr_thr_bpm, analysis_win_sec, 'lungs');
+    [events_diaph, records_diaph] = localize_confirmed_breath_events( ...
+        candidate_diaph, diaph, N, config.fs, 'slow_breathing_diaph', ...
+        'rate_le', NaN, rr_thr_bpm, analysis_win_sec, 'diaph');
     events = merge_events({events_lungs, events_diaph});
+    slow_lungs = events_to_grid_mask(events_lungs, t_grid);
+    slow_diaph = events_to_grid_mask(events_diaph, t_grid);
+    boundary_info = make_label_boundary_info('slowB', ...
+        'detect_slow_breathing', 'confirmed_window_breath_interval_localization', ...
+        [candidate_lungs; candidate_diaph], [events_lungs; events_diaph], ...
+        NaN, 'reviewed_breathwise_rr_bpm', ...
+        slow_lungs_endpoint | slow_diaph_endpoint, ...
+        slow_lungs_candidate | slow_diaph_candidate, ...
+        slow_lungs | slow_diaph);
+    boundary_info.events = normalize_records([records_lungs; records_diaph]);
+    boundary_info.boundary_uncertainty_sec = record_uncertainty(boundary_info.events);
 
     if isfield(config, 'SlB') && isfield(config.SlB, 'do_plot') && config.SlB.do_plot
         opts = struct( ...
@@ -61,7 +85,7 @@ function events = detect_slow_breathing(data, phys_feat, config)
             'event_name', 'Slow breathing', ...
             'metric_title', 'Mean breaths/min used for slow detection', ...
             'metric_detail', sprintf('%g s trailing analysis window; %g s held display', ...
-                phys_feat.resp.rate_windows_sec.slow, plot_rr_step_sec), ...
+                analysis_win_sec, plot_rr_step_sec), ...
             'metric_ylabel', 'Breaths/min', ...
             'threshold', rr_thr_bpm, ...
             'threshold_label', sprintf('Threshold: <= %g breaths/min', rr_thr_bpm), ...
@@ -72,4 +96,15 @@ function events = detect_slow_breathing(data, phys_feat, config)
         plot_belt_diagnostic_figure( ...
             data, config, t_grid, slow_lungs, slow_diaph, rr_lungs, rr_diaph, opts);
     end
+end
+
+function records = normalize_records(records)
+    for i = 1:numel(records)
+        records(i).label = 'slowB';
+        records(i).detector = 'detect_slow_breathing';
+    end
+end
+
+function value = record_uncertainty(records)
+    if isempty(records), value = NaN; else, value = [records.uncertainty_sec]'; end
 end

@@ -4,7 +4,7 @@ function config = get_config()
     config = struct;                                                                                   % main configuration container
     config.path_data_in = 'D:\Projects\MAGMA\raw_data';                                                % *** folder with raw input .dat files
     config.path_results_out = 'D:\Projects\MAGMA\data_analysis\disorder_classification';               % *** root output folder
-    config.subjects = [20:60];                                                                              % *** subjects to analyze
+    config.subjects = 20:60;                                                                                % *** subjects to analyze
     config.remove_subjects = [3 30 91];                                                                % *** subjects to not analyze
     config.measurements = [1 2];                                                                       % *** measurements to analyze - 1: pre-rehab-pre-stress, 2: pre-rehab-post-stress, 3:post-rehab-pre-stress, 4:post-rehab-post-stress
     config.fs = 200;                                                                                   % native/master sampling frequency (Hz) for all aligned physiological signals
@@ -232,6 +232,16 @@ function config = get_config()
     config.LabelEdit.filename_suffix = '_manual_label_events.mat';
     config.LabelEdit.rewrite_changed_figures = true; % overwrite only label diagnostic images whose intervals changed manually
 
+    %---- PER-RECORDING ML-READY EXPORT
+    % MAT remains authoritative and is not replaced. HDF5 contains simple
+    % numeric/text datasets on the same native 200-Hz master timeline.
+    config.HDF5 = struct();
+    config.HDF5.enabled = true;
+    config.HDF5.export_schema_version = 'magma_ml_hdf5_v1';
+    config.HDF5.filename_suffix = '_labels.h5';
+    config.HDF5.upstream_input_preprocessing = ...
+        'external / not fully documented';
+
     % some additional logic:
     config.subjects(ismember(config.subjects, config.remove_subjects)) = [];
 
@@ -246,7 +256,7 @@ end
 
 function labels = get_labels()
     labels_long = {'ShallowBreathing', 'IrregularBreathing', 'SlowBreathing', 'RapidBreathing', 'RespiratoryAsynchrony', 'Desaturation', 'Apnea', 'Sigh', 'PeriodicBreathingCheyneStokesLike', 'DeepBreathing', 'ThoracicDominantBreathing'};
-    labels_short = {'shallowB', 'irregB', 'slowB', 'rapidB', 'asyncB', 'desat', 'apnea', 'sigh', 'CSR', 'deepB', 'thorDomB'};
+    labels_short = canonical_label_names();
     labels_idx = 1:11;
     labels = struct( ...
         'idx',   num2cell(labels_idx), ...

@@ -1,0 +1,26 @@
+function events = label_mask_to_events(mask, label_names, fs)
+% label_mask_to_events  Convert a label-aligned sample mask to canonical events.
+    label_names = cellstr(string(label_names));
+    if size(mask,2) ~= numel(label_names)
+        error('MAGMA:Annotations:MaskAlignment', ...
+            'mask columns must align with label_names.');
+    end
+    events = normalize_event_types_and_meta(empty_events());
+    for i = 1:numel(label_names)
+        column = logical(mask(:,i));
+        d = diff([false; column; false]);
+        starts = find(d == 1);
+        ends = find(d == -1) - 1;
+        for j = 1:numel(starts)
+            event = struct( ...
+                'type', label_names{i}, ...
+                'start_idx', starts(j), ...
+                'end_idx', ends(j), ...
+                'start_t', (starts(j)-1)/fs, ...
+                'end_t', (ends(j)-1)/fs, ...
+                'duration', (ends(j)-starts(j))/fs, ...
+                'belt', '');
+            events(end+1,1) = event; %#ok<AGROW>
+        end
+    end
+end

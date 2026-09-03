@@ -319,8 +319,10 @@ function testManualEditVersionOneMigrationUsesFieldIdentity(testCase)
 
     repo_root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
     source = fileread(fullfile(repo_root, 'src', 'gui', 'manual_edit_label_events.m'));
-    verifyTrue(testCase, contains(source, "'schema_version', 2"));
+    verifyTrue(testCase, contains(source, "'schema_version', 3"));
     verifyTrue(testCase, contains(source, 'manual_label_edit_meta.label_names'));
+    verifyEmpty(testCase, info.reviewed_fields);
+    verifyEqual(testCase, info.status_by_label.rapidB, 'unreviewed');
 end
 
 function testArtificialAmplitudeManipulationsAndElevenSpecs(testCase)

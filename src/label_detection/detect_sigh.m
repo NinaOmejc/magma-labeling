@@ -1,4 +1,4 @@
-function [events, diagnostics] = detect_sigh(data, phys_feat, resp_feat, baseline, spo2_feat, config)
+function [events, diagnostics, review_info] = detect_sigh(data, phys_feat, resp_feat, baseline, spo2_feat, config)
 % detect_sigh
 % Label 8 – Sigh
 %
@@ -30,6 +30,17 @@ function [events, diagnostics] = detect_sigh(data, phys_feat, resp_feat, baselin
         'iqr_multiplier', NaN, ...
         'lungs', empty_sigh_belt_diagnostics(lungs), ...
         'diaph', empty_sigh_belt_diagnostics(diaph));
+    review_info = struct( ...
+        'reviewed', false, ...
+        'review_scope', 'unreviewed', ...
+        'review_mask', false(N,1), ...
+        'status', 'unreviewed', ...
+        'weak_events', empty_events(), ...
+        'reviewed_events', empty_events(), ...
+        'weak_flags_lungs', false(size(lungs.peak_t(:))), ...
+        'weak_flags_diaph', false(size(diaph.peak_t(:))), ...
+        'reviewed_flags_lungs', false(size(lungs.peak_t(:))), ...
+        'reviewed_flags_diaph', false(size(diaph.peak_t(:))));
 
     if ~lungs_valid && ~diaph_valid
         fprintf('Skipping sigh detection: no valid respiratory belt with usable breath amplitudes.\n');
@@ -102,8 +113,22 @@ function [events, diagnostics] = detect_sigh(data, phys_feat, resp_feat, baselin
     diagnostics.minimum_absolute_ratio = min_abs_ratio;
     diagnostics.iqr_multiplier = iqr_k;
 
+    weak_sigh_lungs = sigh_lungs;
+    weak_sigh_diaph = sigh_diaph;
+    weak_events_L = sigh_flags_to_events(lungs.peak_t, weak_sigh_lungs, N, fs, 'lungs');
+    weak_events_D = sigh_flags_to_events(diaph.peak_t, weak_sigh_diaph, N, fs, 'diaph');
+    weak_events = merge_events({weak_events_L, weak_events_D});
+    review_info.weak_events = weak_events;
+    review_info.weak_flags_lungs = weak_sigh_lungs;
+    review_info.weak_flags_diaph = weak_sigh_diaph;
+
     if manual_control && lungs_valid && diaph_valid
-        [sigh_lungs, sigh_diaph] = manual_edit_sigh_flags(data, resp_feat.lungs, resp_feat.diaph, sigh_lungs, sigh_diaph, baseline, spo2_feat, config, manual_window_sec);
+        [sigh_lungs, sigh_diaph, sigh_review_mask] = manual_edit_sigh_flags( ...
+            data, resp_feat.lungs, resp_feat.diaph, sigh_lungs, sigh_diaph, ...
+            baseline, spo2_feat, config, manual_window_sec);
+        review_info.reviewed = true;
+        review_info.review_scope = 'explicitly_viewed_regions_sigh_breaths_both_belts';
+        review_info.review_mask = sigh_review_mask;
     elseif manual_control
         warning('MAGMA:Sigh:ManualSkipped', ...
             'Manual sigh editing requires two valid respiratory belts and was skipped for this input configuration.');
@@ -111,9 +136,23 @@ function [events, diagnostics] = detect_sigh(data, phys_feat, resp_feat, baselin
 
     events_L = sigh_flags_to_events(lungs.peak_t, sigh_lungs, N, fs, 'lungs');
     events_D = sigh_flags_to_events(diaph.peak_t, sigh_diaph, N, fs, 'diaph');
-    diagnostics.lungs.selected_breath_mask = sigh_lungs;
-    diagnostics.diaph.selected_breath_mask = sigh_diaph;
+    diagnostics.lungs.selected_breath_mask = weak_sigh_lungs;
+    diagnostics.diaph.selected_breath_mask = weak_sigh_diaph;
+    diagnostics.lungs.reviewed_selected_breath_mask = sigh_lungs;
+    diagnostics.diaph.reviewed_selected_breath_mask = sigh_diaph;
     events = merge_events({events_L, events_D});
+    review_info.reviewed_events = events;
+    review_info.reviewed_flags_lungs = sigh_lungs;
+    review_info.reviewed_flags_diaph = sigh_diaph;
+    if review_info.reviewed
+        if event_sets_equal(weak_events, events)
+            review_info.status = 'reviewed_accepted';
+        elseif ~isempty(weak_events) && isempty(events)
+            review_info.status = 'reviewed_rejected';
+        else
+            review_info.status = 'reviewed_edited';
+        end
+    end
 
     if do_plot
         if ~isfield(config, 'channels')
@@ -186,7 +225,23 @@ function diagnostics = empty_sigh_belt_diagnostics(belt)
         'peak_t', belt.peak_t, ...
         'amp_ratio_global', belt.amp_ratio_global, ...
         'decision_threshold', NaN, ...
-        'selected_breath_mask', false(size(belt.peak_t)));
+        'selected_breath_mask', false(size(belt.peak_t)), ...
+        'reviewed_selected_breath_mask', false(size(belt.peak_t)));
+end
+
+function tf = event_sets_equal(a, b)
+    if numel(a) ~= numel(b)
+        tf = false;
+        return;
+    end
+    if isempty(a)
+        tf = true;
+        return;
+    end
+    a = sortrows(struct2table(a), {'type', 'start_idx', 'end_idx'});
+    b = sortrows(struct2table(b), {'type', 'start_idx', 'end_idx'});
+    tf = isequal(a.type, b.type) && isequal(a.start_idx, b.start_idx) && ...
+        isequal(a.end_idx, b.end_idx);
 end
 
 function [sigh_flags, local_ref, ratio, ratio_thr] = sigh_flags_global_ratio_outlier( ...

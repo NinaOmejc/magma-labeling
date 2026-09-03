@@ -1,6 +1,8 @@
-function [event_sets, edit_info] = manual_edit_label_events(data, config, event_sets)
+function [reviewed_event_sets, edit_info] = manual_edit_label_events(data, config, weak_event_sets)
 % manual_edit_label_events
-% Final manual interval editor for label events, excluding sigh.
+% Final manual interval editor for label events, excluding sigh. Automatic
+% weak events are immutable input; a separate reviewed working copy and
+% explicit per-label review scope are returned.
 %
 % This editor works at the event level. It can reuse persisted edits on
 % rerun, lets the user drag on a non-shaded region to add an interval, and
@@ -8,38 +10,48 @@ function [event_sets, edit_info] = manual_edit_label_events(data, config, event_
 % Click times and saved sample indices use the config.fs master timeline.
 
     label_defs = manual_label_definitions();
-    event_sets = ensure_event_sets(event_sets, label_defs);
-    auto_event_sets = event_sets;
+    weak_event_sets = ensure_event_sets(weak_event_sets, label_defs);
+    reviewed_event_sets = weak_event_sets;
 
     cfg = label_edit_config(config);
     edit_file = manual_edit_file(config, cfg);
     N = size(data, 1);
     fs = config.fs;
     edit_info = init_edit_info(edit_file);
+    reviewed_fields = {};
+    review_coverage_mask = false(N, numel(label_defs));
 
     if cfg.apply_saved_edits && exist(edit_file, 'file')
-        loaded = load_manual_event_sets( ...
-            edit_file, event_sets, label_defs, config, N, fs);
+        [loaded, loaded_reviewed_fields, loaded_schema, loaded_coverage] = load_manual_event_sets( ...
+            edit_file, reviewed_event_sets, label_defs, config, N, fs);
         if ~isempty(loaded)
-            event_sets = loaded;
+            reviewed_event_sets = loaded;
+            reviewed_fields = loaded_reviewed_fields;
+            review_coverage_mask = loaded_coverage;
             edit_info.applied_saved_edits = true;
+            edit_info.loaded_schema_version = loaded_schema;
             fprintf('Loaded manual label event edits: %s\n', edit_file);
         end
     end
 
     if ~cfg.manual_control
-        edit_info = finalize_edit_info(edit_info, auto_event_sets, event_sets, label_defs);
+        edit_info = finalize_edit_info(edit_info, weak_event_sets, ...
+            reviewed_event_sets, label_defs, reviewed_fields, review_coverage_mask);
         return;
     end
 
-    event_sets = run_editor(data, config, event_sets, auto_event_sets, label_defs, cfg);
+    [reviewed_event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
+        data, config, reviewed_event_sets, weak_event_sets, label_defs, cfg, ...
+        reviewed_fields, review_coverage_mask);
     edit_info.editor_opened = true;
 
     if cfg.save_edits
-        save_manual_event_sets(edit_file, event_sets, label_defs, config, N, fs);
+        save_manual_event_sets(edit_file, weak_event_sets, reviewed_event_sets, ...
+            reviewed_fields, review_coverage_mask, label_defs, config, N, fs);
         fprintf('Saved manual label event edits: %s\n', edit_file);
     end
-    edit_info = finalize_edit_info(edit_info, auto_event_sets, event_sets, label_defs);
+    edit_info = finalize_edit_info(edit_info, weak_event_sets, ...
+        reviewed_event_sets, label_defs, reviewed_fields, review_coverage_mask);
 end
 
 
@@ -74,19 +86,43 @@ function edit_info = init_edit_info(edit_file)
     edit_info = struct( ...
         'edit_file', edit_file, ...
         'applied_saved_edits', false, ...
+        'loaded_schema_version', NaN, ...
         'editor_opened', false, ...
+        'review_scope', 'explicitly_viewed_or_edited_regions_per_label', ...
+        'review_coverage_mask', false(0, 0), ...
+        'reviewed_fields', {{}}, ...
+        'reviewed_labels', {{}}, ...
+        'status_by_label', struct(), ...
         'changed_fields', {{}}, ...
         'changed_labels', {{}}, ...
         'changed_plot_names', {{}} );
 end
 
-function edit_info = finalize_edit_info(edit_info, auto_event_sets, event_sets, label_defs)
+function edit_info = finalize_edit_info(edit_info, weak_event_sets, event_sets, ...
+    label_defs, reviewed_fields, review_coverage_mask)
     changed = false(1, numel(label_defs));
+    reviewed = false(1, numel(label_defs));
+    status = struct();
     for i = 1:numel(label_defs)
         field = label_defs(i).field;
-        changed(i) = ~event_sets_equal(auto_event_sets.(field), event_sets.(field));
+        changed(i) = ~event_sets_equal(weak_event_sets.(field), event_sets.(field));
+        reviewed(i) = any(strcmp(reviewed_fields, field));
+        if ~reviewed(i)
+            value = 'unreviewed';
+        elseif ~changed(i)
+            value = 'reviewed_accepted';
+        elseif ~isempty(weak_event_sets.(field)) && isempty(event_sets.(field))
+            value = 'reviewed_rejected';
+        else
+            value = 'reviewed_edited';
+        end
+        status.(field) = value;
     end
 
+    edit_info.reviewed_fields = {label_defs(reviewed).field};
+    edit_info.reviewed_labels = {label_defs(reviewed).type};
+    edit_info.status_by_label = status;
+    edit_info.review_coverage_mask = logical(review_coverage_mask);
     edit_info.changed_fields = {label_defs(changed).field};
     edit_info.changed_labels = {label_defs(changed).name};
     edit_info.changed_plot_names = {label_defs(changed).plot_name};
@@ -174,8 +210,12 @@ function edit_file = manual_edit_file(config, cfg)
     edit_file = fullfile(out_dir, sprintf('Sub%d_M%d%s', config.subject, config.measure, suffix));
 end
 
-function loaded_sets = load_manual_event_sets(edit_file, automatic_sets, label_defs, config, N, fs)
+function [loaded_sets, reviewed_fields, schema_version, review_coverage_mask] = load_manual_event_sets( ...
+    edit_file, automatic_sets, label_defs, config, N, fs)
     loaded_sets = [];
+    reviewed_fields = {};
+    schema_version = NaN;
+    review_coverage_mask = false(N, numel(label_defs));
     try
         loaded = load(edit_file);
     catch ME
@@ -195,6 +235,11 @@ function loaded_sets = load_manual_event_sets(edit_file, automatic_sets, label_d
         warning('MAGMA:ManualLabelEdit:MetaMismatch', ...
             'Ignoring manual label edits because subject, measurement, sample count, or sampling rate changed: %s', edit_file);
         return;
+    end
+    if isfield(meta, 'schema_version') && isnumeric(meta.schema_version) && isscalar(meta.schema_version)
+        schema_version = meta.schema_version;
+    elseif isfield(meta, 'version') && isnumeric(meta.version) && isscalar(meta.version)
+        schema_version = meta.version;
     end
 
     saved_sets = loaded.manual_label_event_sets;
@@ -221,6 +266,16 @@ function loaded_sets = load_manual_event_sets(edit_file, automatic_sets, label_d
         end
         loaded_sets.(field) = migrated;
     end
+
+    % Versions 1 and 2 did not persist review coverage. Their intervals may
+    % migrate, but their absent scope cannot become a reviewed-negative claim.
+    if schema_version >= 3 && isfield(loaded, 'manual_label_review_mask') && ...
+            (isnumeric(loaded.manual_label_review_mask) || ...
+             islogical(loaded.manual_label_review_mask)) && ...
+            isequal(size(loaded.manual_label_review_mask), size(review_coverage_mask))
+        review_coverage_mask = logical(loaded.manual_label_review_mask);
+        reviewed_fields = {label_defs(any(review_coverage_mask, 1)).field};
+    end
 end
 
 function ok = is_valid_manual_meta(meta, config, N, fs)
@@ -231,28 +286,37 @@ function ok = is_valid_manual_meta(meta, config, N, fs)
         isfield(meta, 'fs') && isequal(meta.fs, fs);
 end
 
-function save_manual_event_sets(edit_file, event_sets, label_defs, config, N, fs)
+function save_manual_event_sets(edit_file, weak_event_sets, reviewed_event_sets, ...
+    reviewed_fields, review_coverage_mask, label_defs, config, N, fs)
     out_dir = fileparts(edit_file);
     if ~isfolder(out_dir)
         mkdir(out_dir);
     end
 
-    manual_label_event_sets = ensure_event_sets(event_sets, label_defs);
+    manual_label_weak_event_sets = ensure_event_sets(weak_event_sets, label_defs);
+    manual_label_event_sets = ensure_event_sets(reviewed_event_sets, label_defs);
+    manual_label_review_mask = logical(review_coverage_mask);
     manual_label_edit_meta = struct( ...
-        'version', 2, ...
-        'schema_version', 2, ...
+        'version', 3, ...
+        'schema_version', 3, ...
         'subject', config.subject, ...
         'measure', config.measure, ...
         'n_samples', N, ...
         'fs', fs, ...
         'data_columns', {config.data_columns}, ...
+        'review_scope', 'explicitly_viewed_or_edited_regions_per_label', ...
+        'reviewed_fields', {reviewed_fields}, ...
         'saved_on', char(datetime('now', 'Format', 'yyyy-MM-dd HH:mm:ss')) );
     manual_label_edit_meta.label_names = {label_defs.type};
 
-    save(edit_file, 'manual_label_event_sets', 'manual_label_edit_meta');
+    save(edit_file, 'manual_label_weak_event_sets', ...
+        'manual_label_event_sets', 'manual_label_review_mask', ...
+        'manual_label_edit_meta');
 end
 
-function event_sets = run_editor(data, config, event_sets, auto_event_sets, label_defs, cfg)
+function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
+    data, config, event_sets, auto_event_sets, label_defs, cfg, ...
+    reviewed_fields, review_coverage_mask)
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
     end
@@ -263,6 +327,7 @@ function event_sets = run_editor(data, config, event_sets, auto_event_sets, labe
     t_end = t_raw(end);
     window_sec = min(max(30, cfg.window_sec), max(30, t_end));
     current_label_idx = 1;
+    reviewed = ismember({label_defs.field}, reviewed_fields);
     drag_start_t = NaN;
     drag_active = false;
     drag_ax = gobjects(0);
@@ -333,10 +398,13 @@ function event_sets = run_editor(data, config, event_sets, auto_event_sets, labe
     fprintf('  Close or press Done when finished.\n\n');
 
     refresh_event_patches();
+    mark_current_view_reviewed();
     uiwait(fh);
+    mark_current_view_reviewed();
     if isgraphics(fh)
         delete(fh);
     end
+    reviewed_fields = {label_defs(reviewed).field};
 
     function steps = slider_step(total_sec, visible_sec)
         max_val = max(0, total_sec - visible_sec);
@@ -350,22 +418,35 @@ function event_sets = run_editor(data, config, event_sets, auto_event_sets, labe
     function set_xlim(x0)
         x0 = max(0, min(x0, max(0, t_end - window_sec)));
         xlim(ax1, [x0 min(x0 + window_sec, t_end)]);
+        mark_current_view_reviewed();
     end
 
     function change_label(value)
         current_label_idx = value;
+        mark_current_view_reviewed();
         refresh_event_patches();
     end
 
     function reset_current_label()
         field = label_defs(current_label_idx).field;
+        mark_current_view_reviewed();
         event_sets.(field) = auto_event_sets.(field);
         refresh_event_patches();
     end
 
     function reset_all_labels()
         event_sets = auto_event_sets;
+        mark_current_view_reviewed();
         refresh_event_patches();
+    end
+
+    function mark_current_view_reviewed()
+        if ~isgraphics(ax1), return; end
+        limits = xlim(ax1);
+        start_idx = max(1, min(N, floor(limits(1) * fs) + 1));
+        end_idx = max(start_idx, min(N, ceil(limits(2) * fs) + 1));
+        review_coverage_mask(start_idx:end_idx, current_label_idx) = true;
+        reviewed(current_label_idx) = true;
     end
 
     function begin_drag(clicked_ax)

@@ -1,17 +1,20 @@
-function events = detect_deep_breathing(data, phys_feat, config)
+function [events, boundary_info] = detect_deep_breathing(data, phys_feat, config)
 % detect_deep_breathing
 % Label 10 - sustained relative increase in respiratory-belt excursion.
 % A reviewed breath is deep when its excursion divided by that belt's fixed
 % session reference is >= config.DeB.amp_ratio_thr. This is an uncalibrated,
 % within-record belt-amplitude state, not absolute tidal volume.
-% A qualifying trailing-window endpoint supports its complete preceding
-% window. min_dur_sec is applied once to the resulting inferred state.
+% The all-breath rolling condition confirms an event. Boundaries are placed
+% at deterministic midpoint cells around qualifying reviewed breaths.
 
     events = empty_events();
     N = size(data, 1);
     t_grid = phys_feat.resp.time_sec;
     lungs = phys_feat.resp.lungs;
     diaph = phys_feat.resp.diaph;
+    boundary_info = make_label_boundary_info('deepB', ...
+        'detect_deep_breathing', 'not_evaluated', empty_events(), ...
+        empty_events(), NaN, '', [], [], []);
 
     lungs_mask = false(size(t_grid));
     if lungs.session_amplitude_available
@@ -27,13 +30,31 @@ function events = detect_deep_breathing(data, phys_feat, config)
         return;
     end
 
-    [events_lungs, ~] = sustained_condition_to_events( ...
+    [candidate_lungs, lungs_candidate_mask] = sustained_condition_to_events( ...
         lungs_mask, t_grid, config.fs, N, config.DeB.min_dur_sec, ...
         'deep_breathing_lungs');
-    [events_diaph, ~] = sustained_condition_to_events( ...
+    [candidate_diaph, diaph_candidate_mask] = sustained_condition_to_events( ...
         diaph_mask, t_grid, config.fs, N, config.DeB.min_dur_sec, ...
         'deep_breathing_diaph');
+    [events_lungs, records_lungs] = localize_confirmed_breath_events( ...
+        candidate_lungs, lungs, N, config.fs, 'deep_breathing_lungs', ...
+        'amplitude_ge', config.DeB.amp_ratio_thr, NaN, ...
+        config.DeB.analysis_win_sec, 'lungs');
+    [events_diaph, records_diaph] = localize_confirmed_breath_events( ...
+        candidate_diaph, diaph, N, config.fs, 'deep_breathing_diaph', ...
+        'amplitude_ge', config.DeB.amp_ratio_thr, NaN, ...
+        config.DeB.analysis_win_sec, 'diaph');
     events = merge_events({events_lungs, events_diaph});
+    endpoint_mask = get_endpoint_mask(lungs, 'deep_amplitude_endpoint_mask', t_grid) | ...
+        get_endpoint_mask(diaph, 'deep_amplitude_endpoint_mask', t_grid);
+    localized_mask = events_to_grid_mask(events, t_grid);
+    boundary_info = make_label_boundary_info('deepB', ...
+        'detect_deep_breathing', 'confirmed_all_breath_window_midpoint_localization', ...
+        [candidate_lungs; candidate_diaph], [events_lungs; events_diaph], ...
+        NaN, 'reviewed_breath_amplitude_ratio_session', endpoint_mask, ...
+        lungs_candidate_mask | diaph_candidate_mask, localized_mask);
+    boundary_info.events = normalize_records([records_lungs; records_diaph]);
+    boundary_info.boundary_uncertainty_sec = record_uncertainty(boundary_info.events);
 
     if config.DeB.do_plot
         opts = struct( ...
@@ -44,4 +65,20 @@ function events = detect_deep_breathing(data, phys_feat, config)
         plot_amplitude_state_diagnostic( ...
             phys_feat, events_lungs, events_diaph, config, opts);
     end
+end
+
+function mask = get_endpoint_mask(belt, field, t_grid)
+    mask = false(size(t_grid));
+    if isfield(belt, field), mask = logical(belt.(field)); end
+end
+
+function records = normalize_records(records)
+    for i = 1:numel(records)
+        records(i).label = 'deepB';
+        records(i).detector = 'detect_deep_breathing';
+    end
+end
+
+function value = record_uncertainty(records)
+    if isempty(records), value = NaN; else, value = [records.uncertainty_sec]'; end
 end

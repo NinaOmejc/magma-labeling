@@ -200,7 +200,8 @@ end
 function testFivePhenotypesAreEvidenceNotNewDiagnoses(testCase)
     [burden, overlaps, label_evidence] = phenotype_fixture();
     evidence = build_db_phenotype_evidence(burden, overlaps, label_evidence);
-    phenotype_names = setdiff(fieldnames(evidence), {'version'; 'levels'});
+    phenotype_names = setdiff(fieldnames(evidence), ...
+        {'version'; 'levels'; 'source_provenance'; 'external_clinical_data'});
     verifyEqual(testCase, numel(phenotype_names), 5);
     verifyFalse(testCase, evidence.hyperventilation_syndrome.assessable_from_current_signals);
     verifyFalse(testCase, isfield(evidence.hyperventilation_syndrome, 'diagnosis'));

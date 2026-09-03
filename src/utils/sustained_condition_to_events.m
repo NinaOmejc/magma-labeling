@@ -4,9 +4,9 @@ function [events, sustained_mask, grid_events] = sustained_condition_to_events(c
 %
 % The input condition should already represent the detector's intended
 % diagnostic mask on t_grid. Rolling-window detectors may pass either an
-% endpoint mask or a backfilled analysis-window mask, depending on their
-% event semantics. This helper only keeps runs where the provided condition
-% stays true for min_dur_sec.
+% endpoint mask or a candidate-support mask, depending on their confirmation
+% semantics. This helper only keeps runs where the provided condition stays
+% true for min_dur_sec; detector-specific localization happens separately.
 
     cond = cond(:) ~= 0;
     t_grid = t_grid(:);

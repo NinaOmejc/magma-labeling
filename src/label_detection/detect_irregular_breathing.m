@@ -1,4 +1,4 @@
-function irregular_events = detect_irregular_breathing(data, phys_feat, config)
+function [irregular_events, boundary_info] = detect_irregular_breathing(data, phys_feat, config)
 % detect_irregular_breathing
 % Label 2 - Irregular Breathing
 %
@@ -14,9 +14,9 @@ function irregular_events = detect_irregular_breathing(data, phys_feat, config)
 %   - Use config.IrB.detection_metric to choose the detection metric.
 % Detector grids map to master samples using config.fs.
 %   - No breathing pauses allowed in analyzed segment.
-%   - A TRUE endpoint describes the complete preceding analysis window.
-%     Qualifying windows are unioned into an inferred state, then
-%     min_dur_sec is applied once to that state.
+%   - CoV is intrinsically a multi-breath/window property. Candidate support
+%     is retained with explicit analysis-window timing uncertainty; no
+%     unsupported instantaneous onset is claimed.
 
     irregular_events = empty_events();
 
@@ -26,6 +26,9 @@ function irregular_events = detect_irregular_breathing(data, phys_feat, config)
     diaph = phys_feat.resp.diaph;
     lungs_valid = lungs.available;
     diaph_valid = diaph.available;
+    boundary_info = make_label_boundary_info('irregB', ...
+        'detect_irregular_breathing', 'not_evaluated', empty_events(), ...
+        empty_events(), NaN, '', [], [], []);
 
     if ~lungs_valid && ~diaph_valid
         fprintf('Skipping irregB detection: no valid respiratory belt with usable breath timing.\n');
@@ -83,6 +86,14 @@ function irregular_events = detect_irregular_breathing(data, phys_feat, config)
         irregular_condition_diaph, t_grid, config.fs, N, min_dur_sec, 'irregular_breathing_diaph');
 
     irregular_events = merge_events({irregular_events_lungs, irregular_events_diaph});
+    boundary_info = make_label_boundary_info('irregB', ...
+        'detect_irregular_breathing', ...
+        'multi_breath_window_candidate_support_with_explicit_uncertainty', ...
+        irregular_events, irregular_events, analysis_win_sec, ...
+        ['reviewed_interbreath_intervals_' lower(strtrim(detection_metric))], ...
+        irregular_endpoint_lungs | irregular_endpoint_diaph, ...
+        irregular_condition_lungs | irregular_condition_diaph, ...
+        irregular_mask_lungs | irregular_mask_diaph);
 
     if do_plot
         rmssd_suffix = '';

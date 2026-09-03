@@ -1,0 +1,591 @@
+function tests = test_stage6_freeze
+% Deterministic tests for the frozen Stage-6 annotation/export architecture.
+    tests = functiontests(localfunctions);
+end
+
+function testCanonicalLabelOrderAndSchemaRemainFrozen(testCase)
+    config = stage6_config();
+    verifyEqual(testCase, {config.labels.short}, ...
+        {'shallowB', 'irregB', 'slowB', 'rapidB', 'asyncB', 'desat', ...
+         'apnea', 'sigh', 'CSR', 'deepB', 'thorDomB'});
+    verifyEqual(testCase, config.label_schema_version, ...
+        'independent_labels_v2_11class');
+end
+
+function testRapidConfirmationUsesBreathwiseLocalization(testCase)
+    config = stage6_config();
+    t = (0:120)';
+    endpoint = t == 60;
+    state = t >= 30 & t <= 60;
+    peak_t = [(0:5:40)'; (42:2:90)'];
+    lungs = rate_belt(t, peak_t);
+    lungs.rate_rapid_window_bpm(endpoint) = 24;
+    lungs.rate_rapid_endpoint_mask = endpoint;
+    lungs.rate_rapid_state_mask = state;
+    phys = rate_phys(t, lungs);
+
+    [events, boundary] = detect_rapid_breathing(zeros(1210, 6), phys, config);
+    verifyNumElements(testCase, events, 1);
+    verifyEqual(testCase, boundary.events.candidate_start_t, 30);
+    verifyEqual(testCase, events.start_t, 40, 'AbsTol', 1/config.fs);
+    verifyLessThan(testCase, events.start_t, 60);
+    verifyEqual(testCase, boundary.events.evidence_source, ...
+        'reviewed_breathwise_rr_bpm');
+end
+
+function testSlowConfirmationUsesBreathwiseLocalization(testCase)
+    config = stage6_config();
+    t = (0:130)';
+    endpoint = t == 100;
+    state = t >= 40 & t <= 100;
+    peak_t = [(0:5:40)'; (48:8:120)'];
+    lungs = rate_belt(t, peak_t);
+    lungs.rate_slow_window_bpm(endpoint) = 8;
+    lungs.rate_slow_endpoint_mask = endpoint;
+    lungs.rate_slow_state_mask = state;
+    phys = rate_phys(t, lungs);
+
+    [events, boundary] = detect_slow_breathing(zeros(1310, 6), phys, config);
+    verifyNumElements(testCase, events, 1);
+    verifyEqual(testCase, boundary.events.candidate_start_t, 40);
+    verifyEqual(testCase, events.start_t, 40, 'AbsTol', 1/config.fs);
+    verifyLessThan(testCase, events.start_t, 100);
+end
+
+function testShallowAndDeepUseBreathMidpointCells(testCase)
+    config = stage6_config();
+    t = (0:70)';
+    lungs = rate_belt(t, (5:5:25)');
+    lungs.session_amplitude_available = true;
+    lungs.amp_ratio_session = 0.7 * ones(size(lungs.peak_t));
+    lungs.shallow_amplitude_mask = t <= 30;
+    lungs.shallow_amplitude_endpoint_mask = t == 30;
+    lungs.deep_amplitude_mask = t <= 30;
+    lungs.deep_amplitude_endpoint_mask = t == 30;
+    diaph = empty_rate_belt(t);
+    phys.resp = struct('time_sec', t, 'lungs', lungs, 'diaph', diaph);
+    [shallow, shallow_info] = detect_shallow_breathing(zeros(710,6), phys, config);
+    lungs.amp_ratio_session(:) = 1.3;
+    phys.resp.lungs = lungs;
+    [deep, deep_info] = detect_deep_breathing(zeros(710,6), phys, config);
+    verifyNotEmpty(testCase, shallow);
+    verifyNotEmpty(testCase, deep);
+    verifyGreaterThan(testCase, shallow.start_t, 0);
+    verifyGreaterThan(testCase, deep.start_t, 0);
+    verifyEqual(testCase, shallow_info.events.boundary_method, ...
+        'confirmed_window_breath_midpoint_localization');
+    verifyEqual(testCase, deep_info.events.boundary_method, ...
+        'confirmed_window_breath_midpoint_localization');
+end
+
+function testThoracicDominanceRetainsExplicitUncertainty(testCase)
+    config = stage6_config();
+    t = (0:70)';
+    state = t >= 10 & t <= 40;
+    evidence = struct('available', true, 'analysis_window_sec', 30, ...
+        'dominance_endpoint_mask', t == 40, ...
+        'dominance_state_mask', state, 'dominance_mask', state);
+    phys.resp = struct('time_sec', t, 'thoracoabdominal_balance', evidence);
+    [events, info] = detect_thoracic_dominant_breathing(zeros(710,6), phys, config);
+    verifyNotEmpty(testCase, events);
+    verifyEqual(testCase, info.boundary_uncertainty_sec, 30);
+    verifyTrue(testCase, contains(info.boundary_method, 'explicit_uncertainty'));
+end
+
+function testIrregularityRetainsWindowScaleUncertainty(testCase)
+    config = stage6_config();
+    t = (0:100)';
+    lungs = empty_rate_belt(t);
+    lungs.available = true;
+    lungs.irregularity.window_mask(t <= 60) = true;
+    lungs.irregularity.endpoint_mask(t == 60) = true;
+    lungs.irregularity.cov(t == 60) = 0.4;
+    phys.resp = struct('time_sec', t, 'lungs', lungs, ...
+        'diaph', empty_rate_belt(t));
+    [events, info] = detect_irregular_breathing(zeros(1010,6), phys, config);
+    verifyNotEmpty(testCase, events);
+    verifyEqual(testCase, info.boundary_uncertainty_sec, 60);
+    verifyTrue(testCase, contains(info.boundary_method, 'explicit_uncertainty'));
+end
+
+function testApneaRawFlatStoresBoundaryEvidenceSource(testCase)
+    config = stage6_config();
+    config.baseline_location = 'first';
+    config.baseline_sec = 30;
+    config.Apn.raw_flat_enabled = true;
+    config.Apn.do_plot = false;
+    t_raw = (0:1/config.fs:100-1/config.fs)';
+    data = zeros(numel(t_raw), 6);
+    respiratory = sin(2*pi*0.2*t_raw);
+    respiratory(t_raw >= 50 & t_raw <= 80) = 0;
+    data(:,4) = respiratory;
+    data(:,6) = respiratory;
+    t = (0:100-1)';
+    belt = empty_rate_belt(t);
+    belt.available = false;
+    belt.session_amplitude_available = false;
+    phys.resp = struct('time_sec', t, 'lungs', belt, 'diaph', belt);
+    [events, diagnostics, info] = detect_apnea(data, phys, config);
+    verifyNotEmpty(testCase, events);
+    verifyTrue(testCase, diagnostics.raw_flat_path_available);
+    verifyTrue(testCase, any(strcmp({info.events.evidence_source}, 'raw_flat')));
+    native_record = info.events(contains({info.events.boundary_method}, ...
+        'raw_flat_native_plateau'));
+    verifyNotEmpty(testCase, native_record);
+    verifyEqual(testCase, native_record(1).localized_start_t, 50, 'AbsTol', 1/config.fs);
+    verifyEqual(testCase, native_record(1).uncertainty_sec, 1/config.fs, ...
+        'AbsTol', eps);
+end
+
+function testOverlapRejectsMaskColumnMismatch(testCase)
+    [mask, names, available] = overlap_fixture();
+    verifyError(testCase, @() compute_label_overlap_summary( ...
+        mask(:,1:10), names, available, 200), 'MAGMA:Overlap:LabelAlignment');
+end
+
+function testOverlapRejectsAvailabilityMismatch(testCase)
+    [mask, names, available] = overlap_fixture();
+    verifyError(testCase, @() compute_label_overlap_summary( ...
+        mask, names, available(1:10), 200), ...
+        'MAGMA:Overlap:AvailabilityAlignment');
+end
+
+function testOverlapRejectsAssessabilityMismatch(testCase)
+    [mask, names, available] = overlap_fixture();
+    verifyError(testCase, @() compute_label_overlap_summary( ...
+        mask, names, available, 200, false(9,11)), ...
+        'MAGMA:Overlap:AssessableMaskSize');
+end
+
+function testOverlapRejectsInvalidSamplingRate(testCase)
+    [mask, names, available] = overlap_fixture();
+    verifyError(testCase, @() compute_label_overlap_summary( ...
+        mask, names, available, NaN), 'MAGMA:Overlap:InvalidSamplingRate');
+end
+
+function testOverlapRejectsInvalidMaskTypeAndValues(testCase)
+    [mask, names, available] = overlap_fixture();
+    verifyError(testCase, @() compute_label_overlap_summary( ...
+        repmat({'x'},size(mask)), names, available, 200), ...
+        'MAGMA:Overlap:InvalidMaskType');
+    mask = double(mask); mask(1) = 2;
+    verifyError(testCase, @() compute_label_overlap_summary( ...
+        mask, names, available, 200), 'MAGMA:Overlap:InvalidMaskValues');
+end
+
+function testOverlapRejectsInvalidLabelAndAvailabilityInputs(testCase)
+    [mask, names, available] = overlap_fixture();
+    verifyError(testCase, @() compute_label_overlap_summary( ...
+        mask, 1:numel(names), available, 200), ...
+        'MAGMA:Overlap:InvalidLabelNames');
+    invalid_available = double(available);
+    invalid_available(1) = 2;
+    verifyError(testCase, @() compute_label_overlap_summary( ...
+        mask, names, invalid_available, 200), ...
+        'MAGMA:Overlap:InvalidAvailability');
+end
+
+function testOverlapRejectsInvalidAssessabilityTypeAndValues(testCase)
+    [mask, names, available] = overlap_fixture();
+    verifyError(testCase, @() compute_label_overlap_summary( ...
+        mask, names, available, 200, repmat({'x'},size(mask))), ...
+        'MAGMA:Overlap:InvalidAssessableMaskType');
+    invalid_assessable = double(mask);
+    invalid_assessable(1) = NaN;
+    verifyError(testCase, @() compute_label_overlap_summary( ...
+        mask, names, available, 200, invalid_assessable), ...
+        'MAGMA:Overlap:InvalidAssessableMaskValues');
+end
+
+function testOverlapRejectsDuplicateAndMissingRequiredLabels(testCase)
+    [mask, names, available] = overlap_fixture();
+    duplicate = names; duplicate{2} = duplicate{1};
+    verifyError(testCase, @() compute_label_overlap_summary( ...
+        mask, duplicate, available, 200), ...
+        'MAGMA:Overlap:DuplicateLabelNames');
+    missing = names; missing{4} = 'notRapid';
+    verifyError(testCase, @() compute_label_overlap_summary( ...
+        mask, missing, available, 200), ...
+        'MAGMA:Overlap:MissingRequiredLabel');
+end
+
+function testAutomaticAndReviewedLayersRemainSeparate(testCase)
+    config = stage6_config();
+    defs = manual_label_definitions();
+    weak = empty_event_sets(defs);
+    reviewed = weak;
+    weak.rapidB = make_event_fixture('rapid_breathing_lungs', 10, 20, config.fs);
+    coverage = false(300,numel(defs));
+    coverage(:,strcmp({defs.field},'rapidB')) = true;
+    manual = struct('reviewed_fields', {{'rapidB'}}, ...
+        'status_by_label', struct('rapidB', 'reviewed_rejected'), ...
+        'review_coverage_mask', coverage);
+    sigh = empty_sigh_review();
+    annotations = assemble_annotation_layers(weak, reviewed, manual, sigh, 300, config);
+    rapid = strcmp(annotations.label_names, 'rapidB');
+    shallow = strcmp(annotations.label_names, 'shallowB');
+    verifyTrue(testCase, any(annotations.mask_weak(:, rapid)));
+    verifyFalse(testCase, any(annotations.mask_reviewed(:, rapid)));
+    verifyTrue(testCase, all(annotations.gold_review_mask(:, rapid)));
+    verifyFalse(testCase, any(annotations.gold_review_mask(:, shallow)));
+    verifyEqual(testCase, annotations.review_status{rapid}, 'reviewed_rejected');
+end
+
+function testUnreviewedDiffersFromReviewedNegative(testCase)
+    config = stage6_config();
+    defs = manual_label_definitions();
+    weak = empty_event_sets(defs);
+    reviewed = weak;
+    coverage = false(20,numel(defs));
+    coverage(:,strcmp({defs.field},'desat')) = true;
+    manual = struct('reviewed_fields', {{'desat'}}, ...
+        'status_by_label', struct('desat', 'reviewed_accepted'), ...
+        'review_coverage_mask', coverage);
+    annotations = assemble_annotation_layers( ...
+        weak, reviewed, manual, empty_sigh_review(), 20, config);
+    desat = strcmp(annotations.label_names, 'desat');
+    apnea = strcmp(annotations.label_names, 'apnea');
+    verifyFalse(testCase, any(annotations.mask_reviewed(:, desat)));
+    verifyTrue(testCase, all(annotations.gold_review_mask(:, desat)));
+    verifyFalse(testCase, any(annotations.mask_reviewed(:, apnea)));
+    verifyFalse(testCase, any(annotations.gold_review_mask(:, apnea)));
+    verifySize(testCase, annotations.gold_review_mask, [20 11]);
+end
+
+function testManualV3LoadsCoverageWithoutMutatingWeakInput(testCase)
+    output_dir = tempname;
+    mkdir(output_dir);
+    cleanup = onCleanup(@() rmdir(output_dir,'s'));
+    config = stage6_config();
+    config.sub_results_path = output_dir;
+    config.path_results_out = output_dir;
+    config.LabelEdit.apply_saved_edits = true;
+    config.LabelEdit.manual_control = false;
+    defs = manual_label_definitions();
+    weak = empty_event_sets(defs);
+    weak.rapidB = make_event_fixture('rapid_breathing_lungs',10,20,config.fs);
+    manual_label_weak_event_sets = weak;
+    manual_label_event_sets = weak;
+    manual_label_event_sets.rapidB = empty_events();
+    N = 300;
+    manual_label_review_mask = false(N,numel(defs));
+    rapid_def = strcmp({defs.field},'rapidB');
+    manual_label_review_mask(51:150,rapid_def) = true;
+    manual_label_edit_meta = struct('version',3,'schema_version',3, ...
+        'subject',config.subject,'measure',config.measure,'n_samples',N, ...
+        'fs',config.fs,'reviewed_fields',{{'rapidB'}});
+    filename = fullfile(output_dir,sprintf('Sub%d_M%d%s',config.subject, ...
+        config.measure,config.LabelEdit.filename_suffix));
+    save(filename,'manual_label_weak_event_sets','manual_label_event_sets', ...
+        'manual_label_review_mask','manual_label_edit_meta');
+
+    [reviewed, info] = manual_edit_label_events(zeros(N,6),config,weak);
+    verifyNotEmpty(testCase, weak.rapidB);
+    verifyEmpty(testCase, reviewed.rapidB);
+    verifyEqual(testCase, info.review_coverage_mask(:,rapid_def), ...
+        manual_label_review_mask(:,rapid_def));
+    verifyEqual(testCase, info.status_by_label.rapidB,'reviewed_rejected');
+end
+
+function testAutomaticSighCandidatesSurviveWithoutReview(testCase)
+    config = stage6_config();
+    config.Sig.manual_control = false;
+    config.Sig.do_plot = false;
+    peak_t = (0:4:96)';
+    amp = ones(size(peak_t)); amp(12) = 4; amp(end) = NaN;
+    belt = struct('peak_t', peak_t, 'amp', amp, ...
+        'amp_ratio_global', amp, 'global_reference_value', 1, ...
+        'global_amplitude_available', true, 'reference_quality', 'good');
+    phys.resp = struct('lungs', belt, 'diaph', belt);
+    resp_feat = struct('lungs', belt, 'diaph', belt);
+    data = zeros(1000, 6);
+    baseline = struct();
+    spo2 = struct();
+    [events, diagnostics, review] = detect_sigh( ...
+        data, phys, resp_feat, baseline, spo2, config);
+    verifyNotEmpty(testCase, events);
+    verifyEqual(testCase, review.weak_events, events);
+    verifyFalse(testCase, review.reviewed);
+    verifyEqual(testCase, diagnostics.lungs.selected_breath_mask, ...
+        review.weak_flags_lungs);
+end
+
+function testReviewedSighDoesNotDestroyAutomaticCandidates(testCase)
+    config = stage6_config();
+    defs = manual_label_definitions();
+    weak = empty_event_sets(defs);
+    reviewed = weak;
+    weak_sigh = make_event_fixture('sigh_lungs',5,7,config.fs);
+    sigh = struct('reviewed',true,'review_scope','explicitly_viewed_regions', ...
+        'review_mask',true(100,1),'status','reviewed_rejected', ...
+        'weak_events',weak_sigh,'reviewed_events',empty_events());
+    manual = struct('reviewed_fields',{{}},'status_by_label',struct(), ...
+        'review_coverage_mask',false(100,numel(defs)));
+    annotations = assemble_annotation_layers(weak,reviewed,manual,sigh,100,config);
+    sigh_idx = strcmp(annotations.label_names,'sigh');
+    verifyTrue(testCase,any(annotations.mask_weak(:,sigh_idx)));
+    verifyFalse(testCase,any(annotations.mask_reviewed(:,sigh_idx)));
+    verifyTrue(testCase,all(annotations.gold_review_mask(:,sigh_idx)));
+end
+
+function testCompleteAndPartialAssessability(testCase)
+    config = stage6_config();
+    names = {config.labels.short};
+    N = 10;
+    spo2.spo2 = 97 * ones(N,1); spo2.spo2(4:5) = NaN;
+    rea = struct('time_sec', (0:9)', ...
+        'valid_evidence_mask', [false; true(7,1); false; false]);
+    [mask, info] = compute_label_assessable_mask( ...
+        N, names, true(1,11), spo2, rea, config);
+    verifyFalse(testCase, mask(4, strcmp(names,'desat')));
+    verifyFalse(testCase, mask(1, strcmp(names,'asyncB')));
+    verifyTrue(testCase, all(mask(:, strcmp(names,'rapidB'))));
+    verifyEqual(testCase, info.version, 'label_assessability_v1');
+
+    unavailable = true(1,11); unavailable(strcmp(names,'thorDomB')) = false;
+    complete = compute_label_assessable_mask(N, names, unavailable, ...
+        struct('spo2',97*ones(N,1)), rea, config);
+    verifyFalse(testCase, any(complete(:, strcmp(names,'thorDomB'))));
+end
+
+function testReviewedBurdenUsesReviewedAssessableDenominator(testCase)
+    config = stage6_config();
+    names = {config.labels.short};
+    mask = false(100,11);
+    rapid = strcmp(names,'rapidB');
+    mask(1:20,rapid) = true;
+    review = false(100,11); review(1:40,rapid) = true;
+    available = false(1,11); available(rapid) = true;
+    burden = compute_recording_label_burden(mask, names, available, ...
+        normalize_event_types_and_meta(empty_events()), 10, review);
+    verifyEqual(testCase, burden.by_label.rapidB.assessable_duration_sec, 4);
+    verifyEqual(testCase, burden.by_label.rapidB.fraction, 0.5);
+    verifyTrue(testCase, isnan(burden.by_label.thorDomB.fraction));
+end
+
+function testHdf5RoundTripPreservesOrderMasksNaNsAndRespiration(testCase)
+    config = stage6_config();
+    N = 20;
+    results = export_fixture(config, N);
+    filename = [tempname '.h5'];
+    cleanup = onCleanup(@() delete_if_present(filename));
+    raw = reshape(1:N*6, N, 6);
+    preprocessed = raw / 10;
+    export_results_hdf5(filename, results, raw, preprocessed);
+
+    verifySize(testCase, h5read(filename, '/signals/raw'), [N 6]);
+    verifyEqual(testCase, h5read(filename, '/meta/fs'), config.fs);
+    verifyEqual(testCase, read_hdf5_text(filename, '/labels/names'), ...
+        {config.labels.short});
+    verifyEqual(testCase, logical(h5read(filename, '/labels/weak_mask')), ...
+        results.mask_weak);
+    verifyEqual(testCase, logical(h5read(filename, '/labels/reviewed_mask')), ...
+        results.mask_reviewed);
+    verifyEqual(testCase, logical(h5read(filename, '/labels/review_mask')), ...
+        results.gold_review_mask);
+    verifyTrue(testCase, isnan(h5read(filename, ...
+        '/burden/weak/by_label/thorDomB/fraction')));
+    verifyEqual(testCase, h5read(filename, '/resp/lungs/peak_idx'), ...
+        results.phys_feat.resp.lungs.peak_idx);
+end
+
+function testExternalClinicalPhenotypeValuesRemainUnknown(testCase)
+    [burden, overlap, evidence] = phenotype_fixture();
+    profiles = build_db_phenotype_evidence( ...
+        burden, overlap, evidence, 'reviewed_labels');
+    verifyEqual(testCase, profiles.source_provenance, 'reviewed_labels');
+    verifyFalse(testCase, profiles.external_clinical_data.Nijmegen_Questionnaire.available);
+    verifyEmpty(testCase, profiles.external_clinical_data.Nijmegen_Questionnaire.value);
+    verifyFalse(testCase, profiles.hyperventilation_syndrome.assessable_from_current_signals);
+    verifyFalse(testCase, profiles.forced_abdominal_expiration.assessable_from_current_signals);
+end
+
+function testPhenotypeBundleDistinguishesAnnotationAndDetectorScope(testCase)
+    [burden, overlap, evidence] = phenotype_fixture();
+    bundle = build_db_phenotype_evidence_bundle( ...
+        burden,overlap,evidence,burden,overlap,evidence);
+    verifyEqual(testCase,bundle.weak.source_provenance,'weak_labels');
+    verifyEqual(testCase,bundle.reviewed.source_provenance,'reviewed_labels');
+    verifyEqual(testCase,bundle.reviewed.annotation_scope, ...
+        'explicitly_reviewed_and_assessable_regions');
+    verifyEqual(testCase,bundle.reviewed.detector_evidence_scope, ...
+        'full_record_descriptive_evidence_not_manual_confidence');
+end
+
+function testNoCompoundLabelColumns(testCase)
+    config = stage6_config();
+    names = {config.labels.short};
+    verifyFalse(testCase, any(contains(names, 'desat_')));
+    verifyFalse(testCase, any(contains(names, '_desat')));
+    verifyFalse(testCase, any(contains(names, 'rapid_deep')));
+    verifyNumElements(testCase, names, 11);
+end
+
+function testCohortQcSummarizesWeakReviewedAndBeltAvailability(testCase)
+    config = stage6_config();
+    names = {config.labels.short};
+    T = table((1:2)',[1;1], ...
+        'VariableNames',{'subject','measure'});
+    for i = 1:numel(names)
+        token = matlab.lang.makeValidName(names{i});
+        T.(['label_' token '_available']) = [1;1];
+        T.(['events_' token '_weak_count']) = [0;2];
+        T.(['label_' token '_weak_fraction']) = [0;0.2];
+        T.(['label_' token '_reviewed_coverage_fraction']) = [0;0.5];
+        T.(['label_' token '_weak_reviewed_disagreement_fraction']) = [NaN;0.1];
+        T.(['events_' token '_weak_duration_median_sec']) = [NaN;10];
+        T.(['events_' token '_weak_duration_p90_sec']) = [NaN;15];
+    end
+    T.respiratory_belt_availability = {'single_belt';'two_belts'};
+    T.lungs_reference_quality = {'belt_unavailable';'warning_edge_change'};
+    T.diaph_reference_quality = {'good';'good'};
+    qc = build_cohort_qc_summary(T,names);
+    verifyEqual(testCase,qc.n_recordings,2);
+    verifyEqual(testCase,qc.by_label.weak_event_count(1),2);
+    verifyEqual(testCase,qc.by_label.zero_event_recordings(1),1);
+    verifyEqual(testCase,qc.belt_availability.single_belt,1);
+    verifyEqual(testCase,qc.belt_availability.two_belts,1);
+    verifyEqual(testCase,qc.reference_quality_warning_recordings,1);
+end
+
+function config = stage6_config()
+    config = make_test_config();
+    config.fs = 10;
+    config.grid_step_sec = 1;
+    config.subject = 999;
+    config.measure = 1;
+    config.problems.missing_lung_belt = zeros(0,2);
+    fields = {'ShB','DeB','TDB','IrB','SlB','RaB','Apn','Sig'};
+    for i = 1:numel(fields)
+        config.(fields{i}).do_plot = false;
+    end
+end
+
+function belt = rate_belt(t, peak_t)
+    belt = empty_rate_belt(t);
+    belt.available = true;
+    belt.peak_t = peak_t(:);
+    belt.rr_bpm = 60 ./ diff(belt.peak_t);
+end
+
+function belt = empty_rate_belt(t)
+    belt = struct('available', false, 'session_amplitude_available', false, ...
+        'global_amplitude_available', false, 'ignored', false, ...
+        'peak_t', [], 'rr_bpm', [], 'amp_ratio_session', [], ...
+        'rate_slow_window_bpm', nan(size(t)), ...
+        'rate_rapid_window_bpm', nan(size(t)), ...
+        'rate_slow_endpoint_mask', false(size(t)), ...
+        'rate_slow_state_mask', false(size(t)), ...
+        'rate_rapid_endpoint_mask', false(size(t)), ...
+        'rate_rapid_state_mask', false(size(t)), ...
+        'shallow_amplitude_mask', false(size(t)), ...
+        'shallow_amplitude_endpoint_mask', false(size(t)), ...
+        'deep_amplitude_mask', false(size(t)), ...
+        'deep_amplitude_endpoint_mask', false(size(t)), ...
+        'apnea_amp_ratio_session_window_median', nan(size(t)), ...
+        'irregularity', struct('window_mask', false(size(t)), ...
+            'endpoint_mask', false(size(t)), 'cov', nan(size(t)), ...
+            'robust_cov', nan(size(t)), 'rmssd_sec', nan(size(t)), ...
+            'pause_exclusion_mask', false(size(t))));
+end
+
+function phys = rate_phys(t, lungs)
+    phys.resp = struct('time_sec', t, ...
+        'rate_windows_sec', struct('slow',60,'rapid',30), ...
+        'lungs', lungs, 'diaph', empty_rate_belt(t));
+end
+
+function [mask, names, available] = overlap_fixture()
+    config = stage6_config();
+    names = {config.labels.short};
+    mask = false(10,11);
+    available = true(1,11);
+end
+
+function sets = empty_event_sets(defs)
+    sets = struct();
+    for i = 1:numel(defs), sets.(defs(i).field) = empty_events(); end
+end
+
+function review = empty_sigh_review()
+    review = struct('reviewed', false, 'status', 'unreviewed', ...
+        'weak_events', empty_events(), 'reviewed_events', empty_events());
+end
+
+function event = make_event_fixture(type, start_t, end_t, fs)
+    event = struct('type', type, 'start_idx', round(start_t*fs)+1, ...
+        'end_idx', round(end_t*fs)+1, 'start_t', start_t, 'end_t', end_t, ...
+        'duration', end_t-start_t);
+end
+
+function results = export_fixture(config, N)
+    names = {config.labels.short};
+    belt = struct('available', true, 'peak_idx', [1; 11], ...
+        'peak_t', [0; 1], 'amp', [1; NaN], 'ibi', 1, 'rr_bpm', 60, ...
+        'amp_ratio_session', [1; NaN], 'amp_ratio_global', [1; NaN]);
+    results = struct();
+    results.subject = 999;
+    results.measure = 1;
+    results.config = config;
+    results.phys_feat = struct('version', 'independent_physiological_evidence_v2', ...
+        'resp', struct('lungs', belt, 'diaph', belt));
+    reference = struct('session', struct('value', 1, 'available', true), ...
+        'global', struct('value', 1, 'available', true), ...
+        'reference_quality', 'good');
+    results.resp_ref = struct('lungs', reference, 'diaph', reference);
+    results.label_names = names;
+    results.label_available = true(1,11);
+    results.label_available(end) = false;
+    results.label_availability_reason = repmat({'available'},1,11);
+    results.label_availability_reason{end} = 'one_belt_only';
+    results.label_assessable_mask = repmat(results.label_available,N,1);
+    results.mask_weak = false(N,11);
+    results.mask_weak(1:3,strcmp(names,'rapidB')) = true;
+    results.mask_reviewed = false(N,11);
+    results.gold_review_mask = false(N,11);
+    results.gold_review_mask(:,strcmp(names,'rapidB')) = true;
+    results.review_status = repmat({'unreviewed'},1,11);
+    results.review_status{strcmp(names,'rapidB')} = 'reviewed_rejected';
+    raw_event = make_event_fixture('rapid_breathing_lungs',0,0.01,config.fs);
+    results.events_weak = normalize_event_types_and_meta(raw_event);
+    results.events_reviewed = normalize_event_types_and_meta(empty_events());
+    results.label_burden_weak = compute_recording_label_burden( ...
+        results.mask_weak,names,results.label_available,results.events_weak, ...
+        config.fs,results.label_assessable_mask);
+    reviewed_available = false(1,11); reviewed_available(strcmp(names,'rapidB')) = true;
+    results.label_burden_reviewed = compute_recording_label_burden( ...
+        results.mask_reviewed,names,reviewed_available,results.events_reviewed, ...
+        config.fs,results.gold_review_mask);
+    results.label_overlap_summary_weak = compute_label_overlap_summary( ...
+        results.mask_weak,names,results.label_available,config.fs, ...
+        results.label_assessable_mask);
+    results.label_overlap_summary_reviewed = compute_label_overlap_summary( ...
+        results.mask_reviewed,names,reviewed_available,config.fs, ...
+        results.gold_review_mask);
+    results.db_phenotype_evidence = struct('version','test', ...
+        'external_clinical_data',struct('status','not_integrated','value',[]));
+    results.label_schema_version = config.label_schema_version;
+    results.annotation_schema_version = 'weak_reviewed_annotations_v1';
+    results.export_schema_version = 'magma_ml_hdf5_v1';
+    results.upstream_input_preprocessing = 'external / not fully documented';
+end
+
+function [burden, overlap, evidence] = phenotype_fixture()
+    config = stage6_config();
+    names = {config.labels.short};
+    mask = false(10,11);
+    burden = compute_recording_label_burden(mask,names,true(1,11), ...
+        normalize_event_types_and_meta(empty_events()),1);
+    overlap = compute_label_overlap_summary(mask,names,true(1,11),1);
+    evidence.rapidB = struct('median_rr_lungs',NaN,'median_rr_diaph',NaN);
+    evidence.deepB = struct('median_ratio_lungs',NaN,'median_ratio_diaph',NaN);
+    evidence.thorDomB = struct('median_ratio',NaN,'median_log_ratio',NaN, ...
+        'median_relative_fraction',NaN);
+    evidence.asyncB = struct('analysis_valid',false, ...
+        'baseline_coherence',struct(),'median_observed_coherence',struct(), ...
+        'maximum_deviating_bins',NaN);
+end
+
+function delete_if_present(filename)
+    if isfile(filename), delete(filename); end
+end

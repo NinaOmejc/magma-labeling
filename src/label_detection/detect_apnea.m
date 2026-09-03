@@ -1,4 +1,4 @@
-function [events, diagnostics] = detect_apnea(data, phys_feat, config)
+function [events, diagnostics, boundary_info] = detect_apnea(data, phys_feat, config)
 % detect_apnea
 % Label 7 - Apnea
 %
@@ -11,11 +11,11 @@ function [events, diagnostics] = detect_apnea(data, phys_feat, config)
 % If both belts are usable, both must support the apnea evidence. If only
 % one belt is usable, that belt is used alone. SpO2 does not modify apnea
 % events; coincident desaturation remains a separate label.
-% A TRUE amplitude endpoint summarizes the preceding amplitude-analysis
-% window; that window is backfilled into the inferred state. Raw-flat
-% diagnostics already mark their supporting window. The two inferred-state
-% paths are unioned and min_dur_sec is applied once. All raw-signal windows
-% and returned sample indices use config.fs.
+% Rolling evidence confirms candidate episodes. Once confirmed, raw-flat
+% plateau timing is preferred for localization; otherwise low-amplitude
+% reviewed breath cells localize the episode. Candidate timing is retained
+% as an explicit fallback and event existence is never changed by the
+% localization step.
 
     events = empty_events();
 
@@ -23,6 +23,8 @@ function [events, diagnostics] = detect_apnea(data, phys_feat, config)
     t_grid = phys_feat.resp.time_sec;
     lungs = phys_feat.resp.lungs;
     diaph = phys_feat.resp.diaph;
+    boundary_info = make_label_boundary_info('apnea', 'detect_apnea', ...
+        'not_evaluated', empty_events(), empty_events(), NaN, '', [], [], []);
 
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
@@ -65,15 +67,18 @@ function [events, diagnostics] = detect_apnea(data, phys_feat, config)
         'raw_flat_path_available', false, ...
         'peak_endpoint_mask', false(size(t_grid)), ...
         'peak_state_mask', false(size(t_grid)), ...
+        'peak_localized_mask', false(size(t_grid)), ...
         'raw_flat_state_mask', false(size(t_grid)), ...
+        'raw_flat_localized_mask', false(size(t_grid)), ...
         'combined_state_mask', false(size(t_grid)), ...
+        'localized_state_mask', false(size(t_grid)), ...
         'peak_support_belts', support_belts(lungs_breath_valid, diaph_breath_valid), ...
         'raw_flat_support_belts', '', ...
         'amp_ratio_threshold', amp_ratio_thr, ...
         'amp_analysis_window_sec', get_config_value(config, 'Apn', 'amp_analysis_win_sec', min_dur_sec), ...
         'raw_flat_analysis_window_sec', raw_cfg.win_sec, ...
         'min_state_duration_sec', min_dur_sec, ...
-        'raw_flat', init_raw_flat_diag(t_grid));
+        'raw_flat', init_raw_flat_diag(t_grid, N));
 
     if ~(lungs_breath_valid || diaph_breath_valid || ...
             (raw_flat_enabled && (lungs_raw_valid || diaph_raw_valid)))
@@ -115,7 +120,7 @@ function [events, diagnostics] = detect_apnea(data, phys_feat, config)
     % Optional raw-flat apnea path
     % ----------------------------
     apnea_raw = false(size(t_grid));
-    raw_diag = init_raw_flat_diag(t_grid);
+    raw_diag = init_raw_flat_diag(t_grid, N);
 
     if raw_flat_enabled
         [apnea_raw_candidate, raw_diag] = raw_flat_apnea_condition_on_grid( ...
@@ -133,11 +138,39 @@ function [events, diagnostics] = detect_apnea(data, phys_feat, config)
 
     % Merge evidence paths and convert to sample-level events.
     apnea_mask_candidate = apnea_peak | apnea_raw;
-    [events, apnea_mask] = sustained_condition_to_events( ...
+    [candidate_events, apnea_mask] = sustained_condition_to_events( ...
         apnea_mask_candidate, t_grid, config.fs, N, min_dur_sec, 'apnea');
     diagnostics.combined_state_mask = apnea_mask;
     diagnostics.available = diagnostics.peak_path_available || ...
         diagnostics.raw_flat_path_available;
+
+    amplitude_local_mask = amplitude_apnea_support_mask( ...
+        lungs, diaph, lungs_breath_valid, diaph_breath_valid, ...
+        amp_ratio_thr, t_grid);
+    raw_local_mask = raw_diag.combined_plateau;
+    if ~any(raw_local_mask) && diagnostics.raw_flat_path_available
+        % Motion/slope windows still support the event when no histogram
+        % plateau is found, but retain their full window-scale uncertainty.
+        raw_local_mask = apnea_raw;
+    end
+    diagnostics.peak_localized_mask = amplitude_local_mask;
+    diagnostics.raw_flat_localized_mask = raw_local_mask;
+    [events, boundary_records] = localize_apnea_candidates( ...
+        candidate_events, amplitude_local_mask, apnea_peak, ...
+        raw_diag.combined_plateau_native, raw_local_mask, apnea_raw, ...
+        t_grid, N, config.fs, diagnostics.amp_analysis_window_sec, ...
+        diagnostics.raw_flat_analysis_window_sec);
+    diagnostics.localized_state_mask = events_to_grid_mask(events, t_grid);
+    boundary_info = make_label_boundary_info('apnea', 'detect_apnea', ...
+        'confirmed_dual_path_evidence_specific_localization', ...
+        candidate_events, events, NaN, 'raw_flat_or_breath_amplitude', ...
+        diagnostics.peak_endpoint_mask, apnea_mask_candidate, ...
+        diagnostics.localized_state_mask);
+    boundary_info.events = boundary_records;
+    if ~isempty(boundary_records)
+        boundary_info.boundary_uncertainty_sec = ...
+            [boundary_records.uncertainty_sec]';
+    end
 
     % ----------------------------
     % Optional plot
@@ -151,7 +184,7 @@ function [events, diagnostics] = detect_apnea(data, phys_feat, config)
 
         subplot(4, 1, 1); hold on
         plot_resp_trace_or_message(t_raw, data, idx_lungs, 'Resp-Lungs');
-        shade_mask_on_axis(t_grid, apnea_mask);
+        shade_mask_on_axis(t_grid, diagnostics.localized_state_mask);
         yline(0, ':')
         title('Combined apnea mask over lungs raw signal')
         xlabel('Time (s)'); ylabel('Resp-Lungs'); grid on
@@ -159,7 +192,7 @@ function [events, diagnostics] = detect_apnea(data, phys_feat, config)
 
         subplot(4, 1, 2); hold on
         plot_resp_trace_or_message(t_raw, data, idx_diaph, 'Resp-Diaphragm');
-        shade_mask_on_axis(t_grid, apnea_mask);
+        shade_mask_on_axis(t_grid, diagnostics.localized_state_mask);
         title('Combined apnea mask over diaphragm raw signal')
         xlabel('Time (s)'); ylabel('Resp-Diaphragm'); grid on
         hold off
@@ -176,7 +209,7 @@ function [events, diagnostics] = detect_apnea(data, phys_feat, config)
         plot(t_grid, lungs_ratio, 'k')
         plot(t_grid, diaph_ratio, 'b')
         yline(amp_ratio_thr, 'r--')
-        shade_mask_on_axis(t_grid, apnea_mask);
+        shade_mask_on_axis(t_grid, diagnostics.localized_state_mask);
         title('Peak-amplitude ratios (fixed protocol/session reference)')
         xlabel('Time (s)'); ylabel('Amp ratio'); grid on
         legend('lungs ratio', 'diaph ratio', 'thr', 'Location', 'eastoutside')
@@ -190,7 +223,7 @@ function [events, diagnostics] = detect_apnea(data, phys_feat, config)
             plot(t_grid, raw_diag.diaph.hist_peak_frac, 'Color', [0.1 0.35 0.9], 'LineStyle', ':')
             yline(raw_cfg.motion_ratio_thr, 'r--')
             yline(raw_cfg.hist_peak_frac_thr, 'm--')
-            shade_mask_on_axis(t_grid, apnea_mask);
+            shade_mask_on_axis(t_grid, diagnostics.localized_state_mask);
             title('Raw-flat diagnostics: movement ratio and histogram plateau score')
             xlabel('Time (s)'); ylabel('Ratio / fraction'); grid on
             legend('lungs motion', 'diaph motion', 'lungs hist peak', 'diaph hist peak', ...
@@ -232,7 +265,7 @@ function [combined_mask, diag] = raw_flat_apnea_condition_on_grid( ...
     data, config, t_grid, idx_lungs, idx_diaph, use_lungs, use_diaph, raw_cfg)
 
     combined_mask = false(size(t_grid));
-    diag = init_raw_flat_diag(t_grid);
+    diag = init_raw_flat_diag(t_grid, size(data, 1));
 
     if use_lungs
         [lungs_mask, lungs_diag] = raw_flat_belt_mask(data(:, idx_lungs), config, t_grid, raw_cfg);
@@ -251,22 +284,33 @@ function [combined_mask, diag] = raw_flat_apnea_condition_on_grid( ...
 
     if use_lungs && use_diaph
         combined_mask = diag.lungs.mask & diag.diaph.mask;
+        diag.combined_plateau = diag.lungs.plateau_mask & diag.diaph.plateau_mask;
+        diag.combined_plateau_native = ...
+            diag.lungs.plateau_mask_native & diag.diaph.plateau_mask_native;
     elseif use_lungs
         combined_mask = diag.lungs.mask;
+        diag.combined_plateau = diag.lungs.plateau_mask;
+        diag.combined_plateau_native = diag.lungs.plateau_mask_native;
     elseif use_diaph
         combined_mask = diag.diaph.mask;
+        diag.combined_plateau = diag.diaph.plateau_mask;
+        diag.combined_plateau_native = diag.diaph.plateau_mask_native;
     end
 
     diag.combined_candidate = combined_mask;
 end
 
-function diag = init_raw_flat_diag(t_grid)
+function diag = init_raw_flat_diag(t_grid, N)
+    if nargin < 2
+        N = numel(t_grid);
+    end
     empty_belt = struct( ...
         'valid', false, ...
         'mask', false(size(t_grid)), ...
         'motion_mask', false(size(t_grid)), ...
         'slope_mask', false(size(t_grid)), ...
         'plateau_mask', false(size(t_grid)), ...
+        'plateau_mask_native', false(N, 1), ...
         'motion_ratio', nan(size(t_grid)), ...
         'slope_ratio', nan(size(t_grid)), ...
         'hist_peak_frac', nan(size(t_grid)), ...
@@ -276,16 +320,171 @@ function diag = init_raw_flat_diag(t_grid)
     diag.lungs = empty_belt;
     diag.diaph = empty_belt;
     diag.combined_candidate = false(size(t_grid));
+    diag.combined_plateau = false(size(t_grid));
+    diag.combined_plateau_native = false(N, 1);
+end
+
+function mask = amplitude_apnea_support_mask( ...
+    lungs, diaph, use_lungs, use_diaph, threshold, t_grid)
+
+    lungs_mask = breath_amplitude_mask(lungs, threshold, t_grid);
+    diaph_mask = breath_amplitude_mask(diaph, threshold, t_grid);
+    if use_lungs && use_diaph
+        mask = lungs_mask & diaph_mask;
+    elseif use_lungs
+        mask = lungs_mask;
+    elseif use_diaph
+        mask = diaph_mask;
+    else
+        mask = false(size(t_grid));
+    end
+end
+
+function mask = breath_amplitude_mask(belt, threshold, t_grid)
+    mask = false(size(t_grid));
+    if ~isstruct(belt) || ~isfield(belt, 'peak_t') || ...
+            ~isfield(belt, 'amp_ratio_session')
+        return;
+    end
+    peak_t = belt.peak_t(:);
+    ratio = belt.amp_ratio_session(:);
+    n = min(numel(peak_t), numel(ratio));
+    peak_t = peak_t(1:n);
+    ratio = ratio(1:n);
+    for i = 1:n
+        if ~isfinite(peak_t(i)) || ~isfinite(ratio(i)) || ratio(i) > threshold
+            continue;
+        end
+        if n == 1
+            t0 = peak_t(i) - 0.5;
+            t1 = peak_t(i) + 0.5;
+        else
+            if i == 1
+                t0 = peak_t(i) - 0.5 * (peak_t(i+1) - peak_t(i));
+            else
+                t0 = 0.5 * (peak_t(i-1) + peak_t(i));
+            end
+            if i == n
+                t1 = peak_t(i) + 0.5 * (peak_t(i) - peak_t(i-1));
+            else
+                t1 = 0.5 * (peak_t(i) + peak_t(i+1));
+            end
+        end
+        mask = mask | (t_grid >= t0 & t_grid <= t1);
+    end
+end
+
+function [events, records] = localize_apnea_candidates( ...
+    candidates, amplitude_local, amplitude_candidate, raw_plateau_native, ...
+    raw_window_local, raw_candidate, t_grid, N, fs, amp_window_sec, raw_window_sec)
+
+    events = empty_events();
+    template = struct('label', 'apnea', 'detector', 'detect_apnea', ...
+        'boundary_method', '', 'candidate_start_t', NaN, ...
+        'candidate_end_t', NaN, 'localized_start_t', NaN, ...
+        'localized_end_t', NaN, 'uncertainty_sec', NaN, ...
+        'evidence_source', '');
+    records = template([]);
+    if isempty(candidates)
+        return;
+    end
+    events = repmat(candidates(1), numel(candidates), 1);
+    records = repmat(template, numel(candidates), 1);
+    if numel(t_grid) > 1
+        grid_step = median(diff(t_grid), 'omitnan');
+    else
+        grid_step = 1;
+    end
+    t_native = (0:N-1)' / fs;
+
+    for i = 1:numel(candidates)
+        candidate = candidates(i);
+        in_candidate = t_grid >= candidate.start_t & t_grid <= candidate.end_t;
+        in_candidate_native = t_native >= candidate.start_t & ...
+            t_native <= candidate.end_t;
+        has_amp = any(amplitude_candidate & in_candidate);
+        has_raw = any(raw_candidate & in_candidate);
+        source = 'confirmation_window_only';
+        method = 'aggregate_window_candidate_fallback';
+        uncertainty = max(amp_window_sec, raw_window_sec);
+        local_mask = false(size(t_grid));
+        found = false;
+
+        if has_raw && any(raw_plateau_native & in_candidate_native)
+            native_mask = raw_plateau_native & in_candidate_native;
+            [t0, t1, found] = longest_grid_run(native_mask, t_native, 1/fs);
+            method = 'raw_flat_native_plateau_localization';
+            uncertainty = 1/fs;
+            if has_amp
+                source = 'both';
+            else
+                source = 'raw_flat';
+            end
+        elseif has_raw && any(raw_window_local & in_candidate)
+            local_mask = raw_window_local & in_candidate;
+            method = 'raw_flat_window_support_localization';
+            uncertainty = raw_window_sec;
+            if has_amp
+                source = 'both';
+            else
+                source = 'raw_flat';
+            end
+        elseif has_amp && any(amplitude_local & in_candidate)
+            local_mask = amplitude_local & in_candidate;
+            method = 'breath_amplitude_midpoint_localization';
+            uncertainty = amp_window_sec;
+            source = 'breath_amplitude';
+        end
+
+        if ~found
+            [t0, t1, found] = longest_grid_run(local_mask, t_grid, grid_step);
+        end
+        if ~found
+            t0 = candidate.start_t;
+            t1 = candidate.end_t;
+        end
+        events(i) = event_from_times(candidate, t0, t1, N, fs);
+        records(i).boundary_method = method;
+        records(i).candidate_start_t = candidate.start_t;
+        records(i).candidate_end_t = candidate.end_t;
+        records(i).localized_start_t = events(i).start_t;
+        records(i).localized_end_t = events(i).end_t;
+        records(i).uncertainty_sec = uncertainty;
+        records(i).evidence_source = source;
+    end
+end
+
+function [t0, t1, found] = longest_grid_run(mask, t_grid, grid_step)
+    d = diff([false; logical(mask(:)); false]);
+    starts = find(d == 1);
+    ends = find(d == -1) - 1;
+    found = ~isempty(starts);
+    t0 = NaN;
+    t1 = NaN;
+    if ~found, return; end
+    [~, best] = max(ends - starts + 1);
+    t0 = t_grid(starts(best));
+    t1 = t_grid(ends(best)) + grid_step;
+end
+
+function event = event_from_times(event, start_t, end_t, N, fs)
+    recording_end = max(0, (N - 1) / fs);
+    start_t = max(0, min(recording_end, start_t));
+    end_t = max(start_t, min(recording_end, end_t));
+    event.start_idx = max(1, min(N, round(start_t * fs) + 1));
+    event.end_idx = max(event.start_idx, min(N, round(end_t * fs) + 1));
+    event.start_t = (event.start_idx - 1) / fs;
+    event.end_t = (event.end_idx - 1) / fs;
+    event.duration = event.end_t - event.start_t;
 end
 
 function [mask, diag] = raw_flat_belt_mask(x, config, t_grid, raw_cfg)
-    diag = init_raw_flat_diag(t_grid);
-    diag = diag.lungs;
-    mask = false(size(t_grid));
-
     x = x(:);
     fs = config.fs;
     N = numel(x);
+    all_diag = init_raw_flat_diag(t_grid, N);
+    diag = all_diag.lungs;
+    mask = false(size(t_grid));
 
     if raw_cfg.win_sec <= 0 || N < 3 || numel(t_grid) < 2
         return;
@@ -355,6 +554,9 @@ function [mask, diag] = raw_flat_belt_mask(x, config, t_grid, raw_cfg)
 
         if plateau_ok
             plateau_mask(mark_time_range_on_grid(t_grid, plateau_start_t, plateau_end_t)) = true;
+            [plateau_start_idx, plateau_end_idx] = time_window_to_indices( ...
+                plateau_start_t, plateau_end_t, fs, N);
+            diag.plateau_mask_native(plateau_start_idx:plateau_end_idx) = true;
         end
     end
 

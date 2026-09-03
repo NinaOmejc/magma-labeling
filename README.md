@@ -16,7 +16,7 @@ Detected labels include:
 - Deep breathing (relative increased belt excursion)
 - Thoracic-dominant breathing (relative thoracoabdominal excursion dominance)
 
-The pipeline processes multi-channel physiological recordings and saves structured event annotations, label masks, diagnostic signals, features, and figures. Original label definitions are in `Labels.docx`.
+The pipeline processes multi-channel physiological recordings and saves structured weak/reviewed event annotations, label masks, detector evidence, MAT results, one ML-ready HDF5 file per recording, and figures. Original label definitions are in `Labels.docx`.
 
 ## Download And Setup
 
@@ -47,7 +47,7 @@ addpath(genpath(fullfile(pwd, 'src')));
 run('src/main_single.m')
 ```
 
-`main_single.m` loops over the selected subjects and measurements, loads each recording, preprocesses the data, extracts respiration and SpO2 features, computes the respiratory and SpO2 references, builds common physiological evidence, runs all label detectors, builds the label mask, and saves outputs.
+`main_single.m` loops over the selected subjects and measurements, loads and preprocesses each recording, reuses reviewed respiratory breaths, computes respiratory references and physiological evidence, runs the independent detectors, freezes automatic weak annotations, optionally creates a separate manually reviewed layer, computes masks/summaries, and saves MAT plus HDF5 outputs.
 
 ## Configuration
 
@@ -81,7 +81,7 @@ Respiratory belts are uncalibrated. Their raw amplitudes do not represent absolu
 
 `phys_feat.resp.lungs` and `phys_feat.resp.diaph` preserve the reviewed `peak_idx`, `peak_t`, `amp`, `ibi`, and `rr_bpm` independently. Derived fields include session/global amplitude ratios, configured slow/rapid rate traces, shallow and deep amplitude masks, apnea amplitude-ratio evidence, and irregularity traces. Deep evidence is `amp_ratio_session >= config.DeB.amp_ratio_thr` with no upper cutoff.
 
-`phys_feat.resp.thoracoabdominal_balance` stores cross-belt evidence only when both fixed session references are available and at least one common window contains sufficient evidence. It computes 30-second robust medians `T` and `A` from thoracic and abdominal `amp_ratio_session`, then stores `T/A`, `log(T/A)`, and `T/(T+A)`. `dominance_endpoint_mask` identifies qualifying trailing windows and `dominance_state_mask` contains the union of their preceding 30-second support intervals. `thorDomB` uses the provisional weak-label rule `T/A >= 1.5` and a 30-second minimum inferred state. It does not require a second 30-second run of qualifying endpoints. These are within-record relative excursion measures, not calibrated percent rib-cage contribution or absolute thoracic dominance; a recording that is already thoracic-dominant throughout its reference interval may not be detected.
+`phys_feat.resp.thoracoabdominal_balance` stores cross-belt evidence only when both fixed session references are available and at least one common window contains sufficient evidence. It computes 30-second robust medians `T` and `A` from thoracic and abdominal `amp_ratio_session`, then stores `T/A`, `log(T/A)`, and `T/(T+A)`. `dominance_endpoint_mask` identifies qualifying trailing windows and `dominance_state_mask` is retained as their candidate-support union, not a precisely localized onset. `thorDomB` uses the provisional weak-label rule `T/A >= 1.5` and a 30-second minimum candidate. It does not require a second 30-second run of qualifying endpoints. These are within-record relative excursion measures, not calibrated percent rib-cage contribution or absolute thoracic dominance; a recording that is already thoracic-dominant throughout its reference interval may not be detected.
 
 The alignment convention is explicit: `amp(i)` belongs to peak `i` and the final amplitude may be `NaN` because no following peak closes that excursion. `ibi(i)` and `rr_bpm(i)` describe the interval from peak `i` to peak `i+1`, so they contain one fewer value than the peak arrays. Invalid, non-positive amplitudes remain present in the copied `amp` array but become `NaN` in normalized ratio fields. A missing session reference never falls back to the global reference.
 
@@ -89,21 +89,21 @@ SpO2/desaturation is an independent evidence stream at `phys_feat.spo2`. `phys_f
 
 ### Detector Temporal Semantics
 
-For rolling detectors, an **evidence endpoint** means that the trailing analysis window ending at that time qualified. An **inferred state** is the union of complete support intervals for qualifying windows. `min_dur_sec` is applied once to the inferred state. Event boundaries are mapped from that retained state to the native `config.fs` sample timeline.
+Stage 6 separates **confirmation** from **boundary localization**. A robust rolling window decides whether sustained evidence exists. It does not automatically prove that every preceding sample was abnormal, and the first qualifying endpoint is not substituted as the onset. After confirmation, each detector uses its finest defensible existing evidence to localize the event. `results.event_boundary_info` retains endpoint masks, candidate support, localized state, method, evidence source, candidate/localized times, and uncertainty without expanding the canonical seven-field event struct.
 
-- Shallow: every eligible breath in a trailing 30-second window must have `0.65 <= amp_ratio_session <= 0.80`. Qualifying windows are backfilled; the inferred state must last at least 30 seconds. Rate and SpO2 are unused.
-- Deep: every eligible breath in a trailing 30-second window must have `amp_ratio_session >= 1.20`, with no upper bound. Qualifying windows are backfilled; the inferred state must last at least 30 seconds.
-- Slow: mean rate from a trailing 60-second window must be `<= 10 bpm`. The qualifying window supports the inferred state, whose minimum duration is 30 seconds. The first evidence endpoint can therefore occur after the reported inferred-state onset.
-- Rapid: mean rate from a trailing 30-second window must be `>= 20 bpm`. `analysis_win_sec=30` and `min_dur_sec=30` are separate parameters; a qualifying window supports its preceding interval and does not start another hidden 30-second requirement.
-- Irregular: CoV/robust-CoV/RMSSD are estimated from a trailing 60-second IBI window, with pause exclusion. A qualifying window is backfilled and the current minimum inferred-state duration remains 60 seconds. `detection_metric='cov'` remains the default.
-- Apnea-like respiratory pause: normalized-amplitude endpoints summarize a trailing 10-second window and are backfilled. Raw-flat motion/slope/plateau evidence already marks its supporting windows. The pathways are unioned and the 10-second minimum state rule is applied once. This remains a low-motion/pause weak label, not a definitive obstructive or central apnea diagnosis.
-- Thoracic dominance: a qualifying 30-second `T/A >= 1.5` window supports its complete preceding window; the 30-second minimum state is applied once.
+- Shallow: every eligible breath in a trailing 30-second window must have `0.65 <= amp_ratio_session <= 0.80`. This all-breath rule confirms the event; final boundaries use midpoint cells around qualifying reviewed breaths. Rate and SpO2 are unused.
+- Deep: every eligible breath in a trailing 30-second window must have `amp_ratio_session >= 1.20`, with no upper bound. Final boundaries likewise use qualifying-breath midpoint cells.
+- Slow: the trailing 60-second mean-rate criterion remains `<= 10 bpm`, with a 30-second minimum confirmed candidate. Boundaries then use contiguous reviewed peak-to-peak intervals whose breathwise `rr_bpm <= 10`.
+- Rapid: the trailing 30-second mean-rate criterion remains `>= 20 bpm`, with a 30-second minimum confirmed candidate. Boundaries then use contiguous reviewed peak-to-peak intervals whose breathwise `rr_bpm >= 20`.
+- Irregular: CoV/robust-CoV/RMSSD remain multi-breath 60-second properties with pause exclusion and `detection_metric='cov'` by default. No instantaneous onset is fabricated: candidate support retains 60-second boundary uncertainty. Its 60-second minimum duration remains an unresolved scientific parameter rather than a tuned value.
+- Apnea-like respiratory pause: breath-amplitude and raw-flat pathways retain their thresholds and jointly confirm candidates. Native-sample dominant-bin raw-flat plateau timing is preferred for localization; otherwise qualifying low-amplitude breath midpoint cells are used, with window support as an explicit fallback. Boundary provenance records `raw_flat`, `breath_amplitude`, or `both`. This is not an airflow-cessation or obstructive/central diagnosis.
+- Thoracic dominance: the 30-second `T/A >= 1.5` confirmation uses independent within-record belt normalization. No stable, calibrated breath-pair localizer is available without inventing a new definition, so candidate support retains explicit 30-second boundary uncertainty.
 - Respiratory asynchrony: signals are locally resampled to 20 Hz, time-localized wavelet coherence uses the configured cycle-based window, and baseline-relative low-coherence samples must persist for 30 seconds. No additional backfilled state window is imposed. Reported boundaries are retained low-coherence runs mapped to the native timeline.
 - CSR-like periodic breathing: events span the first through last trough of at least two adjacent qualifying waxing--waning cycles. Cycle duration, shape, modulation, and breath-count requirements define the event; no additional generic duration filter is added.
 - Desaturation: the sample-level condition is `SpO2 < 90%` or a drop of at least 3 percentage points from a valid baseline, retained for at least 10 seconds. No rolling respiratory state semantics are applied.
 - Sigh: a selected breath is a discrete event bounded by midpoints to neighboring respiratory peaks. It uses the intentional whole-record amplitude reference and no sustained-state duration rule.
 
-Endpoint masks, inferred-state masks, threshold margins, rate/amplitude traces, irregularity pause exclusions, thoracoabdominal ratios, apnea pathway support, ReA coherence diagnostics, sigh thresholds, and periodic-cycle diagnostics are retained in `phys_feat`, `diagnostic_signals`, or `detector_diagnostics`. They stay in their native interpretable scales; no generic confidence or probability is assigned.
+Endpoint masks, candidate-support masks, localized-state masks, threshold margins, rate/amplitude traces, irregularity pause exclusions, thoracoabdominal ratios, apnea pathway support, ReA coherence diagnostics, sigh thresholds, and periodic-cycle diagnostics are retained in `phys_feat`, `diagnostic_signals`, `detector_diagnostics`, or `event_boundary_info`. They stay in native interpretable scales; no generic confidence or probability is assigned.
 
 ### Evidence-Aware Availability
 
@@ -111,15 +111,19 @@ Endpoint masks, inferred-state masks, threshold margins, rate/amplitude traces, 
 
 Thus, for example, two physical belt columns do not make `asyncB` available when the wavelet analysis fails, and a physically present SpO2 column does not make `desat` available when its samples or baseline are unusable. An available detector with no events remains a true zero; an unavailable detector has `NaN` burden.
 
+`results.label_assessable_mask [N x 11]` additionally encodes unambiguous partial availability. Non-finite native SpO2 samples are unassessable for `desat`; invalid local wavelet-evidence regions are unassessable for `asyncB`. Other respiratory labels use recording-level availability because the initial delay before a complete rolling estimate is estimator latency, not proof that the physiology itself is unavailable. Unavailable samples never enter burden or overlap denominators and are never treated as negative.
+
 ### MAGMA DB Phenotype Evidence
 
-The repository now distinguishes three levels:
+The repository uses this final hierarchy:
 
 1. The 11 elementary signal-derived weak physiological labels and their evidence.
 2. Five prespecified MAGMA WP1 DB phenotype-evidence structures.
 3. Later data-driven clusters or phenotype discovery.
 
-The 11 elementary labels are not 11 clinical DB phenotypes, and the five WP1 phenotypes are not mutually exclusive sample-level classes. `results.db_phenotype_evidence` contains descriptive signal-derived measures, assessability, required external data, and limitations:
+Clinical characterization is a later, separate layer using Nijmegen Questionnaire, ETCO2/capnography, CPET/ergospirometry, clinical observations, Beck Anxiety Inventory, and other clinical data when available.
+
+The 11 elementary labels are not 11 clinical DB phenotypes, and the five WP1 phenotypes are not mutually exclusive sample-level classes. `results.db_phenotype_evidence.weak` and `.reviewed` contain the same five descriptive profiles with explicit label provenance. Reviewed annotation measures use only explicitly reviewed and assessable regions; accompanying detector evidence remains a full-record descriptive signal summary and is not manual confidence. `.external_clinical_data` is a typed unavailable/unknown placeholder and never invents values. Reviewed profiles can be unavailable when no relevant region was reviewed.
 
 - Hyperventilation syndrome: rapid/deep burdens, overlap, rate, and normalized excursion are respiratory-pattern support only. Definitive assessment is not available from belts alone and requires later ETCO2/capnography, ventilation relative to metabolic demand, exercise testing, clinical assessment, and questionnaire information. It is never defined as `rapidB & deepB`.
 - Periodic deep sighing: represented continuously by sigh count/rate, irregular burden, deep burden, and sigh--irregular association. It is explicitly distinct from CSR-like periodic breathing and has no invented clinical cutoff.
@@ -137,6 +141,8 @@ Manual review can be enabled at three levels:
 - `config.resp.manual_control` - opens a breath peak editor before label detection. Edited peaks/troughs affect all downstream respiratory labels.
 - `config.Sig.manual_control` - opens the sigh-specific breath-level editor for adding or removing sigh markers.
 - `config.LabelEdit.manual_control` - opens the final event-interval editor after automatic detection and before the final label mask is saved. This editor handles `shallowB`, `deepB`, `thorDomB`, `irregB`, `slowB`, `rapidB`, `asyncB`, `desat`, `apnea`, and `CSR`; sigh is excluded because it has its own editor.
+
+Automatic detector outputs are frozen as `events_weak`/`mask_weak`; neither GUI overwrites them. Both scroll-windowed label GUIs record exact viewed/edited sample regions. `gold_review_mask=true` means that label/sample was explicitly in review scope. Therefore `mask_reviewed=false, gold_review_mask=true` is a reviewed negative, while both false means unknown/unreviewed. Review status is one of `unreviewed`, `reviewed_accepted`, `reviewed_rejected`, or `reviewed_edited`; no arbitrary confidence score is created.
 
 Final manual label edits are controlled by:
 
@@ -187,6 +193,8 @@ For example:
 ECG1_ECG2_SpO2_RespL_BP_RespD_fs200_Sub42_Pom1_DeTr_Norm.dat
 ```
 
+The `DeTr_Norm` filename component comes from upstream processing that is not fully documented in this repository. The pipeline does not guess what `Norm` means and does not apply an extra global normalization because of the filename. MAT/HDF5 metadata records `upstream_input_preprocessing = 'external / not fully documented'` as a dataset-provenance limitation.
+
 ## Outputs
 
 For each subject and measurement, the pipeline creates one output folder:
@@ -195,6 +203,7 @@ For each subject and measurement, the pipeline creates one output folder:
 <config.path_results_out>/
   Sub42_M1/
     Sub42_M1_labels.mat
+    Sub42_M1_labels.h5
     Sub42_M1_raw_data.png
     Sub42_M1_label_mask.png
     Sub42_M1_rapid_breathing.png
@@ -209,11 +218,19 @@ A saved label file contains fields like:
 ```matlab
 results.subject            = config.subject;      % Subject identifier
 results.measure            = config.measure;      % Measurement identifier
-results.events             = sub_events;          % Detected event struct array
-results.mask               = label_mask;          % Sample-level label mask [N x labels]
+results.events_weak        = events_weak;         % Frozen automatic events
+results.mask_weak          = mask_weak;           % Frozen automatic mask [N x 11]
+results.events_reviewed    = events_reviewed;     % Events only inside explicit review scope
+results.mask_reviewed      = mask_reviewed;       % Reviewed labels; false outside review scope
+results.gold_review_mask   = gold_review_mask;    % Explicit label/sample review coverage [N x 11]
+results.review_status      = review_status;       % Per-label controlled provenance
+results.events             = events_weak;         % Backward-compatible weak alias
+results.mask               = mask_weak;           % Backward-compatible weak alias
 results.label_names        = label_names;         % Label names matching mask columns
 results.label_available    = label_available;     % Assessed/available status matching mask columns
 results.label_availability_reason = label_availability_reason; % Controlled reason matching label order
+results.label_assessable_mask = label_assessable_mask; % Partial/recording assessability [N x 11]
+results.label_reviewed_available = reviewed_available; % Availability plus nonempty review scope
 results.label_schema_version = config.label_schema_version; % Explicit canonical-label schema
 results.resp_feat          = resp_feat;           % Respiratory features for lungs and diaphragm
 results.resp_ref           = resp_ref;            % Fixed session/global respiratory references and descriptive QC
@@ -221,22 +238,29 @@ results.phys_feat          = phys_feat;           % Common derived physiological
 results.spo2_feat          = spo2_feat;           % SpO2 features and desaturation candidates
 results.diagnostic_signals = diagnostic_signals;  % Continuous detector-adjacent signals
 results.detector_diagnostics = detector_diagnostics; % Specialized apnea/ReA/sigh/CSR evidence
-results.label_burden       = label_burden;        % Per-label availability, duration, fraction, event count
-results.label_overlap_summary = label_overlap_summary; % Prespecified directional overlaps
-results.label_evidence_summary = label_evidence_summary; % Recording-level native-scale evidence
-results.db_phenotype_evidence = db_phenotype_evidence; % Five non-diagnostic WP1 phenotype structures
+results.label_burden_weak = label_burden_weak;    % Automatic-label burden
+results.label_burden_reviewed = label_burden_reviewed; % Reviewed-scope burden
+results.label_overlap_summary_weak = label_overlap_summary_weak;
+results.label_overlap_summary_reviewed = label_overlap_summary_reviewed;
+results.label_evidence_summary_weak = label_evidence_summary_weak;
+results.label_evidence_summary_reviewed = label_evidence_summary_reviewed;
+results.event_boundary_info = event_boundary_info; % Parallel detector boundary provenance
+results.db_phenotype_evidence = db_phenotype_evidence; % Weak/reviewed five-profile bundle
 results.manual_label_edit  = manual_label_edit;   % Manual edit metadata and changed label list
+results.manual_sigh_review = sigh_review;         % Weak/reviewed sigh flags and review coverage
 results.rewritten_manual_label_figures = rewritten_manual_label_figures; % Figures rewritten after manual interval edits
 results.baseline           = baseline;            % Static SpO2 and label-specific baseline interval
 results.input_config       = config.input_config; % Resolved channels and skipped/running labels
 results.config             = config;              % Full configuration used for this run
 ```
 
-`results.events` and `results.mask` already include accepted manual edits. The separate `Sub*_M*_manual_label_events.mat` file stores the edited per-label event sets before final merging/normalization, so the same human edits can be reused on rerun and compared against newly detected automatic events.
+`results.events` and `results.mask` are compatibility aliases to the immutable weak layer. Manual review is only in the explicit reviewed layer and is interpreted together with `gold_review_mask`. The separate `Sub*_M*_manual_label_events.mat` stores original weak sets, reviewed working sets, and the exact review-coverage mask.
 
 `results.measure` is the saved measurement identifier.
 
-Saved manual interval edits use schema version 2 and record their editable label names. Version-1 files are migrated by event-set field identity: interval boundaries are preserved, historical compound types are reduced to that field's canonical label, and labels absent from the old file retain their current automatic events rather than being interpreted as manually reviewed negatives.
+Saved manual interval edits use schema version 3. Version-1/2 files are migrated by event-set field identity: interval boundaries are preserved, historical compound types are reduced to that field's canonical label, and labels absent from the old file retain current automatic events. Because old schemas did not store coverage, migrated intervals do not imply reviewed-negative regions.
+
+The per-recording HDF5 export (`magma_ml_hdf5_v1`) uses only numeric arrays and UTF-8 character datasets. Its top groups are `/signals`, `/time`, `/resp`, `/resp_reference`, `/phys_features`, `/labels`, `/events`, `/burden`, `/overlap`, `/phenotype_evidence`, and `/meta`. The master timeline remains native 200 Hz; ReA-derived arrays retain their own `time_sec` and `analysis_fs`. No ML z-scoring or training-set normalization is performed in MATLAB.
 
 ## Group-Level Measure Comparability
 
@@ -247,11 +271,11 @@ Saved manual interval edits use schema version 2 and record their editable label
 - Within-record normalized: thoracic-to-abdominal normalized excursion ratio, its log ratio, and thoracic relative fraction.
 - Not safely comparable across subjects: raw belt amplitude or raw session/global belt reference values.
 
-Group label summaries include `label_<name>_available`. An unavailable or historically absent label has availability `0` and `NaN` duration/fraction; an assessed label with no events has availability `1` and zero duration/fraction.
+Group label summaries include `label_<name>_available`, explicit weak/reviewed burden, reviewed coverage, weak-versus-reviewed disagreement, event counts and duration summaries, prespecified overlaps, reference QC, thoracoabdominal diagnostics, and single-/two-belt availability. `cohort_label_qc_summary.csv` and `cohort_qc_summary.mat` aggregate assessable recording counts, event counts, labeled fractions, zero-event recordings, event durations, review coverage/disagreement, belt availability, and reference warnings. These are validation outputs and do not tune thresholds.
 
-Within each new result file, `label_burden.by_label.<name>` stores `available`, `duration_sec`, `fraction`, `event_count`, and `assessable_duration_sec`. The reusable burden helper accepts a per-sample assessability mask when partial availability is known; with the current recording-level availability architecture, an available label uses the recording as its assessable interval and a wholly unavailable label returns `NaN` burden. Sigh also stores `sigh_count` and `sighs_per_15_min`. Label fractions overlap and must not sum to one.
+Within each new result file, `label_burden_weak.by_label.<name>` and `label_burden_reviewed.by_label.<name>` store `available`, `duration_sec`, `fraction`, `event_count`, and `assessable_duration_sec`. Weak denominators use physiological assessability; reviewed denominators use the intersection of physiological assessability and explicit review coverage. A wholly unavailable or unreviewed label returns `NaN` burden. Sigh also stores `sigh_count` and `sighs_per_15_min`. Label fractions overlap and must not sum to one.
 
-`label_overlap_summary` stores derived directional overlap for only four prespecified pairs: rapid--Deep, sigh--irregular, apnea--desaturation, and thoracic-dominance--asynchrony. It distinguishes the fraction of A overlapped by B from the fraction of B overlapped by A. These statistics do not create compound events or mask columns.
+Weak and reviewed overlap summaries store derived directional overlap for only four prespecified pairs: rapid--Deep, sigh--irregular, apnea--desaturation, and thoracic-dominance--asynchrony. Reviewed overlap uses only jointly reviewed and assessable samples. It distinguishes the fraction of A overlapped by B from the fraction of B overlapped by A. These statistics do not create compound events or mask columns.
 
 ## Artificial Test Signals
 
