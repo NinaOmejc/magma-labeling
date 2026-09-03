@@ -1,4 +1,5 @@
-function [events, diagnostics, boundary_info] = detect_apnea(data, phys_feat, config)
+function [events, diagnostics, boundary_info] = detect_apnea( ...
+    data, phys_feat, session_reference, config)
 % detect_apnea
 % Label 6 - Apnea
 %
@@ -7,6 +8,8 @@ function [events, diagnostics, boundary_info] = detect_apnea(data, phys_feat, co
 %      respiratory amplitude reference.
 %   2) Optional raw-flat path: direct low-motion/plateau detection on the
 %      preprocessed respiration belts, independent of detected breath peaks.
+%      Its raw motion/slope anchor is estimated from the common session
+%      physiological reference interval.
 %
 % If both belts are usable, both must support the apnea evidence. If only
 % one belt is usable, that belt is used alone. SpO2 does not modify apnea
@@ -124,7 +127,7 @@ function [events, diagnostics, boundary_info] = detect_apnea(data, phys_feat, co
 
     if raw_flat_enabled
         [apnea_raw_candidate, raw_diag] = raw_flat_apnea_condition_on_grid( ...
-            data, config, t_grid, idx_lungs, idx_diaph, ...
+            data, session_reference, config, t_grid, idx_lungs, idx_diaph, ...
             lungs_raw_valid, diaph_raw_valid, raw_cfg);
 
         apnea_raw = apnea_raw_candidate;
@@ -210,7 +213,7 @@ function [events, diagnostics, boundary_info] = detect_apnea(data, phys_feat, co
         plot(t_grid, diaph_ratio, 'b')
         yline(amp_ratio_thr, 'r--')
         shade_mask_on_axis(t_grid, diagnostics.localized_state_mask);
-        title('Peak-amplitude ratios (fixed protocol/session reference)')
+        title('Peak-amplitude ratios (common session reference)')
         xlabel('Time (s)'); ylabel('Amp ratio'); grid on
         legend('lungs ratio', 'diaph ratio', 'thr', 'Location', 'eastoutside')
         hold off
@@ -262,19 +265,22 @@ end
 % =========================================================
 
 function [combined_mask, diag] = raw_flat_apnea_condition_on_grid( ...
-    data, config, t_grid, idx_lungs, idx_diaph, use_lungs, use_diaph, raw_cfg)
+    data, session_reference, config, t_grid, idx_lungs, idx_diaph, ...
+    use_lungs, use_diaph, raw_cfg)
 
     combined_mask = false(size(t_grid));
     diag = init_raw_flat_diag(t_grid, size(data, 1));
 
     if use_lungs
-        [lungs_mask, lungs_diag] = raw_flat_belt_mask(data(:, idx_lungs), config, t_grid, raw_cfg);
+        [lungs_mask, lungs_diag] = raw_flat_belt_mask( ...
+            data(:, idx_lungs), session_reference, config, t_grid, raw_cfg);
         diag.lungs = lungs_diag;
         diag.lungs.mask = lungs_mask;
     end
 
     if use_diaph
-        [diaph_mask, diaph_diag] = raw_flat_belt_mask(data(:, idx_diaph), config, t_grid, raw_cfg);
+        [diaph_mask, diaph_diag] = raw_flat_belt_mask( ...
+            data(:, idx_diaph), session_reference, config, t_grid, raw_cfg);
         diag.diaph = diaph_diag;
         diag.diaph.mask = diaph_mask;
     end
@@ -306,6 +312,13 @@ function diag = init_raw_flat_diag(t_grid, N)
     end
     empty_belt = struct( ...
         'valid', false, ...
+        'reference_available', false, ...
+        'reference_quality', 'not_evaluated', ...
+        'reference_source', 'common_session_reference_interval', ...
+        'reference_n_samples', 0, ...
+        'reference_finite_fraction', NaN, ...
+        'session_motion_reference', NaN, ...
+        'session_slope_reference', NaN, ...
         'mask', false(size(t_grid)), ...
         'motion_mask', false(size(t_grid)), ...
         'slope_mask', false(size(t_grid)), ...
@@ -313,6 +326,9 @@ function diag = init_raw_flat_diag(t_grid, N)
         'plateau_mask_native', false(N, 1), ...
         'motion_ratio', nan(size(t_grid)), ...
         'slope_ratio', nan(size(t_grid)), ...
+        'motion_reference_used', nan(size(t_grid)), ...
+        'slope_reference_used', nan(size(t_grid)), ...
+        'adaptive_reference_used', false(size(t_grid)), ...
         'hist_peak_frac', nan(size(t_grid)), ...
         'plateau_run_sec', nan(size(t_grid)) );
 
@@ -478,7 +494,8 @@ function event = event_from_times(event, start_t, end_t, N, fs)
     event.duration = (event.end_idx - event.start_idx + 1) / fs;
 end
 
-function [mask, diag] = raw_flat_belt_mask(x, config, t_grid, raw_cfg)
+function [mask, diag] = raw_flat_belt_mask( ...
+    x, session_reference, config, t_grid, raw_cfg)
     x = x(:);
     fs = config.fs;
     N = numel(x);
@@ -490,19 +507,42 @@ function [mask, diag] = raw_flat_belt_mask(x, config, t_grid, raw_cfg)
         return;
     end
 
-    [baseline_start_idx, baseline_end_idx] = get_static_baseline_interval(N, config);
-    baseline_segment = x(baseline_start_idx:baseline_end_idx);
-    static_motion_ref = robust_excursion(baseline_segment, raw_cfg);
-    static_slope_ref = raw_slope_level(baseline_segment);
+    if ~isstruct(session_reference) || ~isfield(session_reference, 'available') || ...
+            ~session_reference.available
+        diag.reference_quality = 'reference_interval_unavailable';
+        return;
+    end
+    reference_start_idx = session_reference.reference_start_idx;
+    reference_end_idx = session_reference.reference_end_idx;
+    if reference_start_idx < 1 || reference_end_idx > N || ...
+            reference_end_idx < reference_start_idx
+        diag.reference_quality = 'reference_interval_unavailable';
+        return;
+    end
 
-    if ~isfinite(static_motion_ref) || static_motion_ref <= 0 || ...
-            ~isfinite(static_slope_ref) || static_slope_ref <= 0
+    reference_segment = x(reference_start_idx:reference_end_idx);
+    diag.reference_n_samples = numel(reference_segment);
+    diag.reference_finite_fraction = finite_fraction(reference_segment);
+    session_motion_ref = robust_excursion(reference_segment, raw_cfg);
+    session_slope_ref = raw_slope_level(reference_segment);
+    diag.session_motion_reference = session_motion_ref;
+    diag.session_slope_reference = session_slope_ref;
+
+    if ~isfinite(session_motion_ref) || session_motion_ref <= 0 || ...
+            ~isfinite(session_slope_ref) || session_slope_ref <= 0
+        diag.reference_quality = 'unusable_motion_or_slope_reference';
         return;
     end
 
     motion_mask = false(size(t_grid));
     slope_mask = false(size(t_grid));
     plateau_mask = false(size(t_grid));
+    diag.reference_available = true;
+    if session_reference.complete
+        diag.reference_quality = 'good';
+    else
+        diag.reference_quality = 'warning_truncated_interval';
+    end
     diag.valid = true;
 
     for i = 1:numel(t_grid)
@@ -522,8 +562,11 @@ function [mask, diag] = raw_flat_belt_mask(x, config, t_grid, raw_cfg)
             continue;
         end
 
-        [motion_ref, slope_ref] = raw_reference_at_time( ...
-            x, t, fs, static_motion_ref, static_slope_ref, raw_cfg);
+        [motion_ref, slope_ref, adaptive_reference_used] = raw_reference_at_time( ...
+            x, t, fs, session_motion_ref, session_slope_ref, raw_cfg);
+        diag.motion_reference_used(i) = motion_ref;
+        diag.slope_reference_used(i) = slope_ref;
+        diag.adaptive_reference_used(i) = adaptive_reference_used;
 
         motion = robust_excursion(segment, raw_cfg);
         slope = raw_slope_level(segment);
@@ -567,11 +610,15 @@ function [mask, diag] = raw_flat_belt_mask(x, config, t_grid, raw_cfg)
     diag.plateau_mask = plateau_mask;
 end
 
-function [motion_ref, slope_ref] = raw_reference_at_time( ...
-    x, t, fs, static_motion_ref, static_slope_ref, raw_cfg)
+function [motion_ref, slope_ref, adaptive_reference_used] = raw_reference_at_time( ...
+    x, t, fs, session_motion_ref, session_slope_ref, raw_cfg)
 
-    motion_ref = static_motion_ref;
-    slope_ref = static_slope_ref;
+    % Preserve the detector's causal local comparator, but require and
+    % anchor it to the common session reference. A missing session reference
+    % is handled before this function; no other interval substitutes for it.
+    motion_ref = session_motion_ref;
+    slope_ref = session_slope_ref;
+    adaptive_reference_used = false;
 
     t2 = t - raw_cfg.ref_lag_sec;
     t1 = t2 - raw_cfg.ref_win_sec;
@@ -597,14 +644,16 @@ function [motion_ref, slope_ref] = raw_reference_at_time( ...
 
     if isfinite(candidate_motion) && candidate_motion > 0
         motion_ref = candidate_motion;
+        adaptive_reference_used = true;
     end
     if isfinite(candidate_slope) && candidate_slope > 0
         slope_ref = candidate_slope;
+        adaptive_reference_used = true;
     end
 
     if isfinite(raw_cfg.ref_floor_ratio) && raw_cfg.ref_floor_ratio > 0
-        motion_ref = max(motion_ref, raw_cfg.ref_floor_ratio * static_motion_ref);
-        slope_ref = max(slope_ref, raw_cfg.ref_floor_ratio * static_slope_ref);
+        motion_ref = max(motion_ref, raw_cfg.ref_floor_ratio * session_motion_ref);
+        slope_ref = max(slope_ref, raw_cfg.ref_floor_ratio * session_slope_ref);
     end
 end
 

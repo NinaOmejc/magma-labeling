@@ -1,12 +1,13 @@
-function rea = compute_respiratory_asynchrony_metrics(data, resp_feat, config)
+function rea = compute_respiratory_asynchrony_metrics(data, resp_feat, session_reference, config)
 % compute_respiratory_asynchrony_metrics
 % Wavelet phase-coherence diagnostics for Label 10. Master inputs and output
 % timing stay at config.fs; only the internal wavelet signals use analysis_fs.
+% Coherence reference statistics use the common session-reference interval.
 
     N = size(data, 1);
     t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';
 
-    rea = empty_rea_metrics(t_grid, config);
+    rea = empty_rea_metrics(t_grid, session_reference, config);
     rea.master_n_samples = N;
 
     if ~isfield(config, 'channels')
@@ -38,6 +39,14 @@ function rea = compute_respiratory_asynchrony_metrics(data, resp_feat, config)
     [diaph_sig, diaph_ok] = prepare_resp_signal_local(data(:, idx_diaph));
     if ~lungs_ok || ~diaph_ok
         rea.skip_code = 5;
+        return;
+    end
+
+    rea.reference_mask = get_reference_mask_local(t_grid, session_reference);
+    if ~isstruct(session_reference) || ~isfield(session_reference, 'available') || ...
+            ~session_reference.available || ~any(rea.reference_mask)
+        rea.reference_quality = 'reference_interval_unavailable';
+        rea.skip_code = 9;
         return;
     end
 
@@ -90,8 +99,23 @@ function rea = compute_respiratory_asynchrony_metrics(data, resp_feat, config)
     rea.phase_coherence_mid = interp1(t_pc, coh_mid, t_grid, 'linear', nan);
     rea.phase_coherence_low = interp1(t_pc, coh_low, t_grid, 'linear', nan);
 
-    rea.baseline_mask = get_baseline_mask_local(t_grid, N, config);
-    [rea.thresholds, rea.baselines] = phase_coherence_thresholds_local(rea, rea.baseline_mask);
+    [rea.thresholds, rea.references, rea.reference_valid_counts] = ...
+        phase_coherence_thresholds_local(rea, rea.reference_mask);
+    rea.reference_available = any(structfun(@(x) x > 0, rea.reference_valid_counts));
+    if ~rea.reference_available
+        if ~isstruct(session_reference) || ~isfield(session_reference, 'available') || ...
+                ~session_reference.available
+            rea.reference_quality = 'reference_interval_unavailable';
+        else
+            rea.reference_quality = 'insufficient_valid_coherence';
+        end
+        rea.skip_code = 9;
+        return;
+    elseif session_reference.complete
+        rea.reference_quality = 'good';
+    else
+        rea.reference_quality = 'warning_truncated_interval';
+    end
 
     valid_high = isfinite(rea.phase_coherence_high) & isfinite(rea.thresholds.high);
     valid_mid = isfinite(rea.phase_coherence_mid) & isfinite(rea.thresholds.mid);
@@ -133,7 +157,7 @@ function restore_figure_visibility(old_visibility, existing_figures, target_visi
     end
 end
 
-function rea = empty_rea_metrics(t_grid, config)
+function rea = empty_rea_metrics(t_grid, session_reference, config)
     rea = struct();
     rea.time_sec = t_grid;
     rea.valid_analysis = false;
@@ -151,7 +175,7 @@ function rea = empty_rea_metrics(t_grid, config)
     rea.mid_high_cut_hz = get_config_value(config, 'ReA', 'mid_high_cut_hz', 0.6);
     rea.tlphcoh_cycles = get_config_value(config, 'ReA', 'tlphcoh_cycles', 10);
     rea.min_dur_sec = get_config_value(config, 'ReA', 'min_dur_sec', 30);
-    rea.baseline_mad_k = get_config_value(config, 'ReA', 'baseline_mad_k', 3);
+    rea.reference_mad_k = get_config_value(config, 'ReA', 'reference_mad_k', 3);
     rea.min_abs_drop = get_config_value(config, 'ReA', 'min_abs_drop', 0.15);
     rea.min_deviating_bins = get_config_value(config, 'ReA', 'min_deviating_bins', 1);
     rea.plot_step_sec = get_config_value(config, 'ReA', 'plot_step_sec', 15);
@@ -159,11 +183,18 @@ function rea = empty_rea_metrics(t_grid, config)
     rea.phase_coherence_high = nan(size(t_grid));
     rea.phase_coherence_mid = nan(size(t_grid));
     rea.phase_coherence_low = nan(size(t_grid));
-    rea.baseline_mask = false(size(t_grid));
+    rea.reference_mask = false(size(t_grid));
+    rea.reference_available = false;
+    rea.reference_quality = 'not_evaluated';
+    if ~isstruct(session_reference) || ~isfield(session_reference, 'available') || ...
+            ~session_reference.available
+        rea.reference_quality = 'reference_interval_unavailable';
+    end
     rea.deviation_bin_count = nan(size(t_grid));
     rea.low_coherence_mask = false(size(t_grid));
     rea.valid_evidence_mask = false(size(t_grid));
-    rea.baselines = struct('high', nan, 'mid', nan, 'low', nan);
+    rea.references = struct('high', nan, 'mid', nan, 'low', nan);
+    rea.reference_valid_counts = struct('high', 0, 'mid', 0, 'low', 0);
     rea.thresholds = struct('high', nan, 'mid', nan, 'low', nan);
 end
 
@@ -214,18 +245,21 @@ function trace = mean_phase_coherence_in_band_local(TPC, band_mask)
     trace = mean(TPC(band_mask, :), 1, 'omitnan')';
 end
 
-function [thresholds, baselines] = phase_coherence_thresholds_local(rea, baseline_mask)
+function [thresholds, references, valid_counts] = ...
+    phase_coherence_thresholds_local(rea, reference_mask)
     names = {'high', 'mid', 'low'};
     thresholds = struct();
-    baselines = struct();
+    references = struct();
+    valid_counts = struct();
 
     for i = 1:numel(names)
         name = names{i};
-        values = rea.(['phase_coherence_' name])(baseline_mask);
+        values = rea.(['phase_coherence_' name])(reference_mask);
         values = values(isfinite(values));
+        valid_counts.(name) = numel(values);
 
         if isempty(values)
-            baselines.(name) = nan;
+            references.(name) = nan;
             thresholds.(name) = nan;
             continue;
         end
@@ -236,12 +270,17 @@ function [thresholds, baselines] = phase_coherence_thresholds_local(rea, baselin
             spread = 0;
         end
 
-        baselines.(name) = center;
-        thresholds.(name) = max(0, center - max(rea.min_abs_drop, rea.baseline_mad_k * spread));
+        references.(name) = center;
+        thresholds.(name) = max(0, center - max(rea.min_abs_drop, rea.reference_mad_k * spread));
     end
 end
 
-function baseline_mask = get_baseline_mask_local(t_grid, N, config)
-    [~, ~, baseline_start_t, baseline_end_t] = get_static_baseline_interval(N, config);
-    baseline_mask = t_grid >= baseline_start_t & t_grid <= baseline_end_t;
+function reference_mask = get_reference_mask_local(t_grid, session_reference)
+    reference_mask = false(size(t_grid));
+    if ~isstruct(session_reference) || ~isfield(session_reference, 'available') || ...
+            ~session_reference.available
+        return;
+    end
+    reference_mask = t_grid >= session_reference.reference_start_t & ...
+        t_grid < session_reference.reference_end_t;
 end

@@ -31,13 +31,13 @@ end
 
 function testReAMetricsMapBackToMasterDuration(testCase)
     config = make_test_config();
-    config.baseline_sec = 10;
-    config.baseline_location = 'first';
-    n_samples = 12001;
+    n_samples = 72001;
     data = make_synthetic_master_data(n_samples, config.fs);
     data_before = data;
+    session_reference = get_session_reference_interval(n_samples, config);
 
-    rea = compute_respiratory_asynchrony_metrics(data, [], config);
+    rea = compute_respiratory_asynchrony_metrics( ...
+        data, [], session_reference, config);
     expected_grid = (0:config.grid_step_sec:(n_samples-1)/config.fs)';
 
     verifyEqual(testCase, data, data_before);

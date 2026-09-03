@@ -209,29 +209,29 @@ end
 
 function testApneaRawFlatStoresBoundaryEvidenceSource(testCase)
     config = stage6_config();
-    config.baseline_location = 'first';
-    config.baseline_sec = 30;
     config.Apn.raw_flat_enabled = true;
     config.Apn.do_plot = false;
-    t_raw = (0:1/config.fs:100-1/config.fs)';
+    t_raw = (0:1/config.fs:400-1/config.fs)';
     data = zeros(numel(t_raw), 6);
     respiratory = sin(2*pi*0.2*t_raw);
-    respiratory(t_raw >= 50 & t_raw <= 80) = 0;
+    respiratory(t_raw >= 250 & t_raw <= 280) = 0;
     data(:,4) = respiratory;
     data(:,6) = respiratory;
-    t = (0:100-1)';
+    t = (0:400-1)';
     belt = empty_rate_belt(t);
     belt.available = false;
     belt.session_amplitude_available = false;
     phys.resp = struct('time_sec', t, 'lungs', belt, 'diaph', belt);
-    [events, diagnostics, info] = detect_apnea(data, phys, config);
+    session_reference = get_session_reference_interval(size(data,1), config);
+    [events, diagnostics, info] = detect_apnea( ...
+        data, phys, session_reference, config);
     verifyNotEmpty(testCase, events);
     verifyTrue(testCase, diagnostics.raw_flat_path_available);
     verifyTrue(testCase, any(strcmp({info.events.evidence_source}, 'raw_flat')));
     native_record = info.events(contains({info.events.boundary_method}, ...
         'raw_flat_native_plateau'));
     verifyNotEmpty(testCase, native_record);
-    verifyEqual(testCase, native_record(1).localized_start_t, 50, 'AbsTol', 1/config.fs);
+    verifyEqual(testCase, native_record(1).localized_start_t, 250, 'AbsTol', 1/config.fs);
     verifyEqual(testCase, native_record(1).uncertainty_sec, 1/config.fs, ...
         'AbsTol', eps);
 end
@@ -401,10 +401,11 @@ function testAutomaticSighCandidatesSurviveWithoutReview(testCase)
     phys.resp = struct('lungs', belt, 'diaph', belt);
     resp_feat = struct('lungs', belt, 'diaph', belt);
     data = zeros(1000, 6);
-    baseline = struct();
+    session_reference = get_session_reference_interval(size(data,1), config);
+    spo2_ref = struct();
     spo2 = struct();
     [events, diagnostics, review] = detect_sigh( ...
-        data, phys, resp_feat, baseline, spo2, config);
+        data, phys, resp_feat, spo2_ref, session_reference, spo2, config);
     verifyNotEmpty(testCase, events);
     verifyEqual(testCase, review.weak_events, events);
     verifyFalse(testCase, review.reviewed);
@@ -738,12 +739,15 @@ function results = export_fixture(config, N)
     results.subject = 999;
     results.measure = 1;
     results.config = config;
-    results.phys_feat = struct('version', 'independent_physiological_evidence_v2', ...
+    results.phys_feat = struct('version', 'independent_physiological_evidence_v3', ...
         'resp', struct('lungs', belt, 'diaph', belt));
+    results.session_reference = get_session_reference_interval(N, config);
     reference = struct('session', struct('value', 1, 'available', true), ...
         'global', struct('value', 1, 'available', true), ...
         'reference_quality', 'good');
     results.resp_ref = struct('lungs', reference, 'diaph', reference);
+    results.spo2_ref = struct('available',false,'quality','test', ...
+        'median_percent',NaN,'source','common_session_reference_interval');
     results.label_names = names;
     results.label_available = true(1,11);
     results.label_available(end) = false;
@@ -782,7 +786,7 @@ function results = export_fixture(config, N)
         'external_clinical_data',struct('status','not_integrated','value',[]));
     results.label_schema_version = config.label_schema_version;
     results.annotation_schema_version = 'weak_reviewed_annotations_v1';
-    results.export_schema_version = 'magma_ml_hdf5_v1';
+    results.export_schema_version = 'magma_ml_hdf5_v2';
     results.upstream_input_preprocessing = 'external / not fully documented';
 end
 
@@ -798,7 +802,7 @@ function [burden, overlap, evidence] = phenotype_fixture()
     evidence.thoracic = struct('median_ratio',NaN,'median_log_ratio',NaN, ...
         'median_relative_fraction',NaN);
     evidence.async = struct('analysis_valid',false, ...
-        'baseline_coherence',struct(),'median_observed_coherence',struct(), ...
+        'reference_coherence',struct(),'median_observed_coherence',struct(), ...
         'maximum_deviating_bins',NaN);
 end
 

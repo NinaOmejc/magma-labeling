@@ -178,7 +178,8 @@ function testIndependentDetectorsAndOverlappingMask(testCase)
     thoracic = detect_thoracic_dominant_breathing(data, phys_feat, config);
     slow = detect_slow_breathing(data, phys_feat, config);
     rapid = detect_rapid_breathing(data, phys_feat, config);
-    apnea = detect_apnea(data, phys_feat, config);
+    session_reference = get_session_reference_interval(size(data,1), config);
+    apnea = detect_apnea(data, phys_feat, session_reference, config);
     desat = phys_feat.spo2.desaturation_events;
 
     verifyNotEmpty(testCase, shallow);

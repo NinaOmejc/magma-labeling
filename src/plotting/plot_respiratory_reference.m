@@ -1,11 +1,12 @@
-function fig = plot_respiratory_reference(resp_feat, resp_ref, config)
+function fig = plot_respiratory_reference( ...
+    resp_feat, resp_ref, session_reference, config)
 % plot_respiratory_reference
-% Plot the fixed protocol/session reference, whole-record context, and
-% descriptive stability QC. Warnings retain data and do not request correction.
+% Plot respiratory excursion statistics from the common session-reference
+% interval, whole-record context, and descriptive stability QC.
 
     fig = [];
-    if ~isfield(config, 'resp_ref') || ~isfield(config.resp_ref, 'do_plot') || ...
-            ~config.resp_ref.do_plot
+    if ~isfield(config, 'reference') || ...
+            ~isfield(config.reference, 'do_plot') || ~config.reference.do_plot
         return;
     end
 
@@ -16,16 +17,18 @@ function fig = plot_respiratory_reference(resp_feat, resp_ref, config)
         config.subject, config.measure));
 
     ax1 = nexttile(tl);
-    plot_belt_reference(ax1, get_belt(resp_feat, 'lungs'), resp_ref.lungs, 'Resp-Lungs');
+    plot_belt_reference(ax1, get_belt(resp_feat, 'lungs'), ...
+        resp_ref.lungs, session_reference, 'Resp-Lungs');
     ax2 = nexttile(tl);
-    plot_belt_reference(ax2, get_belt(resp_feat, 'diaph'), resp_ref.diaph, 'Resp-Diaphragm');
+    plot_belt_reference(ax2, get_belt(resp_feat, 'diaph'), ...
+        resp_ref.diaph, session_reference, 'Resp-Diaphragm');
 
     linkaxes([ax1 ax2], 'x');
     align_axes_x_widths([ax1 ax2]);
     save_figure(config, 'respiratory_reference');
 end
 
-function plot_belt_reference(ax, breaths, belt, belt_name)
+function plot_belt_reference(ax, breaths, belt, session_reference, belt_name)
     hold(ax, 'on');
     grid(ax, 'on');
     xlabel(ax, 'Breath peak time (s)');
@@ -43,14 +46,15 @@ function plot_belt_reference(ax, breaths, belt, belt_name)
 
     h_amp = plot(ax, peak_t, amp, '.-', 'Color', [0.20 0.35 0.70], ...
         'DisplayName', 'reviewed breath amplitude');
-    shade_session_region(ax, belt.session.start_t, belt.session.end_t);
+    shade_session_reference_on_axis( ...
+        ax, session_reference, 'common session-reference interval');
     shade_edge_regions(ax, peak_t, belt.edge_window_sec_used);
 
     handles = gobjects(0);
     handles(end+1) = h_amp;
     if belt.session.available
         h_session = yline(ax, belt.session.value, '-', 'Color', [0.45 0.10 0.65], ...
-            'LineWidth', 2, 'DisplayName', 'fixed session median');
+            'LineWidth', 2, 'DisplayName', 'session reference median');
         handles(end+1) = h_session;
     end
     if belt.global.available
@@ -91,16 +95,6 @@ function plot_belt_reference(ax, breaths, belt, belt_name)
     legend(ax, handles(isgraphics(handles)), 'Location', 'eastoutside');
     hold(ax, 'off');
 
-end
-
-function shade_session_region(ax, start_t, end_t)
-    if ~isfinite(start_t) || ~isfinite(end_t) || end_t <= start_t
-        return;
-    end
-    y_limits = robust_plot_limits(ax);
-    patch(ax, [start_t end_t end_t start_t], ...
-        [y_limits(1) y_limits(1) y_limits(2) y_limits(2)], [0.82 0.78 0.96], ...
-        'EdgeColor', 'none', 'FaceAlpha', 0.16, 'HandleVisibility', 'off');
 end
 
 function shade_edge_regions(ax, peak_t, edge_window_sec)

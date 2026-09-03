@@ -18,18 +18,21 @@ for isub = 1:length(config.subjects)
         % PREPROCESS DATA
         [data, config] = preprocess_data(data_raw, config);
 
+        % ONE COMMON SESSION PHYSIOLOGICAL REFERENCE INTERVAL
+        session_reference = get_session_reference_interval(size(data, 1), config);
+
         % EXTRACT OR LOAD FEATURES (manually checked breath peaks/troughs)
         resp_feat = load_or_extract_respiratory_features(data, config);
 
-        % FIXED PROTOCOL/SESSION RESPIRATORY AMPLITUDE REFERENCE + QC
-        resp_ref = compute_respiratory_reference(resp_feat, config);
-        plot_respiratory_reference(resp_feat, resp_ref, config);
+        % MODALITY-SPECIFIC REFERENCES FROM THE COMMON INTERVAL
+        resp_ref = compute_respiratory_reference( ...
+            resp_feat, session_reference, config);
+        spo2_ref = compute_spo2_reference(data, session_reference, config);
+        plot_respiratory_reference( ...
+            resp_feat, resp_ref, session_reference, config);
 
-        % COMPUTE SPO2 / LABEL-SPECIFIC STATIC BASELINE
-        baseline = compute_baseline(data, config);
-        
         % EXTRACT SPO2 FEATURES
-        spo2_feat = extract_spo2_features(data, baseline, config);
+        spo2_feat = extract_spo2_features(data, spo2_ref, config);
 
         % COMMON PHYSIOLOGICAL EVIDENCE (derived; no peak redetection)
         phys_feat = compute_physiological_features( ...
@@ -42,11 +45,15 @@ for isub = 1:length(config.subjects)
         [events_IrB, boundary_IrB] = detect_irregular_breathing(data, phys_feat, config);
         [events_SlB, boundary_SlB] = detect_slow_breathing(data, phys_feat, config);
         [events_RaB, boundary_RaB] = detect_rapid_breathing(data, phys_feat, config);
-        [events_ReA, diagnostics_ReA] = detect_respiratory_asynchrony(data, baseline, resp_feat, config);
-        events_Des = detect_desaturation(data, baseline, spo2_feat, config);
-        [events_Apn, diagnostics_Apn, boundary_Apn] = detect_apnea(data, phys_feat, config);
+        [events_ReA, diagnostics_ReA] = detect_respiratory_asynchrony( ...
+            data, session_reference, resp_feat, config);
+        events_Des = detect_desaturation( ...
+            data, spo2_ref, session_reference, spo2_feat, config);
+        [events_Apn, diagnostics_Apn, boundary_Apn] = detect_apnea( ...
+            data, phys_feat, session_reference, config);
         [~, diagnostics_Sigh, sigh_review] = detect_sigh( ...
-            data, phys_feat, resp_feat, baseline, spo2_feat, config);
+            data, phys_feat, resp_feat, spo2_ref, session_reference, ...
+            spo2_feat, config);
         [events_CSR, diagnostics_CSR] = detect_periodic_breathing( ...
             data, resp_feat, config);
 
@@ -83,7 +90,7 @@ for isub = 1:length(config.subjects)
             compute_label_assessable_mask(N, label_names, label_available, ...
                 spo2_feat, diagnostics_ReA, config);
         diagnostic_signals = compute_label_diagnostic_signals( ...
-            phys_feat, baseline, spo2_feat, config, diagnostics_ReA, ...
+            phys_feat, spo2_ref, spo2_feat, config, diagnostics_ReA, ...
             diagnostics_Apn, diagnostics_Sigh, diagnostics_CSR);
         detector_diagnostics = struct( ...
             'respiratory_asynchrony', diagnostics_ReA, ...
@@ -136,7 +143,8 @@ for isub = 1:length(config.subjects)
             'desat', standard_boundary('desat', 'detect_desaturation', ...
                 events_Des, 'native_spo2_threshold_run', 1/config.fs, 'native_spo2_samples'));
         rewritten_manual_label_figures = rewrite_changed_manual_label_figures( ...
-            data, baseline, resp_feat, spo2_feat, diagnostic_signals, reviewed_event_sets, manual_label_edit, config);
+            data, spo2_ref, session_reference, resp_feat, spo2_feat, ...
+            diagnostic_signals, reviewed_event_sets, manual_label_edit, config);
         plot_label_mask(mask_weak, label_names, config);
         
         % SAVE
@@ -165,6 +173,8 @@ for isub = 1:length(config.subjects)
         results.label_schema_version = config.label_schema_version;
         results.resp_feat = resp_feat;
         results.resp_ref = resp_ref;
+        results.session_reference = session_reference;
+        results.spo2_ref = spo2_ref;
         results.phys_feat = phys_feat;
         results.spo2_feat = spo2_feat;
         results.diagnostic_signals = diagnostic_signals;
@@ -184,11 +194,10 @@ for isub = 1:length(config.subjects)
         results.manual_label_edit = manual_label_edit;
         results.manual_sigh_review = sigh_review;
         results.rewritten_manual_label_figures = rewritten_manual_label_figures;
-        results.baseline = baseline;
         results.input_config = config.input_config;
         results.config = config;
         results.export_schema_version = get_config_value( ...
-            config, 'HDF5', 'export_schema_version', 'magma_ml_hdf5_v1');
+            config, 'HDF5', 'export_schema_version', 'magma_ml_hdf5_v2');
         results.upstream_input_preprocessing = get_config_value( ...
             config, 'HDF5', 'upstream_input_preprocessing', ...
             'external / not fully documented');

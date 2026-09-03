@@ -6,7 +6,7 @@ function [events, diagnostics] = detect_periodic_breathing(data, resp_feat, conf
 % scorer. It detects repeated modulation of the breath-amplitude envelope:
 % smaller breaths -> larger breaths -> smaller breaths, typically over
 % cycles of about 40-120 s. It uses breath amplitudes, not the slow
-% baseline drift of the raw belt signal.
+% slow drift of the raw belt signal.
 % Event boundaries run from the first qualifying trough to the last trough
 % of at least min_cycles adjacent qualifying cycles. No additional generic
 % state-duration filter is applied.

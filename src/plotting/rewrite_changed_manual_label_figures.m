@@ -1,10 +1,12 @@
-function rewritten = rewrite_changed_manual_label_figures(data, baseline, resp_feat, spo2_feat, diagnostic_signals, event_sets, edit_info, config)
+function rewritten = rewrite_changed_manual_label_figures( ...
+    data, spo2_ref, session_reference, resp_feat, spo2_feat, ...
+    diagnostic_signals, event_sets, edit_info, config)
 % rewrite_changed_manual_label_figures
 % Overwrite changed diagnostics using config.fs master sample times.
 
     rewritten = {};
 
-    if nargin < 8 || isempty(edit_info) || ~isstruct(edit_info)
+    if nargin < 9 || isempty(edit_info) || ~isstruct(edit_info)
         return;
     end
     if ~isfield(edit_info, 'changed_fields') || isempty(edit_info.changed_fields)
@@ -27,7 +29,8 @@ function rewritten = rewrite_changed_manual_label_figures(data, baseline, resp_f
         end
 
         plot_final_manual_label_figure( ...
-            data, baseline, resp_feat, spo2_feat, diagnostic_signals, event_sets.(def.field), def, config);
+            data, spo2_ref, session_reference, resp_feat, spo2_feat, ...
+            diagnostic_signals, event_sets.(def.field), def, config);
         rewritten{end+1} = def.plot_name; %#ok<AGROW>
         fprintf('Rewrote manual-edited label figure: %s\n', def.plot_name);
     end
@@ -48,7 +51,9 @@ function tf = should_rewrite_label(config, def)
     end
 end
 
-function plot_final_manual_label_figure(data, baseline, resp_feat, spo2_feat, diagnostic_signals, events, def, config)
+function plot_final_manual_label_figure( ...
+    data, spo2_ref, session_reference, resp_feat, spo2_feat, ...
+    diagnostic_signals, events, def, config)
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
     end
@@ -72,7 +77,8 @@ function plot_final_manual_label_figure(data, baseline, resp_feat, spo2_feat, di
         'Resp-Diaphragm with final label intervals', 'Resp-Diaphragm');
 
     ax3 = nexttile(tl);
-    plot_spo2_panel(ax3, t_raw, data, baseline, spo2_feat, config, events);
+    plot_spo2_panel(ax3, t_raw, data, spo2_ref, session_reference, ...
+        spo2_feat, config, events);
 
     ax4 = nexttile(tl);
     plot_diagnostic_panel(ax4, diagnostic_signals, resp_feat, events, def, config);
@@ -103,7 +109,8 @@ function plot_signal_panel(ax, t_raw, data, idx, events, title_text, y_text)
     grid(ax, 'on');
 end
 
-function plot_spo2_panel(ax, t_raw, data, baseline, spo2_feat, config, events)
+function plot_spo2_panel( ...
+    ax, t_raw, data, spo2_ref, session_reference, spo2_feat, config, events)
     hold(ax, 'on');
     idx = [];
     if isfield(config, 'channels')
@@ -118,8 +125,10 @@ function plot_spo2_panel(ax, t_raw, data, baseline, spo2_feat, config, events)
             'Units', 'normalized', 'HorizontalAlignment', 'center');
     else
         plot(ax, t_raw, data(:, idx), 'k', 'DisplayName', 'SpO2');
-        if isfield(baseline, 'SpO2_median') && isfinite(baseline.SpO2_median)
-            yline(ax, baseline.SpO2_median, 'k--', 'Baseline', ...
+        shade_session_reference_on_axis( ...
+            ax, session_reference, 'common session-reference interval');
+        if isfield(spo2_ref, 'median_percent') && isfinite(spo2_ref.median_percent)
+            yline(ax, spo2_ref.median_percent, 'k--', 'Session reference', ...
                 'LabelHorizontalAlignment', 'left', 'HandleVisibility', 'off');
         end
         if isfield(config, 'spo2') && isfield(config.spo2, 'spo2_floor') && isfinite(config.spo2.spo2_floor)
@@ -203,8 +212,8 @@ function plot_diagnostic_panel(ax, diagnostic_signals, resp_feat, events, def, c
                 plotted = plot_async_metrics(ax, t, diagnostic_signals);
 
             case 'desat'
-                plotted = plot_metric(ax, t, diagnostic_signals, 'spo2_drop_from_baseline_percent', ...
-                    [0.00 0.35 0.85], 'SpO2 drop from baseline');
+                plotted = plot_metric(ax, t, diagnostic_signals, 'spo2_drop_from_reference_percent', ...
+                    [0.00 0.35 0.85], 'SpO2 drop from session reference');
                 if plotted && isfield(config, 'spo2')
                     yline_if_finite(ax, config.spo2.drop_thr, 'r--', 'Drop threshold');
                 end

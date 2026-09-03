@@ -1,22 +1,20 @@
-function [events, rea_metrics] = detect_respiratory_asynchrony(data, baseline_or_config, resp_feat, config)
+function [events, rea_metrics] = detect_respiratory_asynchrony( ...
+    data, session_reference, resp_feat, config)
 % detect_respiratory_asynchrony
 % Label 10 - Respiratory Asynchrony / Dyssynchrony.
 %
 % Uses the wavelet phase-coherence core from Tomislav's script, reduced to
 % the two respiratory belts. The time-localized phase coherence is averaged
-% over three frequency bins and compared against the subject baseline.
+% over three frequency bins and compared against independent reference
+% statistics estimated within the common session-reference interval.
 % low_coherence_mask is evidence at the wavelet-localized time point; it is
 % not a complete preceding fixed-duration state window. min_dur_sec is
 % therefore applied directly once to its contiguous low-coherence runs.
 % Local 20 Hz analysis is mapped back to config.fs master-grid events.
 
-    if nargin == 2
-        config = baseline_or_config;
-        resp_feat = [];
-    end
-
     events = empty_events();
-    rea_metrics = compute_respiratory_asynchrony_metrics(data, resp_feat, config);
+    rea_metrics = compute_respiratory_asynchrony_metrics( ...
+        data, resp_feat, session_reference, config);
 
     if ~rea_metrics.valid_analysis
         fprintf('Skipping async detection: %s\n', rea_skip_reason(rea_metrics.skip_code, rea_metrics.error_message));
@@ -58,7 +56,7 @@ function msg = rea_skip_reason(skip_code, error_message)
                 msg = ['wavelet coherence computation failed (' error_message ').'];
             end
         case 9
-            msg = 'no finite baseline-relative coherence evidence was available.';
+            msg = 'no finite session-reference-relative coherence evidence was available.';
         otherwise
             msg = 'input data do not support asynchrony computation.';
     end
@@ -86,18 +84,18 @@ function plot_respiratory_asynchrony(data, config, t_grid, rea_mask, rea_metrics
 
     ax3 = nexttile(tl);
     plot_coherence_panel(ax3, t_grid, rea_metrics.phase_coherence_high, rea_metrics.thresholds.high, ...
-        rea_metrics.baselines.high, rea_metrics.baseline_mask, rea_mask, ...
+        rea_metrics.references.high, rea_metrics.reference_mask, rea_mask, ...
         sprintf('High-frequency phase coherence (> %.3g Hz)', rea_metrics.mid_high_cut_hz), rea_metrics.plot_step_sec);
 
     ax4 = nexttile(tl);
     plot_coherence_panel(ax4, t_grid, rea_metrics.phase_coherence_mid, rea_metrics.thresholds.mid, ...
-        rea_metrics.baselines.mid, rea_metrics.baseline_mask, rea_mask, ...
+        rea_metrics.references.mid, rea_metrics.reference_mask, rea_mask, ...
         sprintf('Respiratory-band phase coherence (%.3g-%.3g Hz)', rea_metrics.low_mid_cut_hz, rea_metrics.mid_high_cut_hz), ...
         rea_metrics.plot_step_sec);
 
     ax5 = nexttile(tl);
     plot_coherence_panel(ax5, t_grid, rea_metrics.phase_coherence_low, rea_metrics.thresholds.low, ...
-        rea_metrics.baselines.low, rea_metrics.baseline_mask, rea_mask, ...
+        rea_metrics.references.low, rea_metrics.reference_mask, rea_mask, ...
         sprintf('Low-frequency phase coherence (< %.3g Hz)', rea_metrics.low_mid_cut_hz), rea_metrics.plot_step_sec);
 
     ax = [ax1 ax2 ax3 ax4 ax5];
@@ -136,23 +134,23 @@ function plot_raw_panel(ax, t_raw, data, idx, t_grid, rea_mask, title_text, y_te
     hold(ax, 'off');
 end
 
-function plot_coherence_panel(ax, t_grid, coherence, threshold, baseline_value, baseline_mask, rea_mask, title_text, plot_step_sec)
+function plot_coherence_panel(ax, t_grid, coherence, threshold, reference_value, reference_mask, rea_mask, title_text, plot_step_sec)
     held = held_median_trace(t_grid, coherence, plot_step_sec);
 
     ylim(ax, [0 1]);
     hold(ax, 'on');
-    shade_baseline_on_axis(ax, t_grid, baseline_mask);
+    shade_reference_on_axis(ax, t_grid, reference_mask);
     shade_mask_on_axis(ax, t_grid, rea_mask);
     h_raw = plot(ax, t_grid, coherence, 'Color', [0.70 0.70 0.70], ...
         'LineWidth', 0.8, 'DisplayName', 'raw coherence');
     h_held = stairs(ax, t_grid, held, 'b', 'LineWidth', 1.4, ...
         'DisplayName', sprintf('%g s held median', plot_step_sec));
 
-    if isfinite(baseline_value)
-        h_baseline = yline(ax, baseline_value, 'k--', ...
-            'DisplayName', 'baseline median');
+    if isfinite(reference_value)
+        h_reference = yline(ax, reference_value, 'k--', ...
+            'DisplayName', 'session reference median');
     else
-        h_baseline = gobjects(0);
+        h_reference = gobjects(0);
     end
     if isfinite(threshold)
         h_threshold = yline(ax, threshold, 'r--', ...
@@ -161,7 +159,7 @@ function plot_coherence_panel(ax, t_grid, coherence, threshold, baseline_value, 
         h_threshold = gobjects(0);
     end
 
-    legend_handles = [h_raw; h_held; h_baseline; h_threshold];
+    legend_handles = [h_raw; h_held; h_reference; h_threshold];
     legend_handles = legend_handles(isgraphics(legend_handles));
     legend_labels = get(legend_handles, 'DisplayName');
     if ischar(legend_labels) || isstring(legend_labels)
@@ -193,13 +191,13 @@ function held = held_median_trace(t_grid, values, step_sec)
     end
 end
 
-function shade_baseline_on_axis(ax, t_grid, baseline_mask)
-    if ~any(baseline_mask)
+function shade_reference_on_axis(ax, t_grid, reference_mask)
+    if ~any(reference_mask)
         return;
     end
 
     y_limits = ylim(ax);
-    d = diff([false; baseline_mask(:); false]);
+    d = diff([false; reference_mask(:); false]);
     starts = find(d == 1);
     ends = find(d == -1) - 1;
 

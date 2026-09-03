@@ -1,4 +1,5 @@
-function [events, diagnostics, review_info] = detect_sigh(data, phys_feat, resp_feat, baseline, spo2_feat, config)
+function [events, diagnostics, review_info] = detect_sigh( ...
+    data, phys_feat, resp_feat, spo2_ref, session_reference, spo2_feat, config)
 % detect_sigh
 % Label 7 – Sigh
 %
@@ -51,7 +52,7 @@ function [events, diagnostics, review_info] = detect_sigh(data, phys_feat, resp_
     ratio_prctile = 98;
     
     % New robust sigh criteria
-    min_abs_ratio = 1.8;      % sigh must be at least 1.8x local baseline
+    min_abs_ratio = 1.8;      % sigh must be at least 1.8x the whole-record amplitude reference
     iqr_k = 3.5;              % robust outlier threshold: median + iqr_k*IQR
     min_gap_sec = 20;         % avoid multiple nearby detections
     
@@ -125,7 +126,7 @@ function [events, diagnostics, review_info] = detect_sigh(data, phys_feat, resp_
     if manual_control && lungs_valid && diaph_valid
         [sigh_lungs, sigh_diaph, sigh_review_mask] = manual_edit_sigh_flags( ...
             data, resp_feat.lungs, resp_feat.diaph, sigh_lungs, sigh_diaph, ...
-            baseline, spo2_feat, config, manual_window_sec);
+            spo2_ref, session_reference, spo2_feat, config, manual_window_sec);
         review_info.reviewed = true;
         review_info.review_scope = 'explicitly_viewed_regions_sigh_breaths_both_belts';
         review_info.review_mask = sigh_review_mask;
@@ -200,7 +201,8 @@ function [events, diagnostics, review_info] = detect_sigh(data, phys_feat, resp_
         % Subplot 3: SpO2 + desaturation thresholds
         % ----------------------
         ax3 = subplot(3,1,3);
-        plot_spo2_diagnostic_panel(ax3, data, baseline, spo2_feat, config, 'SpO2 with desaturation thresholds');
+        plot_spo2_diagnostic_panel(ax3, data, spo2_ref, session_reference, ...
+            spo2_feat, config, 'SpO2 with desaturation thresholds');
     
         linkaxes([ax1 ax2 ax3], 'x');
         xlim(ax1, [0 t_grid(end)]);

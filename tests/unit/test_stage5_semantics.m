@@ -6,7 +6,7 @@ end
 function testEvidenceVersionAndCanonicalOrder(testCase)
     [data, resp_feat, resp_ref, spo2_feat, config] = physiological_fixture();
     phys = compute_physiological_features(data, resp_feat, resp_ref, spo2_feat, config);
-    verifyEqual(testCase, phys.version, 'independent_physiological_evidence_v2');
+    verifyEqual(testCase, phys.version, 'independent_physiological_evidence_v3');
     verifyEqual(testCase, {config.labels.short}, ...
         {'shallow', 'deep', 'slow', 'rapid', 'irregular', 'apnea', ...
          'sigh', 'csr', 'thoracic', 'async', 'desat'});
@@ -116,7 +116,9 @@ function testTenSecondApneaWindowDoesNotRequireTwentySeconds(testCase)
     lungs.apnea_amp_ratio_session_window_median(t == 20) = 0.05;
     diaph = empty_detector_belt(t);
     phys.resp = struct('time_sec', t, 'lungs', lungs, 'diaph', diaph);
-    [events, diagnostics] = detect_apnea(zeros(51, 6), phys, config);
+    session_reference = get_session_reference_interval(51, config);
+    [events, diagnostics] = detect_apnea( ...
+        zeros(51, 6), phys, session_reference, config);
     verifyNotEmpty(testCase, events);
     verifyEqual(testCase, events.start_t, 10);
     verifyLessThan(testCase, events.duration, 15);
@@ -318,7 +320,7 @@ function [burden, overlaps, evidence] = phenotype_fixture()
     evidence.thoracic = struct('median_ratio', 1.7, ...
         'median_log_ratio', log(1.7), 'median_relative_fraction', 1.7/2.7);
     evidence.async = struct('analysis_valid', true, ...
-        'baseline_coherence', struct('high', 0.8, 'mid', 0.8, 'low', 0.8), ...
+        'reference_coherence', struct('high', 0.8, 'mid', 0.8, 'low', 0.8), ...
         'median_observed_coherence', struct('high', 0.5, 'mid', 0.5, 'low', 0.5), ...
         'maximum_deviating_bins', 2);
 end

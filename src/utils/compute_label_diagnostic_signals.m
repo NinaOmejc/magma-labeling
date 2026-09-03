@@ -1,5 +1,5 @@
 function diagnostic_signals = compute_label_diagnostic_signals( ...
-    phys_feat, baseline, spo2_feat, config, rea_metrics, apnea_metrics, sigh_metrics, csr_metrics)
+    phys_feat, spo2_ref, spo2_feat, config, rea_metrics, apnea_metrics, sigh_metrics, csr_metrics)
 % compute_label_diagnostic_signals
 % Save detector-adjacent signals on the config.fs master recording timeline.
 
@@ -113,8 +113,8 @@ function diagnostic_signals = compute_label_diagnostic_signals( ...
     diagnostic_signals.thoracic_dominance_ratio_margin = ...
         balance.thoracic_to_abdominal_ratio - balance.dominance_ratio_threshold;
 
-    [diagnostic_signals.spo2_percent, diagnostic_signals.spo2_drop_from_baseline_percent] = ...
-        spo2_on_grid(spo2_feat, baseline, t_grid);
+    [diagnostic_signals.spo2_percent, diagnostic_signals.spo2_drop_from_reference_percent] = ...
+        spo2_on_grid(spo2_feat, spo2_ref, t_grid);
 
     if nargin < 5 || isempty(rea_metrics)
         error('MAGMA:Diagnostics:MissingReAMetrics', ...
@@ -129,6 +129,20 @@ function diagnostic_signals = compute_label_diagnostic_signals( ...
         diagnostic_signals.apnea_raw_flat_inferred_state = double(apnea_metrics.raw_flat_state_mask);
         diagnostic_signals.apnea_combined_state = double(apnea_metrics.combined_state_mask);
         diagnostic_signals.apnea_amp_ratio_threshold = apnea_metrics.amp_ratio_threshold;
+        if isfield(apnea_metrics, 'raw_flat')
+            diagnostic_signals.apnea_raw_lungs_reference_available = ...
+                double(apnea_metrics.raw_flat.lungs.reference_available);
+            diagnostic_signals.apnea_raw_diaph_reference_available = ...
+                double(apnea_metrics.raw_flat.diaph.reference_available);
+            diagnostic_signals.apnea_raw_lungs_session_motion_reference = ...
+                apnea_metrics.raw_flat.lungs.session_motion_reference;
+            diagnostic_signals.apnea_raw_diaph_session_motion_reference = ...
+                apnea_metrics.raw_flat.diaph.session_motion_reference;
+            diagnostic_signals.apnea_raw_lungs_session_slope_reference = ...
+                apnea_metrics.raw_flat.lungs.session_slope_reference;
+            diagnostic_signals.apnea_raw_diaph_session_slope_reference = ...
+                apnea_metrics.raw_flat.diaph.session_slope_reference;
+        end
     end
     if nargin >= 7 && isstruct(sigh_metrics) && isfield(sigh_metrics, 'available')
         diagnostic_signals.sigh_analysis_available = double(sigh_metrics.available);
@@ -188,7 +202,7 @@ function [metric, margin] = selected_for_belt(irregularity, metric_name, cov_thr
     end
 end
 
-function [spo2_grid, spo2_drop_grid] = spo2_on_grid(spo2_feat, baseline, t_grid)
+function [spo2_grid, spo2_drop_grid] = spo2_on_grid(spo2_feat, spo2_ref, t_grid)
     spo2_grid = nan(size(t_grid));
     spo2_drop_grid = nan(size(t_grid));
 
@@ -204,8 +218,8 @@ function [spo2_grid, spo2_drop_grid] = spo2_on_grid(spo2_feat, baseline, t_grid)
     end
 
     spo2_grid = interp1(t_spo2(valid), spo2(valid), t_grid, 'linear', nan);
-    if isfield(baseline, 'SpO2_median') && isfinite(baseline.SpO2_median)
-        spo2_drop_grid = baseline.SpO2_median - spo2_grid;
+    if isfield(spo2_ref, 'median_percent') && isfinite(spo2_ref.median_percent)
+        spo2_drop_grid = spo2_ref.median_percent - spo2_grid;
     end
 end
 
@@ -219,7 +233,7 @@ function diagnostic_signals = add_respiratory_asynchrony_diagnostics(diagnostic_
     diagnostic_signals.resp_asynchrony_mid_high_cut_hz = rea.mid_high_cut_hz;
     diagnostic_signals.resp_asynchrony_min_deviating_bins = rea.min_deviating_bins;
     diagnostic_signals.resp_asynchrony_min_abs_drop = rea.min_abs_drop;
-    diagnostic_signals.resp_asynchrony_baseline_mad_k = rea.baseline_mad_k;
+    diagnostic_signals.resp_asynchrony_reference_mad_k = rea.reference_mad_k;
 
     diagnostic_signals.resp_asynchrony_phase_coherence_high = rea.phase_coherence_high;
     diagnostic_signals.resp_asynchrony_phase_coherence_mid = rea.phase_coherence_mid;
@@ -235,11 +249,11 @@ function diagnostic_signals = add_respiratory_asynchrony_diagnostics(diagnostic_
             isfinite(rea.phase_coherence_mid) | ...
             isfinite(rea.phase_coherence_low));
     end
-    diagnostic_signals.resp_asynchrony_baseline_mask = double(rea.baseline_mask);
+    diagnostic_signals.resp_asynchrony_reference_mask = double(rea.reference_mask);
 
-    diagnostic_signals.resp_asynchrony_baseline_coherence_high = rea.baselines.high;
-    diagnostic_signals.resp_asynchrony_baseline_coherence_mid = rea.baselines.mid;
-    diagnostic_signals.resp_asynchrony_baseline_coherence_low = rea.baselines.low;
+    diagnostic_signals.resp_asynchrony_reference_coherence_high = rea.references.high;
+    diagnostic_signals.resp_asynchrony_reference_coherence_mid = rea.references.mid;
+    diagnostic_signals.resp_asynchrony_reference_coherence_low = rea.references.low;
     diagnostic_signals.resp_asynchrony_threshold_coherence_high = rea.thresholds.high;
     diagnostic_signals.resp_asynchrony_threshold_coherence_mid = rea.thresholds.mid;
     diagnostic_signals.resp_asynchrony_threshold_coherence_low = rea.thresholds.low;

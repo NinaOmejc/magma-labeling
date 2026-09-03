@@ -88,7 +88,7 @@ function summary = build_label_evidence_summary( ...
 
     rea = detector_diagnostics.respiratory_asynchrony;
     summary.async.analysis_valid = logical(rea.valid_analysis);
-    summary.async.baseline_coherence = rea.baselines;
+    summary.async.reference_coherence = rea.references;
     summary.async.thresholds = rea.thresholds;
     summary.async.median_observed_coherence = struct( ...
         'high', finite_median(rea.phase_coherence_high), ...
@@ -98,7 +98,8 @@ function summary = build_label_evidence_summary( ...
 
     summary.desat.median_spo2_percent = finite_median(diagnostic_signals.spo2_percent);
     summary.desat.minimum_spo2_percent = finite_min(diagnostic_signals.spo2_percent);
-    summary.desat.maximum_drop_percent = finite_max(diagnostic_signals.spo2_drop_from_baseline_percent);
+    summary.desat.maximum_drop_from_reference_percent = ...
+        finite_max(diagnostic_signals.spo2_drop_from_reference_percent);
     summary.desat.duration_sec = label_burden.by_label.desat.duration_sec;
     summary.desat.supporting_signal = 'SpO2';
 

@@ -75,7 +75,7 @@ end
 
 function data_out = clean_template_from_source(source_data, config)
 % Keep source ECG/BP columns and replace channels that drive the detectors
-% with clean baseline signals. This prevents accidental labels from the
+% with clean nominal signals. This prevents accidental labels from the
 % real source recording while preserving the original recording length.
     data_out = source_data;
     fs = config.fs;
@@ -90,13 +90,13 @@ function data_out = clean_template_from_source(source_data, config)
         data_out(:, idx_spo2) = 97 + 0.05 * sin(2 * pi * 0.01 * t);
     end
 
-    baseline_bpm = 12;
-    baseline_phase = 2 * pi * (baseline_bpm / 60) * t;
+    nominal_bpm = 12;
+    nominal_phase = 2 * pi * (nominal_bpm / 60) * t;
     if ~isempty(idx_lungs)
-        data_out(:, idx_lungs) = sin(baseline_phase);
+        data_out(:, idx_lungs) = sin(nominal_phase);
     end
     if ~isempty(idx_diaph)
-        data_out(:, idx_diaph) = 0.85 * sin(baseline_phase + 0.06);
+        data_out(:, idx_diaph) = 0.85 * sin(nominal_phase + 0.06);
     end
 end
 

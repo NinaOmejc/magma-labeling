@@ -1,11 +1,12 @@
-function resp_ref = compute_respiratory_reference(resp_feat, config)
+function resp_ref = compute_respiratory_reference(resp_feat, session_reference, config)
 % compute_respiratory_reference
-% Compute one fixed protocol/session reference per belt from reviewed breaths,
-% plus descriptive whole-record and Phase-2A stability diagnostics. Warning
-% categories retain the session value and never trigger automatic correction.
+% Compute one respiratory-excursion reference per belt from reviewed breaths
+% in the common session physiological reference interval. Whole-record and
+% stability diagnostics remain descriptive. Warnings retain the session
+% value and never trigger automatic correction.
 
     cfg = respiratory_reference_config(config);
-    [session_start_t, session_end_t] = session_reference_interval(config, cfg);
+    validate_session_reference(session_reference);
 
     lungs = get_belt_features(resp_feat, 'lungs');
     if is_lung_belt_ignored(config)
@@ -13,18 +14,15 @@ function resp_ref = compute_respiratory_reference(resp_feat, config)
     end
 
     resp_ref = struct();
-    resp_ref.session_interval = struct( ...
-        'start_t', session_start_t, ...
-        'end_t', session_end_t);
     resp_ref.default_warning_action = 'retain_data_no_correction';
-    resp_ref.lungs = analyze_belt(lungs, cfg, session_start_t, session_end_t);
+    resp_ref.lungs = analyze_belt(lungs, cfg, session_reference);
     resp_ref.diaph = analyze_belt( ...
-        get_belt_features(resp_feat, 'diaph'), cfg, session_start_t, session_end_t);
+        get_belt_features(resp_feat, 'diaph'), cfg, session_reference);
     resp_ref = add_belt_agreement(resp_ref, cfg);
 end
 
-function belt = analyze_belt(breaths, cfg, session_start_t, session_end_t)
-    belt = empty_belt_reference(session_start_t, session_end_t);
+function belt = analyze_belt(breaths, cfg, session_reference)
+    belt = empty_belt_reference();
     if isempty(breaths) || ~isstruct(breaths) || ...
             ~isfield(breaths, 'peak_t') || ~isfield(breaths, 'amp')
         return;
@@ -51,20 +49,34 @@ function belt = analyze_belt(breaths, cfg, session_start_t, session_end_t)
         belt.global.available = isfinite(belt.global.value) && belt.global.value > 0;
     end
 
-    in_session = valid_peak_t >= session_start_t & valid_peak_t <= session_end_t;
-    session_amp = valid_amp(in_session);
+    session_amp = [];
+    if session_reference.available
+        in_session = valid_peak_t >= session_reference.reference_start_t & ...
+            valid_peak_t < session_reference.reference_end_t;
+        session_amp = valid_amp(in_session);
+    end
     belt.session.n_breaths = numel(session_amp);
-    if belt.session.n_breaths >= cfg.session_min_breaths
+    if belt.session.n_breaths >= cfg.min_breaths
         belt.session.value = median(session_amp, 'omitnan');
         belt.session.available = isfinite(belt.session.value) && belt.session.value > 0;
     end
     if belt.session.available
-        belt.session.quality = 'good';
-        belt.reference_quality = 'good';
+        if session_reference.complete
+            belt.session.quality = 'good';
+            belt.reference_quality = 'good';
+        else
+            belt.session.quality = 'warning_truncated_interval';
+            belt.reference_quality = 'warning_truncated_interval';
+        end
     elseif belt.available
         belt.session.value = NaN;
-        belt.session.quality = 'insufficient_breaths';
-        belt.reference_quality = 'insufficient_breaths';
+        if session_reference.available
+            belt.session.quality = 'insufficient_breaths';
+            belt.reference_quality = 'insufficient_breaths';
+        else
+            belt.session.quality = 'reference_interval_unavailable';
+            belt.reference_quality = 'reference_interval_unavailable';
+        end
     end
     if belt.global.available && belt.session.available
         belt.global_to_session_ratio = belt.global.value / belt.session.value;
@@ -310,12 +322,10 @@ function breaths = get_belt_features(resp_feat, name)
     end
 end
 
-function belt = empty_belt_reference(session_start_t, session_end_t)
+function belt = empty_belt_reference()
     belt = struct( ...
         'available', false, ...
         'session', struct( ...
-            'start_t', session_start_t, ...
-            'end_t', session_end_t, ...
             'value', NaN, ...
             'n_breaths', 0, ...
             'available', false, ...
@@ -354,70 +364,58 @@ end
 
 function cfg = respiratory_reference_config(config)
     cfg = struct( ...
-        'session_pre_start_min', 2, ...
-        'session_pre_end_min', 7, ...
-        'session_post_start_min', 18, ...
-        'session_post_end_min', 23, ...
-        'session_min_breaths', 10, ...
+        'min_breaths', 10, ...
         'edge_window_sec', 300, ...
         'change_trigger_frac', 0.25, ...
         'min_segment_breaths', 12, ...
         'min_cost_improvement', 0.30);
-    if isfield(config, 'resp_ref')
-        names = fieldnames(cfg);
-        for i = 1:numel(names)
-            if isfield(config.resp_ref, names{i})
-                cfg.(names{i}) = config.resp_ref.(names{i});
+    if isfield(config, 'reference') && isstruct(config.reference)
+        if isfield(config.reference, 'resp_min_breaths')
+            cfg.min_breaths = config.reference.resp_min_breaths;
+        end
+        if isfield(config.reference, 'resp') && isstruct(config.reference.resp)
+            names = {'edge_window_sec', 'change_trigger_frac', ...
+                'min_segment_breaths', 'min_cost_improvement'};
+            for i = 1:numel(names)
+                if isfield(config.reference.resp, names{i})
+                    cfg.(names{i}) = config.reference.resp.(names{i});
+                end
             end
         end
     end
 
     if ~isscalar(cfg.edge_window_sec) || ~isfinite(cfg.edge_window_sec) || cfg.edge_window_sec <= 0
-        error('config.resp_ref.edge_window_sec must be positive and finite.');
+        error('config.reference.resp.edge_window_sec must be positive and finite.');
     end
-    validate_session_minutes(cfg.session_pre_start_min, cfg.session_pre_end_min, 'pre');
-    validate_session_minutes(cfg.session_post_start_min, cfg.session_post_end_min, 'post');
-    if ~isscalar(cfg.session_min_breaths) || ~isfinite(cfg.session_min_breaths) || ...
-            cfg.session_min_breaths < 1 || cfg.session_min_breaths ~= round(cfg.session_min_breaths)
-        error('config.resp_ref.session_min_breaths must be a positive integer.');
+    if ~isscalar(cfg.min_breaths) || ~isfinite(cfg.min_breaths) || ...
+            cfg.min_breaths < 1 || cfg.min_breaths ~= round(cfg.min_breaths)
+        error('config.reference.resp_min_breaths must be a positive integer.');
     end
     if ~isscalar(cfg.change_trigger_frac) || ~isfinite(cfg.change_trigger_frac) || cfg.change_trigger_frac <= 0
-        error('config.resp_ref.change_trigger_frac must be positive and finite.');
+        error('config.reference.resp.change_trigger_frac must be positive and finite.');
     end
     if ~isscalar(cfg.min_segment_breaths) || ~isfinite(cfg.min_segment_breaths) || ...
             cfg.min_segment_breaths < 3 || cfg.min_segment_breaths ~= round(cfg.min_segment_breaths)
-        error('config.resp_ref.min_segment_breaths must be an integer of at least 3.');
+        error('config.reference.resp.min_segment_breaths must be an integer of at least 3.');
     end
     if ~isscalar(cfg.min_cost_improvement) || ~isfinite(cfg.min_cost_improvement) || ...
             cfg.min_cost_improvement < 0 || cfg.min_cost_improvement > 1
-        error('config.resp_ref.min_cost_improvement must be between 0 and 1.');
+        error('config.reference.resp.min_cost_improvement must be between 0 and 1.');
     end
 end
 
-function [start_t, end_t] = session_reference_interval(config, cfg)
-    if ~isfield(config, 'measure') || ~isscalar(config.measure) || ~isfinite(config.measure)
-        error('MAGMA:RespReference:MissingMeasurement', ...
-            'config.measure is required to select the protocol/session reference interval.');
+function validate_session_reference(reference)
+    required = {'reference_start_idx', 'reference_end_idx', ...
+        'reference_start_t', 'reference_end_t', 'available', 'complete', ...
+        'reference_schema_version'};
+    if ~isstruct(reference) || ~isscalar(reference) || ...
+            ~all(isfield(reference, required))
+        error('MAGMA:RespReference:InvalidSessionReference', ...
+            'A resolved common session-reference interval is required.');
     end
-
-    switch config.measure
-        case {1, 3}
-            start_t = 60 * cfg.session_pre_start_min;
-            end_t = 60 * cfg.session_pre_end_min;
-        case {2, 4}
-            start_t = 60 * cfg.session_post_start_min;
-            end_t = 60 * cfg.session_post_end_min;
-        otherwise
-            error('MAGMA:RespReference:UnsupportedMeasurement', ...
-                'No protocol/session respiratory reference interval is defined for measurement %g.', ...
-                config.measure);
-    end
-end
-
-function validate_session_minutes(start_min, end_min, interval_name)
-    if ~isscalar(start_min) || ~isscalar(end_min) || ...
-            ~isfinite(start_min) || ~isfinite(end_min) || ...
-            start_min < 0 || end_min <= start_min
-        error('config.resp_ref session %s interval must have 0 <= start < end.', interval_name);
+    if ~strcmp(char(string(reference.reference_schema_version)), ...
+            'session_physiological_reference_v1')
+        error('MAGMA:RespReference:SchemaMismatch', ...
+            'Unsupported session-reference schema version.');
     end
 end

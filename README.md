@@ -82,7 +82,7 @@ Key settings are defined in `src/get_config.m`:
 - `config.make_figs_visible` — show/hide figures during batch processing
 - `config.detrend.*` — respiratory-belt detrending settings
 - `config.resp.*` — respiratory peak/trough extraction and breath-review settings
-- `config.resp_ref.*` — common session-reference interval and reference QC settings
+- `config.reference.*` — common session physiological-reference interval and modality-specific reference/QC settings
 - `config.ShB` / `config.DeB` — shallow/deep settings
 - `config.SlB` / `config.RaB` — slow/rapid settings
 - `config.IrB` — irregularity settings
@@ -95,6 +95,19 @@ Key settings are defined in `src/get_config.m`:
 - `config.LabelEdit.*` — final manual label-review settings
 
 The same reviewed respiratory peaks, troughs, amplitudes, inter-breath intervals, and respiratory rates are reused across detectors; individual labels do not redetect breaths.
+
+## Common Session Physiological Reference
+
+Each recording has one fixed three-minute temporal reference interval:
+
+- measurements M1 and M3: 3–6 min
+- measurements M2 and M4: 19–22 min
+
+The interval is resolved once on the native `config.fs` timeline. Its indices are inclusive and its times are half-open: `[reference_start_t, reference_end_t)`. If a recording ends within the requested interval, the available tail is explicitly marked as truncated; if it ends before the requested start, the reference interval is unavailable. The interval is never shifted to another part of the recording.
+
+Respiratory excursion, SpO2, respiratory-asynchrony coherence, and raw respiratory motion/slope each calculate their own statistic from this same interval. Sharing the time interval does not share a numerical normalization scale across modalities, and an unavailable statistic for one modality does not invalidate the others. Reference-quality warnings retain the data by default and do not trigger automatic correction, interval movement, or threshold tuning.
+
+Respiratory excursion is calculated independently for each usable belt as the median of finite positive reviewed breath excursions in the interval, with at least 10 qualifying breaths required. There is no whole-record fallback. The whole-record stability comparison remains descriptive respiratory QC and is not a second reference interval.
 
 ## Conditions for Detecting Individual Physiological Events
 
@@ -118,7 +131,7 @@ The thresholds below are operational research criteria and should not be interpr
 
 - **`thoracic`** — thoracic dominance is assessed from independently normalized thoracic and abdominal excursion. The operational condition is a 30-s thoracic-to-abdominal ratio `T/A >= 1.5`. Both belts are required. Because the measure is window-based, boundaries retain explicit temporal uncertainty.
 
-- **`async`** — thoracoabdominal asynchrony is assessed from time-localized wavelet phase coherence between the two belts. Respiratory signals are temporarily downsampled to 20 Hz for this analysis only. Sustained baseline-relative low-coherence evidence must persist for at least 30 s.
+- **`async`** — thoracoabdominal asynchrony is assessed from time-localized wavelet phase coherence between the two belts. Respiratory signals are temporarily downsampled to 20 Hz for this analysis only. Sustained session-reference-relative low-coherence evidence must persist for at least 30 s.
 
 - **`desat`** — SpO2 is `< 90%` or decreases by at least 3 percentage points from the valid session reference for at least 10 s.
 
@@ -187,7 +200,9 @@ The most important result fields include:
 - review coverage: `results.gold_review_mask`
 - label names and availability: `results.label_names`, `results.label_available`, `results.label_assessable_mask`
 - reviewed availability: `results.label_reviewed_available`, `results.label_reviewed_assessable_mask`
-- respiratory features/reference: `results.resp_feat`, `results.resp_ref`
+- common temporal reference: `results.session_reference`
+- modality-specific references: `results.resp_ref`, `results.spo2_ref`, plus ReA and raw-apnea reference provenance in `results.detector_diagnostics`
+- respiratory features: `results.resp_feat`
 - physiological evidence: `results.phys_feat`
 - event-boundary information: `results.event_boundary_info`
 - burden/overlap summaries
@@ -195,6 +210,8 @@ The most important result fields include:
 - full run configuration and input-channel provenance
 
 Additional detector diagnostics and intermediate evidence can be inspected directly in the saved `results` structure or in the HDF5 hierarchy.
+
+The HDF5 export schema is `magma_ml_hdf5_v2`. It stores the common metadata once under `/session_reference`, the independent respiratory-belt statistics under `/resp_reference`, and the SpO2 statistic under `/spo2_reference`. ReA and raw-apnea reference quality and statistics remain with their detector/physiological diagnostics. The MAT output preserves the same distinction.
 
 Group-level summaries are written under the `group_analysis/` output directory. `cohort_localized_boundary_qc.csv` preserves every localized-run duration and duration shortfall; `cohort_label_qc_summary.csv` aggregates rejected-run counts, medians, upper tails, maxima, and the smallest shortfall per label. These outputs are descriptive QC and never change thresholds automatically.
 

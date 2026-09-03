@@ -6,7 +6,7 @@ end
 function testStationaryAmplitudesUseSingleReference(testCase)
     config = reference_test_config();
     [t, amp] = stationary_series(120, 1.0, 0.04);
-    resp_ref = compute_respiratory_reference(make_resp_feat(t, amp, t, 0.8*amp), config);
+    resp_ref = compute_test_reference(make_resp_feat(t, amp, t, 0.8*amp), config);
 
     verifyFalse(testCase, resp_ref.lungs.change_detected);
     verifyEqual(testCase, resp_ref.lungs.mode, 'single');
@@ -19,7 +19,7 @@ end
 function testClearDownwardStepIsDetected(testCase)
     config = reference_test_config();
     [t, amp] = step_series(120, 60, 1.0, 0.55);
-    resp_ref = compute_respiratory_reference(make_resp_feat(t, amp, [], []), config);
+    resp_ref = compute_test_reference(make_resp_feat(t, amp, [], []), config);
     belt = resp_ref.lungs;
 
     verifyTrue(testCase, belt.change_detected);
@@ -27,13 +27,14 @@ function testClearDownwardStepIsDetected(testCase)
     verifyLessThanOrEqual(testCase, abs(belt.change_breath_idx - 61), 1);
     verifyLessThanOrEqual(testCase, abs(belt.change_t - t(61)), 3);
     verifyEqual(testCase, belt.change_ratio, 0.55, 'AbsTol', 0.06);
-    verifyGreaterThan(testCase, belt.cost_improvement, config.resp_ref.min_cost_improvement);
+    verifyGreaterThan(testCase, belt.cost_improvement, ...
+        config.reference.resp.min_cost_improvement);
 end
 
 function testClearUpwardStepIsDetected(testCase)
     config = reference_test_config();
     [t, amp] = step_series(120, 60, 0.65, 1.25);
-    resp_ref = compute_respiratory_reference(make_resp_feat(t, amp, [], []), config);
+    resp_ref = compute_test_reference(make_resp_feat(t, amp, [], []), config);
     belt = resp_ref.lungs;
 
     verifyTrue(testCase, belt.change_detected);
@@ -48,10 +49,11 @@ function testNoisyStationaryAmplitudesDoNotFalseTrigger(testCase)
     t = (0:119)' * 3;
     k = (1:120)';
     amp = 1 + 0.10*sin(0.73*k) + 0.05*cos(0.31*k);
-    resp_ref = compute_respiratory_reference(make_resp_feat(t, amp, [], []), config);
+    resp_ref = compute_test_reference(make_resp_feat(t, amp, [], []), config);
 
     verifyFalse(testCase, resp_ref.lungs.change_detected);
-    verifyLessThan(testCase, resp_ref.lungs.edge_change_frac, config.resp_ref.change_trigger_frac);
+    verifyLessThan(testCase, resp_ref.lungs.edge_change_frac, ...
+        config.reference.resp.change_trigger_frac);
     verifyEqual(testCase, resp_ref.lungs.quality, 'good');
 end
 
@@ -60,7 +62,7 @@ function testGradualDriftIsNotAcceptedAsSharpStep(testCase)
     t = (0:139)' * 3;
     k = (1:140)';
     amp = linspace(1.0, 0.50, 140)' .* (1 + 0.01*sin(0.6*k));
-    resp_ref = compute_respiratory_reference(make_resp_feat(t, amp, [], []), config);
+    resp_ref = compute_test_reference(make_resp_feat(t, amp, [], []), config);
     belt = resp_ref.lungs;
 
     verifyTrue(testCase, belt.edge_change_triggered);
@@ -74,7 +76,7 @@ function testTooFewBreathsReturnsInsufficientData(testCase)
     config = reference_test_config();
     t = (0:14)' * 3;
     amp = ones(size(t));
-    resp_ref = compute_respiratory_reference(make_resp_feat(t, amp, [], []), config);
+    resp_ref = compute_test_reference(make_resp_feat(t, amp, [], []), config);
 
     verifyTrue(testCase, resp_ref.lungs.available);
     verifyFalse(testCase, resp_ref.lungs.change_detected);
@@ -89,7 +91,7 @@ function testBrokenLungBeltLeavesDiaphragmAnalyzable(testCase)
     config.problems.missing_lung_belt = [1 1];
     [t, lungs_amp] = step_series(120, 60, 1.0, 0.5);
     [~, diaph_amp] = step_series(120, 60, 0.8, 1.2);
-    resp_ref = compute_respiratory_reference( ...
+    resp_ref = compute_test_reference( ...
         make_resp_feat(t, lungs_amp, t, diaph_amp), config);
 
     verifyFalse(testCase, resp_ref.lungs.available);
@@ -102,7 +104,7 @@ function testMatchingBeltChangesAreSummarizedAsSimilar(testCase)
     config = reference_test_config();
     [t, lungs_amp] = step_series(140, 70, 1.0, 0.55);
     [~, diaph_amp] = step_series(140, 70, 0.8, 0.46);
-    resp_ref = compute_respiratory_reference( ...
+    resp_ref = compute_test_reference( ...
         make_resp_feat(t, lungs_amp, t, diaph_amp), config);
 
     verifyTrue(testCase, resp_ref.lungs.change_detected);
@@ -116,25 +118,25 @@ function testDifferentBeltChangeTimesAreSummarizedAsDifferent(testCase)
     config = reference_test_config();
     [t, lungs_amp] = step_series(180, 60, 1.0, 0.55);
     [~, diaph_amp] = step_series(180, 120, 0.8, 0.44);
-    resp_ref = compute_respiratory_reference( ...
+    resp_ref = compute_test_reference( ...
         make_resp_feat(t, lungs_amp, t, diaph_amp), config);
 
     verifyEqual(testCase, resp_ref.change_pattern, 'both_different');
     verifyGreaterThan(testCase, resp_ref.change_time_difference_sec, ...
-        0.25 * config.resp_ref.edge_window_sec);
+        0.25 * config.reference.resp.edge_window_sec);
     verifyEqual(testCase, resp_ref.agreement_quality, 'belt_disagreement');
 end
 
 function testSuppliedBreathValuesAreUsedDirectly(testCase)
     config = reference_test_config();
     config = rmfield(config, 'resp');
-    config.resp_ref.min_segment_breaths = 5;
-    config.resp_ref.edge_window_sec = 45;
+    config.reference.resp.min_segment_breaths = 5;
+    config.reference.resp.edge_window_sec = 45;
     t = (0:59)' * 7.3;
     amp = [2*ones(30,1); ones(30,1)];
     amp(5) = NaN;
     amp(10) = 0;
-    resp_ref = compute_respiratory_reference(make_resp_feat(t, amp, [], []), config);
+    resp_ref = compute_test_reference(make_resp_feat(t, amp, [], []), config);
 
     verifyEqual(testCase, resp_ref.lungs.n_input_breaths, 60);
     verifyEqual(testCase, resp_ref.lungs.n_valid_breaths, 58);
@@ -151,12 +153,13 @@ function testDiagnosticPlotUsesRepositorySaveConvention(testCase)
     cleanup_dir = onCleanup(@() rmdir(output_dir, 's'));
     config = reference_test_config();
     config.sub_results_path = output_dir;
-    config.resp_ref.do_plot = true;
+    config.reference.do_plot = true;
     [t, amp] = step_series(120, 60, 1.0, 0.55);
     resp_feat = make_resp_feat(t, amp, t, 0.8*amp);
-    resp_ref = compute_respiratory_reference(resp_feat, config);
+    session_reference = make_session_interval(config);
+    resp_ref = compute_respiratory_reference(resp_feat, session_reference, config);
 
-    plot_respiratory_reference(resp_feat, resp_ref, config);
+    plot_respiratory_reference(resp_feat, resp_ref, session_reference, config);
 
     expected_file = fullfile(output_dir, ...
         sprintf('Sub%d_M%d_respiratory_reference.png', config.subject, config.measure));
@@ -166,11 +169,22 @@ end
 
 function config = reference_test_config()
     config = make_test_config();
-    config.resp_ref.edge_window_sec = 300;
-    config.resp_ref.change_trigger_frac = 0.25;
-    config.resp_ref.min_segment_breaths = 12;
-    config.resp_ref.min_cost_improvement = 0.30;
-    config.resp_ref.do_plot = false;
+    config.reference.resp.edge_window_sec = 300;
+    config.reference.resp.change_trigger_frac = 0.25;
+    config.reference.resp.min_segment_breaths = 12;
+    config.reference.resp.min_cost_improvement = 0.30;
+    config.reference.do_plot = false;
+end
+
+function resp_ref = compute_test_reference(resp_feat, config)
+    session_reference = make_session_interval(config);
+    resp_ref = compute_respiratory_reference( ...
+        resp_feat, session_reference, config);
+end
+
+function session_reference = make_session_interval(config)
+    N = round(1501 * config.fs);
+    session_reference = get_session_reference_interval(N, config);
 end
 
 function [t, amp] = stationary_series(n, level, noise_scale)

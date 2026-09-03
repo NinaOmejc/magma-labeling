@@ -1,6 +1,8 @@
-function spo2_feat = extract_spo2_features(data, baseline, config)
+function spo2_feat = extract_spo2_features(data, spo2_ref, config)
 % extract_spo2_features
-% Extracts SpO2 on the config.fs master timeline and detects Label 11 events.
+% Extract SpO2 on the config.fs master timeline and detect Label 11 events
+% relative to the modality-specific statistic from the common session
+% physiological reference interval.
 
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
@@ -9,7 +11,8 @@ function spo2_feat = extract_spo2_features(data, baseline, config)
     spo2_feat = struct();
     spo2_feat.idx_spo2 = config.channels.spo2_idx;
     spo2_feat.signal_available = false;
-    spo2_feat.baseline_available = false;
+    spo2_feat.reference_available = false;
+    spo2_feat.reference_quality = 'not_evaluated';
     spo2_feat.detection_available = false;
 
     if isempty(spo2_feat.idx_spo2)
@@ -23,10 +26,14 @@ function spo2_feat = extract_spo2_features(data, baseline, config)
     spo2_feat.spo2 = data(:, spo2_feat.idx_spo2);
     spo2_feat.t_spo2 = (0:numel(spo2_feat.spo2)-1) / config.fs;
     spo2_feat.signal_available = nnz(isfinite(spo2_feat.spo2)) >= 2;
-    spo2_feat.baseline_available = isfield(baseline, 'SpO2_median') && ...
-        isfinite(baseline.SpO2_median);
+    spo2_feat.reference_available = isstruct(spo2_ref) && ...
+        isfield(spo2_ref, 'available') && logical(spo2_ref.available) && ...
+        isfield(spo2_ref, 'median_percent') && isfinite(spo2_ref.median_percent);
+    if isstruct(spo2_ref) && isfield(spo2_ref, 'quality')
+        spo2_feat.reference_quality = char(string(spo2_ref.quality));
+    end
     spo2_feat.detection_available = spo2_feat.signal_available && ...
-        spo2_feat.baseline_available;
+        spo2_feat.reference_available;
 
     if ~spo2_feat.detection_available
         spo2_feat.desat_events = empty_events();
@@ -45,7 +52,8 @@ function spo2_feat = extract_spo2_features(data, baseline, config)
     end
 
     spo2_feat.desat_events = detect_desaturation_events( ...
-        spo2_feat.spo2, baseline.SpO2_median, config.fs, floor_thr, drop_thr, min_dur_sec);
+        spo2_feat.spo2, spo2_ref.median_percent, config.fs, ...
+        floor_thr, drop_thr, min_dur_sec);
 
     spo2_feat.is_desat_samples = events_to_sample_mask( ...
         spo2_feat.desat_events, numel(spo2_feat.spo2), config.fs);

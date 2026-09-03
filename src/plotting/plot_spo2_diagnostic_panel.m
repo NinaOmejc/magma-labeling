@@ -1,11 +1,13 @@
-function h = plot_spo2_diagnostic_panel(ax, data, baseline, spo2_feat, config, title_text)
+function h = plot_spo2_diagnostic_panel( ...
+    ax, data, spo2_ref, session_reference, spo2_feat, config, title_text)
 % plot_spo2_diagnostic_panel
-% Shared SpO2 panel using config.fs master sample times.
+% Shared SpO2 panel using the common session-reference interval and its
+% independently estimated SpO2 reference statistic.
 
     if nargin < 1 || isempty(ax)
         ax = gca;
     end
-    if nargin < 6 || isempty(title_text)
+    if nargin < 7 || isempty(title_text)
         title_text = 'SpO2';
     end
 
@@ -29,18 +31,20 @@ function h = plot_spo2_diagnostic_panel(ax, data, baseline, spo2_feat, config, t
     floor_thr = get_config_value(config, 'spo2', 'spo2_floor', 90);
     drop_thr = get_config_value(config, 'spo2', 'drop_thr', 3);
 
-    set_spo2_limits(ax, spo2, baseline, floor_thr, drop_thr);
-    h.baseline_window = shade_static_baseline_on_axis(ax, baseline, 'baseline window');
+    set_spo2_limits(ax, spo2, spo2_ref, floor_thr, drop_thr);
+    h.reference_window = shade_session_reference_on_axis( ...
+        ax, session_reference, 'common session-reference interval');
     h.spo2 = plot(ax, t_spo2, spo2, 'k', 'DisplayName', 'SpO2');
 
-    if isstruct(baseline) && isfield(baseline, 'SpO2_median') && isfinite(baseline.SpO2_median)
-        h.baseline = yline(ax, baseline.SpO2_median, 'k--', ...
-            'DisplayName', 'baseline median');
-        h.baseline_drop = yline(ax, baseline.SpO2_median - drop_thr, 'g--', ...
-            'DisplayName', sprintf('baseline - %g', drop_thr));
+    if isstruct(spo2_ref) && isfield(spo2_ref, 'median_percent') && ...
+            isfinite(spo2_ref.median_percent)
+        h.reference = yline(ax, spo2_ref.median_percent, 'k--', ...
+            'DisplayName', 'session SpO2 reference median');
+        h.reference_drop = yline(ax, spo2_ref.median_percent - drop_thr, 'g--', ...
+            'DisplayName', sprintf('session reference - %g', drop_thr));
     else
-        h.baseline = gobjects(0);
-        h.baseline_drop = gobjects(0);
+        h.reference = gobjects(0);
+        h.reference_drop = gobjects(0);
     end
 
     h.floor = yline(ax, floor_thr, 'r--', ...
@@ -74,7 +78,6 @@ function [t_spo2, spo2] = get_spo2_trace(data, spo2_feat, config)
         return;
     end
 
-    idx_spo2 = [];
     if isfield(config, 'channels') && isfield(config.channels, 'spo2_idx')
         idx_spo2 = config.channels.spo2_idx;
     else
@@ -96,11 +99,13 @@ function [t_spo2, spo2] = get_spo2_trace(data, spo2_feat, config)
     t_spo2 = (0:numel(spo2)-1)' / config.fs;
 end
 
-function set_spo2_limits(ax, spo2, baseline, floor_thr, drop_thr)
+function set_spo2_limits(ax, spo2, spo2_ref, floor_thr, drop_thr)
     values = spo2(isfinite(spo2));
     values = [values; floor_thr; 89; 100];
-    if isstruct(baseline) && isfield(baseline, 'SpO2_median') && isfinite(baseline.SpO2_median)
-        values = [values; baseline.SpO2_median; baseline.SpO2_median - drop_thr]; %#ok<AGROW>
+    if isstruct(spo2_ref) && isfield(spo2_ref, 'median_percent') && ...
+            isfinite(spo2_ref.median_percent)
+        values = [values; spo2_ref.median_percent; ...
+            spo2_ref.median_percent - drop_thr];
     end
 
     y0 = min(values, [], 'omitnan');
@@ -117,10 +122,10 @@ end
 function add_spo2_legend(ax, h)
     handles = gobjects(0);
     if isfield(h, 'spo2'), handles(end+1,1) = h.spo2; end
-    if isfield(h, 'baseline'), handles = append_graphics_handle(handles, h.baseline); end
-    if isfield(h, 'baseline_drop'), handles = append_graphics_handle(handles, h.baseline_drop); end
+    if isfield(h, 'reference'), handles = append_graphics_handle(handles, h.reference); end
+    if isfield(h, 'reference_drop'), handles = append_graphics_handle(handles, h.reference_drop); end
     if isfield(h, 'floor'), handles = append_graphics_handle(handles, h.floor); end
-    if isfield(h, 'baseline_window'), handles = append_graphics_handle(handles, h.baseline_window); end
+    if isfield(h, 'reference_window'), handles = append_graphics_handle(handles, h.reference_window); end
     if isfield(h, 'desat_events'), handles = append_graphics_handle(handles, h.desat_events); end
 
     handles = handles(isgraphics(handles));

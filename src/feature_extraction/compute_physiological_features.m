@@ -14,15 +14,15 @@ function phys_feat = compute_physiological_features(data, resp_feat, resp_ref, s
     cfg = evidence_config(config);
 
     phys_feat = struct();
-    phys_feat.version = 'independent_physiological_evidence_v2';
+    phys_feat.version = 'independent_physiological_evidence_v3';
     phys_feat.provenance = struct( ...
         'breath_source', 'reviewed_resp_feat', ...
         'respiratory_reference_source', 'resp_ref', ...
         'spo2_source', 'spo2_feat', ...
+        'reference_interval_source', 'common_session_reference_interval', ...
         'redetected_respiratory_peaks', false, ...
-        'version_changes', ['v2: independent 11-label evidence, deep-amplitude ' ...
-            'and thoracoabdominal-balance evidence, and explicit analysis-window ' ...
-            'endpoint versus inferred-state semantics']);
+        'version_changes', ['v3: independent 11-label evidence with one common ' ...
+            'session-reference interval and modality-specific reference statistics']);
 
     phys_feat.resp = struct();
     phys_feat.resp.time_sec = t_grid;
@@ -167,7 +167,8 @@ function spo2 = build_spo2_evidence(spo2_feat)
     spo2 = struct( ...
         'available', false, ...
         'signal_available', false, ...
-        'baseline_available', false, ...
+        'reference_available', false, ...
+        'reference_quality', 'not_evaluated', ...
         'desaturation_events', empty_events());
     if ~isstruct(spo2_feat)
         return;
@@ -179,16 +180,16 @@ function spo2 = build_spo2_evidence(spo2_feat)
     if isfield(spo2_feat, 'signal_available')
         spo2.signal_available = logical(spo2_feat.signal_available);
     end
-    if isfield(spo2_feat, 'baseline_available')
-        spo2.baseline_available = logical(spo2_feat.baseline_available);
+    if isfield(spo2_feat, 'reference_available')
+        spo2.reference_available = logical(spo2_feat.reference_available);
+    end
+    if isfield(spo2_feat, 'reference_quality')
+        spo2.reference_quality = char(string(spo2_feat.reference_quality));
     end
     if isfield(spo2_feat, 'detection_available')
         spo2.available = logical(spo2_feat.detection_available);
     else
-        % Compatibility for tests/older callers that only provide extracted
-        % samples: signal evidence is visible, but no baseline claim is made.
-        spo2.available = spo2.signal_available;
-        spo2.baseline_available = spo2.signal_available;
+        spo2.available = false;
     end
     if isfield(spo2_feat, 'desat_events')
         spo2.desaturation_events = spo2_feat.desat_events;

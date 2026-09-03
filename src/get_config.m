@@ -34,10 +34,6 @@ function config = get_config()
         (1:20)', ones(20, 1); ...
         (1:20)', 2 * ones(20, 1)];
 
-    %---- STATIC SPO2 / LABEL-SPECIFIC BASELINE SETTINGS ----
-    config.baseline_sec = 60;           % static interval length for SpO2 and label-specific safeguards (not respiratory amplitude normalization)
-    config.baseline_location = '5/20';  % 'first', 'second', '5/20', or 'last'; '5/20' uses minute 5 for M1/M3 and minute 20 for M2/M4
-
     %---- RESPIRATION / BREATHING AMPLITUDE EXTRACTION SETTINGS ----
     config.resp.min_peak_dist_sec = 1.0;    % *** Peak selection; min time between breaths (tune if needed)
     config.resp.min_peak_prom     = 0.2;    % *** Peak selection; key knob: increase to reduce extra peaks. But then this alters also apnea detection, where the amplitudes are extremely small. Trade-off...
@@ -63,24 +59,30 @@ function config = get_config()
     config.resp.manual_window_sec = 300;        % visible time span for manual breath GUI scrolling
     config.resp.manual_peak_search_sec = 1.0;   % add peak at local maximum within this window around the click
 
-    %---- RESPIRATORY AMPLITUDE REFERENCE ----
-    % One fixed, per-belt session reference normalizes amplitude-dependent
-    % detectors. Stability findings are descriptive QC warnings only: the
-    % default action is to retain the data without correction.
-    config.resp_ref.session_pre_start_min = 2;   % M1/M3 protocol reference interval start
-    config.resp_ref.session_pre_end_min = 7;     % M1/M3 protocol reference interval end
-    config.resp_ref.session_post_start_min = 18; % M2/M4 protocol reference interval start
-    config.resp_ref.session_post_end_min = 23;   % M2/M4 protocol reference interval end
-    config.resp_ref.session_min_breaths = 10;    % minimum reviewed, finite positive breaths required per belt
-    config.resp_ref.edge_window_sec = 300;       % early/late comparison window, capped at one quarter of short recordings
-    config.resp_ref.change_trigger_frac = 0.25; % symmetric fractional edge-level difference that triggers one-step inspection
-    config.resp_ref.min_segment_breaths = 12;   % minimum valid breaths on each side of a candidate split
-    config.resp_ref.min_cost_improvement = 0.30;% minimum robust L1 cost improvement for a two-level candidate
-    config.resp_ref.do_plot = true;             % save one diagnostic respiratory-reference figure
+    %---- SESSION PHYSIOLOGICAL REFERENCE ----
+    % One fixed reference time interval per recording supplies independent
+    % modality-specific reference statistics. It never supplies one shared
+    % numeric normalization value across modalities.
+    config.reference.pre_start_min = 3;          % M1/M3 common reference start
+    config.reference.pre_end_min = 6;            % M1/M3 common reference end
+    config.reference.post_start_min = 19;        % M2/M4 common reference start
+    config.reference.post_end_min = 22;          % M2/M4 common reference end
+    config.reference.resp_min_breaths = 10;      % reviewed finite positive breaths required per belt
+    config.reference.spo2_min_valid_samples = 2; % finite SpO2 samples required for a reference statistic
+    config.reference.do_plot = true;             % save respiratory-reference QC figure
+
+    % Respiratory whole-record stability QC is descriptive. Its 300-s edge
+    % window compares early/late recording stability and is intentionally
+    % distinct from the three-minute session reference interval. Warnings
+    % retain data and never trigger automatic correction.
+    config.reference.resp.edge_window_sec = 300;
+    config.reference.resp.change_trigger_frac = 0.25;
+    config.reference.resp.min_segment_breaths = 12;
+    config.reference.resp.min_cost_improvement = 0.30;
         
     %---- SPO2 / DESATURATION FEATURE EXTRACTION
     config.spo2.spo2_floor  = 90;   % absolute threshold (%) if spo2 goes below, its considered desaturation
-    config.spo2.drop_thr    = 3;    % relative drop threshold (% points). if the spo2 decreases for more than "drop_thr %" from the baseline, its considered desaturation
+    config.spo2.drop_thr    = 3;    % relative drop threshold (percentage points) from the session SpO2 reference
     config.spo2.min_dur_sec = 10;   % episode duration (seconds)
     config.spo2.desat_association_delay_sec = 5; % downstream overlap/association allowance for pulse-ox lag; never modifies respiratory labels
 
@@ -89,8 +91,8 @@ function config = get_config()
 
     %---- LABEL 1 - ShB - DETECTION SETTINGS 
     config.ShB = struct();                  % shallow breathing settings
-    config.ShB.amp_ratio_low    = 0.65;     % lower amplitude ratio bound for shallow breaths (35 % decreased from baseline)
-    config.ShB.amp_ratio_high   = 0.80;     % upper amplitude ratio bound for shallow breaths (20 % decreased from baseline)
+    config.ShB.amp_ratio_low    = 0.65;     % lower amplitude ratio bound relative to the per-belt session reference
+    config.ShB.amp_ratio_high   = 0.80;     % upper amplitude ratio bound relative to the per-belt session reference
     config.ShB.analysis_win_sec = 30;       % trailing breath-amplitude analysis window
     config.ShB.min_dur_sec      = 30;       % minimum final localized shallow-state duration
     config.ShB.do_plot           = true;    % save shallow breathing diagnostic plot
@@ -134,7 +136,7 @@ function config = get_config()
 
     %---- LABEL 6 - apnea - DETECTION SETTINGS
     config.Apn = struct();                  % apnea settings
-    config.Apn.amp_ratio_thr    = 0.10;     % <=10% of baseline in BOTH belts (if only one belt is working, then consider only one)
+    config.Apn.amp_ratio_thr    = 0.10;     % <=10% of each usable belt's session excursion reference
     config.Apn.amp_analysis_win_sec = 10;   % trailing normalized-amplitude evidence window
     config.Apn.min_dur_sec      = 10;       % minimum inferred low-motion/pause-state duration
     config.Apn.raw_flat_enabled = true;     % optional second apnea detector based directly on raw belt flatness/low motion, independent of detected breath peaks
@@ -202,8 +204,8 @@ function config = get_config()
     config.ReA.fmax = 2.0;                  % upper WT frequency bound from Tomislav's script
     config.ReA.tlphcoh_cycles = 10;         % time-localized phase coherence window in cycles
     config.ReA.min_dur_sec = 30;            % sustained low-coherence deviation duration
-    config.ReA.baseline_mad_k = 3;          % robust spread multiplier for baseline-relative threshold
-    config.ReA.min_abs_drop = 0.15;         % minimum coherence drop from baseline median
+    config.ReA.reference_mad_k = 3;         % robust spread multiplier for session-reference-relative threshold
+    config.ReA.min_abs_drop = 0.15;         % minimum coherence drop from session reference median
     config.ReA.min_deviating_bins = 1;      % number of frequency bins that must deviate
     config.ReA.plot_step_sec = 5;           % display coherence as held medians at this step (in seconds)
     config.ReA.do_plot          = true;     % save respiratory asynchrony diagnostic plot
@@ -232,7 +234,7 @@ function config = get_config()
     % numeric/text datasets on the same native 200-Hz master timeline.
     config.HDF5 = struct();
     config.HDF5.enabled = true;
-    config.HDF5.export_schema_version = 'magma_ml_hdf5_v1';
+    config.HDF5.export_schema_version = 'magma_ml_hdf5_v2';
     config.HDF5.filename_suffix = '_labels.h5';
     config.HDF5.upstream_input_preprocessing = ...
         'external / not fully documented';

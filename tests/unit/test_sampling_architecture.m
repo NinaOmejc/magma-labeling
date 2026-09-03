@@ -89,7 +89,9 @@ function testBrokenLungBeltPreservesMasterIndexing(testCase)
 
     data = preprocess_data(data_raw, config);
     resp_feat = extract_respiration_features(data, config);
-    rea = compute_respiratory_asynchrony_metrics(data, resp_feat, config);
+    session_reference = get_session_reference_interval(size(data,1), config);
+    rea = compute_respiratory_asynchrony_metrics( ...
+        data, resp_feat, session_reference, config);
 
     verifySize(testCase, data, size(data_raw));
     verifyFalse(testCase, resp_feat.lungs.ok);
