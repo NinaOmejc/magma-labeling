@@ -82,16 +82,17 @@ end
 
 function testShortLocalizedRunsRemainQcOnlyForAllFourStates(testCase)
     config = stage6_config();
-    t = (0:60)';
-    candidate_state = t <= 30;
-    N = 610;
+    t = (0:90)';
+    amplitude_candidate_state = t <= 30;
+    rate_candidate_state = t <= 60;
+    N = 910;
 
     amplitude_belt = rate_belt(t, (1:2:27)');
     amplitude_belt.session_amplitude_available = true;
     amplitude_belt.amp_ratio_session = 0.70 * ones(size(amplitude_belt.peak_t));
-    amplitude_belt.shallow_amplitude_mask = candidate_state;
+    amplitude_belt.shallow_amplitude_mask = amplitude_candidate_state;
     amplitude_belt.shallow_amplitude_endpoint_mask = t == 30;
-    amplitude_belt.deep_amplitude_mask = candidate_state;
+    amplitude_belt.deep_amplitude_mask = amplitude_candidate_state;
     amplitude_belt.deep_amplitude_endpoint_mask = t == 30;
     phys = rate_phys(t, amplitude_belt);
     [shallow, shallow_info] = detect_shallow_breathing(zeros(N,6), phys, config);
@@ -100,16 +101,16 @@ function testShortLocalizedRunsRemainQcOnlyForAllFourStates(testCase)
     [deep, deep_info] = detect_deep_breathing(zeros(N,6), phys, config);
 
     rapid_belt = rate_belt(t, (1:2:29)');
-    rapid_belt.rate_rapid_window_bpm(t == 30) = 25;
-    rapid_belt.rate_rapid_endpoint_mask = t == 30;
-    rapid_belt.rate_rapid_state_mask = candidate_state;
+    rapid_belt.rate_rapid_window_bpm(t == 60) = 25;
+    rapid_belt.rate_rapid_endpoint_mask = t == 60;
+    rapid_belt.rate_rapid_state_mask = rate_candidate_state;
     [rapid, rapid_info] = detect_rapid_breathing( ...
         zeros(N,6), rate_phys(t, rapid_belt), config);
 
     slow_belt = rate_belt(t, (1:6:25)');
-    slow_belt.rate_slow_window_bpm(t == 30) = 8;
-    slow_belt.rate_slow_endpoint_mask = t == 30;
-    slow_belt.rate_slow_state_mask = candidate_state;
+    slow_belt.rate_slow_window_bpm(t == 60) = 8;
+    slow_belt.rate_slow_endpoint_mask = t == 60;
+    slow_belt.rate_slow_state_mask = rate_candidate_state;
     [slow, slow_info] = detect_slow_breathing( ...
         zeros(N,6), rate_phys(t, slow_belt), config);
 
@@ -155,12 +156,12 @@ function testRapidNearMissPlotIsSavedWithoutFinalEvent(testCase)
     config = stage6_config();
     config.sub_results_path = output_dir;
     config.RaB.do_plot = true;
-    t = (0:60)';
+    t = (0:90)';
     belt = rate_belt(t, (1:2:29)');
-    belt.rate_rapid_window_bpm(t == 30) = 25;
-    belt.rate_rapid_endpoint_mask = t == 30;
-    belt.rate_rapid_state_mask = t <= 30;
-    events = detect_rapid_breathing(zeros(610,6), rate_phys(t,belt), config);
+    belt.rate_rapid_window_bpm(t == 60) = 25;
+    belt.rate_rapid_endpoint_mask = t == 60;
+    belt.rate_rapid_state_mask = t <= 60;
+    events = detect_rapid_breathing(zeros(910,6), rate_phys(t,belt), config);
     verifyEmpty(testCase, events);
     verifyTrue(testCase, isfile(fullfile(output_dir, ...
         'Sub999_M1_rapid_breathing.png')));
@@ -170,7 +171,7 @@ function testRapidNearMissPlotIsSavedWithoutFinalEvent(testCase)
     ax = axes(fig);
     plot(ax, t, zeros(size(t)));
     hold(ax, 'on');
-    shade_state_support_on_axis(ax, t, t <= 30, t <= 28, false(size(t)));
+    shade_state_support_on_axis(ax, t, t <= 60, t <= 28, false(size(t)));
     names = string(get(findall(ax, 'Type', 'patch'), 'DisplayName'));
     verifyTrue(testCase, any(names == "Rolling/candidate support"));
     verifyTrue(testCase, any(names == "All localized qualifying support"));
@@ -703,7 +704,7 @@ end
 
 function phys = rate_phys(t, lungs)
     phys.resp = struct('time_sec', t, ...
-        'rate_windows_sec', struct('slow',60,'rapid',30), ...
+        'rate_windows_sec', struct('slow',60,'rapid',60), ...
         'lungs', lungs, 'diaph', empty_rate_belt(t));
 end
 
@@ -739,7 +740,7 @@ function results = export_fixture(config, N)
     results.subject = 999;
     results.measure = 1;
     results.config = config;
-    results.phys_feat = struct('version', 'independent_physiological_evidence_v3', ...
+    results.phys_feat = struct('version', 'independent_physiological_evidence_v4', ...
         'resp', struct('lungs', belt, 'diaph', belt));
     results.session_reference = get_session_reference_interval(N, config);
     reference = struct('session', struct('value', 1, 'available', true), ...

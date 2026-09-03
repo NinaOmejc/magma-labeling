@@ -14,14 +14,17 @@ function phys_feat = compute_physiological_features(data, resp_feat, resp_ref, s
     cfg = evidence_config(config);
 
     phys_feat = struct();
-    phys_feat.version = 'independent_physiological_evidence_v3';
+    phys_feat.version = 'independent_physiological_evidence_v4';
     phys_feat.provenance = struct( ...
         'breath_source', 'reviewed_resp_feat', ...
         'respiratory_reference_source', 'resp_ref', ...
         'spo2_source', 'spo2_feat', ...
         'reference_interval_source', 'common_session_reference_interval', ...
         'redetected_respiratory_peaks', false, ...
-        'version_changes', ['v3: independent 11-label evidence with one common ' ...
+        'respiratory_rate_estimator', ...
+            '60_over_mean_complete_ibi_in_full_trailing_window', ...
+        'version_changes', ['v4: Slow and Rapid use 60-second confirmation windows ' ...
+            'with respiratory rate equal to 60/mean(IBI); v3 introduced one common ' ...
             'session-reference interval and modality-specific reference statistics']);
 
     phys_feat.resp = struct();
@@ -322,16 +325,24 @@ end
 function trace = breath_rate_trace(peak_t, t_grid, win_sec)
     trace = nan(size(t_grid));
     peak_t = peak_t(:);
-    peak_t = peak_t(isfinite(peak_t));
     for i = 1:numel(t_grid)
         t = t_grid(i);
         lb = t - win_sec;
         if lb < 0
             continue;
         end
-        n_breaths = sum(peak_t >= lb & peak_t < t);
-        if n_breaths >= 2
-            trace(i) = n_breaths / win_sec * 60;
+        idx = find(isfinite(peak_t) & peak_t >= lb & peak_t <= t);
+        if numel(idx) < 3
+            continue;
+        end
+        ibi = diff(peak_t(idx));
+        ibi = ibi(isfinite(ibi) & ibi > 0);
+        if numel(ibi) < 2
+            continue;
+        end
+        mean_ibi = mean(ibi);
+        if isfinite(mean_ibi) && mean_ibi > 0
+            trace(i) = 60 / mean_ibi;
         end
     end
 end
@@ -494,7 +505,7 @@ end
 function cfg = evidence_config(config)
     cfg = struct();
     cfg.slow_win_sec = get_config_value(config, 'SlB', 'analysis_win_sec', 60);
-    cfg.rapid_win_sec = get_config_value(config, 'RaB', 'analysis_win_sec', 30);
+    cfg.rapid_win_sec = get_config_value(config, 'RaB', 'analysis_win_sec', 60);
     cfg.shallow_win_sec = get_config_value(config, 'ShB', 'analysis_win_sec', 30);
     cfg.deep_win_sec = get_config_value(config, 'DeB', 'analysis_win_sec', 30);
     cfg.apnea_win_sec = get_config_value(config, 'Apn', 'amp_analysis_win_sec', 10);

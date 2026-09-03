@@ -117,9 +117,9 @@ The thresholds below are operational research criteria and should not be interpr
 
 - **`deep`** — all eligible breaths in a trailing 30-s candidate window have session-normalized excursion `>= 1.20`. Final boundaries are localized from qualifying reviewed breaths, and the localized state must last at least 30 s.
 
-- **`slow`** — trailing 60-s mean respiratory rate is `<= 10 bpm`. Confirmed candidates are localized using reviewed breathwise `RR <= 10 bpm`; the final localized state must last at least 30 s.
+- **`slow`** — a full trailing 60-s window estimates respiratory rate as `RR = 60 / mean(IBI)` and confirms a candidate when `RR <= 10 bpm`. Final boundaries are localized from consecutive reviewed breath intervals with breathwise `RR_i <= 10 bpm`; only localized runs lasting at least 30 s become final events.
 
-- **`rapid`** — trailing 30-s mean respiratory rate is `>= 20 bpm`. Confirmed candidates are localized using reviewed breathwise `RR >= 20 bpm`; the final localized state must last at least 30 s.
+- **`rapid`** — a full trailing 60-s window estimates respiratory rate as `RR = 60 / mean(IBI)` and confirms a candidate when `RR >= 20 bpm`. Final boundaries are localized from consecutive reviewed breath intervals with breathwise `RR_i >= 20 bpm`; only localized runs lasting at least 30 s become final events.
 
 - **`irregular`** — respiratory-rhythm variability is assessed over 60-s IBI windows. The default criterion is `CV_IBI >= 0.30`, with long pauses excluded from irregularity estimation. Because irregularity is intrinsically window-based, event boundaries retain window-scale uncertainty.
 

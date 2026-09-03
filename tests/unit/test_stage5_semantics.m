@@ -6,7 +6,7 @@ end
 function testEvidenceVersionAndCanonicalOrder(testCase)
     [data, resp_feat, resp_ref, spo2_feat, config] = physiological_fixture();
     phys = compute_physiological_features(data, resp_feat, resp_ref, spo2_feat, config);
-    verifyEqual(testCase, phys.version, 'independent_physiological_evidence_v3');
+    verifyEqual(testCase, phys.version, 'independent_physiological_evidence_v4');
     verifyEqual(testCase, {config.labels.short}, ...
         {'shallow', 'deep', 'slow', 'rapid', 'irregular', 'apnea', ...
          'sigh', 'csr', 'thoracic', 'async', 'desat'});
@@ -53,7 +53,9 @@ end
 
 function testRapidAndSlowWindowsAreSeparateFromMinimumDuration(testCase)
     config = stage_config();
-    verifyEqual(testCase, config.RaB.analysis_win_sec, 30);
+    verifyEqual(testCase, config.ShB.analysis_win_sec, 30);
+    verifyEqual(testCase, config.DeB.analysis_win_sec, 30);
+    verifyEqual(testCase, config.RaB.analysis_win_sec, 60);
     verifyEqual(testCase, config.RaB.min_dur_sec, 30);
     verifyEqual(testCase, config.SlB.analysis_win_sec, 60);
     verifyEqual(testCase, config.SlB.min_dur_sec, 30);
@@ -66,10 +68,10 @@ function testRapidAndSlowWindowsAreSeparateFromMinimumDuration(testCase)
     lungs.rr_bpm = 30 * ones(numel(lungs.peak_t)-1,1);
     lungs.rate_rapid_window_bpm(rapid_endpoint) = 25;
     lungs.rate_rapid_endpoint_mask = rapid_endpoint;
-    lungs.rate_rapid_state_mask = analysis_window_endpoints_to_state_mask(rapid_endpoint, t, 30);
+    lungs.rate_rapid_state_mask = analysis_window_endpoints_to_state_mask(rapid_endpoint, t, 60);
     diaph = empty_detector_belt(t);
     phys.resp = struct('time_sec', t, 'rate_windows_sec', ...
-        struct('slow', 60, 'rapid', 30), 'lungs', lungs, 'diaph', diaph);
+        struct('slow', 60, 'rapid', 60), 'lungs', lungs, 'diaph', diaph);
 
     rapid = detect_rapid_breathing(zeros(101, 6), phys, config);
     lungs = empty_detector_belt(t);
@@ -83,9 +85,33 @@ function testRapidAndSlowWindowsAreSeparateFromMinimumDuration(testCase)
     phys.resp.lungs = lungs;
     slow = detect_slow_breathing(zeros(101, 6), phys, config);
     verifyNotEmpty(testCase, rapid);
-    verifyEqual(testCase, rapid.start_t, 30);
+    verifyEqual(testCase, rapid.start_t, 0);
     verifyNotEmpty(testCase, slow);
     verifyEqual(testCase, slow.start_t, 20);
+end
+
+function testRapidDetectorFallbackUsesSixtySecondConfirmationWindow(testCase)
+    config = stage_config();
+    config.RaB = rmfield(config.RaB, 'analysis_win_sec');
+    t = (0:80)';
+    endpoint = t == 60;
+    lungs = empty_detector_belt(t);
+    lungs = rmfield(lungs, 'rate_rapid_state_mask');
+    lungs.available = true;
+    lungs.peak_t = (0:2:60)';
+    lungs.rr_bpm = 30 * ones(numel(lungs.peak_t)-1, 1);
+    lungs.rate_rapid_window_bpm(endpoint) = 25;
+    lungs.rate_rapid_endpoint_mask = endpoint;
+    diaph = empty_detector_belt(t);
+    phys.resp = struct('time_sec', t, 'rate_windows_sec', ...
+        struct('slow', 60, 'rapid', 60), 'lungs', lungs, 'diaph', diaph);
+
+    [events, boundary] = detect_rapid_breathing(zeros(81, 6), phys, config);
+
+    verifyNotEmpty(testCase, events);
+    verifyEqual(testCase, boundary.events.candidate_start_t, 0);
+    verifyEqual(testCase, events.start_t, 0);
+    verifyEqual(testCase, events.duration, 60);
 end
 
 function testIrregularWindowAndDurationAreSeparateWithoutDoubleApplication(testCase)
@@ -291,7 +317,7 @@ function [names, phys, spo2, rea, apnea, sigh, csr] = availability_fixture()
     belt.session_amplitude_available = true;
     belt.global_amplitude_available = true;
     belt.rate_slow_window_bpm(61:end) = 12;
-    belt.rate_rapid_window_bpm(31:end) = 12;
+    belt.rate_rapid_window_bpm(61:end) = 12;
     belt.irregularity.cov(61:end) = 0.1;
     balance = struct('available', true);
     phys = struct('resp', struct('lungs', belt, 'diaph', belt, ...

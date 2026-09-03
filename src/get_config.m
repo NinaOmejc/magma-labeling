@@ -108,16 +108,16 @@ function config = get_config()
 
     %---- LABEL 3 - slow - DETECTION SETTINGS
     config.SlB = struct();                % slow breathing settings
-    config.SlB.analysis_win_sec = 60;     % rolling analysis window (30–60 s allowed)
-    config.SlB.rr_thr_bpm       = 10;     % mean RR <= 10 bpm
+    config.SlB.analysis_win_sec = 60;     % 60-s respiratory-rate analysis window
+    config.SlB.rr_thr_bpm       = 10;     % window RR = 60/mean(IBI) <= 10 bpm
     config.SlB.min_dur_sec      = 30;     % minimum final localized slow-state duration
     config.SlB.plot_rr_step_sec = 5;      % display RR as held values that can change 12 times/min (60/5). So its averaged over X seconds, here 5 seconds.
     config.SlB.do_plot          = true;   % save slow breathing diagnostic plot
 
     %---- LABEL 4 - rapid - DETECTION SETTINGS
     config.RaB = struct();                                      % rapid breathing settings
-    config.RaB.analysis_win_sec = 30;                           % trailing respiratory-rate analysis window
-    config.RaB.rr_thr_bpm       = 20;                           % mean RR >= 20 bpm
+    config.RaB.analysis_win_sec = 60;                           % 60-s respiratory-rate analysis window
+    config.RaB.rr_thr_bpm       = 20;                           % window RR = 60/mean(IBI) >= 20 bpm
     config.RaB.min_dur_sec      = 30;                           % minimum final localized rapid-state duration
     config.RaB.plot_rr_step_sec = 5;                            % display RR as held values at this step size in seconds
     config.RaB.do_plot         = true;                          % save rapid breathing diagnostic plot

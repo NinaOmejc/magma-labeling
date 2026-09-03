@@ -1,7 +1,8 @@
 function [events, boundary_info] = detect_rapid_breathing(data, phys_feat, config)
 % detect_rapid_breathing
-% Label 4 - mean respiratory rate >= the configured threshold. The rolling
-% window confirms an event; reviewed breathwise RR localizes its boundary.
+% Label 4 - 60/mean(IBI) in the full trailing analysis window is at or above
+% the configured threshold. The window confirms an event; reviewed
+% breathwise RR localizes its boundary.
 % A qualifying aggregate window is not treated as proof that every sample
 % in the preceding window was rapid.
 % Rate is evaluated independently per usable belt; amplitude and SpO2 do
@@ -22,7 +23,7 @@ function [events, boundary_info] = detect_rapid_breathing(data, phys_feat, confi
     end
 
     rr_thr_bpm = get_config_value(config, 'RaB', 'rr_thr_bpm', 20);
-    analysis_win_sec = get_config_value(config, 'RaB', 'analysis_win_sec', 30);
+    analysis_win_sec = get_config_value(config, 'RaB', 'analysis_win_sec', 60);
     min_dur_sec = get_config_value(config, 'RaB', 'min_dur_sec', 30);
     plot_rr_step_sec = get_config_value(config, 'RaB', 'plot_rr_step_sec', 15);
 
@@ -87,7 +88,7 @@ function [events, boundary_info] = detect_rapid_breathing(data, phys_feat, confi
         opts = struct( ...
             'figure_title', ['RAPID BREATHING' newline 'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)], ...
             'event_name', 'Rapid breathing', ...
-            'metric_title', 'Mean breaths/min used for rapid detection', ...
+            'metric_title', 'Window RR = 60/mean(IBI) for rapid detection', ...
             'metric_detail', sprintf('%g s trailing analysis window; %g s held display', ...
                 analysis_win_sec, plot_rr_step_sec), ...
             'metric_ylabel', 'Breaths/min', ...

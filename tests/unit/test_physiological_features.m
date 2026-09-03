@@ -76,15 +76,15 @@ function testMissingLungBeltLeavesDiaphragmValid(testCase)
     verifyFalse(testCase, phys_feat.resp.both_belts_available);
 end
 
-function testRateAndIrregularityEvidenceMatchesPreviousCalculations(testCase)
+function testRateAndIrregularityEvidenceMatchesDefinitions(testCase)
     [data, resp_feat, resp_ref, spo2_feat, config] = feature_fixture();
     phys_feat = compute_physiological_features( ...
         data, resp_feat, resp_ref, spo2_feat, config);
     t_grid = phys_feat.resp.time_sec;
 
-    expected_slow = legacy_rate_trace( ...
+    expected_slow = ibi_rate_trace_reference( ...
         resp_feat.lungs.peak_t, t_grid, config.SlB.analysis_win_sec);
-    expected_rapid = legacy_rate_trace( ...
+    expected_rapid = ibi_rate_trace_reference( ...
         resp_feat.lungs.peak_t, t_grid, config.RaB.analysis_win_sec);
     verifyTrue(testCase, isequaln( ...
         phys_feat.resp.lungs.rate_slow_window_bpm, expected_slow));
@@ -102,6 +102,82 @@ function testRateAndIrregularityEvidenceMatchesPreviousCalculations(testCase)
     verifyTrue(testCase, isequaln(actual.cov, expected_cov));
     verifyTrue(testCase, isequaln(actual.robust_cov, expected_robust));
     verifyTrue(testCase, isequaln(actual.rmssd_sec, expected_rmssd));
+end
+
+function testWindowRateUsesSixtyOverMeanIbiAndIsShared(testCase)
+    peaks = [10; 20; 40; 50];
+    [data, resp_feat, resp_ref, spo2_feat, config] = ...
+        rate_only_feature_fixture(peaks, 120);
+    phys_feat = compute_physiological_features( ...
+        data, resp_feat, resp_ref, spo2_feat, config);
+    t_grid = phys_feat.resp.time_sec;
+    endpoint = t_grid == 60;
+
+    expected = 60 / mean(diff(peaks));
+    count_based = nnz(peaks >= 0 & peaks < 60) / 60 * 60;
+    actual_slow = phys_feat.resp.lungs.rate_slow_window_bpm(endpoint);
+    actual_rapid = phys_feat.resp.lungs.rate_rapid_window_bpm(endpoint);
+
+    verifyEqual(testCase, expected, 4.5, 'AbsTol', eps);
+    verifyNotEqual(testCase, expected, count_based);
+    verifyEqual(testCase, actual_slow, expected, 'AbsTol', eps);
+    verifyEqual(testCase, actual_rapid, expected, 'AbsTol', eps);
+    verifyTrue(testCase, isequaln( ...
+        phys_feat.resp.lungs.rate_slow_window_bpm, ...
+        phys_feat.resp.lungs.rate_rapid_window_bpm));
+    verifyEqual(testCase, phys_feat.provenance.respiratory_rate_estimator, ...
+        '60_over_mean_complete_ibi_in_full_trailing_window');
+end
+
+function testRateWindowRequiresFullHistoryAndAtLeastTwoValidIbis(testCase)
+    [data, resp_feat, resp_ref, spo2_feat, config] = ...
+        rate_only_feature_fixture([10; 30; 50], 120);
+    phys_feat = compute_physiological_features( ...
+        data, resp_feat, resp_ref, spo2_feat, config);
+    t_grid = phys_feat.resp.time_sec;
+    verifyTrue(testCase, all(isnan( ...
+        phys_feat.resp.lungs.rate_slow_window_bpm(t_grid < 60))));
+    verifyTrue(testCase, all(isnan( ...
+        phys_feat.resp.lungs.rate_rapid_window_bpm(t_grid < 60))));
+
+    [data, resp_feat, resp_ref, spo2_feat, config] = ...
+        rate_only_feature_fixture([10; 50], 120);
+    phys_feat = compute_physiological_features( ...
+        data, resp_feat, resp_ref, spo2_feat, config);
+    endpoint = phys_feat.resp.time_sec == 60;
+    verifyTrue(testCase, isnan( ...
+        phys_feat.resp.lungs.rate_slow_window_bpm(endpoint)));
+    verifyTrue(testCase, isnan( ...
+        phys_feat.resp.lungs.rate_rapid_window_bpm(endpoint)));
+
+    [data, resp_feat, resp_ref, spo2_feat, config] = ...
+        rate_only_feature_fixture([10; 10; 50], 120);
+    phys_feat = compute_physiological_features( ...
+        data, resp_feat, resp_ref, spo2_feat, config);
+    endpoint = phys_feat.resp.time_sec == 60;
+    verifyTrue(testCase, isnan( ...
+        phys_feat.resp.lungs.rate_slow_window_bpm(endpoint)));
+end
+
+function testRapidWindowDefaultsCannotRevertToThirtySeconds(testCase)
+    config = make_test_config();
+    config.RaB = rmfield(config.RaB, 'analysis_win_sec');
+    [data, resp_feat, resp_ref, spo2_feat, config] = ...
+        rate_only_feature_fixture((0:2:80)', 100, config);
+    phys_feat = compute_physiological_features( ...
+        data, resp_feat, resp_ref, spo2_feat, config);
+    verifyEqual(testCase, phys_feat.resp.rate_windows_sec.rapid, 60);
+
+    repo_root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
+    files = {fullfile(repo_root, 'src', 'feature_extraction', ...
+        'compute_physiological_features.m'), ...
+        fullfile(repo_root, 'src', 'label_detection', ...
+        'detect_rapid_breathing.m')};
+    for i = 1:numel(files)
+        source = fileread(files{i});
+        verifyEmpty(testCase, regexp(source, ...
+            '''RaB'',\s*''analysis_win_sec'',\s*30', 'once'));
+    end
 end
 
 function testAmplitudeEvidenceMatchesPreviousCalculations(testCase)
@@ -303,20 +379,48 @@ function reference = belt_reference(session_value, global_value, quality)
         'reference_quality', quality);
 end
 
-function trace = legacy_rate_trace(peak_t, t_grid, win_sec)
+function trace = ibi_rate_trace_reference(peak_t, t_grid, win_sec)
     trace = nan(size(t_grid));
-    peak_t = peak_t(isfinite(peak_t));
+    peak_t = peak_t(:);
     for i = 1:numel(t_grid)
         t = t_grid(i);
         lb = t - win_sec;
         if lb < 0
             continue;
         end
-        n_breaths = sum(peak_t >= lb & peak_t < t);
-        if n_breaths >= 2
-            trace(i) = n_breaths / win_sec * 60;
+        idx = find(isfinite(peak_t) & peak_t >= lb & peak_t <= t);
+        if numel(idx) < 3
+            continue;
+        end
+        ibi = diff(peak_t(idx));
+        ibi = ibi(isfinite(ibi) & ibi > 0);
+        if numel(ibi) >= 2
+            trace(i) = 60 / mean(ibi);
         end
     end
+end
+
+function [data, resp_feat, resp_ref, spo2_feat, config] = ...
+    rate_only_feature_fixture(peak_t, duration_sec, config)
+
+    if nargin < 3
+        config = make_test_config();
+    end
+    config.fs = 10;
+    config.grid_step_sec = 1;
+    config.subject = 999;
+    config.measure = 1;
+    config.problems.missing_lung_belt = zeros(0, 2);
+    N = duration_sec * config.fs + 1;
+    data = zeros(N, 6);
+    peak_idx = round(peak_t * config.fs) + 1;
+    resp_feat = struct( ...
+        'lungs', reviewed_belt(peak_idx, peak_t, ones(size(peak_t)), config.fs), ...
+        'diaph', empty_respiration_feature('Resp-Diaphragm'));
+    resp_ref = struct( ...
+        'lungs', belt_reference(1, 1, 'good'), ...
+        'diaph', belt_reference(NaN, NaN, 'belt_unavailable'));
+    spo2_feat = struct();
 end
 
 function mask = legacy_amplitude_band_mask(breaths, t_grid, win_sec, reference, lo, hi)
