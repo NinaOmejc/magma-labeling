@@ -68,7 +68,8 @@ function [output, config, trend] = preprocess_data(t_series, config)
 
             Wn = highpass_cutoff / nyquist;
 
-            [b, a] = butter(filter_order, Wn, 'high');
+            [z, p, k] = butter(filter_order, Wn, 'high');
+            [sos, g] = zp2sos(z, p, k);
 
             for c = 1:n_signals
                 x = data(:, c);
@@ -76,7 +77,7 @@ function [output, config, trend] = preprocess_data(t_series, config)
                     output_data(:, c) = x;
                     trend_data(:, c)  = x;
                 else
-                    y = highpass_with_reflect_padding(x, b, a, sampl_freq, highpass_cutoff, hp_edge_pad_sec);
+                    y = highpass_with_reflect_padding(x, sos, g, sampl_freq, highpass_cutoff, hp_edge_pad_sec);
                     output_data(:, c) = y;
                     trend_data(:, c)  = x - y;
                 end
@@ -214,7 +215,7 @@ function signal_cols = resolved_resp_signal_cols(config, fallback_signals)
 end
 
 
-function y = highpass_with_reflect_padding(x, b, a, fs, cutoff_hz, pad_sec_cfg)
+function y = highpass_with_reflect_padding(x, sos, g, fs, cutoff_hz, pad_sec_cfg)
 % Apply zero-phase high-pass filtering with reflected edge padding.
 % This reduces endpoint ringing artifacts from filtfilt.
 
@@ -237,12 +238,12 @@ function y = highpass_with_reflect_padding(x, b, a, fs, cutoff_hz, pad_sec_cfg)
         pad_sec = pad_sec_cfg;
     end
 
-    base_guard = 3 * (max(numel(a), numel(b)) - 1);
+    base_guard = 3 * (2 * size(sos, 1));
     pad_len = max(base_guard, round(pad_sec * fs));
     pad_len = min(pad_len, floor((n - 1) / 2));
 
     if pad_len < 1
-        y = filtfilt(b, a, xv);
+        y = filtfilt(sos, g, xv);
         y(~valid) = NaN;
         return;
     end
@@ -251,7 +252,7 @@ function y = highpass_with_reflect_padding(x, b, a, fs, cutoff_hz, pad_sec_cfg)
     right_pad = xv(end-1:-1:end-pad_len);
     xp = [left_pad; xv; right_pad];
 
-    yp = filtfilt(b, a, xp);
+    yp = filtfilt(sos, g, xp);
     y = yp(pad_len+1:pad_len+n);
     y(~valid) = NaN;
 end

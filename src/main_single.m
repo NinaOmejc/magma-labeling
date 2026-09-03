@@ -18,18 +18,14 @@ for isub = 1:length(config.subjects)
         % PREPROCESS DATA
         [data, config] = preprocess_data(data_raw, config);
 
-        % ONE COMMON SESSION PHYSIOLOGICAL REFERENCE INTERVAL
-        session_reference = get_session_reference_interval(size(data, 1), config);
-
         % EXTRACT OR LOAD FEATURES (manually checked breath peaks/troughs)
         resp_feat = load_or_extract_respiratory_features(data, config);
 
         % MODALITY-SPECIFIC REFERENCES FROM THE COMMON INTERVAL
-        resp_ref = compute_respiratory_reference( ...
-            resp_feat, session_reference, config);
+        session_reference = get_session_reference_interval(size(data, 1), config);
+        resp_ref = compute_respiratory_reference(resp_feat, session_reference, config);
         spo2_ref = compute_spo2_reference(data, session_reference, config);
-        plot_respiratory_reference( ...
-            resp_feat, resp_ref, session_reference, config);
+        plot_respiratory_reference(resp_feat, resp_ref, session_reference, config);
 
         % EXTRACT SPO2 FEATURES
         spo2_feat = extract_spo2_features(data, spo2_ref, config);
