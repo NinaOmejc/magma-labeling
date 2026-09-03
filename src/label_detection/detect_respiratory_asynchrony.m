@@ -1,6 +1,6 @@
 function [events, rea_metrics] = detect_respiratory_asynchrony(data, baseline_or_config, resp_feat, config)
 % detect_respiratory_asynchrony
-% Label 5 - Respiratory Asynchrony / Dyssynchrony.
+% Label 10 - Respiratory Asynchrony / Dyssynchrony.
 %
 % Uses the wavelet phase-coherence core from Tomislav's script, reduced to
 % the two respiratory belts. The time-localized phase coherence is averaged
@@ -19,7 +19,7 @@ function [events, rea_metrics] = detect_respiratory_asynchrony(data, baseline_or
     rea_metrics = compute_respiratory_asynchrony_metrics(data, resp_feat, config);
 
     if ~rea_metrics.valid_analysis
-        fprintf('Skipping asyncB detection: %s\n', rea_skip_reason(rea_metrics.skip_code, rea_metrics.error_message));
+        fprintf('Skipping async detection: %s\n', rea_skip_reason(rea_metrics.skip_code, rea_metrics.error_message));
         return;
     end
 

@@ -1,4 +1,5 @@
-function qc = build_cohort_qc_summary(group_table, label_names, event_duration_table)
+function qc = build_cohort_qc_summary( ...
+    group_table, label_names, event_duration_table, localized_boundary_qc)
 % build_cohort_qc_summary
 % Cohort-ready descriptive QC only. This function never tunes thresholds.
 
@@ -6,11 +7,15 @@ function qc = build_cohort_qc_summary(group_table, label_names, event_duration_t
     if nargin < 3
         event_duration_table = table();
     end
+    if nargin < 4
+        localized_boundary_qc = table();
+    end
     qc = struct();
     qc.version = 'cohort_label_qc_v1';
     qc.n_recordings = height(group_table);
     qc.by_label = table();
     qc.event_durations = event_duration_table;
+    qc.localized_boundary_qc = localized_boundary_qc;
     qc.belt_availability = struct('two_belts', 0, 'single_belt', 0, 'no_belt', 0);
     qc.reference_quality_warning_recordings = 0;
     if isempty(group_table)
@@ -28,6 +33,11 @@ function qc = build_cohort_qc_summary(group_table, label_names, event_duration_t
     disagreement_mean = nan(n_labels, 1);
     event_duration_median_sec = nan(n_labels, 1);
     event_duration_p90_sec = nan(n_labels, 1);
+    rejected_localized_run_count = zeros(n_labels, 1);
+    rejected_localized_duration_median_sec = nan(n_labels, 1);
+    rejected_localized_duration_p90_sec = nan(n_labels, 1);
+    rejected_localized_duration_max_sec = nan(n_labels, 1);
+    rejected_localized_min_shortfall_sec = nan(n_labels, 1);
 
     for i = 1:n_labels
         token = matlab.lang.makeValidName(label_names{i});
@@ -42,6 +52,8 @@ function qc = build_cohort_qc_summary(group_table, label_names, event_duration_t
         duration_p90 = numeric_column(group_table, ...
             ['events_' token '_weak_duration_p90_sec']);
         pooled_duration = pooled_weak_duration(event_duration_table,label_names{i});
+        [rejected_duration, rejected_shortfall] = rejected_localized_values( ...
+            localized_boundary_qc, label_names{i});
 
         assessable_recordings(i) = nnz(available == 1);
         weak_event_count(i) = sum(counts(isfinite(counts)), 'omitnan');
@@ -58,12 +70,24 @@ function qc = build_cohort_qc_summary(group_table, label_names, event_duration_t
             event_duration_median_sec(i) = median(pooled_duration,'omitnan');
             event_duration_p90_sec(i) = prctile(pooled_duration,90);
         end
+        rejected_localized_run_count(i) = numel(rejected_duration);
+        rejected_localized_duration_median_sec(i) = finite_median(rejected_duration);
+        if ~isempty(rejected_duration)
+            rejected_localized_duration_p90_sec(i) = prctile(rejected_duration, 90);
+            rejected_localized_duration_max_sec(i) = max(rejected_duration);
+        end
+        if ~isempty(rejected_shortfall)
+            rejected_localized_min_shortfall_sec(i) = min(rejected_shortfall);
+        end
     end
     label = string(label_names(:));
     qc.by_label = table(label, assessable_recordings, weak_event_count, ...
         weak_fraction_mean, weak_fraction_median, zero_event_recordings, ...
         reviewed_recordings, reviewed_coverage_mean, disagreement_mean, ...
-        event_duration_median_sec, event_duration_p90_sec);
+        event_duration_median_sec, event_duration_p90_sec, ...
+        rejected_localized_run_count, rejected_localized_duration_median_sec, ...
+        rejected_localized_duration_p90_sec, rejected_localized_duration_max_sec, ...
+        rejected_localized_min_shortfall_sec);
 
     if ismember('respiratory_belt_availability', group_table.Properties.VariableNames)
         values = string(group_table.respiratory_belt_availability);
@@ -81,6 +105,22 @@ function qc = build_cohort_qc_summary(group_table, label_names, event_duration_t
         end
     end
     qc.reference_quality_warning_recordings = nnz(warning_mask);
+end
+
+function [durations, shortfalls] = rejected_localized_values(T, label_name)
+    durations = [];
+    shortfalls = [];
+    required = {'label', 'localized_duration_sec', ...
+        'passes_final_min_duration', 'duration_shortfall_sec'};
+    if isempty(T) || ~all(ismember(required, T.Properties.VariableNames))
+        return;
+    end
+    keep = string(T.label) == string(label_name) & ...
+        ~logical(T.passes_final_min_duration);
+    durations = double(T.localized_duration_sec(keep));
+    durations = durations(isfinite(durations));
+    shortfalls = double(T.duration_shortfall_sec(keep));
+    shortfalls = shortfalls(isfinite(shortfalls));
 end
 
 function values = pooled_weak_duration(T, label_name)

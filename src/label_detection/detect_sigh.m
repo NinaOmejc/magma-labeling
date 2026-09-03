@@ -1,6 +1,6 @@
 function [events, diagnostics, review_info] = detect_sigh(data, phys_feat, resp_feat, baseline, spo2_feat, config)
 % detect_sigh
-% Label 8 – Sigh
+% Label 7 – Sigh
 %
 % Default method: global nonparametric outlier detection on normalized breath amplitude.
 % ratio = breath_amp / whole-record global breath-amplitude reference
@@ -349,18 +349,18 @@ function events = sigh_flags_to_events(peak_t, flags, N, fs, belt)
 
         if i == L && L >= 2
             dt = peak_t(i) - peak_t(i-1);
-            end_t = min((N-1)/fs, t0 + 0.5*dt);
+            end_t = min(N/fs, t0 + 0.5*dt);
         elseif i < L
             end_t = 0.5*(peak_t(i) + peak_t(i+1));
         else
-            end_t = min((N-1)/fs, t0 + 0.5); % fallback
+            end_t = min(N/fs, t0 + 0.5); % fallback
         end
 
         s = max(1, min(N, round(start_t*fs) + 1));
-        e = max(1, min(N, round(end_t*fs)   + 1));
+        e = max(s, min(N, round(end_t*fs)));
 
         start_t = (s-1)/fs;
-        end_t   = (e-1)/fs;
+        end_t   = e/fs;
 
         out = out + 1;
         events(out) = struct( ...
@@ -369,7 +369,7 @@ function events = sigh_flags_to_events(peak_t, flags, N, fs, belt)
             'end_idx', e, ...
             'start_t', start_t, ...
             'end_t', end_t, ...
-            'duration', end_t - start_t );
+            'duration', (e - s + 1) / fs );
 
     end
 

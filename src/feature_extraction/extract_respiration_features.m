@@ -39,13 +39,6 @@ function resp_feat = extract_respiration_features(data, config)
                 'Manual breath editing requires at least one usable respiratory belt signal and was skipped.');
         end
     end
-    
-    if is_valid_breath_signal(resp_feat.lungs, false) && ~is_lung_belt_ignored(config)
-        check_normalities(resp_feat.lungs, config);
-    end
-    if is_valid_breath_signal(resp_feat.diaph, false)
-        check_normalities(resp_feat.diaph, config);
-    end
 end
 
 function save_final_respiration_feature_figure(b, config, basename)

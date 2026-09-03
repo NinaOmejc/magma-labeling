@@ -1,11 +1,12 @@
 function [events, boundary_info] = detect_deep_breathing(data, phys_feat, config)
 % detect_deep_breathing
-% Label 10 - sustained relative increase in respiratory-belt excursion.
+% Label 2 - sustained relative increase in respiratory-belt excursion.
 % A reviewed breath is deep when its excursion divided by that belt's fixed
 % session reference is >= config.DeB.amp_ratio_thr. This is an uncalibrated,
 % within-record belt-amplitude state, not absolute tidal volume.
 % The all-breath rolling condition confirms an event. Boundaries are placed
 % at deterministic midpoint cells around qualifying reviewed breaths.
+% Localized runs shorter than config.DeB.min_dur_sec remain QC only.
 
     events = empty_events();
     N = size(data, 1);
@@ -26,7 +27,7 @@ function [events, boundary_info] = detect_deep_breathing(data, phys_feat, config
     end
 
     if ~lungs.session_amplitude_available && ~diaph.session_amplitude_available
-        fprintf('Skipping deepB detection: no valid respiratory belt with usable breath amplitudes.\n');
+        fprintf('Skipping deep detection: no valid respiratory belt with usable breath amplitudes.\n');
         return;
     end
 

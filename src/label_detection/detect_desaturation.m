@@ -1,6 +1,6 @@
 function events_Des = detect_desaturation(data, baseline, spo2_feat, config)
 % detect_desaturation
-% Label 6 - Desaturation (Hypoxia)
+% Label 11 - Desaturation (Hypoxia)
 %
 % This function does NOT re-detect desaturation. Detection is done in
 % extract_spo2_features; this function returns those events and optionally
@@ -25,7 +25,7 @@ function events_Des = detect_desaturation(data, baseline, spo2_feat, config)
 
     fig = figure('Units', 'pixels', 'Position', near_fullscreen_figure_position(), ...
         'Visible', config.make_figs_visible);
-    sgtitle(['Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure) ' | Label 6 - Desaturation (Hypoxia)'])
+    sgtitle(['Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure) ' | Label 11 - Desaturation (Hypoxia)'])
 
     ax = gca;
     plot_spo2_diagnostic_panel(ax, data, baseline, spo2_feat, config, 'SpO2 desaturation');

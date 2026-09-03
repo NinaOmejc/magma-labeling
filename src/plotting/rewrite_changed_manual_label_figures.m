@@ -142,7 +142,7 @@ function plot_diagnostic_panel(ax, diagnostic_signals, resp_feat, events, def, c
     if isstruct(diagnostic_signals) && isfield(diagnostic_signals, 'time_sec')
         t = diagnostic_signals.time_sec(:);
         switch def.field
-            case 'shallowB'
+            case 'shallow'
                 plotted = plot_metric_pair(ax, t, diagnostic_signals, ...
                     'breath_amplitude_ratio_to_reference_lungs', ...
                     'breath_amplitude_ratio_to_reference_diaph', ...
@@ -152,7 +152,7 @@ function plot_diagnostic_panel(ax, diagnostic_signals, resp_feat, events, def, c
                     yline_if_finite(ax, config.ShB.amp_ratio_high, 'r--', 'Upper threshold');
                 end
 
-            case 'deepB'
+            case 'deep'
                 plotted = plot_metric_pair(ax, t, diagnostic_signals, ...
                     'deep_breath_amplitude_ratio_to_reference_lungs', ...
                     'deep_breath_amplitude_ratio_to_reference_diaph', ...
@@ -162,7 +162,7 @@ function plot_diagnostic_panel(ax, diagnostic_signals, resp_feat, events, def, c
                     yline_if_finite(ax, config.DeB.amp_ratio_thr, 'r--', 'Deep threshold');
                 end
 
-            case 'thorDomB'
+            case 'thoracic'
                 plotted = plot_metric(ax, t, diagnostic_signals, ...
                     'thoracic_to_abdominal_ratio', [0.85 0.33 0.10], ...
                     'Thoracic / abdominal normalized excursion');
@@ -173,7 +173,7 @@ function plot_diagnostic_panel(ax, diagnostic_signals, resp_feat, events, def, c
                     title(ax, 'Relative thoracoabdominal excursion balance');
                 end
 
-            case 'irregB'
+            case 'irregular'
                 metric = irregular_metric_name(config);
                 plotted = plot_metric_pair(ax, t, diagnostic_signals, metric.lungs, metric.diaph, ...
                     metric.ylabel, metric.title);
@@ -181,7 +181,7 @@ function plot_diagnostic_panel(ax, diagnostic_signals, resp_feat, events, def, c
                     yline_if_finite(ax, metric.threshold, 'r--', 'Threshold');
                 end
 
-            case 'slowB'
+            case 'slow'
                 plotted = plot_metric_pair(ax, t, diagnostic_signals, ...
                     'breathing_rate_slow_window_bpm_lungs', ...
                     'breathing_rate_slow_window_bpm_diaph', ...
@@ -190,7 +190,7 @@ function plot_diagnostic_panel(ax, diagnostic_signals, resp_feat, events, def, c
                     yline_if_finite(ax, config.SlB.rr_thr_bpm, 'r--', 'Slow threshold');
                 end
 
-            case 'rapidB'
+            case 'rapid'
                 plotted = plot_metric_pair(ax, t, diagnostic_signals, ...
                     'breathing_rate_rapid_window_bpm_lungs', ...
                     'breathing_rate_rapid_window_bpm_diaph', ...
@@ -199,7 +199,7 @@ function plot_diagnostic_panel(ax, diagnostic_signals, resp_feat, events, def, c
                     yline_if_finite(ax, config.RaB.rr_thr_bpm, 'r--', 'Rapid threshold');
                 end
 
-            case 'asyncB'
+            case 'async'
                 plotted = plot_async_metrics(ax, t, diagnostic_signals);
 
             case 'desat'

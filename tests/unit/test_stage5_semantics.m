@@ -8,8 +8,8 @@ function testEvidenceVersionAndCanonicalOrder(testCase)
     phys = compute_physiological_features(data, resp_feat, resp_ref, spo2_feat, config);
     verifyEqual(testCase, phys.version, 'independent_physiological_evidence_v2');
     verifyEqual(testCase, {config.labels.short}, ...
-        {'shallowB', 'irregB', 'slowB', 'rapidB', 'asyncB', 'desat', ...
-         'apnea', 'sigh', 'CSR', 'deepB', 'thorDomB'});
+        {'shallow', 'deep', 'slow', 'rapid', 'irregular', 'apnea', ...
+         'sigh', 'csr', 'thoracic', 'async', 'desat'});
 end
 
 function testThoracicEndpointAndStateHaveDistinctSemantics(testCase)
@@ -60,20 +60,27 @@ function testRapidAndSlowWindowsAreSeparateFromMinimumDuration(testCase)
 
     t = (0:100)';
     rapid_endpoint = t == 60;
-    slow_endpoint = t == 80;
     lungs = empty_detector_belt(t);
     lungs.available = true;
+    lungs.peak_t = (0:2:100)';
+    lungs.rr_bpm = 30 * ones(numel(lungs.peak_t)-1,1);
     lungs.rate_rapid_window_bpm(rapid_endpoint) = 25;
     lungs.rate_rapid_endpoint_mask = rapid_endpoint;
     lungs.rate_rapid_state_mask = analysis_window_endpoints_to_state_mask(rapid_endpoint, t, 30);
-    lungs.rate_slow_window_bpm(slow_endpoint) = 8;
-    lungs.rate_slow_endpoint_mask = slow_endpoint;
-    lungs.rate_slow_state_mask = analysis_window_endpoints_to_state_mask(slow_endpoint, t, 60);
     diaph = empty_detector_belt(t);
     phys.resp = struct('time_sec', t, 'rate_windows_sec', ...
         struct('slow', 60, 'rapid', 30), 'lungs', lungs, 'diaph', diaph);
 
     rapid = detect_rapid_breathing(zeros(101, 6), phys, config);
+    lungs = empty_detector_belt(t);
+    lungs.available = true;
+    lungs.peak_t = (0:6:96)';
+    lungs.rr_bpm = 10 * ones(numel(lungs.peak_t)-1,1);
+    slow_endpoint = t == 80;
+    lungs.rate_slow_window_bpm(slow_endpoint) = 8;
+    lungs.rate_slow_endpoint_mask = slow_endpoint;
+    lungs.rate_slow_state_mask = analysis_window_endpoints_to_state_mask(slow_endpoint, t, 60);
+    phys.resp.lungs = lungs;
     slow = detect_slow_breathing(zeros(101, 6), phys, config);
     verifyNotEmpty(testCase, rapid);
     verifyEqual(testCase, rapid.start_t, 30);
@@ -126,8 +133,8 @@ function testEvidenceAwareAvailabilityAndReasonOrder(testCase)
         names, phys, spo2, rea, apnea, sigh, csr);
     verifySize(testCase, available, [1 11]);
     verifySize(testCase, reasons, [1 11]);
-    verifyFalse(testCase, available(strcmp(names, 'asyncB')));
-    verifyEqual(testCase, reasons{strcmp(names, 'asyncB')}, ...
+    verifyFalse(testCase, available(strcmp(names, 'async')));
+    verifyEqual(testCase, reasons{strcmp(names, 'async')}, ...
         'respiratory_asynchrony_analysis_invalid');
     verifyFalse(testCase, available(strcmp(names, 'desat')));
     verifyEqual(testCase, reasons{strcmp(names, 'desat')}, 'invalid_spo2');
@@ -143,10 +150,10 @@ function testKnownOneBeltCaseMakesThoracicAndAsynchronyUnavailable(testCase)
     rea.skip_code = 2;
     [available, reasons] = compute_label_availability( ...
         names, phys, spo2, rea, apnea, sigh, csr);
-    verifyFalse(testCase, available(strcmp(names, 'thorDomB')));
-    verifyEqual(testCase, reasons{strcmp(names, 'thorDomB')}, 'one_belt_only');
-    verifyFalse(testCase, available(strcmp(names, 'asyncB')));
-    verifyEqual(testCase, reasons{strcmp(names, 'asyncB')}, 'one_belt_only');
+    verifyFalse(testCase, available(strcmp(names, 'thoracic')));
+    verifyEqual(testCase, reasons{strcmp(names, 'thoracic')}, 'one_belt_only');
+    verifyFalse(testCase, available(strcmp(names, 'async')));
+    verifyEqual(testCase, reasons{strcmp(names, 'async')}, 'one_belt_only');
 end
 
 function testAssessedZeroAndUnavailableBurdenAreDistinct(testCase)
@@ -154,38 +161,38 @@ function testAssessedZeroAndUnavailableBurdenAreDistinct(testCase)
     names = {config.labels.short};
     mask = false(100, 11);
     available = true(1, 11);
-    available(strcmp(names, 'thorDomB')) = false;
+    available(strcmp(names, 'thoracic')) = false;
     burden = compute_recording_label_burden( ...
         mask, names, available, normalize_event_types_and_meta(empty_events()), config.fs);
-    verifyEqual(testCase, burden.by_label.rapidB.duration_sec, 0);
-    verifyEqual(testCase, burden.by_label.rapidB.fraction, 0);
-    verifyEqual(testCase, burden.by_label.rapidB.event_count, 0);
-    verifyTrue(testCase, isnan(burden.by_label.thorDomB.duration_sec));
-    verifyTrue(testCase, isnan(burden.by_label.thorDomB.fraction));
-    verifyTrue(testCase, isnan(burden.by_label.thorDomB.event_count));
+    verifyEqual(testCase, burden.by_label.rapid.duration_sec, 0);
+    verifyEqual(testCase, burden.by_label.rapid.fraction, 0);
+    verifyEqual(testCase, burden.by_label.rapid.event_count, 0);
+    verifyTrue(testCase, isnan(burden.by_label.thoracic.duration_sec));
+    verifyTrue(testCase, isnan(burden.by_label.thoracic.fraction));
+    verifyTrue(testCase, isnan(burden.by_label.thoracic.event_count));
 end
 
 function testBurdenUsesAssessableSamplesWhenProvided(testCase)
     config = stage_config();
     names = {config.labels.short};
     mask = false(100, 11);
-    rapid_idx = strcmp(names, 'rapidB');
+    rapid_idx = strcmp(names, 'rapid');
     mask(1:25, rapid_idx) = true;
     assessable = true(100, 11);
     assessable(51:end, rapid_idx) = false;
     burden = compute_recording_label_burden(mask, names, true(1,11), ...
         normalize_event_types_and_meta(empty_events()), 10, assessable);
-    verifyEqual(testCase, burden.by_label.rapidB.duration_sec, 2.5);
-    verifyEqual(testCase, burden.by_label.rapidB.assessable_duration_sec, 5);
-    verifyEqual(testCase, burden.by_label.rapidB.fraction, 0.5);
+    verifyEqual(testCase, burden.by_label.rapid.duration_sec, 2.5);
+    verifyEqual(testCase, burden.by_label.rapid.assessable_duration_sec, 5);
+    verifyEqual(testCase, burden.by_label.rapid.fraction, 0.5);
 end
 
 function testPrespecifiedOverlapsDoNotCreateMaskColumns(testCase)
     config = stage_config();
     names = {config.labels.short};
     mask = false(100, 11);
-    mask(1:20, strcmp(names, 'rapidB')) = true;
-    mask(11:30, strcmp(names, 'deepB')) = true;
+    mask(1:20, strcmp(names, 'rapid')) = true;
+    mask(11:30, strcmp(names, 'deep')) = true;
     mask(41:50, strcmp(names, 'apnea')) = true;
     mask(46:55, strcmp(names, 'desat')) = true;
     original_size = size(mask);
@@ -200,6 +207,8 @@ end
 function testFivePhenotypesAreEvidenceNotNewDiagnoses(testCase)
     [burden, overlaps, label_evidence] = phenotype_fixture();
     evidence = build_db_phenotype_evidence(burden, overlaps, label_evidence);
+    verifyEqual(testCase, evidence.levels.level_1, ...
+        'elementary physiological labels and evidence');
     phenotype_names = setdiff(fieldnames(evidence), ...
         {'version'; 'levels'; 'source_provenance'; 'external_clinical_data'});
     verifyEqual(testCase, numel(phenotype_names), 5);
@@ -238,6 +247,7 @@ function belt = empty_detector_belt(t)
     belt = struct( ...
         'available', false, 'session_amplitude_available', false, ...
         'global_amplitude_available', false, 'ignored', false, ...
+        'peak_t', zeros(0,1), 'rr_bpm', zeros(0,1), ...
         'rate_slow_window_bpm', nan(size(t)), ...
         'rate_rapid_window_bpm', nan(size(t)), ...
         'rate_slow_endpoint_mask', false(size(t)), ...
@@ -303,11 +313,11 @@ function [burden, overlaps, evidence] = phenotype_fixture()
     burden.sigh_count = 2;
     burden.sighs_per_15_min = 18;
     overlaps = compute_label_overlap_summary(mask, names, available, 1);
-    evidence.rapidB = struct('median_rr_lungs', 22, 'median_rr_diaph', 21);
-    evidence.deepB = struct('median_ratio_lungs', 1.3, 'median_ratio_diaph', 1.4);
-    evidence.thorDomB = struct('median_ratio', 1.7, ...
+    evidence.rapid = struct('median_rr_lungs', 22, 'median_rr_diaph', 21);
+    evidence.deep = struct('median_ratio_lungs', 1.3, 'median_ratio_diaph', 1.4);
+    evidence.thoracic = struct('median_ratio', 1.7, ...
         'median_log_ratio', log(1.7), 'median_relative_fraction', 1.7/2.7);
-    evidence.asyncB = struct('analysis_valid', true, ...
+    evidence.async = struct('analysis_valid', true, ...
         'baseline_coherence', struct('high', 0.8, 'mid', 0.8, 'low', 0.8), ...
         'median_observed_coherence', struct('high', 0.5, 'mid', 0.5, 'low', 0.5), ...
         'maximum_deviating_bins', 2);

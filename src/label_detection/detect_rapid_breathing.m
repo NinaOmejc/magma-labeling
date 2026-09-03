@@ -17,7 +17,7 @@ function [events, boundary_info] = detect_rapid_breathing(data, phys_feat, confi
         empty_events(), NaN, '', [], [], []);
 
     if ~lungs.available && ~diaph.available
-        fprintf('Skipping rapidB detection: no valid respiratory belt with usable breath timing.\n');
+        fprintf('Skipping rapid detection: no valid respiratory belt with usable breath timing.\n');
         return;
     end
 
@@ -82,10 +82,6 @@ function [events, boundary_info] = detect_rapid_breathing(data, phys_feat, confi
         localized_lungs | localized_diaph, rapid_lungs | rapid_diaph);
     boundary_info.events = normalize_records([records_lungs; records_diaph]);
     boundary_info.boundary_uncertainty_sec = record_uncertainty(boundary_info.events);
-
-    if isempty(events)
-        return;
-    end
 
     if isfield(config, 'RaB') && isfield(config.RaB, 'do_plot') && config.RaB.do_plot
         opts = struct( ...

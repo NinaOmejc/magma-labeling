@@ -270,7 +270,8 @@ function [loaded_sets, reviewed_fields, schema_version, review_coverage_mask] = 
     end
 
     % Field identity is authoritative across schema versions. Historical
-    % compound raw types inside e.g. rapidB are migrated to rapidB without
+    % compound raw types inside a historical rapid field are migrated to
+    % canonical rapid without
     % reconstructing former depth/desaturation modifiers. A field absent
     % from an old file was never reviewed, so keep that label's current
     % automatic events rather than treating absence as a negative edit.
@@ -295,9 +296,22 @@ function [loaded_sets, reviewed_fields, schema_version, review_coverage_mask] = 
     if schema_version >= 3 && isfield(loaded, 'manual_label_review_mask') && ...
             (isnumeric(loaded.manual_label_review_mask) || ...
              islogical(loaded.manual_label_review_mask)) && ...
-            isequal(size(loaded.manual_label_review_mask), size(review_coverage_mask))
-        review_coverage_mask = logical(loaded.manual_label_review_mask);
+            size(loaded.manual_label_review_mask, 1) == N && ...
+            isfield(meta, 'label_names') && ...
+            numel(meta.label_names) == size(loaded.manual_label_review_mask, 2)
+        saved_review_labels = canonicalize_label_names(meta.label_names);
+        saved_review_mask = logical(loaded.manual_label_review_mask);
+        for i = 1:numel(label_defs)
+            saved_index = find(strcmp(saved_review_labels, label_defs(i).type), 1);
+            if ~isempty(saved_index)
+                review_coverage_mask(:, i) = saved_review_mask(:, saved_index);
+            end
+        end
         reviewed_fields = {label_defs(any(review_coverage_mask, 1)).field};
+    elseif schema_version >= 3 && isfield(loaded, 'manual_label_review_mask')
+        warning('MAGMA:ManualLabelEdit:MissingLabelIdentity', ...
+            ['Manual review coverage was not migrated because its saved ' ...
+             'label_names are missing or misaligned. Event edits remain migrated by field identity.']);
     end
 end
 
@@ -467,7 +481,7 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
         if ~isgraphics(ax1), return; end
         limits = xlim(ax1);
         start_idx = max(1, min(N, floor(limits(1) * fs) + 1));
-        end_idx = max(start_idx, min(N, ceil(limits(2) * fs) + 1));
+        end_idx = max(start_idx, min(N, ceil(limits(2) * fs)));
         review_coverage_mask(start_idx:end_idx, current_label_idx) = true;
         reviewed(current_label_idx) = true;
     end

@@ -1,6 +1,6 @@
 function [events, boundary_info] = detect_thoracic_dominant_breathing(data, phys_feat, config)
 % detect_thoracic_dominant_breathing
-% Label 11 - sustained relative thoracoabdominal excursion dominance.
+% Label 9 - sustained relative thoracoabdominal excursion dominance.
 % Both belts and both fixed per-belt session references are required. This
 % weak label is not a calibrated rib-cage contribution or clinical cutoff.
 % A qualifying endpoint summarizes an aggregate median ratio. There is no
@@ -10,11 +10,11 @@ function [events, boundary_info] = detect_thoracic_dominant_breathing(data, phys
 
     events = empty_events();
     evidence = phys_feat.resp.thoracoabdominal_balance;
-    boundary_info = make_label_boundary_info('thorDomB', ...
+    boundary_info = make_label_boundary_info('thoracic', ...
         'detect_thoracic_dominant_breathing', 'not_evaluated', ...
         empty_events(), empty_events(), NaN, '', [], [], []);
     if ~evidence.available
-        fprintf('Skipping thorDomB detection: both session-normalized respiratory belts are required.\n');
+        fprintf('Skipping thoracic detection: both session-normalized respiratory belts are required.\n');
         return;
     end
 
@@ -33,7 +33,7 @@ function [events, boundary_info] = detect_thoracic_dominant_breathing(data, phys
     if isfield(evidence, 'dominance_endpoint_mask')
         endpoint_mask = evidence.dominance_endpoint_mask;
     end
-    boundary_info = make_label_boundary_info('thorDomB', ...
+    boundary_info = make_label_boundary_info('thoracic', ...
         'detect_thoracic_dominant_breathing', ...
         'aggregate_window_candidate_support_with_explicit_uncertainty', ...
         events, events, analysis_window_sec, ...

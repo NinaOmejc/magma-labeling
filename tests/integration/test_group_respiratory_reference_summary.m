@@ -13,6 +13,8 @@ function testSavedRespiratoryReferenceIsSummarized(testCase)
     measure = 2;
     mask = false(100, 2);
     mask(21:60, 2) = true;
+    % Historical v2 names deliberately exercise semantic (not positional)
+    % migration into the v3 group columns.
     label_names = {'shallowB', 'deepB'};
     config = struct('fs', 200);
     resp_ref = synthetic_saved_reference();
@@ -36,13 +38,13 @@ function testSavedRespiratoryReferenceIsSummarized(testCase)
     verifyEqual(testCase, group_table.lungs_global_to_session_ratio, 0.9/1.1, 'AbsTol', eps);
     verifyEqual(testCase, string(group_table.lungs_reference_quality), "step_candidate");
     verifyEqual(testCase, string(group_table.lungs_reference_action), "retain_data_no_correction");
-    verifyEqual(testCase, group_table.label_deepB_duration_sec, 40/200, 'AbsTol', eps);
-    verifyEqual(testCase, group_table.label_deepB_fraction, 0.40, 'AbsTol', eps);
-    verifyEqual(testCase, group_table.label_deepB_available, 1);
-    verifyEqual(testCase, group_table.label_thorDomB_available, 0);
-    verifyTrue(testCase, isnan(group_table.label_thorDomB_duration_sec));
-    verifyTrue(testCase, isnan(group_table.label_thorDomB_fraction));
-    verifyTrue(testCase, isnan(group_table.events_thorDomB_count));
+    verifyEqual(testCase, group_table.label_deep_duration_sec, 40/200, 'AbsTol', eps);
+    verifyEqual(testCase, group_table.label_deep_fraction, 0.40, 'AbsTol', eps);
+    verifyEqual(testCase, group_table.label_deep_available, 1);
+    verifyEqual(testCase, group_table.label_thoracic_available, 0);
+    verifyTrue(testCase, isnan(group_table.label_thoracic_duration_sec));
+    verifyTrue(testCase, isnan(group_table.label_thoracic_fraction));
+    verifyTrue(testCase, isnan(group_table.events_thoracic_count));
     verifyEqual(testCase, string(group_table.label_schema_version), "legacy_unspecified");
 
     dictionary_file = fullfile(results_root, 'group_analysis', ...
@@ -79,15 +81,59 @@ function testAssessedZeroLabelsRemainDistinctFromUnavailable(testCase)
         'label_schema_version', 'config');
 
     group_table = build_group_label_table(results_root);
-    verifyEqual(testCase, group_table.label_deepB_available, 1);
-    verifyEqual(testCase, group_table.label_deepB_duration_sec, 0);
-    verifyEqual(testCase, group_table.label_deepB_fraction, 0);
-    verifyEqual(testCase, group_table.label_thorDomB_available, 1);
-    verifyEqual(testCase, group_table.label_thorDomB_duration_sec, 0);
-    verifyEqual(testCase, group_table.label_thorDomB_fraction, 0);
-    verifyEqual(testCase, group_table.events_thorDomB_count, 0);
+    verifyEqual(testCase, group_table.label_deep_available, 1);
+    verifyEqual(testCase, group_table.label_deep_duration_sec, 0);
+    verifyEqual(testCase, group_table.label_deep_fraction, 0);
+    verifyEqual(testCase, group_table.label_thoracic_available, 1);
+    verifyEqual(testCase, group_table.label_thoracic_duration_sec, 0);
+    verifyEqual(testCase, group_table.label_thoracic_fraction, 0);
+    verifyEqual(testCase, group_table.events_thoracic_count, 0);
     verifyEqual(testCase, string(group_table.label_schema_version), ...
-        "independent_labels_v2_11class");
+        "independent_labels_v3_11class");
+end
+
+function testLegacyEventsAndRejectedRunsUseSemanticIdentityAndIndices(testCase)
+    results_root = tempname;
+    subject_dir = fullfile(results_root, 'Sub8_M1');
+    mkdir(subject_dir);
+    cleanup_dir = onCleanup(@() rmdir(results_root, 's'));
+
+    current = get_config();
+    subject = 8;
+    measure = 1;
+    label_names = {current.labels.short};
+    label_available = true(1,11);
+    mask_weak = false(20,11);
+    config = struct('fs',10);
+    events_weak = struct('type','rapidB','start_idx',1,'end_idx',10, ...
+        'start_t',50,'end_t',60,'duration',999);
+    record = struct('label','rapidB','detector','detect_rapid_breathing', ...
+        'belt','lungs','boundary_method','test', ...
+        'candidate_start_t',0,'candidate_end_t',31, ...
+        'localized_start_t',1,'localized_end_t',29, ...
+        'localized_duration_sec',28,'final_min_duration_sec',30, ...
+        'passes_final_min_duration',false, ...
+        'rejection_reason','localized_duration_below_minimum', ...
+        'uncertainty_sec',1,'evidence_source','reviewed_breathwise_rr_bpm');
+    event_boundary_info = struct('version','test','rapidB',struct('events',record));
+    save(fullfile(subject_dir,'Sub8_M1_labels.mat'), 'subject','measure', ...
+        'label_names','label_available','mask_weak','events_weak', ...
+        'event_boundary_info','config');
+
+    build_group_label_table(results_root);
+    event_table = readtable(fullfile(results_root,'group_analysis', ...
+        'cohort_event_durations.csv'),'TextType','string');
+    verifyEqual(testCase,event_table.label,"rapid");
+    verifyEqual(testCase,event_table.duration_sec,1,'AbsTol',eps);
+    boundary_table = readtable(fullfile(results_root,'group_analysis', ...
+        'cohort_localized_boundary_qc.csv'),'TextType','string');
+    verifyEqual(testCase,boundary_table.label,"rapid");
+    verifyEqual(testCase,boundary_table.localized_duration_sec,28);
+    verifyEqual(testCase,boundary_table.duration_shortfall_sec,2);
+    qc_data = load(fullfile(results_root,'group_analysis','cohort_qc_summary.mat'));
+    rapid_row = qc_data.cohort_qc.by_label.label == "rapid";
+    verifyEqual(testCase, ...
+        qc_data.cohort_qc.by_label.rejected_localized_run_count(rapid_row),1);
 end
 
 function resp_ref = synthetic_saved_reference()

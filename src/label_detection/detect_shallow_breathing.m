@@ -7,7 +7,8 @@ function [events, boundary_info] = detect_shallow_breathing(data, phys_feat, con
 % A TRUE endpoint means every eligible breath in the preceding analysis
 % window is in-band. That all-breath condition confirms the event; boundary
 % times are then placed at deterministic midpoint cells around qualifying
-% reviewed breaths without changing event existence.
+% reviewed breaths. Localized runs shorter than config.ShB.min_dur_sec are
+% retained as boundary QC, but are not final events.
 
     events = empty_events();
     N = size(data, 1);
@@ -28,7 +29,7 @@ function [events, boundary_info] = detect_shallow_breathing(data, phys_feat, con
     end
 
     if ~lungs.session_amplitude_available && ~diaph.session_amplitude_available
-        fprintf('Skipping shallowB detection: no valid respiratory belt with usable breath amplitudes.\n');
+        fprintf('Skipping shallow detection: no valid respiratory belt with usable breath amplitudes.\n');
         return;
     end
 

@@ -113,17 +113,17 @@ function test_specs = build_test_specs(idx_spo2, idx_lungs, idx_diaph)
         'file', '');
     test_specs = repmat(template, 11, 1);
 
-    test_specs(1) = make_spec(1, 'shallowB', 'ShallowBreathing', 'shallow_breathing', resp_columns);
-    test_specs(2) = make_spec(2, 'irregB', 'IrregularBreathing', 'irregular_breathing', resp_columns);
-    test_specs(3) = make_spec(3, 'slowB', 'SlowBreathing', 'slow_breathing', resp_columns);
-    test_specs(4) = make_spec(4, 'rapidB', 'RapidBreathing', 'rapid_breathing', resp_columns);
-    test_specs(5) = make_spec(5, 'asyncB', 'RespiratoryAsynchrony', 'respiratory_asynchrony', resp_columns);
-    test_specs(6) = make_spec(6, 'desat', 'Desaturation', 'desaturation', idx_spo2);
-    test_specs(7) = make_spec(7, 'apnea', 'Apnea', 'apnea', resp_columns);
-    test_specs(8) = make_spec(8, 'sigh', 'Sigh', 'sigh', resp_columns);
-    test_specs(9) = make_spec(9, 'CSR', 'PeriodicBreathingCheyneStokesLike', 'periodic_breathing', resp_columns);
-    test_specs(10) = make_spec(10, 'deepB', 'DeepBreathing', 'deep_breathing', resp_columns);
-    test_specs(11) = make_spec(11, 'thorDomB', 'ThoracicDominantBreathing', 'thoracic_dominant_breathing', resp_columns);
+    test_specs(1) = make_spec(1, 'shallow', 'ShallowBreathing', 'shallow_breathing', resp_columns);
+    test_specs(2) = make_spec(2, 'deep', 'DeepBreathing', 'deep_breathing', resp_columns);
+    test_specs(3) = make_spec(3, 'slow', 'SlowBreathing', 'slow_breathing', resp_columns);
+    test_specs(4) = make_spec(4, 'rapid', 'RapidBreathing', 'rapid_breathing', resp_columns);
+    test_specs(5) = make_spec(5, 'irregular', 'IrregularBreathing', 'irregular_breathing', resp_columns);
+    test_specs(6) = make_spec(6, 'apnea', 'Apnea', 'apnea', resp_columns);
+    test_specs(7) = make_spec(7, 'sigh', 'Sigh', 'sigh', resp_columns);
+    test_specs(8) = make_spec(8, 'csr', 'PeriodicBreathingCheyneStokesLike', 'periodic_breathing', resp_columns);
+    test_specs(9) = make_spec(9, 'thoracic', 'ThoracicDominantBreathing', 'thoracic_dominant_breathing', resp_columns);
+    test_specs(10) = make_spec(10, 'async', 'RespiratoryAsynchrony', 'respiratory_asynchrony', resp_columns);
+    test_specs(11) = make_spec(11, 'desat', 'Desaturation', 'desaturation', idx_spo2);
 end
 
 function spec = make_spec(measure, label_short, label_long, modification_type, columns)

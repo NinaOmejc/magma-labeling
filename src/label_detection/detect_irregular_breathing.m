@@ -1,6 +1,6 @@
 function [irregular_events, boundary_info] = detect_irregular_breathing(data, phys_feat, config)
 % detect_irregular_breathing
-% Label 2 - Irregular Breathing
+% Label 5 - Irregular Breathing
 %
 % Definition:
 %   Irregular breathing means that durations of consecutive breathing cycles
@@ -26,12 +26,12 @@ function [irregular_events, boundary_info] = detect_irregular_breathing(data, ph
     diaph = phys_feat.resp.diaph;
     lungs_valid = lungs.available;
     diaph_valid = diaph.available;
-    boundary_info = make_label_boundary_info('irregB', ...
+    boundary_info = make_label_boundary_info('irregular', ...
         'detect_irregular_breathing', 'not_evaluated', empty_events(), ...
         empty_events(), NaN, '', [], [], []);
 
     if ~lungs_valid && ~diaph_valid
-        fprintf('Skipping irregB detection: no valid respiratory belt with usable breath timing.\n');
+        fprintf('Skipping irregular detection: no valid respiratory belt with usable breath timing.\n');
         return;
     end
 
@@ -86,7 +86,7 @@ function [irregular_events, boundary_info] = detect_irregular_breathing(data, ph
         irregular_condition_diaph, t_grid, config.fs, N, min_dur_sec, 'irregular_breathing_diaph');
 
     irregular_events = merge_events({irregular_events_lungs, irregular_events_diaph});
-    boundary_info = make_label_boundary_info('irregB', ...
+    boundary_info = make_label_boundary_info('irregular', ...
         'detect_irregular_breathing', ...
         'multi_breath_window_candidate_support_with_explicit_uncertainty', ...
         irregular_events, irregular_events, analysis_win_sec, ...

@@ -48,8 +48,9 @@ function group_table = build_group_label_table(config_or_results_path)
     save(out_mat, 'group_table');
     write_measure_comparability_table(out_dir);
     event_duration_table = build_group_event_duration_table(files);
+    localized_boundary_qc = build_group_boundary_qc_table(files);
     cohort_qc = build_cohort_qc_summary( ...
-        group_table, canonical_labels, event_duration_table);
+        group_table, canonical_labels, event_duration_table, localized_boundary_qc);
     save(fullfile(out_dir, 'cohort_qc_summary.mat'), 'cohort_qc');
     if ~isempty(cohort_qc.by_label)
         writetable(cohort_qc.by_label, ...
@@ -57,6 +58,8 @@ function group_table = build_group_label_table(config_or_results_path)
     end
     writetable(event_duration_table, ...
         fullfile(out_dir, 'cohort_event_durations.csv'));
+    writetable(localized_boundary_qc, ...
+        fullfile(out_dir, 'cohort_localized_boundary_qc.csv'));
     fprintf('Saved group label summary: %s\n', out_csv);
 end
 
@@ -101,9 +104,9 @@ function row = add_label_summaries(row, loaded, config, canonical_labels)
     row.duration_sec = nan;
     saved_labels = {};
     if isfield(loaded, 'label_names')
-        saved_labels = cellstr(string(loaded.label_names));
+        saved_labels = canonicalize_label_names(loaded.label_names);
     end
-    labels = union(canonical_labels, saved_labels, 'stable');
+    labels = canonical_labels;
     available = saved_label_availability(loaded, saved_labels);
 
     weak_mask = get_saved_mask(loaded, 'mask_weak', 'mask');
@@ -150,7 +153,7 @@ end
 function row = add_annotation_provenance_summaries(row, loaded, config, canonical_labels)
     saved_labels = canonical_labels;
     if isfield(loaded, 'label_names')
-        saved_labels = cellstr(string(loaded.label_names));
+        saved_labels = canonicalize_label_names(loaded.label_names);
     end
     available = saved_label_availability(loaded, saved_labels);
     weak_mask = get_saved_mask(loaded, 'mask_weak', 'mask');
@@ -181,7 +184,7 @@ function row = add_annotation_provenance_summaries(row, loaded, config, canonica
             numel(saved_labels), idx, true);
         weak_values = logical(weak_mask(:, idx));
         row.(['events_' field_label '_weak_count']) = count_events(weak_events, label);
-        durations = event_durations(weak_events, label);
+        durations = event_durations(weak_events, label, fs);
         if ~isempty(durations)
             row.(['events_' field_label '_weak_duration_median_sec']) = median(durations, 'omitnan');
             row.(['events_' field_label '_weak_duration_p90_sec']) = prctile(durations, 90);
@@ -218,7 +221,8 @@ function available = saved_label_availability(loaded, saved_labels)
         available = logical(loaded.label_available(:)');
     elseif isfield(loaded, 'input_config') && isstruct(loaded.input_config) && ...
             isfield(loaded.input_config, 'running_labels')
-        available = ismember(saved_labels, cellstr(string(loaded.input_config.running_labels)));
+        running_labels = canonicalize_label_names(loaded.input_config.running_labels);
+        available = ismember(saved_labels, running_labels);
     end
 end
 
@@ -255,16 +259,21 @@ end
 function count = count_events(events, label)
     count = 0;
     if ~isempty(events) && isfield(events, 'type')
-        count = nnz(strcmp({events.type}, label));
+        count = nnz(strcmp(canonicalize_label_names({events.type}), label));
     end
 end
 
-function durations = event_durations(events, label)
+function durations = event_durations(events, label, fs)
     durations = [];
-    if isempty(events) || ~isfield(events, 'type') || ~isfield(events, 'duration')
+    if isempty(events) || ~isfield(events, 'type')
         return;
     end
-    durations = [events(strcmp({events.type}, label)).duration];
+    keep = strcmp(canonicalize_label_names({events.type}), label);
+    selected = events(keep);
+    durations = nan(1, numel(selected));
+    for i = 1:numel(selected)
+        durations(i) = authoritative_event_duration(selected(i), fs);
+    end
     durations = durations(isfinite(durations));
 end
 
@@ -316,13 +325,8 @@ function row = add_overlap_summaries(row, loaded)
     end
 end
 
-function labels = current_canonical_labels(config)
-    if isfield(config, 'labels') && isfield(config.labels, 'short')
-        labels = {config.labels.short};
-        return;
-    end
-    current_config = get_config();
-    labels = {current_config.labels.short};
+function labels = current_canonical_labels(~)
+    labels = canonical_label_names();
 end
 
 function row = add_respiratory_reference_summary(row, resp_ref)
@@ -465,9 +469,9 @@ end
 function row = add_event_counts(row, events, canonical_labels)
     event_types = {};
     if ~isempty(events) && isfield(events, 'type')
-        event_types = {events.type};
+        event_types = canonicalize_label_names({events.type});
     end
-    labels = union(canonical_labels, unique(event_types, 'stable'), 'stable');
+    labels = canonical_labels;
     for i = 1:numel(labels)
         field_label = matlab.lang.makeValidName(labels{i});
         available_field = ['label_' field_label '_available'];
@@ -636,6 +640,7 @@ function event_table = build_group_event_duration_table(files)
     for i = 1:numel(files)
         filename = fullfile(files(i).folder, files(i).name);
         loaded = load(filename);
+        fs = get_results_fs(loaded, struct());
         [file_subject, file_measure] = parse_subject_measure(filename);
         layers = {'weak','reviewed'};
         event_fields = {'events_weak','events_reviewed'};
@@ -643,17 +648,119 @@ function event_table = build_group_event_duration_table(files)
         for j = 1:numel(layers)
             events = get_saved_events(loaded,event_fields{j},fallbacks{j});
             for k = 1:numel(events)
-                if ~isfield(events,'type') || ~isfield(events,'duration') || ...
-                        ~isfinite(events(k).duration)
+                if ~isfield(events,'type')
                     continue;
                 end
+                event_duration = authoritative_event_duration(events(k), fs);
+                if ~isfinite(event_duration), continue; end
                 subject(end+1,1) = get_loaded_value(loaded,'subject',file_subject); %#ok<AGROW>
                 measurement(end+1,1) = get_loaded_value(loaded,'measure',file_measure); %#ok<AGROW>
                 provenance(end+1,1) = string(layers{j}); %#ok<AGROW>
-                label(end+1,1) = string(events(k).type); %#ok<AGROW>
-                duration_sec(end+1,1) = events(k).duration; %#ok<AGROW>
+                mapped_label = canonicalize_label_names({events(k).type});
+                label(end+1,1) = string(mapped_label{1}); %#ok<AGROW>
+                duration_sec(end+1,1) = event_duration; %#ok<AGROW>
             end
         end
     end
     event_table = table(subject,measurement,provenance,label,duration_sec);
+end
+
+function duration = authoritative_event_duration(event, fs)
+    duration = NaN;
+    if isfield(event, 'start_idx') && isfield(event, 'end_idx') && ...
+            isnumeric(event.start_idx) && isnumeric(event.end_idx) && ...
+            isscalar(event.start_idx) && isscalar(event.end_idx) && ...
+            isfinite(event.start_idx) && isfinite(event.end_idx) && ...
+            event.end_idx >= event.start_idx && isfinite(fs) && fs > 0
+        duration = (round(event.end_idx) - round(event.start_idx) + 1) / fs;
+    elseif isfield(event, 'duration') && isnumeric(event.duration) && ...
+            isscalar(event.duration) && isfinite(event.duration)
+        duration = event.duration;
+    end
+end
+
+function boundary_table = build_group_boundary_qc_table(files)
+    subject = zeros(0,1);
+    measurement = zeros(0,1);
+    label = strings(0,1);
+    belt = strings(0,1);
+    candidate_start_t = zeros(0,1);
+    candidate_end_t = zeros(0,1);
+    localized_start_t = zeros(0,1);
+    localized_end_t = zeros(0,1);
+    localized_duration_sec = zeros(0,1);
+    final_min_duration_sec = zeros(0,1);
+    passes_final_min_duration = false(0,1);
+    duration_shortfall_sec = zeros(0,1);
+    rejection_reason = strings(0,1);
+    evidence_source = strings(0,1);
+    uncertainty_sec = zeros(0,1);
+
+    for file_index = 1:numel(files)
+        filename = fullfile(files(file_index).folder, files(file_index).name);
+        loaded = load(filename);
+        if ~isfield(loaded, 'event_boundary_info') || ...
+                ~isstruct(loaded.event_boundary_info)
+            continue;
+        end
+        [file_subject, file_measure] = parse_subject_measure(filename);
+        boundary_fields = setdiff(fieldnames(loaded.event_boundary_info), {'version'});
+        for field_index = 1:numel(boundary_fields)
+            info = loaded.event_boundary_info.(boundary_fields{field_index});
+            if ~isstruct(info) || ~isfield(info, 'events') || isempty(info.events)
+                continue;
+            end
+            records = info.events;
+            for record_index = 1:numel(records)
+                record = records(record_index);
+                minimum = numeric_record_field(record, 'final_min_duration_sec', NaN);
+                if ~isfinite(minimum)
+                    continue;
+                end
+                duration = numeric_record_field(record, 'localized_duration_sec', NaN);
+                passed = logical(numeric_record_field( ...
+                    record, 'passes_final_min_duration', false));
+                record_label = text_record_field(record, 'label', boundary_fields{field_index});
+                mapped_label = canonicalize_label_names({record_label});
+                subject(end+1,1) = get_loaded_value(loaded, 'subject', file_subject); %#ok<AGROW>
+                measurement(end+1,1) = get_loaded_value(loaded, 'measure', file_measure); %#ok<AGROW>
+                label(end+1,1) = string(mapped_label{1}); %#ok<AGROW>
+                belt(end+1,1) = string(text_record_field(record, 'belt', '')); %#ok<AGROW>
+                candidate_start_t(end+1,1) = numeric_record_field(record, 'candidate_start_t', NaN); %#ok<AGROW>
+                candidate_end_t(end+1,1) = numeric_record_field(record, 'candidate_end_t', NaN); %#ok<AGROW>
+                localized_start_t(end+1,1) = numeric_record_field(record, 'localized_start_t', NaN); %#ok<AGROW>
+                localized_end_t(end+1,1) = numeric_record_field(record, 'localized_end_t', NaN); %#ok<AGROW>
+                localized_duration_sec(end+1,1) = duration; %#ok<AGROW>
+                final_min_duration_sec(end+1,1) = minimum; %#ok<AGROW>
+                passes_final_min_duration(end+1,1) = passed; %#ok<AGROW>
+                duration_shortfall_sec(end+1,1) = max(0, minimum - duration); %#ok<AGROW>
+                rejection_reason(end+1,1) = string(text_record_field(record, 'rejection_reason', '')); %#ok<AGROW>
+                evidence_source(end+1,1) = string(text_record_field(record, 'evidence_source', '')); %#ok<AGROW>
+                uncertainty_sec(end+1,1) = numeric_record_field(record, 'uncertainty_sec', NaN); %#ok<AGROW>
+            end
+        end
+    end
+    boundary_table = table(subject, measurement, label, belt, ...
+        candidate_start_t, candidate_end_t, localized_start_t, localized_end_t, ...
+        localized_duration_sec, final_min_duration_sec, ...
+        passes_final_min_duration, duration_shortfall_sec, rejection_reason, ...
+        evidence_source, uncertainty_sec);
+end
+
+function value = numeric_record_field(record, name, default_value)
+    value = default_value;
+    if isfield(record, name) && isnumeric(record.(name)) && ...
+            isscalar(record.(name)) && isfinite(record.(name))
+        value = record.(name);
+    elseif isfield(record, name) && islogical(record.(name)) && ...
+            isscalar(record.(name))
+        value = record.(name);
+    end
+end
+
+function value = text_record_field(record, name, default_value)
+    value = default_value;
+    if isfield(record, name) && ~isempty(record.(name))
+        value = char(string(record.(name)));
+    end
 end

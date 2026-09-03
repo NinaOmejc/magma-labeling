@@ -2,10 +2,10 @@ function [events, records, localized_support_events] = localize_confirmed_breath
     candidate_events, belt, N, fs, event_type, criterion, lower, upper, ...
     analysis_window_sec, min_duration_sec, belt_name)
 % localize_confirmed_breath_events
-% Refine already-confirmed candidate event boundaries using reviewed
-% breath-level evidence. This function never decides whether an event
-% exists. All disconnected localized qualifying runs are retained in QC
-% records, and only runs meeting min_duration_sec become final events.
+% Refine confirmed candidate boundaries using reviewed breath-level
+% evidence. Localization may reject a candidate: all disconnected
+% qualifying runs are retained in QC records, while only runs meeting
+% min_duration_sec become final events.
 %
 % Rate criteria use peak-to-peak intervals and breathwise rr_bpm. Amplitude
 % criteria use midpoint cells around reviewed breaths and amp_ratio_session.
@@ -136,7 +136,7 @@ function [starts, ends, uncertainty, source, method] = ...
             method = 'confirmed_window_breath_midpoint_localization';
     end
 
-    good = isfinite(starts) & isfinite(ends) & ends >= starts;
+    good = isfinite(starts) & isfinite(ends) & ends > starts;
     starts = starts(good);
     ends = ends(good);
     uncertainty = uncertainty(good);
@@ -172,7 +172,7 @@ function [run_starts, run_ends, run_uncertainties] = ...
     starts = max(starts(keep), c0);
     ends = min(ends(keep), c1);
     uncertainty = uncertainty(keep);
-    valid = ends >= starts;
+    valid = ends > starts;
     starts = starts(valid);
     ends = ends(valid);
     uncertainty = uncertainty(valid);

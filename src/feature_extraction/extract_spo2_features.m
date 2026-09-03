@@ -1,6 +1,6 @@
 function spo2_feat = extract_spo2_features(data, baseline, config)
 % extract_spo2_features
-% Extracts SpO2 on the config.fs master timeline and detects Label 6 events.
+% Extracts SpO2 on the config.fs master timeline and detects Label 11 events.
 
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);

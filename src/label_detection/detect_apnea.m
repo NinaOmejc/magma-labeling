@@ -1,6 +1,6 @@
 function [events, diagnostics, boundary_info] = detect_apnea(data, phys_feat, config)
 % detect_apnea
-% Label 7 - Apnea
+% Label 6 - Apnea
 %
 % Evidence paths:
 %   1) Peak-amplitude path: breath amplitudes <= threshold relative to the
@@ -370,7 +370,7 @@ function mask = breath_amplitude_mask(belt, threshold, t_grid)
                 t1 = 0.5 * (peak_t(i) + peak_t(i+1));
             end
         end
-        mask = mask | (t_grid >= t0 & t_grid <= t1);
+        mask = mask | (t_grid >= t0 & t_grid < t1);
     end
 end
 
@@ -399,9 +399,9 @@ function [events, records] = localize_apnea_candidates( ...
 
     for i = 1:numel(candidates)
         candidate = candidates(i);
-        in_candidate = t_grid >= candidate.start_t & t_grid <= candidate.end_t;
+        in_candidate = t_grid >= candidate.start_t & t_grid < candidate.end_t;
         in_candidate_native = t_native >= candidate.start_t & ...
-            t_native <= candidate.end_t;
+            t_native < candidate.end_t;
         has_amp = any(amplitude_candidate & in_candidate);
         has_raw = any(raw_candidate & in_candidate);
         source = 'confirmation_window_only';
@@ -468,14 +468,14 @@ function [t0, t1, found] = longest_grid_run(mask, t_grid, grid_step)
 end
 
 function event = event_from_times(event, start_t, end_t, N, fs)
-    recording_end = max(0, (N - 1) / fs);
+    recording_end = N / fs;
     start_t = max(0, min(recording_end, start_t));
     end_t = max(start_t, min(recording_end, end_t));
     event.start_idx = max(1, min(N, round(start_t * fs) + 1));
-    event.end_idx = max(event.start_idx, min(N, round(end_t * fs) + 1));
+    event.end_idx = max(event.start_idx, min(N, round(end_t * fs)));
     event.start_t = (event.start_idx - 1) / fs;
-    event.end_t = (event.end_idx - 1) / fs;
-    event.duration = event.end_t - event.start_t;
+    event.end_t = event.end_idx / fs;
+    event.duration = (event.end_idx - event.start_idx + 1) / fs;
 end
 
 function [mask, diag] = raw_flat_belt_mask(x, config, t_grid, raw_cfg)

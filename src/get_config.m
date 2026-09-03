@@ -4,7 +4,7 @@ function config = get_config()
     config = struct;                                                                                   % main configuration container
     config.path_data_in = 'D:\Projects\MAGMA\raw_data';                                                % *** folder with raw input .dat files
     config.path_results_out = 'D:\Projects\MAGMA\data_analysis\disorder_classification';               % *** root output folder
-    config.subjects = 20:60;                                                                                % *** subjects to analyze
+    config.subjects = 1:2;                                                                                % *** subjects to analyze
     config.remove_subjects = [3 30 91];                                                                % *** subjects to not analyze
     config.measurements = [1 2];                                                                       % *** measurements to analyze - 1: pre-rehab-pre-stress, 2: pre-rehab-post-stress, 3:post-rehab-pre-stress, 4:post-rehab-post-stress
     config.fs = 200;                                                                                   % native/master sampling frequency (Hz) for all aligned physiological signals
@@ -13,7 +13,6 @@ function config = get_config()
     config.label_schema_version = 'independent_labels_v3_11class';         % explicit saved-output label schema
     config.labels = get_labels();                                          % canonical label names and indices
 
-                                        % resolution of the saved figures
     config.make_figs_visible = 'off';                                      % create figures hidden during batch runs, so they dont pop up (for faster run)
     config.overwrite_results = true;                                       % *** Recompute even if label output already exists
     config.overwrite_features = false;                                     % *** Recompute respiratory features even if "*_features.mat" exists
@@ -30,12 +29,8 @@ function config = get_config()
     config.detrend.window_length = 60;                          % moving detrend window length in seconds
     config.detrend.do_plot = true;                              % save detrending diagnostic plots
     
-    config.normality = struct;
-    config.normality.method = 'lillie';
-    config.normality.do_plot = false;                           % diagnostic normality plots for extracted respiration features
-
     %---- PROBLEMS ----
-    config.problems.missing_lung_belt = [ ...                  % known [subject, measurement] recordings without a usable lung belt
+    config.problems.missing_lung_belt = [ ...                  % known [subject, measurement] recordings without a usable lung belt (e.g. first 20 subjects have a broken belt)
         (1:20)', ones(20, 1); ...
         (1:20)', 2 * ones(20, 1)];
 
@@ -97,10 +92,35 @@ function config = get_config()
     config.ShB.amp_ratio_low    = 0.65;     % lower amplitude ratio bound for shallow breaths (35 % decreased from baseline)
     config.ShB.amp_ratio_high   = 0.80;     % upper amplitude ratio bound for shallow breaths (20 % decreased from baseline)
     config.ShB.analysis_win_sec = 30;       % trailing breath-amplitude analysis window
-    config.ShB.min_dur_sec      = 30;       % minimum inferred shallow-state duration
+    config.ShB.min_dur_sec      = 30;       % minimum final localized shallow-state duration
     config.ShB.do_plot           = true;    % save shallow breathing diagnostic plot
 
-    %---- LABEL 2 - IrB - DETECTION SETTINGS 
+    %---- LABEL 2 - deep - DETECTION SETTINGS
+    % Relative increased excursion of an uncalibrated belt. This is a
+    % within-record state, not an absolute tidal-volume measurement.
+    config.DeB = struct();
+    config.DeB.amp_ratio_thr = 1.20;              % breath excursion / fixed per-belt session reference
+    config.DeB.analysis_win_sec = 30;             % trailing breath-amplitude analysis window
+    config.DeB.min_dur_sec = 30;                  % minimum final localized deep-state duration
+    config.DeB.do_plot = true;                    % save deep breathing diagnostic plot
+
+    %---- LABEL 3 - slow - DETECTION SETTINGS
+    config.SlB = struct();                % slow breathing settings
+    config.SlB.analysis_win_sec = 60;     % rolling analysis window (30–60 s allowed)
+    config.SlB.rr_thr_bpm       = 10;     % mean RR <= 10 bpm
+    config.SlB.min_dur_sec      = 30;     % minimum final localized slow-state duration
+    config.SlB.plot_rr_step_sec = 5;      % display RR as held values that can change 12 times/min (60/5). So its averaged over X seconds, here 5 seconds.
+    config.SlB.do_plot          = true;   % save slow breathing diagnostic plot
+
+    %---- LABEL 4 - rapid - DETECTION SETTINGS
+    config.RaB = struct();                                      % rapid breathing settings
+    config.RaB.analysis_win_sec = 30;                           % trailing respiratory-rate analysis window
+    config.RaB.rr_thr_bpm       = 20;                           % mean RR >= 20 bpm
+    config.RaB.min_dur_sec      = 30;                           % minimum final localized rapid-state duration
+    config.RaB.plot_rr_step_sec = 5;                            % display RR as held values at this step size in seconds
+    config.RaB.do_plot         = true;                          % save rapid breathing diagnostic plot
+
+    %---- LABEL 5 - irregular - DETECTION SETTINGS
     config.IrB = struct();              % irregular breathing settings
     config.IrB.analysis_win_sec = 60;   % trailing IBI-variability analysis window
     config.IrB.min_dur_sec = 60;        % minimum inferred irregular-state duration
@@ -112,43 +132,7 @@ function config = get_config()
     config.IrB.plot_cov_step_sec = 1;   % display CoV as held values over "step_sec" windows (just for display)
     config.IrB.do_plot       = true;    % save irregular breathing diagnostic plot
 
-    %---- LABEL 3 - SlB - DETECTION SETTINGS 
-    config.SlB = struct();                % slow breathing settings
-    config.SlB.analysis_win_sec = 60;     % rolling analysis window (30–60 s allowed)
-    config.SlB.rr_thr_bpm       = 10;     % mean RR <= 10 bpm
-    config.SlB.min_dur_sec      = 30;     % sustained >= 30 s
-    config.SlB.plot_rr_step_sec = 5;      % display RR as held values that can change 12 times/min (60/5). So its averaged over X seconds, here 5 seconds.
-    config.SlB.do_plot          = true;   % save slow breathing diagnostic plot
-
-    %---- LABEL 4: RaB  (Rapid breathing)
-    config.RaB = struct();                                      % rapid breathing settings
-    config.RaB.analysis_win_sec = 30;                           % trailing respiratory-rate analysis window
-    config.RaB.rr_thr_bpm       = 20;                           % mean RR >= 20 bpm
-    config.RaB.min_dur_sec      = 30;                           % minimum inferred rapid-state duration
-    config.RaB.plot_rr_step_sec = 5;                            % display RR as held values at this step size in seconds
-    config.RaB.do_plot         = true;                          % save rapid breathing diagnostic plot
-
-    %---- LABEL 5: Respiratory Asynchrony
-    config.ReA = struct();                  % respiratory asynchrony settings
-    config.ReA.analysis_fs = 20;            % local anti-aliased analysis rate; master data and indices remain at config.fs
-    config.ReA.f0 = 1;                      % wavelet resolution parameter from Tomislav's script
-    config.ReA.fmin = 0.052;                % lower WT frequency bound from Tomislav's script
-    config.ReA.low_mid_cut_hz = 0.145;      % low vs respiratory-band split
-    config.ReA.mid_high_cut_hz = 0.6;       % respiratory-band vs high split
-    config.ReA.fmax = 2.0;                  % upper WT frequency bound from Tomislav's script
-    config.ReA.tlphcoh_cycles = 10;         % time-localized phase coherence window in cycles
-    config.ReA.min_dur_sec = 30;            % sustained low-coherence deviation duration
-    config.ReA.baseline_mad_k = 3;          % robust spread multiplier for baseline-relative threshold
-    config.ReA.min_abs_drop = 0.15;         % minimum coherence drop from baseline median
-    config.ReA.min_deviating_bins = 1;      % number of frequency bins that must deviate
-    config.ReA.plot_step_sec = 5;           % display coherence as held medians at this step (in seconds)
-    config.ReA.do_plot          = true;     % save respiratory asynchrony diagnostic plot
-
-    %---- LABEL 6: SpO2 desaturation
-    config.Des = struct();                  % desaturation settings (its exactly the same as feature extraction, see SPO2 / DESATURATION FEATURE EXTRACTION above)
-    config.Des.do_plot = true;              % save desaturation diagnostic plot
-
-    %---- LABEL 7: Apnea
+    %---- LABEL 6 - apnea - DETECTION SETTINGS
     config.Apn = struct();                  % apnea settings
     config.Apn.amp_ratio_thr    = 0.10;     % <=10% of baseline in BOTH belts (if only one belt is working, then consider only one)
     config.Apn.amp_analysis_win_sec = 10;   % trailing normalized-amplitude evidence window
@@ -165,7 +149,7 @@ function config = get_config()
     config.Apn.raw_flat_hist_bins = 40;             % histogram bins used to find held-amplitude plateaus
     config.Apn.do_plot = true;              % save apnea diagnostic plot
 
-    %---- LABEL 8: Sigh
+    %---- LABEL 7 - sigh - DETECTION SETTINGS
     config.Sig = struct();                      % sigh detection settings
     config.Sig.method = 'global_ratio_outlier'; % options: 'global_ratio_outlier' or 'legacy_60s'
     config.Sig.ratio_prctile = 98;              % top 2% normalized breaths are sigh candidates
@@ -181,7 +165,7 @@ function config = get_config()
     config.Sig.legacy_amp_ratio_thr = 1.5;      % amplitude ratio threshold for legacy sigh method
     config.Sig.legacy_min_prev_breaths = 3;     % minimum previous breaths for legacy sigh method
 
-    %---- LABEL 9: Cheyne-Stokes-like / periodic breathing
+    %---- LABEL 8 - csr (Cheyne-Stokes-like / periodic breathing)
     config.CSR = struct();                       % periodic breathing / Cheyne-Stokes-like settings
     config.CSR.min_cycle_sec = 35;               % permissive lower cycle duration, close to AASM >=40 s rule
     config.CSR.max_cycle_sec = 120;              % upper cycle duration for periodic breathing envelopes
@@ -197,16 +181,7 @@ function config = get_config()
     config.CSR.max_cycle_gap_sec = 10;           % allowed gap when merging adjacent candidate cycles
     config.CSR.do_plot = true;                   % save periodic breathing diagnostic plot
 
-    %---- LABEL 10: Deep breathing
-    % Relative increased excursion of an uncalibrated belt. This is a
-    % within-record state, not an absolute tidal-volume measurement.
-    config.DeB = struct();
-    config.DeB.amp_ratio_thr = 1.20;              % breath excursion / fixed per-belt session reference
-    config.DeB.analysis_win_sec = 30;             % trailing breath-amplitude analysis window
-    config.DeB.min_dur_sec = 30;                  % sustained deep-amplitude state duration
-    config.DeB.do_plot = true;                    % save deep breathing diagnostic plot
-
-    %---- LABEL 11: Thoracic-dominant breathing
+    %---- LABEL 9 - thoracic - DETECTION SETTINGS
     % Relative thoracoabdominal excursion dominance after normalizing each
     % uncalibrated belt to its own fixed session reference. The threshold is
     % an operational weak-label rule, not a validated clinical cutoff.
@@ -216,6 +191,26 @@ function config = get_config()
     config.TDB.min_dur_sec = 30;                   % sustained dominance duration
     config.TDB.min_breaths = 3;                    % minimum finite positive breaths per belt/window
     config.TDB.do_plot = true;                     % save relative-balance diagnostic plot
+
+    %---- LABEL 10 - async - DETECTION SETTINGS
+    config.ReA = struct();                  % respiratory asynchrony settings
+    config.ReA.analysis_fs = 20;            % local anti-aliased analysis rate; master data and indices remain at config.fs
+    config.ReA.f0 = 1;                      % wavelet resolution parameter from Tomislav's script
+    config.ReA.fmin = 0.052;                % lower WT frequency bound from Tomislav's script
+    config.ReA.low_mid_cut_hz = 0.145;      % low vs respiratory-band split
+    config.ReA.mid_high_cut_hz = 0.6;       % respiratory-band vs high split
+    config.ReA.fmax = 2.0;                  % upper WT frequency bound from Tomislav's script
+    config.ReA.tlphcoh_cycles = 10;         % time-localized phase coherence window in cycles
+    config.ReA.min_dur_sec = 30;            % sustained low-coherence deviation duration
+    config.ReA.baseline_mad_k = 3;          % robust spread multiplier for baseline-relative threshold
+    config.ReA.min_abs_drop = 0.15;         % minimum coherence drop from baseline median
+    config.ReA.min_deviating_bins = 1;      % number of frequency bins that must deviate
+    config.ReA.plot_step_sec = 5;           % display coherence as held medians at this step (in seconds)
+    config.ReA.do_plot          = true;     % save respiratory asynchrony diagnostic plot
+
+    %---- LABEL 11 - desat - DETECTION SETTINGS
+    config.Des = struct();                  % desaturation plotting settings; thresholds are in config.spo2
+    config.Des.do_plot = true;              % save desaturation diagnostic plot
 
     % HOW TO REPRESENT RESULTS
     config.LabelMask = struct();                 % label-mask heatmap figure

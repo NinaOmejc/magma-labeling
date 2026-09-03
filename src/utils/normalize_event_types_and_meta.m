@@ -49,7 +49,7 @@ function events = normalize_event_types_and_meta(raw_events, fs)
         end
     end
 
-    events = merge_normalized_belt_events(events);
+    events = merge_normalized_belt_events(events, fs);
 end
 
 function template = normalized_template()
@@ -75,15 +75,15 @@ function key = normalize_key(value)
 end
 
 function type = canonical_type(key)
-    if matches_label(key, {'shallow_breathing', 'shallowb', 'shb', 'shallowbreathing'})
+    if matches_label(key, {'shallow', 'shallow_breathing', 'shallowb', 'shb', 'shallowbreathing'})
         type = 'shallow';
-    elseif matches_label(key, {'irregular_breathing', 'irregb', 'irb', 'irregularbreathing'})
+    elseif matches_label(key, {'irregular', 'irregular_breathing', 'irregb', 'irb', 'irregularbreathing'})
         type = 'irregular';
-    elseif matches_label(key, {'slow_breathing', 'slowb', 'slb', 'slowbreathing'})
+    elseif matches_label(key, {'slow', 'slow_breathing', 'slowb', 'slb', 'slowbreathing'})
         type = 'slow';
     elseif matches_label(key, {'rapid_breathing', 'rapid', 'rapidb', 'rab', 'rapidbreathing', 'tachypnea'})
         type = 'rapid';
-    elseif matches_label(key, {'respiratory_asynchrony', 'asyncb', 'rea', 'respiratoryasynchrony'})
+    elseif matches_label(key, {'async', 'respiratory_asynchrony', 'asyncb', 'rea', 'respiratoryasynchrony'})
         type = 'async';
     elseif matches_label(key, {'desaturation', 'desat', 'des', 'hypoxia'})
         type = 'desat';
@@ -95,9 +95,9 @@ function type = canonical_type(key)
             'cheyne_stokes', 'periodicbreathing', ...
             'periodicbreathingcheynestokeslike'})
         type = 'csr';
-    elseif matches_label(key, {'deep_breathing', 'deepb', 'deb', 'deepbreathing'})
+    elseif matches_label(key, {'deep', 'deep_breathing', 'deepb', 'deb', 'deepbreathing'})
         type = 'deep';
-    elseif matches_label(key, {'thoracic_dominant_breathing', 'thordomb', ...
+    elseif matches_label(key, {'thoracic', 'thoracic_dominant_breathing', 'thordomb', ...
             'thoracicdominantbreathing'})
         type = 'thoracic';
     else
@@ -158,7 +158,7 @@ function value = required_numeric_field(event, field)
     value = event.(field);
 end
 
-function events = merge_normalized_belt_events(events)
+function events = merge_normalized_belt_events(events, fs)
     if numel(events) <= 1
         return;
     end
@@ -177,9 +177,16 @@ function events = merge_normalized_belt_events(events)
         if strcmp(current.type, previous.type) && current.start_t <= previous.end_t
             out(end).start_idx = min(previous.start_idx, current.start_idx);
             out(end).end_idx = max(previous.end_idx, current.end_idx);
-            out(end).start_t = min(previous.start_t, current.start_t);
-            out(end).end_t = max(previous.end_t, current.end_t);
-            out(end).duration = out(end).end_t - out(end).start_t;
+            if isempty(fs)
+                out(end).start_t = min(previous.start_t, current.start_t);
+                out(end).end_t = max(previous.end_t, current.end_t);
+                out(end).duration = out(end).end_t - out(end).start_t;
+            else
+                out(end).start_t = (out(end).start_idx - 1) / fs;
+                out(end).end_t = out(end).end_idx / fs;
+                out(end).duration = ...
+                    (out(end).end_idx - out(end).start_idx + 1) / fs;
+            end
             out(end).belt = merge_belt_labels(previous.belt, current.belt);
         else
             out(end+1, 1) = current; %#ok<AGROW>

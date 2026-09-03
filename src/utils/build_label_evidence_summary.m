@@ -16,85 +16,85 @@ function summary = build_label_evidence_summary( ...
 
     lungs = phys_feat.resp.lungs;
     diaph = phys_feat.resp.diaph;
-    summary.shallowB.analysis_window_sec = phys_feat.resp.amplitude_windows_sec.shallow;
-    summary.shallowB.ratio_band = phys_feat.resp.shallow_band_ratio;
-    summary.shallowB.median_ratio_lungs = finite_median(lungs.amp_ratio_session_window_median);
-    summary.shallowB.median_ratio_diaph = finite_median(diaph.amp_ratio_session_window_median);
-    summary.shallowB.reference_quality_lungs = lungs.reference_quality;
-    summary.shallowB.reference_quality_diaph = diaph.reference_quality;
-    summary.shallowB.supporting_belts = belt_support( ...
+    summary.shallow.analysis_window_sec = phys_feat.resp.amplitude_windows_sec.shallow;
+    summary.shallow.ratio_band = phys_feat.resp.shallow_band_ratio;
+    summary.shallow.median_ratio_lungs = finite_median(lungs.amp_ratio_session_window_median);
+    summary.shallow.median_ratio_diaph = finite_median(diaph.amp_ratio_session_window_median);
+    summary.shallow.reference_quality_lungs = lungs.reference_quality;
+    summary.shallow.reference_quality_diaph = diaph.reference_quality;
+    summary.shallow.supporting_belts = belt_support( ...
         lungs.session_amplitude_available, diaph.session_amplitude_available);
 
-    summary.deepB.analysis_window_sec = phys_feat.resp.amplitude_windows_sec.deep;
-    summary.deepB.ratio_threshold = phys_feat.resp.deep_ratio_threshold;
-    summary.deepB.median_ratio_lungs = finite_median(lungs.deep_amp_ratio_session_window_median);
-    summary.deepB.median_ratio_diaph = finite_median(diaph.deep_amp_ratio_session_window_median);
-    summary.deepB.median_margin_lungs = finite_median( ...
+    summary.deep.analysis_window_sec = phys_feat.resp.amplitude_windows_sec.deep;
+    summary.deep.ratio_threshold = phys_feat.resp.deep_ratio_threshold;
+    summary.deep.median_ratio_lungs = finite_median(lungs.deep_amp_ratio_session_window_median);
+    summary.deep.median_ratio_diaph = finite_median(diaph.deep_amp_ratio_session_window_median);
+    summary.deep.median_margin_lungs = finite_median( ...
         lungs.deep_amp_ratio_session_window_median - phys_feat.resp.deep_ratio_threshold);
-    summary.deepB.median_margin_diaph = finite_median( ...
+    summary.deep.median_margin_diaph = finite_median( ...
         diaph.deep_amp_ratio_session_window_median - phys_feat.resp.deep_ratio_threshold);
-    summary.deepB.reference_quality_lungs = lungs.reference_quality;
-    summary.deepB.reference_quality_diaph = diaph.reference_quality;
-    summary.deepB.supporting_belts = belt_support( ...
+    summary.deep.reference_quality_lungs = lungs.reference_quality;
+    summary.deep.reference_quality_diaph = diaph.reference_quality;
+    summary.deep.supporting_belts = belt_support( ...
         lungs.session_amplitude_available, diaph.session_amplitude_available);
 
-    summary.slowB.analysis_window_sec = phys_feat.resp.rate_windows_sec.slow;
-    summary.slowB.median_rr_lungs = finite_median(lungs.rate_slow_window_bpm);
-    summary.slowB.median_rr_diaph = finite_median(diaph.rate_slow_window_bpm);
-    summary.slowB.rr_threshold_bpm = diagnostic_signals.slow_bpm_threshold;
-    summary.slowB.median_margin_lungs = finite_median(diagnostic_signals.slow_margin_bpm_lungs);
-    summary.slowB.median_margin_diaph = finite_median(diagnostic_signals.slow_margin_bpm_diaph);
-    summary.slowB.supporting_belts = belt_support( ...
+    summary.slow.analysis_window_sec = phys_feat.resp.rate_windows_sec.slow;
+    summary.slow.median_rr_lungs = finite_median(lungs.rate_slow_window_bpm);
+    summary.slow.median_rr_diaph = finite_median(diaph.rate_slow_window_bpm);
+    summary.slow.rr_threshold_bpm = diagnostic_signals.slow_bpm_threshold;
+    summary.slow.median_margin_lungs = finite_median(diagnostic_signals.slow_margin_bpm_lungs);
+    summary.slow.median_margin_diaph = finite_median(diagnostic_signals.slow_margin_bpm_diaph);
+    summary.slow.supporting_belts = belt_support( ...
         any_finite(lungs.rate_slow_window_bpm), any_finite(diaph.rate_slow_window_bpm));
 
-    summary.rapidB.analysis_window_sec = phys_feat.resp.rate_windows_sec.rapid;
-    summary.rapidB.median_rr_lungs = finite_median(lungs.rate_rapid_window_bpm);
-    summary.rapidB.median_rr_diaph = finite_median(diaph.rate_rapid_window_bpm);
-    summary.rapidB.rr_threshold_bpm = diagnostic_signals.rapid_bpm_threshold;
-    summary.rapidB.median_margin_lungs = finite_median(diagnostic_signals.rapid_margin_bpm_lungs);
-    summary.rapidB.median_margin_diaph = finite_median(diagnostic_signals.rapid_margin_bpm_diaph);
-    summary.rapidB.supporting_belts = belt_support( ...
+    summary.rapid.analysis_window_sec = phys_feat.resp.rate_windows_sec.rapid;
+    summary.rapid.median_rr_lungs = finite_median(lungs.rate_rapid_window_bpm);
+    summary.rapid.median_rr_diaph = finite_median(diaph.rate_rapid_window_bpm);
+    summary.rapid.rr_threshold_bpm = diagnostic_signals.rapid_bpm_threshold;
+    summary.rapid.median_margin_lungs = finite_median(diagnostic_signals.rapid_margin_bpm_lungs);
+    summary.rapid.median_margin_diaph = finite_median(diagnostic_signals.rapid_margin_bpm_diaph);
+    summary.rapid.supporting_belts = belt_support( ...
         any_finite(lungs.rate_rapid_window_bpm), any_finite(diaph.rate_rapid_window_bpm));
 
-    summary.irregB.detection_metric = diagnostic_signals.irregularity_detection_metric;
-    summary.irregB.cov_threshold = diagnostic_signals.irregularity_cov_thr;
-    summary.irregB.robust_cov_threshold = diagnostic_signals.irregularity_robust_cov_thr;
-    summary.irregB.median_cov_lungs = finite_median(lungs.irregularity.cov);
-    summary.irregB.median_cov_diaph = finite_median(diaph.irregularity.cov);
-    summary.irregB.median_selected_metric_lungs = finite_median( ...
+    summary.irregular.detection_metric = diagnostic_signals.irregularity_detection_metric;
+    summary.irregular.cov_threshold = diagnostic_signals.irregularity_cov_thr;
+    summary.irregular.robust_cov_threshold = diagnostic_signals.irregularity_robust_cov_thr;
+    summary.irregular.median_cov_lungs = finite_median(lungs.irregularity.cov);
+    summary.irregular.median_cov_diaph = finite_median(diaph.irregularity.cov);
+    summary.irregular.median_selected_metric_lungs = finite_median( ...
         diagnostic_signals.irregularity_selected_metric_lungs);
-    summary.irregB.median_selected_metric_diaph = finite_median( ...
+    summary.irregular.median_selected_metric_diaph = finite_median( ...
         diagnostic_signals.irregularity_selected_metric_diaph);
-    summary.irregB.median_selected_margin_lungs = finite_median( ...
+    summary.irregular.median_selected_margin_lungs = finite_median( ...
         diagnostic_signals.irregularity_selected_margin_lungs);
-    summary.irregB.median_selected_margin_diaph = finite_median( ...
+    summary.irregular.median_selected_margin_diaph = finite_median( ...
         diagnostic_signals.irregularity_selected_margin_diaph);
-    summary.irregB.pause_excluded_endpoint_fraction_lungs = finite_mean(lungs.irregularity.pause_exclusion_mask);
-    summary.irregB.pause_excluded_endpoint_fraction_diaph = finite_mean(diaph.irregularity.pause_exclusion_mask);
-    summary.irregB.supporting_belts = belt_support( ...
+    summary.irregular.pause_excluded_endpoint_fraction_lungs = finite_mean(lungs.irregularity.pause_exclusion_mask);
+    summary.irregular.pause_excluded_endpoint_fraction_diaph = finite_mean(diaph.irregularity.pause_exclusion_mask);
+    summary.irregular.supporting_belts = belt_support( ...
         any_finite(lungs.irregularity.cov), any_finite(diaph.irregularity.cov));
 
     balance = phys_feat.resp.thoracoabdominal_balance;
-    summary.thorDomB.analysis_window_sec = balance.analysis_window_sec;
-    summary.thorDomB.ratio_threshold = balance.dominance_ratio_threshold;
-    summary.thorDomB.median_T = finite_median(balance.thoracic_ratio_window_median);
-    summary.thorDomB.median_A = finite_median(balance.abdominal_ratio_window_median);
-    summary.thorDomB.median_ratio = finite_median(balance.thoracic_to_abdominal_ratio);
-    summary.thorDomB.median_log_ratio = finite_median(balance.thoracic_dominance_log_ratio);
-    summary.thorDomB.median_relative_fraction = finite_median(balance.thoracic_relative_fraction);
-    summary.thorDomB.median_ratio_margin = finite_median( ...
+    summary.thoracic.analysis_window_sec = balance.analysis_window_sec;
+    summary.thoracic.ratio_threshold = balance.dominance_ratio_threshold;
+    summary.thoracic.median_T = finite_median(balance.thoracic_ratio_window_median);
+    summary.thoracic.median_A = finite_median(balance.abdominal_ratio_window_median);
+    summary.thoracic.median_ratio = finite_median(balance.thoracic_to_abdominal_ratio);
+    summary.thoracic.median_log_ratio = finite_median(balance.thoracic_dominance_log_ratio);
+    summary.thoracic.median_relative_fraction = finite_median(balance.thoracic_relative_fraction);
+    summary.thoracic.median_ratio_margin = finite_median( ...
         balance.thoracic_to_abdominal_ratio - balance.dominance_ratio_threshold);
-    summary.thorDomB.supporting_belts = 'both';
+    summary.thoracic.supporting_belts = 'both';
 
     rea = detector_diagnostics.respiratory_asynchrony;
-    summary.asyncB.analysis_valid = logical(rea.valid_analysis);
-    summary.asyncB.baseline_coherence = rea.baselines;
-    summary.asyncB.thresholds = rea.thresholds;
-    summary.asyncB.median_observed_coherence = struct( ...
+    summary.async.analysis_valid = logical(rea.valid_analysis);
+    summary.async.baseline_coherence = rea.baselines;
+    summary.async.thresholds = rea.thresholds;
+    summary.async.median_observed_coherence = struct( ...
         'high', finite_median(rea.phase_coherence_high), ...
         'mid', finite_median(rea.phase_coherence_mid), ...
         'low', finite_median(rea.phase_coherence_low));
-    summary.asyncB.maximum_deviating_bins = finite_max(rea.deviation_bin_count);
+    summary.async.maximum_deviating_bins = finite_max(rea.deviation_bin_count);
 
     summary.desat.median_spo2_percent = finite_median(diagnostic_signals.spo2_percent);
     summary.desat.minimum_spo2_percent = finite_min(diagnostic_signals.spo2_percent);
@@ -123,13 +123,13 @@ function summary = build_label_evidence_summary( ...
         sigh.lungs.available, sigh.diaph.available);
 
     csr = detector_diagnostics.periodic_breathing;
-    summary.CSR.minimum_cycles = csr.minimum_cycles;
-    summary.CSR.minimum_modulation_ratio = csr.minimum_modulation_ratio;
-    summary.CSR.detected_cycle_count_lungs = numel(csr.lungs.cycles);
-    summary.CSR.detected_cycle_count_diaph = numel(csr.diaph.cycles);
-    summary.CSR.median_modulation_ratio_lungs = finite_median(cycle_values(csr.lungs.cycles));
-    summary.CSR.median_modulation_ratio_diaph = finite_median(cycle_values(csr.diaph.cycles));
-    summary.CSR.supporting_belts = belt_support( ...
+    summary.csr.minimum_cycles = csr.minimum_cycles;
+    summary.csr.minimum_modulation_ratio = csr.minimum_modulation_ratio;
+    summary.csr.detected_cycle_count_lungs = numel(csr.lungs.cycles);
+    summary.csr.detected_cycle_count_diaph = numel(csr.diaph.cycles);
+    summary.csr.median_modulation_ratio_lungs = finite_median(cycle_values(csr.lungs.cycles));
+    summary.csr.median_modulation_ratio_diaph = finite_median(cycle_values(csr.diaph.cycles));
+    summary.csr.supporting_belts = belt_support( ...
         csr.lungs.analysis_available, csr.diaph.analysis_available);
 end
 

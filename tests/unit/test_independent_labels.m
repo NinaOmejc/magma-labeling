@@ -5,13 +5,13 @@ end
 
 function testCanonicalLabelOrderAndConfiguration(testCase)
     config = get_config();
-    expected = {'shallowB', 'irregB', 'slowB', 'rapidB', 'asyncB', ...
-        'desat', 'apnea', 'sigh', 'CSR', 'deepB', 'thorDomB'};
+    expected = {'shallow', 'deep', 'slow', 'rapid', 'irregular', ...
+        'apnea', 'sigh', 'csr', 'thoracic', 'async', 'desat'};
     verifyEqual(testCase, {config.labels.short}, expected);
     verifyEqual(testCase, [config.labels.idx], 1:11);
-    verifyEqual(testCase, config.labels(10).short, 'deepB');
-    verifyEqual(testCase, config.labels(11).short, 'thorDomB');
-    verifyEqual(testCase, config.label_schema_version, 'independent_labels_v2_11class');
+    verifyEqual(testCase, config.labels(2).short, 'deep');
+    verifyEqual(testCase, config.labels(9).short, 'thoracic');
+    verifyEqual(testCase, config.label_schema_version, 'independent_labels_v3_11class');
     verifyEqual(testCase, config.DeB.amp_ratio_thr, 1.20);
     verifyEqual(testCase, config.DeB.min_dur_sec, 30);
 
@@ -48,9 +48,9 @@ function testDeepThresholdHasNoUpperCutoffAndUsesSessionReference(testCase)
     verifyNotEqual(testCase, resp_feat.lungs.amp(find(deep_peak, 1)), ...
         resp_feat.diaph.amp(find(deep_peak, 1)));
 
-    normalized = normalize_event_types_and_meta(events);
+    normalized = normalize_event_types_and_meta(events, config.fs);
     verifyEqual(testCase, numel(normalized), 1);
-    verifyEqual(testCase, normalized.type, 'deepB');
+    verifyEqual(testCase, normalized.type, 'deep');
     verifyEqual(testCase, normalized.belt, 'both');
 end
 
@@ -78,7 +78,7 @@ function testMissingLungBeltUsesDiaphragmForDeep(testCase)
     verifyTrue(testCase, phys_feat.resp.lungs.ignored);
     verifyNotEmpty(testCase, events);
     verifyTrue(testCase, all(contains(string({events.type}), '_diaph')));
-    normalized = normalize_event_types_and_meta(events);
+    normalized = normalize_event_types_and_meta(events, config.fs);
     verifyEqual(testCase, normalized.belt, 'diaph');
 end
 
@@ -127,8 +127,8 @@ function testThoracicDominanceThresholdAndContinuousEvidence(testCase)
     verifyEqual(testCase, balance.thoracic_relative_fraction(grid_index), 1.8/2.8, 'AbsTol', 1e-12);
     events = detect_thoracic_dominant_breathing(data, phys_feat, config);
     verifyNotEmpty(testCase, events);
-    normalized = normalize_event_types_and_meta(events);
-    verifyEqual(testCase, normalized.type, 'thorDomB');
+    normalized = normalize_event_types_and_meta(events, config.fs);
+    verifyEqual(testCase, normalized.type, 'thoracic');
     verifyEqual(testCase, normalized.belt, '');
 end
 
@@ -160,15 +160,15 @@ function testEffectiveInputConfigurationUsesKnownExclusion(testCase)
     verifyTrue(testCase, config.input_config.lung_belt_ignored);
     verifyFalse(testCase, config.input_config.effective_has_lungs);
     verifyTrue(testCase, config.input_config.effective_has_diaph);
-    verifyTrue(testCase, ismember('asyncB', config.input_config.skipped_labels));
-    verifyTrue(testCase, ismember('thorDomB', config.input_config.skipped_labels));
+    verifyTrue(testCase, ismember('async', config.input_config.skipped_labels));
+    verifyTrue(testCase, ismember('thoracic', config.input_config.skipped_labels));
 
     config.measure = 3;
     config = resolve_signal_channels(config);
     verifyEqual(testCase, config.input_config.effective_resp_count, 2);
     verifyFalse(testCase, config.input_config.lung_belt_ignored);
-    verifyTrue(testCase, ismember('asyncB', config.input_config.running_labels));
-    verifyTrue(testCase, ismember('thorDomB', config.input_config.running_labels));
+    verifyTrue(testCase, ismember('async', config.input_config.running_labels));
+    verifyTrue(testCase, ismember('thoracic', config.input_config.running_labels));
 end
 
 function testIndependentDetectorsAndOverlappingMask(testCase)
@@ -197,11 +197,12 @@ function testIndependentDetectorsAndOverlappingMask(testCase)
 
     asynchrony = make_event('respiratory_asynchrony', 30, 100, config.fs);
     events = normalize_event_types_and_meta(merge_events( ...
-        {shallow, deep, thoracic, slow, rapid, apnea, desat, asynchrony}));
+        {shallow, deep, thoracic, slow, rapid, apnea, desat, asynchrony}), ...
+        config.fs);
     [mask, names] = events_to_time_mask(events, size(data, 1), config);
     sample = 50;
-    overlapping = {'shallowB', 'deepB', 'thorDomB', 'slowB', ...
-        'rapidB', 'asyncB', 'apnea', 'desat'};
+    overlapping = {'shallow', 'deep', 'thoracic', 'slow', ...
+        'rapid', 'async', 'apnea', 'desat'};
     for i = 1:numel(overlapping)
         verifyTrue(testCase, mask(sample, strcmp(names, overlapping{i})));
     end
@@ -211,10 +212,10 @@ end
 function testNormalizationSchemaAndDeepBeltMerge(testCase)
     lungs = make_event('deep_breathing_lungs', 10, 50, 1);
     diaph = make_event('deep_breathing_diaph', 20, 60, 1);
-    events = normalize_event_types_and_meta([lungs; diaph]);
+    events = normalize_event_types_and_meta([lungs; diaph], 1);
 
     verifyEqual(testCase, numel(events), 1);
-    verifyEqual(testCase, events.type, 'deepB');
+    verifyEqual(testCase, events.type, 'deep');
     verifyEqual(testCase, events.belt, 'both');
     verifyEqual(testCase, events.start_t, 10);
     verifyEqual(testCase, events.end_t, 60);
@@ -225,8 +226,8 @@ end
 function testNormalizationIsIdempotentIncludingBelt(testCase)
     lungs = make_event('deep_breathing_lungs', 10, 50, 1);
     diaph = make_event('deep_breathing_diaph', 20, 60, 1);
-    normalized_once = normalize_event_types_and_meta([lungs; diaph]);
-    normalized_twice = normalize_event_types_and_meta(normalized_once);
+    normalized_once = normalize_event_types_and_meta([lungs; diaph], 1);
+    normalized_twice = normalize_event_types_and_meta(normalized_once, 1);
     verifyEqual(testCase, normalized_twice, normalized_once);
     verifyEqual(testCase, normalized_twice.belt, 'both');
 end
@@ -242,20 +243,20 @@ function testMaskIntersectsRatherThanClampsEventIntervals(testCase)
     config = make_test_config();
     N = 100;
 
-    before = make_event('shallowB', -10, -1, 1);
-    after = make_event('shallowB', 200, 210, 1);
-    partial_start = make_event('shallowB', -10, 4, 1);
-    partial_end = make_event('shallowB', 95, 110, 1);
+    before = make_event('shallow', -10, -1, 1);
+    after = make_event('shallow', 200, 210, 1);
+    partial_start = make_event('shallow', -10, 4, 1);
+    partial_end = make_event('shallow', 95, 110, 1);
 
     before_mask = events_to_time_mask(before, N, config);
     after_mask = events_to_time_mask(after, N, config);
     partial_start_mask = events_to_time_mask(partial_start, N, config);
     partial_end_mask = events_to_time_mask(partial_end, N, config);
-    label_index = find(strcmp({config.labels.short}, 'shallowB'), 1);
+    label_index = find(strcmp({config.labels.short}, 'shallow'), 1);
 
     verifyFalse(testCase, any(before_mask(:)));
     verifyFalse(testCase, any(after_mask(:)));
-    verifyEqual(testCase, find(partial_start_mask(:, label_index)), (1:5)');
+    verifyEqual(testCase, find(partial_start_mask(:, label_index)), (1:4)');
     verifyEqual(testCase, find(partial_end_mask(:, label_index)), (96:100)');
 end
 
@@ -268,8 +269,8 @@ end
 function testManualEditorIncludesDeepButNotSigh(testCase)
     definitions = manual_label_definitions();
     fields = {definitions.field};
-    verifyTrue(testCase, ismember('deepB', fields));
-    verifyTrue(testCase, ismember('thorDomB', fields));
+    verifyTrue(testCase, ismember('deep', fields));
+    verifyTrue(testCase, ismember('thoracic', fields));
     verifyFalse(testCase, ismember('sigh', fields));
     verifyEqual(testCase, numel(fields), 10);
 end
@@ -290,8 +291,8 @@ function testManualEditVersionOneMigrationUsesFieldIdentity(testCase)
     for i = 1:numel(definitions)
         automatic_sets.(definitions(i).field) = empty_events();
     end
-    automatic_sets.deepB = make_event('deep_breathing_lungs', 20, 30, config.fs);
-    automatic_sets.thorDomB = make_event( ...
+    automatic_sets.deep = make_event('deep_breathing_lungs', 20, 30, config.fs);
+    automatic_sets.thoracic = make_event( ...
         'thoracic_dominant_breathing', 40, 50, config.fs);
 
     manual_label_event_sets = struct();
@@ -309,20 +310,22 @@ function testManualEditVersionOneMigrationUsesFieldIdentity(testCase)
 
     [migrated, info] = manual_edit_label_events(data, config, automatic_sets);
     verifyTrue(testCase, info.applied_saved_edits);
-    verifyEqual(testCase, migrated.rapidB.type, 'rapidB');
-    verifyEqual(testCase, migrated.rapidB.start_idx, manual_label_event_sets.rapidB.start_idx);
-    verifyEqual(testCase, migrated.rapidB.end_idx, manual_label_event_sets.rapidB.end_idx);
-    verifyEqual(testCase, migrated.rapidB.start_t, manual_label_event_sets.rapidB.start_t);
-    verifyEqual(testCase, migrated.rapidB.end_t, manual_label_event_sets.rapidB.end_t);
-    verifyEqual(testCase, migrated.deepB, automatic_sets.deepB);
-    verifyEqual(testCase, migrated.thorDomB, automatic_sets.thorDomB);
+    verifyEqual(testCase, migrated.rapid.type, 'rapid');
+    verifyEqual(testCase, migrated.rapid.start_idx, manual_label_event_sets.rapidB.start_idx);
+    verifyEqual(testCase, migrated.rapid.end_idx, manual_label_event_sets.rapidB.end_idx);
+    verifyEqual(testCase, migrated.rapid.start_t, ...
+        (manual_label_event_sets.rapidB.start_idx - 1) / config.fs);
+    verifyEqual(testCase, migrated.rapid.end_t, ...
+        manual_label_event_sets.rapidB.end_idx / config.fs);
+    verifyEqual(testCase, migrated.deep, automatic_sets.deep);
+    verifyEqual(testCase, migrated.thoracic, automatic_sets.thoracic);
 
     repo_root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
     source = fileread(fullfile(repo_root, 'src', 'gui', 'manual_edit_label_events.m'));
-    verifyTrue(testCase, contains(source, "'schema_version', 3"));
+    verifyTrue(testCase, contains(source, "'schema_version', 4"));
     verifyTrue(testCase, contains(source, 'manual_label_edit_meta.label_names'));
     verifyEmpty(testCase, info.reviewed_fields);
-    verifyEqual(testCase, info.status_by_label.rapidB, 'unreviewed');
+    verifyEqual(testCase, info.status_by_label.rapid, 'unreviewed');
 end
 
 function testArtificialAmplitudeManipulationsAndElevenSpecs(testCase)
@@ -343,9 +346,9 @@ function testArtificialAmplitudeManipulationsAndElevenSpecs(testCase)
     source = fileread(fullfile(repo_root, 'src', 'utils', 'create_artificial_test_data.m'));
     assignments = regexp(source, 'test_specs\(\d+\)\s*=', 'match');
     verifyEqual(testCase, numel(assignments), 11);
-    verifyTrue(testCase, contains(source, "'deepB'"));
+    verifyTrue(testCase, contains(source, "'deep'"));
     verifyTrue(testCase, contains(source, "'deep_breathing'"));
-    verifyTrue(testCase, contains(source, "'thorDomB'"));
+    verifyTrue(testCase, contains(source, "'thoracic'"));
     verifyTrue(testCase, contains(source, "'thoracic_dominant_breathing'"));
 end
 
@@ -459,24 +462,37 @@ function [data, phys_feat, config] = detector_fixture()
     t_grid = (0:N-1)';
     state = t_grid >= 30 & t_grid <= 100;
 
-    belt = struct( ...
+    lungs = struct( ...
         'available', true, ...
         'session_amplitude_available', true, ...
         'ignored', false, ...
+        'peak_t', (0:2:140)', ...
+        'rr_bpm', 30 * ones(70,1), ...
+        'amp_ratio_session', 0.70 * ones(71,1), ...
         'shallow_amplitude_mask', state, ...
         'deep_amplitude_mask', state, ...
-        'rate_slow_window_bpm', replace_where(nan(size(t_grid)), state, 8), ...
-        'rate_slow_endpoint_mask', state, ...
-        'rate_slow_state_mask', state, ...
+        'rate_slow_window_bpm', nan(size(t_grid)), ...
+        'rate_slow_endpoint_mask', false(size(t_grid)), ...
+        'rate_slow_state_mask', false(size(t_grid)), ...
         'rate_rapid_window_bpm', replace_where(nan(size(t_grid)), state, 25), ...
         'rate_rapid_endpoint_mask', state, ...
         'rate_rapid_state_mask', state, ...
         'apnea_amp_ratio_session_window_median', replace_where(nan(size(t_grid)), state, 0.05));
+    diaph = lungs;
+    diaph.peak_t = (0:6:138)';
+    diaph.rr_bpm = 10 * ones(numel(diaph.peak_t)-1,1);
+    diaph.amp_ratio_session = 1.30 * ones(size(diaph.peak_t));
+    diaph.rate_slow_window_bpm = replace_where(nan(size(t_grid)), state, 8);
+    diaph.rate_slow_endpoint_mask = state;
+    diaph.rate_slow_state_mask = state;
+    diaph.rate_rapid_window_bpm = nan(size(t_grid));
+    diaph.rate_rapid_endpoint_mask = false(size(t_grid));
+    diaph.rate_rapid_state_mask = false(size(t_grid));
     phys_feat = struct();
     balance = struct('available', true, 'dominance_endpoint_mask', state, ...
         'dominance_state_mask', state, 'dominance_mask', state);
-    phys_feat.resp = struct('time_sec', t_grid, 'lungs', belt, ...
-        'diaph', belt, 'thoracoabdominal_balance', balance);
+    phys_feat.resp = struct('time_sec', t_grid, 'lungs', lungs, ...
+        'diaph', diaph, 'thoracoabdominal_balance', balance);
     phys_feat.spo2 = struct('available', true, ...
         'desaturation_events', make_event('desaturation', 30, 100, config.fs));
 end
@@ -489,8 +505,8 @@ function event = make_event(type, start_t, end_t, fs)
     event = struct( ...
         'type', type, ...
         'start_idx', round(start_t * fs) + 1, ...
-        'end_idx', round(end_t * fs) + 1, ...
+        'end_idx', round(end_t * fs), ...
         'start_t', start_t, ...
         'end_t', end_t, ...
-        'duration', end_t - start_t);
+        'duration', max(0, end_t - start_t));
 end

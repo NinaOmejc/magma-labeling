@@ -69,7 +69,7 @@ function [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags(data, 
         if ~isgraphics(ax1), return; end
         limits = xlim(ax1);
         start_idx = max(1, min(N, floor(limits(1) * fs) + 1));
-        end_idx = max(start_idx, min(N, ceil(limits(2) * fs) + 1));
+        end_idx = max(start_idx, min(N, ceil(limits(2) * fs)));
         review_mask(start_idx:end_idx) = true;
     end
 

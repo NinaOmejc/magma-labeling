@@ -18,6 +18,10 @@ function plot_belt_diagnostic_figure(data, config, t_grid, mask_lungs, mask_diap
     metric_mask_diaph = get_opt(opts, 'metric_mask_diaph', mask_diaph);
     metric_trigger_mask_lungs = get_opt(opts, 'metric_trigger_mask_lungs', []);
     metric_trigger_mask_diaph = get_opt(opts, 'metric_trigger_mask_diaph', []);
+    candidate_mask_lungs = get_opt(opts, 'candidate_mask_lungs', []);
+    candidate_mask_diaph = get_opt(opts, 'candidate_mask_diaph', []);
+    localized_mask_lungs = get_opt(opts, 'localized_mask_lungs', []);
+    localized_mask_diaph = get_opt(opts, 'localized_mask_diaph', []);
 
     figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', config.make_figs_visible);
     tl = tiledlayout(4, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
@@ -25,24 +29,32 @@ function plot_belt_diagnostic_figure(data, config, t_grid, mask_lungs, mask_diap
 
     ax1 = nexttile(tl); hold on
     plot_resp_trace_or_message(t_raw, data, idx_lungs, 'Resp-Lungs')
-    shade_mask_on_axis(t_grid, mask_lungs);
+    shade_state_support_on_axis(ax1, t_grid, candidate_mask_lungs, ...
+        localized_mask_lungs, mask_lungs);
     title(sprintf('%s (lungs) over raw signal', opts.event_name))
     xlabel('Time (s)'); ylabel('Resp-Lungs'); grid on
     hold off
 
     ax2 = nexttile(tl); hold on
-    plot_diagnostic_metric(t_grid, metric_lungs, metric_lungs_plot, secondary_lungs, secondary_lungs_plot, opts, 'lungs', metric_mask_lungs, metric_trigger_mask_lungs);
+    plot_diagnostic_metric(t_grid, metric_lungs, metric_lungs_plot, ...
+        secondary_lungs, secondary_lungs_plot, opts, 'lungs', ...
+        candidate_mask_lungs, localized_mask_lungs, metric_mask_lungs, ...
+        metric_trigger_mask_lungs);
     hold off
 
     ax3 = nexttile(tl); hold on
     plot_resp_trace_or_message(t_raw, data, idx_diaph, 'Resp-Diaphragm')
-    shade_mask_on_axis(t_grid, mask_diaph);
+    shade_state_support_on_axis(ax3, t_grid, candidate_mask_diaph, ...
+        localized_mask_diaph, mask_diaph);
     title(sprintf('%s (diaphragm) over raw signal', opts.event_name))
     xlabel('Time (s)'); ylabel('Resp-Diaphragm'); grid on
     hold off
 
     ax4 = nexttile(tl); hold on
-    plot_diagnostic_metric(t_grid, metric_diaph, metric_diaph_plot, secondary_diaph, secondary_diaph_plot, opts, 'diaphragm', metric_mask_diaph, metric_trigger_mask_diaph);
+    plot_diagnostic_metric(t_grid, metric_diaph, metric_diaph_plot, ...
+        secondary_diaph, secondary_diaph_plot, opts, 'diaphragm', ...
+        candidate_mask_diaph, localized_mask_diaph, metric_mask_diaph, ...
+        metric_trigger_mask_diaph);
     hold off
 
     ax = [ax1 ax2 ax3 ax4];
@@ -61,7 +73,9 @@ function plot_resp_trace_or_message(t_raw, data, idx, label_text)
     end
 end
 
-function plot_diagnostic_metric(t_grid, metric_raw, metric_plot, secondary_raw, secondary_plot, opts, belt_name, detection_mask, trigger_mask)
+function plot_diagnostic_metric(t_grid, metric_raw, metric_plot, secondary_raw, ...
+    secondary_plot, opts, belt_name, candidate_mask, localized_mask, ...
+    final_mask, trigger_mask)
     primary_label = get_opt(opts, 'primary_label', 'Metric');
     plot(t_grid, metric_raw, 'Color', [0.70 0.70 0.70], 'LineWidth', 0.8, ...
         'DisplayName', [primary_label ' raw'])
@@ -97,17 +111,17 @@ function plot_diagnostic_metric(t_grid, metric_raw, metric_plot, secondary_raw, 
         values = [values; secondary_raw(:); secondary_plot(:)];
     end
     set_metric_limits(values, opts);
-    if nargin >= 8 && ~isempty(detection_mask)
-        shade_mask_on_axis(gca, t_grid, detection_mask);
-    end
-    if nargin >= 9 && ~isempty(trigger_mask)
+    shade_state_support_on_axis(gca, t_grid, candidate_mask, ...
+        localized_mask, final_mask);
+    if ~isempty(trigger_mask)
         mark_trigger_mask_on_axis(gca, t_grid, trigger_mask);
     end
     title(sprintf('%s (%s, %s)', opts.metric_title, belt_name, opts.metric_detail))
     xlabel('Time (s)')
     ylabel(opts.metric_ylabel)
     grid on
-    if has_secondary
+    if has_secondary || ~isempty(candidate_mask) || ...
+            ~isempty(localized_mask) || ~isempty(final_mask)
         legend('show', 'Location', 'eastoutside')
     end
 end
