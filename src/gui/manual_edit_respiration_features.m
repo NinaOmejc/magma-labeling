@@ -1,8 +1,11 @@
-function [b_l, b_d] = manual_edit_respiration_features(data, b_l, b_d, config)
+function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b_l, b_d, config)
 % Edit master-sample breath peaks and recompute their config.fs timing.
     fs = config.fs;
     N = size(data, 1);
     t_raw = (0:N-1) / fs;
+    automatic_lungs = b_l;
+    automatic_diaph = b_d;
+    review_confirmed = false;
 
     window_sec = 300;
     if isfield(config.resp, 'manual_window_sec')
@@ -16,7 +19,8 @@ function [b_l, b_d] = manual_edit_respiration_features(data, b_l, b_d, config)
         return;
     end
 
-    fh = figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', 'on');
+    fh = figure('Units','pixels','Position', near_fullscreen_figure_position(), ...
+        'Visible', 'on', 'CloseRequestFcn', @(~,~) cancel_review());
 
     ax1 = subplot(2,1,1); hold(ax1, 'on');
     [pL, pkL, trL] = plot_belt_panel(ax1, t_raw, b_l, ...
@@ -37,10 +41,13 @@ function [b_l, b_d] = manual_edit_respiration_features(data, b_l, b_d, config)
     linkaxes([ax1 ax2], 'x');
     xlim(ax1, [0 min(window_sec, t_raw(end))]);
 
-    uicontrol(fh, 'Style','slider', 'Units','normalized', 'Position',[0.1 0.01 0.8 0.03], ...
+    uicontrol(fh, 'Style','slider', 'Units','normalized', 'Position',[0.1 0.01 0.62 0.03], ...
         'Min',0, 'Max',max(0,t_raw(end)-window_sec), 'Value',0, ...
         'SliderStep',[min(1/max(1,t_raw(end)-window_sec),0.05) 0.2], ...
         'Callback', @(src,~) set_xlim(src.Value));
+    uicontrol(fh, 'Style', 'pushbutton', 'String', 'Reviewed', ...
+        'Units', 'normalized', 'Position', [0.76 0.008 0.18 0.038], ...
+        'Callback', @(~,~) confirm_review());
 
     if edit_lungs
         set(pL, 'HitTest','on', 'PickableParts','visible', ...
@@ -71,8 +78,31 @@ function [b_l, b_d] = manual_edit_respiration_features(data, b_l, b_d, config)
     fprintf('  Left-click a trace to add a red peak.\n');
     fprintf('  Left-click a red peak to remove it.\n');
     fprintf('  Blue troughs and amplitudes are recomputed automatically from the edited peaks.\n');
-    fprintf('  Close the figure when done.\n\n');
+    fprintf('  Press Reviewed to accept the current respiratory cycles.\n');
+    fprintf('  Closing the window cancels the review and discards this session''s edits.\n\n');
     uiwait(fh);
+    if isgraphics(fh)
+        delete(fh);
+    end
+    if ~review_confirmed
+        b_l = automatic_lungs;
+        b_d = automatic_diaph;
+    end
+
+    function confirm_review()
+        review_confirmed = true;
+        if isgraphics(fh)
+            uiresume(fh);
+        end
+    end
+
+    function cancel_review()
+        review_confirmed = false;
+        if isgraphics(fh)
+            uiresume(fh);
+            delete(fh);
+        end
+    end
 
     function set_xlim(x0)
         xlim(ax1, [x0 min(x0+window_sec, t_raw(end))]);

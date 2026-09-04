@@ -30,7 +30,7 @@ function testRapidConfirmationUsesBreathwiseLocalization(testCase)
     verifyEqual(testCase, events.start_t, 40, 'AbsTol', 1/config.fs);
     verifyLessThan(testCase, events.start_t, 60);
     verifyEqual(testCase, boundary.events.evidence_source, ...
-        'reviewed_breathwise_rr_bpm');
+        'breathwise_rr_bpm');
 end
 
 function testSlowConfirmationUsesBreathwiseLocalization(testCase)
@@ -819,7 +819,7 @@ function results = export_fixture(config, N)
         'external_clinical_data',struct('status','not_integrated','value',[]));
     results.label_schema_version = config.label_schema_version;
     results.annotation_schema_version = 'automatic_reviewed_annotations_v2';
-    results.export_schema_version = 'magma_ml_hdf5_v2';
+    results.export_schema_version = 'magma_ml_hdf5_v3';
     results.upstream_input_preprocessing = 'external / not fully documented';
 end
 

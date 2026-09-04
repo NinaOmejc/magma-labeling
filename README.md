@@ -107,19 +107,19 @@ The interval is resolved once on the native `config.fs` timeline. Its indices ar
 
 Respiratory excursion, SpO2, respiratory-asynchrony coherence, and raw respiratory motion/slope each calculate their own statistic from this same interval. Sharing the time interval does not share a numerical normalization scale across modalities, and an unavailable statistic for one modality does not invalidate the others. Reference-quality warnings retain the data by default and do not trigger automatic correction, interval movement, or threshold tuning.
 
-Respiratory excursion is calculated independently for each usable belt as the median of finite positive reviewed breath excursions in the interval, with at least 10 qualifying breaths required. There is no whole-record fallback. The whole-record stability comparison remains descriptive respiratory QC and is not a second reference interval.
+Respiratory excursion is calculated independently for each usable belt as the median of finite positive respiratory-cycle excursions in the interval, with at least 10 qualifying cycles required. There is no whole-record fallback. The whole-record stability comparison remains descriptive respiratory QC and is not a second reference interval.
 
 ## Conditions for Detecting Individual Physiological Events
 
 The thresholds below are operational research criteria and should not be interpreted as universal clinical diagnostic cutoffs.
 
-- **`shallow`** — all eligible breaths in a trailing 30-s candidate window have session-normalized excursion between 0.65 and 0.80. Final boundaries are localized from qualifying reviewed breaths, and the localized state must last at least 30 s.
+- **`shallow`** — all eligible breaths in a trailing 30-s candidate window have session-normalized excursion between 0.65 and 0.80. Final boundaries are localized from qualifying respiratory cycles, and the localized state must last at least 30 s.
 
-- **`deep`** — all eligible breaths in a trailing 30-s candidate window have session-normalized excursion `>= 1.20`. Final boundaries are localized from qualifying reviewed breaths, and the localized state must last at least 30 s.
+- **`deep`** — all eligible breaths in a trailing 30-s candidate window have session-normalized excursion `>= 1.20`. Final boundaries are localized from qualifying respiratory cycles, and the localized state must last at least 30 s.
 
-- **`slow`** — a full trailing 60-s window estimates respiratory rate as `RR = 60 / mean(IBI)` and confirms a candidate when `RR <= 10 bpm`. Final boundaries are localized from consecutive reviewed breath intervals with breathwise `RR_i <= 10 bpm`; only localized runs lasting at least 30 s become final events.
+- **`slow`** — a full trailing 60-s window estimates respiratory rate as `RR = 60 / mean(IBI)` and confirms a candidate when `RR <= 10 bpm`. Final boundaries are localized from consecutive respiratory-cycle intervals with breathwise `RR_i <= 10 bpm`; only localized runs lasting at least 30 s become final events.
 
-- **`rapid`** — a full trailing 60-s window estimates respiratory rate as `RR = 60 / mean(IBI)` and confirms a candidate when `RR >= 20 bpm`. Final boundaries are localized from consecutive reviewed breath intervals with breathwise `RR_i >= 20 bpm`; only localized runs lasting at least 30 s become final events.
+- **`rapid`** — a full trailing 60-s window estimates respiratory rate as `RR = 60 / mean(IBI)` and confirms a candidate when `RR >= 20 bpm`. Final boundaries are localized from consecutive respiratory-cycle intervals with breathwise `RR_i >= 20 bpm`; only localized runs lasting at least 30 s become final events.
 
 - **`irregular`** — respiratory-rhythm variability is assessed over 60-s IBI windows. The default criterion is `CV_IBI >= 0.30`, with long pauses excluded from irregularity estimation. Because irregularity is intrinsically window-based, event boundaries retain window-scale uncertainty.
 
@@ -137,7 +137,7 @@ The thresholds below are operational research criteria and should not be interpr
 
 Amplitude-dependent sustained labels use participant/session-relative respiratory excursion rather than absolute tidal volume. Respiratory belts are uncalibrated, so raw amplitudes should not be compared directly across subjects.
 
-For `shallow`, `deep`, `slow`, and `rapid`, rolling evidence confirms a candidate but does not define its final onset and offset. Reviewed breath-level evidence localizes every contiguous qualifying run inside that candidate. The configured `min_dur_sec` is then applied once to each localized run. Passing runs become final automatic events; shorter runs remain in `results.event_boundary_info` as rejected QC evidence, including their duration, minimum duration, shortfall, evidence source, and temporal uncertainty. Diagnostic plots show rolling/candidate support, all localized qualifying support, and the final retained state even when no final event remains.
+For `shallow`, `deep`, `slow`, and `rapid`, rolling evidence confirms a candidate but does not define its final onset and offset. Respiratory-cycle evidence localizes every contiguous qualifying run inside that candidate. The configured `min_dur_sec` is then applied once to each localized run. Passing runs become final automatic events; shorter runs remain in `results.event_boundary_info` as rejected QC evidence, including their duration, minimum duration, shortfall, evidence source, and temporal uncertainty. Diagnostic plots show rolling/candidate support, all localized qualifying support, and the final retained state even when no final event remains.
 
 `irregular` and `thoracic` remain aggregate-window events with explicit boundary uncertainty because no finer localization is defensible from their current evidence. `apnea` retains its detector-specific breath-amplitude and raw-flat localization paths.
 
@@ -217,7 +217,7 @@ The most important result fields include:
 
 Additional detector diagnostics and intermediate evidence can be inspected directly in the saved `results` structure or in the HDF5 hierarchy.
 
-The HDF5 export schema is `magma_ml_hdf5_v2`. Its existing top-level reviewed masks and events remain unchanged for downstream consumers, while `/review/provenance` and `/review/history` expose round metadata, annotations, and exact per-round coverage. It stores the common metadata once under `/session_reference`, the independent respiratory-belt statistics under `/resp_reference`, and the SpO2 statistic under `/spo2_reference`. ReA, desaturation, and raw-apnea diagnostics remain with their detectors. The MAT output preserves the same distinction.
+The HDF5 export schema is `magma_ml_hdf5_v3`. Its existing top-level reviewed masks and events remain unchanged for downstream consumers, while `/review/provenance` and `/review/history` expose round metadata, annotations, and exact per-round coverage. It stores the common metadata once under `/session_reference`, the independent respiratory-belt statistics under `/resp_reference`, and the SpO2 statistic under `/spo2_reference`. ReA, desaturation, and raw-apnea diagnostics remain with their detectors. The MAT output preserves the same distinction.
 
 Group-level summaries are written under the `group_analysis/` output directory. `cohort_localized_boundary_qc.csv` preserves every localized-run duration and duration shortfall; `cohort_label_qc_summary.csv` aggregates rejected-run counts, medians, upper tails, maxima, and the smallest shortfall per label. These outputs are descriptive QC and never change thresholds automatically.
 

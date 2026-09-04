@@ -46,23 +46,28 @@ function annotations = assemble_annotation_layers( ...
         coverage = generic_review_coverage( ...
             manual_edit_info, i, N, numel(defs));
         gold_review_mask(:, label_index) = coverage;
-        if any(coverage) && isfield(manual_edit_info, 'status_by_label') && ...
-                isfield(manual_edit_info.status_by_label, defs(i).field)
-            review_status{label_index} = ...
-                manual_edit_info.status_by_label.(defs(i).field);
-        else
-            review_status{label_index} = 'reviewed_edited';
+        if any(coverage)
+            if isfield(manual_edit_info, 'status_by_label') && ...
+                    isfield(manual_edit_info.status_by_label, defs(i).field)
+                review_status{label_index} = ...
+                    manual_edit_info.status_by_label.(defs(i).field);
+            else
+                review_status{label_index} = 'reviewed_edited';
+            end
         end
     end
 
     sigh_index = find(strcmp(label_names, 'sigh'), 1);
     if has_sigh_review
         reviewed_parts{end+1} = field_events(sigh_review, 'reviewed_events');
-        gold_review_mask(:, sigh_index) = sigh_review_coverage(sigh_review, N);
-        if isfield(sigh_review, 'status')
-            review_status{sigh_index} = char(string(sigh_review.status));
-        else
-            review_status{sigh_index} = 'reviewed_edited';
+        coverage = sigh_review_coverage(sigh_review, N);
+        gold_review_mask(:, sigh_index) = coverage;
+        if any(coverage)
+            if isfield(sigh_review, 'status')
+                review_status{sigh_index} = char(string(sigh_review.status));
+            else
+                review_status{sigh_index} = 'reviewed_edited';
+            end
         end
     end
 

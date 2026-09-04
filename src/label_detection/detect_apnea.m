@@ -16,7 +16,7 @@ function [events, diagnostics, boundary_info] = detect_apnea( ...
 % events; coincident desaturation remains a separate label.
 % Rolling evidence confirms candidate episodes. Once confirmed, raw-flat
 % plateau timing is preferred for localization; otherwise low-amplitude
-% reviewed breath cells localize the episode. Candidate timing is retained
+% respiratory-cycle cells localize the episode. Candidate timing is retained
 % as an explicit fallback and event existence is never changed by the
 % localization step.
 

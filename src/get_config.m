@@ -79,7 +79,7 @@ function config = get_config()
     config.reference.resp.min_segment_breaths = 12;
     config.reference.resp.min_cost_improvement = 0.30;
         
-    %---- SPO2 / DESATURATION FEATURE EXTRACTION
+    %---- SPO2 / DESATURATION SETTINGS
     config.spo2.spo2_floor  = 90;   % absolute threshold (%) if spo2 goes below, its considered desaturation
     config.spo2.drop_thr    = 3;    % relative drop threshold (percentage points) from the session SpO2 reference
     config.spo2.min_dur_sec = 10;   % episode duration (seconds)
@@ -238,7 +238,7 @@ function config = get_config()
     % numeric/text datasets on the same native 200-Hz master timeline.
     config.HDF5 = struct();
     config.HDF5.enabled = true;
-    config.HDF5.export_schema_version = 'magma_ml_hdf5_v2';
+    config.HDF5.export_schema_version = 'magma_ml_hdf5_v3';
     config.HDF5.filename_suffix = '_labels.h5';
     config.HDF5.upstream_input_preprocessing = ...
         'external / not fully documented';
