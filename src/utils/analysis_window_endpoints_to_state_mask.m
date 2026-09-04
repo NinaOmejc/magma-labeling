@@ -1,5 +1,7 @@
 function state_mask = analysis_window_endpoints_to_state_mask(endpoint_mask, t_grid, analysis_win_sec)
 % ANALYSIS_WINDOW_ENDPOINTS_TO_STATE_MASK Perform the analysis window endpoints to state mask operation.
+% It takes a mask that marks qualifying analysis-window endpoints and 
+% converts it into a mask covering the entire analysis windows that led to those endpoints.
 %
 % Syntax:
 %   state_mask = analysis_window_endpoints_to_state_mask(endpoint_mask, t_grid, analysis_win_sec)

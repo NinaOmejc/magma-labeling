@@ -107,18 +107,30 @@ function belt = build_belt_evidence(source, reference, ignored, t_grid, cfg, con
     end
 
     if belt.session_amplitude_available
-        [belt.shallow_amplitude_endpoint_mask, belt.shallow_amplitude_mask] = amplitude_band_mask( ...
-            belt.peak_t, belt.amp_ratio_session, t_grid, cfg.shallow_win_sec, cfg.shallow_lo_ratio, cfg.shallow_hi_ratio);
+        % All-breath criterion: every valid breath in the window must satisfy the threshold.
+        % for shallow breathing
+        % [belt.shallow_amplitude_endpoint_mask, belt.shallow_amplitude_mask] = amplitude_band_mask( ...
+        %     belt.peak_t, belt.amp_ratio_session, t_grid, cfg.shallow_win_sec, cfg.shallow_lo_ratio, cfg.shallow_hi_ratio);
+        [belt.shallow_amplitude_endpoint_mask, belt.shallow_amplitude_mask] = amplitude_threshold_mask( ...
+            belt.peak_t, belt.amp_ratio_session, t_grid, cfg.shallow_win_sec, cfg.shallow_hi_ratio, 3, 'le');
+        % deep breathing
         [belt.deep_amplitude_endpoint_mask, belt.deep_amplitude_mask] = amplitude_threshold_mask( ...
-            belt.peak_t, belt.amp_ratio_session, t_grid, cfg.deep_win_sec, cfg.deep_ratio_threshold);
+            belt.peak_t, belt.amp_ratio_session, t_grid, cfg.deep_win_sec, cfg.deep_ratio_threshold, 3, 'ge');
+        % apnea
+        [belt.apnea_amplitude_endpoint_mask, belt.apnea_amplitude_state_mask] = amplitude_threshold_mask( ...
+            belt.peak_t, belt.amp_ratio_session, t_grid, cfg.apnea_win_sec, cfg.apnea_ratio_threshold, 2, 'le');
+        
+        % Window-summary criterion  (more soft but more robust to normal breath-to-breath variability)
+        % shallow breathing 
         [belt.amp_window_median_raw_units, belt.amp_ratio_session_window_median] = amplitude_window_medians( ...
-            belt.peak_t, belt.amp, belt.amp_ratio_session, t_grid, cfg.shallow_win_sec, 1);
+            belt.peak_t, belt.amp, belt.amp_ratio_session, t_grid, cfg.shallow_win_sec, 3);
+        % deep breathing
         [~, belt.deep_amp_ratio_session_window_median] = amplitude_window_medians( ...
-            belt.peak_t, belt.amp, belt.amp_ratio_session, t_grid, cfg.deep_win_sec, 1);
+            belt.peak_t, belt.amp, belt.amp_ratio_session, t_grid, cfg.deep_win_sec, 3);
+        % apnea
         [~, belt.apnea_amp_ratio_session_window_median] = amplitude_window_medians( ...
             belt.peak_t, belt.amp, belt.amp_ratio_session, t_grid, cfg.apnea_win_sec, 2);
-        [belt.apnea_amplitude_endpoint_mask, belt.apnea_amplitude_state_mask] = amplitude_all_le_mask( ...
-            belt.peak_t, belt.amp_ratio_session, t_grid, cfg.apnea_win_sec, cfg.apnea_ratio_threshold, 2);
+
     elseif belt.amplitude_available
         [belt.amp_window_median_raw_units, ~] = amplitude_window_medians( ...
             belt.peak_t, belt.amp, belt.amp_ratio_session, t_grid, cfg.shallow_win_sec, 1);
@@ -365,47 +377,6 @@ function trace = respiratory_rate_trace(peak_t, t_grid, win_sec)
     end
 end
 
-function [endpoint_mask, state_mask] = amplitude_all_le_mask( ...
-    peak_t, ratio, t_grid, win_sec, threshold, min_breaths)
-% AMPLITUDE_ALL_LE_MASK Perform the amplitude all le mask operation.
-%
-% Syntax:
-%   [endpoint_mask, state_mask] = amplitude_all_le_mask(peak_t, ratio, t_grid, win_sec, threshold, min_breaths)
-%
-% Inputs:
-%   peak_t - Input value `peak_t`.
-%   ratio - Input value `ratio`.
-%   t_grid - Time coordinates in seconds.
-%   win_sec - Duration or window length in seconds.
-%   threshold - Selection threshold value.
-%   min_breaths - Input value `min_breaths`.
-%
-% Outputs:
-%   endpoint_mask - Logical output mask.
-%   state_mask - Logical output mask.
-
-    endpoint_mask = false(size(t_grid));
-    peak_t = peak_t(:);
-    ratio = ratio(:);
-    if numel(peak_t) ~= numel(ratio)
-        error('MAGMA:RespFeatures:SizeMismatch', ...
-            'peak_t and ratio must have equal lengths.');
-    end
-    for i = 1:numel(t_grid)
-        t = t_grid(i);
-        lb = t - win_sec;
-        if lb < 0
-            continue;
-        end
-        values = ratio(peak_t >= lb & peak_t <= t);
-        values = values(isfinite(values) & values > 0);
-        endpoint_mask(i) = numel(values) >= min_breaths && ...
-            all(values <= threshold);
-    end
-    state_mask = analysis_window_endpoints_to_state_mask( ...
-        endpoint_mask, t_grid, win_sec);
-end
-
 function [endpoint_mask, state_mask] = amplitude_band_mask(peak_t, ratio, t_grid, win_sec, r_lo, r_hi)
 % AMPLITUDE_BAND_MASK Perform the amplitude band mask operation.
 %
@@ -448,11 +419,12 @@ function [endpoint_mask, state_mask] = amplitude_band_mask(peak_t, ratio, t_grid
     state_mask = analysis_window_endpoints_to_state_mask(endpoint_mask, t_grid, win_sec);
 end
 
-function [endpoint_mask, state_mask] = amplitude_threshold_mask(peak_t, ratio, t_grid, win_sec, threshold)
+function [endpoint_mask, state_mask] = amplitude_threshold_mask( ...
+    peak_t, ratio, t_grid, win_sec, threshold, min_breaths, direction)
 % AMPLITUDE_THRESHOLD_MASK Perform the amplitude threshold mask operation.
 %
 % Syntax:
-%   [endpoint_mask, state_mask] = amplitude_threshold_mask(peak_t, ratio, t_grid, win_sec, threshold)
+%   [endpoint_mask, state_mask] = amplitude_threshold_mask(peak_t, ratio, t_grid, win_sec, threshold, min_breaths, direction)
 %
 % Inputs:
 %   peak_t - Input value `peak_t`.
@@ -460,10 +432,19 @@ function [endpoint_mask, state_mask] = amplitude_threshold_mask(peak_t, ratio, t
 %   t_grid - Time coordinates in seconds.
 %   win_sec - Duration or window length in seconds.
 %   threshold - Selection threshold value.
+%   min_breaths - Minimum number of valid breaths in the window.
+%   direction - Threshold direction: 'le' or 'ge'.
 %
 % Outputs:
 %   endpoint_mask - Logical output mask.
 %   state_mask - Logical output mask.
+
+    direction = string(direction);
+    if ~isscalar(direction) || ~any(direction == ["le" "ge"])
+        error('MAGMA:RespFeatures:InvalidThresholdDirection', ...
+            'direction must be ''le'' or ''ge''.');
+    end
+    direction = char(direction);
 
     endpoint_mask = false(size(t_grid));
     peak_t = peak_t(:);
@@ -479,19 +460,20 @@ function [endpoint_mask, state_mask] = amplitude_threshold_mask(peak_t, ratio, t
             continue;
         end
         values = ratio(peak_t <= t & peak_t >= lb);
-        if numel(values) < 3
-            continue;
+        if strcmp(direction, 'le')
+            values = values(isfinite(values) & values > 0);
+            passes_threshold = all(values <= threshold);
+        else
+            passes_threshold = all(isfinite(values) & values >= threshold);
         end
-        if all(isfinite(values) & values >= threshold)
-            endpoint_mask(i) = true;
-        end
+        endpoint_mask(i) = numel(values) >= min_breaths && passes_threshold;
     end
     state_mask = analysis_window_endpoints_to_state_mask(endpoint_mask, t_grid, win_sec);
 end
 
-function [raw_trace, ratio_trace] = amplitude_window_medians( ...
-    peak_t, amp, ratio, t_grid, win_sec, min_breaths)
+function [raw_trace, ratio_trace] = amplitude_window_medians(peak_t, amp, ratio, t_grid, win_sec, min_breaths)
 % AMPLITUDE_WINDOW_MEDIANS Perform the amplitude window medians operation.
+% This function creates rolling median breathing-amplitude traces.
 %
 % Syntax:
 %   [raw_trace, ratio_trace] = amplitude_window_medians(peak_t, amp, ratio, t_grid, win_sec, min_breaths)
