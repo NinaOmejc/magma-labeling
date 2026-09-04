@@ -2,23 +2,11 @@
 
 MATLAB-based pipeline for detecting and reviewing respiratory and oxygenation events in single-subject physiological recordings.
 
-Canonical labels, in fixed order:
-
-1. `shallow`
-2. `deep`
-3. `slow`
-4. `rapid`
-5. `irregular`
-6. `apnea`
-7. `sigh`
-8. `csr`
-9. `thoracic`
-10. `async`
-11. `desat`
+Canonical label names, metadata, and fixed order are defined by `get_labels.m`.
 
 The labels are independent and may overlap in time. They represent signal-derived physiological patterns rather than mutually exclusive clinical dysfunctional-breathing diagnoses. Original label definitions are available in `Labels.docx`.
 
-The saved label schema is `independent_labels_v3_11class`. Historical v2 names are migrated by explicit name identity, never by column position: `shallowB→shallow`, `deepB→deep`, `slowB→slow`, `rapidB→rapid`, `irregB→irregular`, `CSR→csr`, `thorDomB→thoracic`, and `asyncB→async` (`apnea`, `sigh`, and `desat` are unchanged).
+Historical names are mapped by explicit name identity, never by column position.
 
 ## Input Data
 

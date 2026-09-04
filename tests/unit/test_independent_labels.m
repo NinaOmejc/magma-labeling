@@ -3,15 +3,32 @@ function tests = test_independent_labels
     tests = functiontests(localfunctions);
 end
 
-function testCanonicalLabelOrderAndConfiguration(testCase)
-    config = get_config();
-    expected = {'shallow', 'deep', 'slow', 'rapid', 'irregular', ...
+function testGetLabelsFormatsAndConfiguration(testCase)
+    expected_short = {'shallow', 'deep', 'slow', 'rapid', 'irregular', ...
         'apnea', 'sigh', 'csr', 'thoracic', 'async', 'desat'};
-    verifyEqual(testCase, {config.labels.short}, expected);
-    verifyEqual(testCase, [config.labels.idx], 1:11);
+    expected_long = {'ShallowBreathing', 'DeepBreathing', 'SlowBreathing', ...
+        'RapidBreathing', 'IrregularBreathing', 'Apnea', 'Sigh', ...
+        'PeriodicBreathingCheyneStokesLike', 'ThoracicDominantBreathing', ...
+        'RespiratoryAsynchrony', 'Desaturation'};
+
+    labels = get_labels();
+    verifyNumElements(testCase, labels, 11);
+    verifyTrue(testCase, all(isfield(labels, {'idx', 'long', 'short'})));
+    verifyEqual(testCase, {labels.short}, expected_short);
+    verifyEqual(testCase, {labels.long}, expected_long);
+    verifyEqual(testCase, [labels.idx], 1:11);
+    verifyEqual(testCase, get_labels('short'), expected_short);
+    verifyEqual(testCase, get_labels("SHORT"), expected_short);
+    verifyEqual(testCase, get_labels('long'), expected_long);
+    verifyEqual(testCase, get_labels("IDX"), 1:11);
+    verifyError(testCase, @() get_labels('unknown'), ...
+        'MAGMA:GetLabels:InvalidFormat');
+
+    config = get_config();
+    verifyEqual(testCase, {config.labels.short}, get_labels('short'));
+    verifyEqual(testCase, [config.labels.idx], get_labels('idx'));
     verifyEqual(testCase, config.labels(2).short, 'deep');
     verifyEqual(testCase, config.labels(9).short, 'thoracic');
-    verifyEqual(testCase, config.label_schema_version, 'independent_labels_v3_11class');
     verifyEqual(testCase, config.deep.amp_ratio_thr, 1.20);
     verifyEqual(testCase, config.deep.min_dur_sec, 30);
 
@@ -24,7 +41,6 @@ function testCanonicalLabelOrderAndConfiguration(testCase)
 
     repo_root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
     main_source = fileread(fullfile(repo_root, 'src', 'main_single.m'));
-    verifyTrue(testCase, contains(main_source, 'results.label_schema_version'));
     verifyTrue(testCase, contains(main_source, 'results.label_available'));
 end
 

@@ -3,13 +3,9 @@ function tests = test_stage5_semantics
     tests = functiontests(localfunctions);
 end
 
-function testEvidenceVersionAndCanonicalOrder(testCase)
-    [data, resp_feat, resp_ref, diagnostics_desat, config] = physiological_fixture();
-    phys = compute_respiratory_features(data, resp_feat, resp_ref, config);
-    verifyEqual(testCase, phys.version, 'independent_respiratory_evidence_v5');
-    verifyEqual(testCase, {config.labels.short}, ...
-        {'shallow', 'deep', 'slow', 'rapid', 'irregular', 'apnea', ...
-         'sigh', 'csr', 'thoracic', 'async', 'desat'});
+function testCanonicalOrder(testCase)
+    config = stage_config();
+    verifyEqual(testCase, {config.labels.short}, get_labels('short'));
 end
 
 function testThoracicEndpointAndStateHaveDistinctSemantics(testCase)

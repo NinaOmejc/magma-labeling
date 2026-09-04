@@ -192,7 +192,7 @@ function validate_label_order(label_names)
 % Inputs:
 %   label_names - Label identifier or label metadata.
 
-    expected = canonical_label_names();
+    expected = get_labels('short');
     if ~isequal(label_names, expected)
         error('MAGMA:Annotations:CanonicalLabels', ...
             'The Stage-6 annotation schema requires the frozen 11-label order.');

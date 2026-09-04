@@ -18,7 +18,7 @@ function [final_event_sets, review_round] = create_manual_review_round( ...
 
     defs = manual_label_definitions();
     label_names = {config.labels.short};
-    if ~isequal(label_names, canonical_label_names())
+    if ~isequal(label_names, get_labels('short'))
         error('MAGMA:ManualReview:CanonicalLabels', ...
             'Manual review requires the frozen 11-label order.');
     end

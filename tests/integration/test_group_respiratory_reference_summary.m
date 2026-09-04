@@ -11,15 +11,15 @@ function testSavedRespiratoryReferenceIsSummarized(testCase)
 
     subject = 5;
     measure = 2;
-    mask = false(100, 2);
-    mask(21:60, 2) = true;
+    mask_automatic = false(100, 2);
+    mask_automatic(21:60, 2) = true;
     % Historical v2 names deliberately exercise semantic (not positional)
-    % migration into the v3 group columns.
+    % mapping into the canonical group columns.
     label_names = {'shallowB', 'deepB'};
     config = struct('fs', 200);
     resp_ref = synthetic_saved_reference();
     save(fullfile(subject_dir, 'Sub5_M2_labels.mat'), ...
-        'subject', 'measure', 'mask', 'label_names', 'config', 'resp_ref');
+        'subject', 'measure', 'mask_automatic', 'label_names', 'config', 'resp_ref');
 
     group_table = build_group_label_table(results_root);
 
@@ -45,7 +45,6 @@ function testSavedRespiratoryReferenceIsSummarized(testCase)
     verifyTrue(testCase, isnan(group_table.label_thoracic_duration_sec));
     verifyTrue(testCase, isnan(group_table.label_thoracic_fraction));
     verifyTrue(testCase, isnan(group_table.events_thoracic_count));
-    verifyEqual(testCase, string(group_table.label_schema_version), "legacy_unspecified");
 
     dictionary_file = fullfile(results_root, 'group_analysis', ...
         'group_measure_comparability.csv');
@@ -71,14 +70,13 @@ function testAssessedZeroLabelsRemainDistinctFromUnavailable(testCase)
     current = get_config();
     subject = 42;
     measure = 3;
-    mask = false(100, numel(current.labels));
+    mask_automatic = false(100, numel(current.labels));
     label_names = {current.labels.short};
     label_available = true(1, numel(label_names));
-    label_schema_version = current.label_schema_version;
     config = struct('fs', 10);
     save(fullfile(subject_dir, 'Sub42_M3_labels.mat'), ...
-        'subject', 'measure', 'mask', 'label_names', 'label_available', ...
-        'label_schema_version', 'config');
+        'subject', 'measure', 'mask_automatic', 'label_names', ...
+        'label_available', 'config');
 
     group_table = build_group_label_table(results_root);
     verifyEqual(testCase, group_table.label_deep_available, 1);
@@ -88,8 +86,6 @@ function testAssessedZeroLabelsRemainDistinctFromUnavailable(testCase)
     verifyEqual(testCase, group_table.label_thoracic_duration_sec, 0);
     verifyEqual(testCase, group_table.label_thoracic_fraction, 0);
     verifyEqual(testCase, group_table.events_thoracic_count, 0);
-    verifyEqual(testCase, string(group_table.label_schema_version), ...
-        "independent_labels_v3_11class");
 end
 
 function testLegacyEventsAndRejectedRunsUseSemanticIdentityAndIndices(testCase)

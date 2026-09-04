@@ -154,7 +154,6 @@ for isub = 1:length(config.subjects)
         results.label_reviewed_available = reviewed_available;
         results.label_reviewed_availability_reason = reviewed_reasons;
         results.label_reviewed_assessable_mask = reviewed_assessable_mask;
-        results.label_schema_version = config.label_schema_version;
         results.resp_cycles = resp_cycles;
         results.resp_ref = resp_ref;
         results.session_reference = session_reference;
@@ -175,8 +174,6 @@ for isub = 1:length(config.subjects)
         results.rewritten_manual_label_figures = rewritten_manual_label_figures;
         results.input_config = config.input_config;
         results.config = config;
-        results.export_schema_version = get_config_value( ...
-            config, 'HDF5', 'export_schema_version', 'magma_ml_hdf5_v4');
         results.upstream_input_preprocessing = get_config_value( ...
             config, 'HDF5', 'upstream_input_preprocessing', ...
             'external / not fully documented');

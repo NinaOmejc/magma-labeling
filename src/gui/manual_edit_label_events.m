@@ -217,7 +217,7 @@ function edit_info = apply_active_round_info(edit_info, history, active_round_id
         return;
     end
     active = history(active_index);
-    label_names = canonical_label_names();
+    label_names = get_labels('short');
     reviewed = false(1, numel(defs));
     changed = false(1, numel(defs));
     for i = 1:numel(defs)
@@ -574,7 +574,7 @@ function history = normalize_saved_review_history(saved_history, N, config)
         return;
     end
 
-    L = numel(canonical_label_names());
+    L = numel(get_labels('short'));
     normalized = repmat(review_round_template(), numel(saved_history), 1);
     for i = 1:numel(saved_history)
         source = saved_history(i);
@@ -684,7 +684,7 @@ function coverage = generic_coverage_from_round(round_info, defs, N)
 %   coverage - Computed output value `coverage`.
 
     coverage = false(N, numel(defs));
-    label_names = canonical_label_names();
+    label_names = get_labels('short');
     if ~isequal(size(round_info.review_mask), [N numel(label_names)])
         error('MAGMA:ManualLabelEdit:ReviewMaskAlignment', ...
             'Active review coverage must be N-by-11.');
@@ -723,8 +723,8 @@ function value = review_round_template()
         'start_from', '', ...
         'source_review_round', NaN, ...
         'events', {normalize_event_types_and_meta(empty_events())}, ...
-        'mask', false(0, numel(canonical_label_names())), ...
-        'review_mask', false(0, numel(canonical_label_names())), ...
+        'mask', false(0, numel(get_labels('short'))), ...
+        'review_mask', false(0, numel(get_labels('short'))), ...
         'review_status', {{}}, ...
         'changed_labels', {{}}, ...
         'reviewer_id', '', ...
@@ -835,7 +835,7 @@ function save_manual_event_sets(edit_file, automatic_event_sets, reviewed_event_
         'reviewed_fields', {reviewed_fields}, ...
         'saved_on', char(datetime('now', 'Format', 'yyyy-MM-dd HH:mm:ss')) );
     manual_label_edit_meta.label_names = {label_defs.type};
-    manual_label_edit_meta.canonical_label_names = canonical_label_names();
+    manual_label_edit_meta.canonical_label_names = get_labels('short');
 
     save(edit_file, 'manual_label_automatic_event_sets', ...
         'manual_label_event_sets', 'manual_label_review_mask', ...

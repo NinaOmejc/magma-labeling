@@ -3,7 +3,7 @@ function tests = test_respiratory_features
     tests = functiontests(localfunctions);
 end
 
-function testReviewedBreathsAndAlignmentArePreserved(testCase)
+function testRespiratoryCycleAlignmentIsPreserved(testCase)
     [data, resp_cycles, resp_ref, diagnostics_desat, config] = feature_fixture();
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
@@ -17,11 +17,6 @@ function testReviewedBreathsAndAlignmentArePreserved(testCase)
     verifyEqual(testCase, numel(lungs.ibi), numel(lungs.peak_t) - 1);
     verifyEqual(testCase, numel(lungs.rr_bpm), numel(lungs.peak_t) - 1);
     verifyTrue(testCase, isnan(lungs.amp(end)));
-    verifyFalse(testCase, resp_features.provenance.redetected_respiratory_peaks);
-    verifyEqual(testCase, resp_features.provenance.cycle_source, 'resp_cycles');
-    verifyEqual(testCase, resp_features.provenance.cycle_review_status, 'automatic');
-    verifyFalse(testCase, resp_features.provenance.manual_review_performed);
-    verifyFalse(testCase, resp_features.provenance.manual_edits_made);
 end
 
 function testSessionAndGlobalRatiosHandleInvalidAmplitudes(testCase)
@@ -124,8 +119,6 @@ function testWindowRateUsesSixtyOverMeanIbiAndIsShared(testCase)
     verifyTrue(testCase, isequaln( ...
         resp_features.resp.lungs.rate_slow_window_bpm, ...
         resp_features.resp.lungs.rate_rapid_window_bpm));
-    verifyEqual(testCase, resp_features.provenance.respiratory_rate_estimator, ...
-        '60_over_mean_complete_ibi_in_full_trailing_window');
 end
 
 function testRateWindowRequiresFullHistoryAndAtLeastTwoValidIbis(testCase)

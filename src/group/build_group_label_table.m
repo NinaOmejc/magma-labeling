@@ -89,8 +89,6 @@ function row = label_file_to_summary_row(label_file, config, canonical_labels)
     row.measure = get_loaded_value(loaded, 'measure', file_measure);
     row.measurement = row.measure;
     row.subject_group = subject_group_for_subject(row.subject, config);
-    row.label_schema_version = char(string( ...
-        get_loaded_value(loaded, 'label_schema_version', 'legacy_unspecified')));
     if isfield(loaded, 'resp_ref')
         row = add_respiratory_reference_summary(row, loaded.resp_ref);
     else
@@ -481,7 +479,7 @@ function labels = current_canonical_labels(~)
 % Outputs:
 %   labels - Output text or identifier.
 
-    labels = canonical_label_names();
+    labels = get_labels('short');
 end
 
 function row = add_respiratory_reference_summary(row, resp_ref)
@@ -835,7 +833,6 @@ function value = missing_value_for_field(name)
 %   value - Computed numeric value.
 
     if strcmp(name, 'label_file') || strcmp(name, 'subject_group') || ...
-            strcmp(name, 'label_schema_version') || ...
             strcmp(name, 'change_pattern') || endsWith(name, '_quality') || ...
             endsWith(name, '_action')
         value = '';

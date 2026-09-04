@@ -12,6 +12,7 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
 
     filename = char(string(filename));
     validate_export_inputs(filename, results, signals_raw, signals_preprocessed);
+    export_schema_version = 'magma_ml_hdf5_v4';
     out_dir = fileparts(filename);
     if ~isempty(out_dir) && ~isfolder(out_dir)
         mkdir(out_dir);
@@ -28,6 +29,11 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
 
     write_resp_belt(filename, '/resp/lungs', results.resp_features.resp.lungs);
     write_resp_belt(filename, '/resp/diaph', results.resp_features.resp.diaph);
+    if isfield(results, 'resp_cycles') && isstruct(results.resp_cycles) && ...
+            isfield(results.resp_cycles, 'provenance')
+        write_value(filename, '/resp/cycle_provenance', ...
+            results.resp_cycles.provenance);
+    end
     write_value(filename, '/session_reference', results.session_reference);
     write_value(filename, '/resp_reference/lungs', results.resp_ref.lungs);
     write_value(filename, '/resp_reference/diaph', results.resp_ref.diaph);
@@ -84,10 +90,8 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
     write_numeric(filename, '/meta/subject', results.subject);
     write_numeric(filename, '/meta/measurement', results.measure);
     write_numeric(filename, '/meta/fs', fs);
-    write_text(filename, '/meta/label_schema_version', results.label_schema_version);
-    write_text(filename, '/meta/resp_features_version', results.resp_features.version);
     write_text(filename, '/meta/annotation_schema_version', results.annotation_schema_version);
-    write_text(filename, '/meta/export_schema_version', results.export_schema_version);
+    write_text(filename, '/meta/export_schema_version', export_schema_version);
     write_text(filename, '/meta/upstream_input_preprocessing', ...
         results.upstream_input_preprocessing);
 end
@@ -115,9 +119,8 @@ function validate_export_inputs(filename, results, raw, preprocessed)
         'label_burden_reviewed', 'label_overlap_summary_automatic', ...
         'label_overlap_summary_reviewed', 'db_phenotype_evidence', ...
         'label_reviewed_available', 'label_reviewed_availability_reason', ...
-        'label_reviewed_assessable_mask', 'label_schema_version', ...
-        'annotation_schema_version', ...
-        'export_schema_version', 'upstream_input_preprocessing', ...
+        'label_reviewed_assessable_mask', 'annotation_schema_version', ...
+        'upstream_input_preprocessing', ...
         'subject', 'measure'};
     missing = required(~isfield(results, required));
     if ~isempty(missing)
@@ -131,14 +134,9 @@ function validate_export_inputs(filename, results, raw, preprocessed)
     end
     N = size(preprocessed, 1);
     L = numel(results.label_names);
-    expected = canonical_label_names();
+    expected = get_labels('short');
     if ~isequal(cellstr(string(results.label_names)), expected)
         error('MAGMA:HDF5:LabelOrder', 'HDF5 export requires the frozen 11-label order.');
-    end
-    if ~strcmp(char(string(results.label_schema_version)), ...
-            'independent_labels_v3_11class')
-        error('MAGMA:HDF5:LabelSchemaVersion', ...
-            'HDF5 export requires independent_labels_v3_11class.');
     end
     vector_fields = {'label_available', 'label_availability_reason', ...
         'label_reviewed_available', 'label_reviewed_availability_reason', ...

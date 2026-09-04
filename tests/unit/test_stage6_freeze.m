@@ -3,13 +3,9 @@ function tests = test_stage6_freeze
     tests = functiontests(localfunctions);
 end
 
-function testCanonicalLabelOrderAndSchemaRemainFrozen(testCase)
+function testCanonicalLabelOrderRemainsFrozen(testCase)
     config = stage6_config();
-    verifyEqual(testCase, {config.labels.short}, ...
-        {'shallow', 'deep', 'slow', 'rapid', 'irregular', 'apnea', ...
-         'sigh', 'csr', 'thoracic', 'async', 'desat'});
-    verifyEqual(testCase, config.label_schema_version, ...
-        'independent_labels_v3_11class');
+    verifyEqual(testCase, {config.labels.short}, get_labels('short'));
 end
 
 function testRapidConfirmationUsesBreathwiseLocalization(testCase)
@@ -515,7 +511,7 @@ function testReviewedAsyncRequiresValidReviewedReaSamples(testCase)
 end
 
 function testHalfOpenOneAndMultiSampleEvents(testCase)
-    names = canonical_label_names();
+    names = get_labels('short');
     fs = 10;
     one_mask = false(10,11);
     one_mask(3,1) = true;
@@ -598,6 +594,8 @@ function testHdf5RoundTripPreservesOrderMasksNaNsAndRespiration(testCase)
         results.label_reviewed_assessable_mask);
     verifyEqual(testCase, h5read(filename, '/resp/lungs/peak_idx'), ...
         results.resp_features.resp.lungs.peak_idx);
+    verifyEqual(testCase, read_hdf5_text(filename, ...
+        '/resp/cycle_provenance/review_status'), {'automatic'});
     verifyEqual(testCase, h5read(filename, '/review/history/number_of_rounds'), 1);
     verifyEqual(testCase, read_hdf5_text(filename, ...
         '/review/history/round_000001/reviewer_role'), {'researcher'});
@@ -758,8 +756,13 @@ function results = export_fixture(config, N)
     results.subject = 999;
     results.measure = 1;
     results.config = config;
-    results.resp_features = struct('version', 'independent_respiratory_evidence_v5', ...
+    results.resp_features = struct( ...
         'resp', struct('lungs', belt, 'diaph', belt));
+    results.resp_cycles = struct('provenance', struct( ...
+        'review_status', 'automatic', ...
+        'manual_review_performed', false, ...
+        'manual_edits_made', false, ...
+        'loaded_from_cache', false));
     results.session_reference = get_session_reference_interval(N, config);
     reference = struct('session', struct('value', 1, 'available', true), ...
         'global', struct('value', 1, 'available', true), ...
@@ -817,9 +820,7 @@ function results = export_fixture(config, N)
         reviewed_assessable);
     results.db_phenotype_evidence = struct('version','test', ...
         'external_clinical_data',struct('status','not_integrated','value',[]));
-    results.label_schema_version = config.label_schema_version;
     results.annotation_schema_version = 'automatic_reviewed_annotations_v2';
-    results.export_schema_version = 'magma_ml_hdf5_v4';
     results.upstream_input_preprocessing = 'external / not fully documented';
 end
 

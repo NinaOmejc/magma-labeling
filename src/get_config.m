@@ -10,17 +10,16 @@ function config = get_config()
     config = struct;                                                                                   % main configuration container
     config.path_data_in = 'D:\Projects\MAGMA\raw_data';                                                % *** folder with raw input .dat files
     config.path_results_out = 'D:\Projects\MAGMA\data_analysis\statistical_labeling';               % *** root output folder
-    config.subjects = 1:2;                                                                                % *** subjects to analyze
+    config.subjects = 1;                                                                                % *** subjects to analyze
     config.remove_subjects = [3 30 91];                                                                % *** subjects to not analyze
-    config.measurements = [1 2];                                                                       % *** measurements to analyze - 1: pre-rehab-pre-stress, 2: pre-rehab-post-stress, 3:post-rehab-pre-stress, 4:post-rehab-post-stress
+    config.measurements = [1];                                                                       % *** measurements to analyze - 1: pre-rehab-pre-stress, 2: pre-rehab-post-stress, 3:post-rehab-pre-stress, 4:post-rehab-post-stress
     config.fs = 200;                                                                                   % native/master sampling frequency (Hz) for all aligned physiological signals
     config.data_columns = {'ECG1', 'ECG2', 'SpO₂', 'Resp-Lungs', 'Blood Pressure', 'Resp-Diaphragm'};  % column names in raw data
     config.input_filename_pattern = 'ECG1_ECG2_SpO2_RespL_BP_RespD_fs200_Sub{subject}_Pom{measure}_DeTr_Norm.dat'; % The generic name of the data files
-    config.label_schema_version = 'independent_labels_v3_11class';         % explicit saved-output label schema
     config.labels = get_labels();                                          % canonical label names and indices
     config.make_figs_visible = 'on';                                      % create figures hidden during batch runs, so they dont pop up (for faster run)
-    config.overwrite_results = false;                                      % *** Recompute even if label output already exists
-    config.overwrite_features = true;                                     % *** Recompute respiratory features even if "*_features.mat" exists
+    config.overwrite_results = true;                                      % *** Recompute even if label output already exists
+    config.overwrite_features = false;                                     % *** Recompute respiratory features even if "*_features.mat" exists
     
     % FIRST CHECK: plot [X1, X2] seconds of raw data
     config.plot_raw_data = false;                               % save an overview plot of raw signals
@@ -229,7 +228,6 @@ function config = get_config()
     % numeric/text datasets on the same native 200-Hz master timeline.
     config.HDF5 = struct();
     config.HDF5.enabled = true;
-    config.HDF5.export_schema_version = 'magma_ml_hdf5_v4';
     config.HDF5.filename_suffix = '_labels.h5';
     config.HDF5.upstream_input_preprocessing = ...
         'external / not fully documented';
@@ -243,23 +241,4 @@ function config = get_config()
         addpath(genpath(src_root));
     end
 
-end
-
-
-function labels = get_labels()
-% GET_LABELS Return labels.
-%
-% Syntax:
-%   labels = get_labels()
-%
-% Outputs:
-%   labels - Output text or identifier.
-
-    labels_long = {'ShallowBreathing', 'DeepBreathing', 'SlowBreathing', 'RapidBreathing', 'IrregularBreathing', 'Apnea', 'Sigh', 'PeriodicBreathingCheyneStokesLike', 'ThoracicDominantBreathing', 'RespiratoryAsynchrony', 'Desaturation'};
-    labels_short = canonical_label_names();
-    labels_idx = 1:11;
-    labels = struct( ...
-        'idx',   num2cell(labels_idx), ...
-        'long',  labels_long, ...
-        'short', labels_short );
 end
