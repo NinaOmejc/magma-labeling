@@ -1,5 +1,17 @@
 function b = recompute_respiration_breath_fields(b, x, peak_idx, config)
-% Recompute breath fields after peak edits on the config.fs master timeline.
+% RECOMPUTE_RESPIRATION_BREATH_FIELDS Derive respiratory-cycle fields from supplied peaks.
+%
+% Syntax:
+%   b = recompute_respiration_breath_fields(b, x, peak_idx, config)
+%
+% Inputs:
+%   b - Respiratory-belt structure to update.
+%   x - Respiratory-belt signal.
+%   peak_idx - Respiratory peak sample indices.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   b - Respiratory-belt structure with cycle timing and amplitude fields.
 
     x = x(:);
     fs = config.fs;

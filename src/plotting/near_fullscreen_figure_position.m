@@ -1,5 +1,14 @@
 function pos = near_fullscreen_figure_position(margin_px)
-% Return a figure position that nearly fills the current MATLAB screen.
+% NEAR_FULLSCREEN_FIGURE_POSITION Perform the near fullscreen figure position operation.
+%
+% Syntax:
+%   pos = near_fullscreen_figure_position(margin_px)
+%
+% Inputs:
+%   margin_px - Input value `margin_px`.
+%
+% Outputs:
+%   pos - Computed output value `pos`.
 
     if nargin < 1 || isempty(margin_px)
         margin_px = [60 110];

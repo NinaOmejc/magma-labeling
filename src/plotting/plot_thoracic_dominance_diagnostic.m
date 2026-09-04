@@ -1,6 +1,15 @@
 function plot_thoracic_dominance_diagnostic(t_grid, evidence, dominance_mask, events, config)
-% plot_thoracic_dominance_diagnostic
-% Plot within-record normalized thoracoabdominal excursion balance.
+% PLOT_THORACIC_DOMINANCE_DIAGNOSTIC Plot thoracic dominance diagnostic.
+%
+% Syntax:
+%   plot_thoracic_dominance_diagnostic(t_grid, evidence, dominance_mask, events, config)
+%
+% Inputs:
+%   t_grid - Time coordinates in seconds.
+%   evidence - Input value `evidence`.
+%   dominance_mask - Logical state or selection mask.
+%   events - Event structure data.
+%   config - Pipeline configuration structure.
 
     fig = figure('Units', 'pixels', 'Position', near_fullscreen_figure_position(), ...
         'Visible', config.make_figs_visible, 'Color', 'w');

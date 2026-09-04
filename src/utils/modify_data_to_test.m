@@ -1,38 +1,20 @@
 function data_modified = modify_data_to_test(data, fs, columns, trange_min, modification_type, to_plot)
-%MODIFY_DATA_TO_TEST Modify selected signal columns in a chosen time range.
+% MODIFY_DATA_TO_TEST Perform the modify data to test operation.
 %
-% Usage:
+% Syntax:
 %   data_modified = modify_data_to_test(data, fs, columns, trange_min, modification_type, to_plot)
 %
 % Inputs:
-%   data              - data matrix, samples x signals
-%   fs                - master sampling frequency in Hz (config.fs)
-%   columns           - columns to modify, e.g. [5 6]
-%   trange_min        - time range in minutes, e.g. [2 4]
-%   modification_type - string, supports:
-%                         'shallow_breathing'
-%                         'deep_breathing'
-%                         'thoracic_dominant_breathing'
-%                         'irregular_breathing'
-%                         'slow_breathing'
-%                         'rapid_breathing'
-%                         'respiratory_asynchrony'
-%                         'desaturation'
-%                         'apnea'
-%                         'sigh'
-%                         'periodic_breathing'
-%   to_plot           - true/false
+%   data - Input physiological signal data.
+%   fs - Sampling frequency in hertz.
+%   columns - Input value `columns`.
+%   trange_min - Input value `trange_min`.
+%   modification_type - Input value `modification_type`.
+%   to_plot - Input value `to_plot`.
 %
-% Output:
-%   data_modified     - same size as data, with selected columns modified
-%
-% Example:
-%   data_mod = modify_data_to_test(data, config.fs, [5 6], [2 4], ...
-%       'shallow_breathing', true);
+% Outputs:
+%   data_modified - Computed output value `data_modified`.
 
-    % -----------------------------
-    % Basic checks
-    % -----------------------------
     if nargin < 6
         to_plot = false;
     end
@@ -158,6 +140,21 @@ function data_modified = modify_data_to_test(data, fs, columns, trange_min, modi
 end
 
 function data_out = redistribute_thoracoabdominal_excursion(data_in, time_sec, mask, columns, fs)
+% REDISTRIBUTE_THORACOABDOMINAL_EXCURSION Perform the redistribute thoracoabdominal excursion operation.
+%
+% Syntax:
+%   data_out = redistribute_thoracoabdominal_excursion(data_in, time_sec, mask, columns, fs)
+%
+% Inputs:
+%   data_in - Input value `data_in`.
+%   time_sec - Time coordinates in seconds.
+%   mask - Logical state or selection mask.
+%   columns - Input value `columns`.
+%   fs - Sampling frequency in hertz.
+%
+% Outputs:
+%   data_out - Computed output value `data_out`.
+
     if numel(columns) < 2
         error('thoracic_dominant_breathing requires thoracic and abdominal belt columns.');
     end
@@ -166,6 +163,22 @@ function data_out = redistribute_thoracoabdominal_excursion(data_in, time_sec, m
 end
 
 function data_out = scale_selected_columns(data_in, time_sec, mask, columns, fs, scale)
+% SCALE_SELECTED_COLUMNS Perform the scale selected columns operation.
+%
+% Syntax:
+%   data_out = scale_selected_columns(data_in, time_sec, mask, columns, fs, scale)
+%
+% Inputs:
+%   data_in - Input value `data_in`.
+%   time_sec - Time coordinates in seconds.
+%   mask - Logical state or selection mask.
+%   columns - Input value `columns`.
+%   fs - Sampling frequency in hertz.
+%   scale - Input value `scale`.
+%
+% Outputs:
+%   data_out - Computed output value `data_out`.
+
     data_out = data_in;
     for i = 1:numel(columns)
         c = columns(i);
@@ -178,6 +191,23 @@ function data_out = scale_selected_columns(data_in, time_sec, mask, columns, fs,
 end
 
 function data_out = replace_respiration_with_fixed_rate(data_in, time_sec, mask, columns, fs, bpm, amp_scale)
+% REPLACE_RESPIRATION_WITH_FIXED_RATE Perform the replace respiration with fixed rate operation.
+%
+% Syntax:
+%   data_out = replace_respiration_with_fixed_rate(data_in, time_sec, mask, columns, fs, bpm, amp_scale)
+%
+% Inputs:
+%   data_in - Input value `data_in`.
+%   time_sec - Time coordinates in seconds.
+%   mask - Logical state or selection mask.
+%   columns - Input value `columns`.
+%   fs - Sampling frequency in hertz.
+%   bpm - Input value `bpm`.
+%   amp_scale - Input value `amp_scale`.
+%
+% Outputs:
+%   data_out - Computed output value `data_out`.
+
     data_out = data_in;
     phase_offsets = linspace(0, 0.12, max(1, numel(columns)));
     t0 = time_sec(find(mask, 1, 'first'));
@@ -194,6 +224,21 @@ function data_out = replace_respiration_with_fixed_rate(data_in, time_sec, mask,
 end
 
 function data_out = replace_respiration_with_variable_rate(data_in, time_sec, mask, columns, fs)
+% REPLACE_RESPIRATION_WITH_VARIABLE_RATE Perform the replace respiration with variable rate operation.
+%
+% Syntax:
+%   data_out = replace_respiration_with_variable_rate(data_in, time_sec, mask, columns, fs)
+%
+% Inputs:
+%   data_in - Input value `data_in`.
+%   time_sec - Time coordinates in seconds.
+%   mask - Logical state or selection mask.
+%   columns - Input value `columns`.
+%   fs - Sampling frequency in hertz.
+%
+% Outputs:
+%   data_out - Computed output value `data_out`.
+
     data_out = data_in;
     t0 = time_sec(find(mask, 1, 'first'));
     local_t = time_sec - t0;
@@ -212,6 +257,21 @@ function data_out = replace_respiration_with_variable_rate(data_in, time_sec, ma
 end
 
 function data_out = replace_respiration_with_asynchrony(data_in, time_sec, mask, columns, fs)
+% REPLACE_RESPIRATION_WITH_ASYNCHRONY Perform the replace respiration with asynchrony operation.
+%
+% Syntax:
+%   data_out = replace_respiration_with_asynchrony(data_in, time_sec, mask, columns, fs)
+%
+% Inputs:
+%   data_in - Input value `data_in`.
+%   time_sec - Time coordinates in seconds.
+%   mask - Logical state or selection mask.
+%   columns - Input value `columns`.
+%   fs - Sampling frequency in hertz.
+%
+% Outputs:
+%   data_out - Computed output value `data_out`.
+
     data_out = data_in;
     if numel(columns) < 2
         error('respiratory_asynchrony requires two respiration columns, e.g. [4 6].');
@@ -242,6 +302,19 @@ function data_out = replace_respiration_with_asynchrony(data_in, time_sec, mask,
 end
 
 function data_out = apply_desaturation(data_in, mask, columns)
+% APPLY_DESATURATION Apply desaturation.
+%
+% Syntax:
+%   data_out = apply_desaturation(data_in, mask, columns)
+%
+% Inputs:
+%   data_in - Input value `data_in`.
+%   mask - Logical state or selection mask.
+%   columns - Input value `columns`.
+%
+% Outputs:
+%   data_out - Computed output value `data_out`.
+
     data_out = data_in;
     for i = 1:numel(columns)
         c = columns(i);
@@ -259,6 +332,21 @@ function data_out = apply_desaturation(data_in, mask, columns)
 end
 
 function data_out = flatten_selected_columns(data_in, time_sec, mask, columns, fs)
+% FLATTEN_SELECTED_COLUMNS Perform the flatten selected columns operation.
+%
+% Syntax:
+%   data_out = flatten_selected_columns(data_in, time_sec, mask, columns, fs)
+%
+% Inputs:
+%   data_in - Input value `data_in`.
+%   time_sec - Time coordinates in seconds.
+%   mask - Logical state or selection mask.
+%   columns - Input value `columns`.
+%   fs - Sampling frequency in hertz.
+%
+% Outputs:
+%   data_out - Computed output value `data_out`.
+
     data_out = data_in;
     for i = 1:numel(columns)
         c = columns(i);
@@ -271,6 +359,21 @@ function data_out = flatten_selected_columns(data_in, time_sec, mask, columns, f
 end
 
 function data_out = inject_sigh_breath(data_in, time_sec, mask, columns, fs)
+% INJECT_SIGH_BREATH Perform the inject sigh breath operation.
+%
+% Syntax:
+%   data_out = inject_sigh_breath(data_in, time_sec, mask, columns, fs)
+%
+% Inputs:
+%   data_in - Input value `data_in`.
+%   time_sec - Time coordinates in seconds.
+%   mask - Logical state or selection mask.
+%   columns - Input value `columns`.
+%   fs - Sampling frequency in hertz.
+%
+% Outputs:
+%   data_out - Computed output value `data_out`.
+
     data_out = data_in;
     event_t = mean(time_sec(mask), 'omitnan');
     sigma_sec = 0.9;
@@ -286,6 +389,21 @@ function data_out = inject_sigh_breath(data_in, time_sec, mask, columns, fs)
 end
 
 function data_out = replace_respiration_with_periodic_breathing(data_in, time_sec, mask, columns, fs)
+% REPLACE_RESPIRATION_WITH_PERIODIC_BREATHING Perform the replace respiration with periodic breathing operation.
+%
+% Syntax:
+%   data_out = replace_respiration_with_periodic_breathing(data_in, time_sec, mask, columns, fs)
+%
+% Inputs:
+%   data_in - Input value `data_in`.
+%   time_sec - Time coordinates in seconds.
+%   mask - Logical state or selection mask.
+%   columns - Input value `columns`.
+%   fs - Sampling frequency in hertz.
+%
+% Outputs:
+%   data_out - Computed output value `data_out`.
+
     data_out = data_in;
     t0 = time_sec(find(mask, 1, 'first'));
     local_t = time_sec - t0;
@@ -307,6 +425,19 @@ function data_out = replace_respiration_with_periodic_breathing(data_in, time_se
 end
 
 function [center, amp] = local_center_and_amp(sig, mask)
+% LOCAL_CENTER_AND_AMP Perform the local center and amp operation.
+%
+% Syntax:
+%   [center, amp] = local_center_and_amp(sig, mask)
+%
+% Inputs:
+%   sig - Input value `sig`.
+%   mask - Logical state or selection mask.
+%
+% Outputs:
+%   center - Computed output value `center`.
+%   amp - Computed output value `amp`.
+
     segment = sig(mask);
     center = median(segment, 'omitnan');
     if ~isfinite(center)
@@ -328,6 +459,22 @@ function [center, amp] = local_center_and_amp(sig, mask)
 end
 
 function sig_out = blend_masked_segment(sig, replacement, time_sec, mask, fs, fade_sec)
+% BLEND_MASKED_SEGMENT Perform the blend masked segment operation.
+%
+% Syntax:
+%   sig_out = blend_masked_segment(sig, replacement, time_sec, mask, fs, fade_sec)
+%
+% Inputs:
+%   sig - Input value `sig`.
+%   replacement - Input value `replacement`.
+%   time_sec - Time coordinates in seconds.
+%   mask - Logical state or selection mask.
+%   fs - Sampling frequency in hertz.
+%   fade_sec - Duration or window length in seconds.
+%
+% Outputs:
+%   sig_out - Computed output value `sig_out`.
+
     sig_out = sig;
     idx = find(mask);
     if isempty(idx)

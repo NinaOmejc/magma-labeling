@@ -1,8 +1,24 @@
 function rewritten = rewrite_changed_manual_label_figures( ...
     data, spo2_ref, session_reference, resp_cycles, diagnostics_Des, ...
     diagnostic_signals, event_sets, edit_info, config)
-% rewrite_changed_manual_label_figures
-% Overwrite changed diagnostics using config.fs master sample times.
+% REWRITE_CHANGED_MANUAL_LABEL_FIGURES Perform the rewrite changed manual label figures operation.
+%
+% Syntax:
+%   rewritten = rewrite_changed_manual_label_figures(data, spo2_ref, session_reference, resp_cycles, diagnostics_Des, diagnostic_signals, event_sets, edit_info, config)
+%
+% Inputs:
+%   data - Input physiological signal data.
+%   spo2_ref - SpO2-reference structure.
+%   session_reference - Session-reference metadata.
+%   resp_cycles - Respiratory-cycle structure.
+%   diagnostics_Des - Detector diagnostic data.
+%   diagnostic_signals - Detector diagnostic data.
+%   event_sets - Input value `event_sets`.
+%   edit_info - Input value `edit_info`.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   rewritten - Computed output value `rewritten`.
 
     rewritten = {};
 
@@ -37,6 +53,17 @@ function rewritten = rewrite_changed_manual_label_figures( ...
 end
 
 function tf = should_rewrite_any(config)
+% SHOULD_REWRITE_ANY Perform the should rewrite any operation.
+%
+% Syntax:
+%   tf = should_rewrite_any(config)
+%
+% Inputs:
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   tf - Computed output value `tf`.
+
     tf = true;
     if isfield(config, 'LabelEdit') && isfield(config.LabelEdit, 'rewrite_changed_figures')
         tf = logical(config.LabelEdit.rewrite_changed_figures);
@@ -44,6 +71,18 @@ function tf = should_rewrite_any(config)
 end
 
 function tf = should_rewrite_label(config, def)
+% SHOULD_REWRITE_LABEL Perform the should rewrite label operation.
+%
+% Syntax:
+%   tf = should_rewrite_label(config, def)
+%
+% Inputs:
+%   config - Pipeline configuration structure.
+%   def - Input value `def`.
+%
+% Outputs:
+%   tf - Computed output value `tf`.
+
     tf = true;
     cfg_field = def.config_field;
     if isfield(config, cfg_field) && isfield(config.(cfg_field), 'do_plot')
@@ -54,6 +93,22 @@ end
 function plot_final_manual_label_figure( ...
     data, spo2_ref, session_reference, resp_cycles, diagnostics_Des, ...
     diagnostic_signals, events, def, config)
+% PLOT_FINAL_MANUAL_LABEL_FIGURE Plot final manual label figure.
+%
+% Syntax:
+%   plot_final_manual_label_figure(data, spo2_ref, session_reference, resp_cycles, diagnostics_Des, diagnostic_signals, events, def, config)
+%
+% Inputs:
+%   data - Input physiological signal data.
+%   spo2_ref - SpO2-reference structure.
+%   session_reference - Session-reference metadata.
+%   resp_cycles - Respiratory-cycle structure.
+%   diagnostics_Des - Detector diagnostic data.
+%   diagnostic_signals - Detector diagnostic data.
+%   events - Event structure data.
+%   def - Input value `def`.
+%   config - Pipeline configuration structure.
+
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
     end
@@ -94,6 +149,20 @@ function plot_final_manual_label_figure( ...
 end
 
 function plot_signal_panel(ax, t_raw, data, idx, events, title_text, y_text)
+% PLOT_SIGNAL_PANEL Plot signal panel.
+%
+% Syntax:
+%   plot_signal_panel(ax, t_raw, data, idx, events, title_text, y_text)
+%
+% Inputs:
+%   ax - Target axes handle.
+%   t_raw - Time coordinates in seconds.
+%   data - Input physiological signal data.
+%   idx - Input value `idx`.
+%   events - Event structure data.
+%   title_text - Input value `title_text`.
+%   y_text - Input value `y_text`.
+
     hold(ax, 'on');
     if isempty(idx)
         text(ax, 0.5, 0.5, [y_text ' channel not found'], ...
@@ -111,6 +180,21 @@ end
 
 function plot_spo2_panel( ...
     ax, t_raw, data, spo2_ref, session_reference, diagnostics_Des, config, events)
+% PLOT_SPO2_PANEL Plot spo2 panel.
+%
+% Syntax:
+%   plot_spo2_panel(ax, t_raw, data, spo2_ref, session_reference, diagnostics_Des, config, events)
+%
+% Inputs:
+%   ax - Target axes handle.
+%   t_raw - Time coordinates in seconds.
+%   data - Input physiological signal data.
+%   spo2_ref - SpO2-reference structure.
+%   session_reference - Session-reference metadata.
+%   diagnostics_Des - Detector diagnostic data.
+%   config - Pipeline configuration structure.
+%   events - Event structure data.
+
     hold(ax, 'on');
     spo2 = [];
     if isstruct(diagnostics_Des) && isfield(diagnostics_Des, 'spo2') && ...
@@ -149,6 +233,19 @@ function plot_spo2_panel( ...
 end
 
 function plot_diagnostic_panel(ax, diagnostic_signals, resp_cycles, events, def, config)
+% PLOT_DIAGNOSTIC_PANEL Plot diagnostic panel.
+%
+% Syntax:
+%   plot_diagnostic_panel(ax, diagnostic_signals, resp_cycles, events, def, config)
+%
+% Inputs:
+%   ax - Target axes handle.
+%   diagnostic_signals - Detector diagnostic data.
+%   resp_cycles - Respiratory-cycle structure.
+%   events - Event structure data.
+%   def - Input value `def`.
+%   config - Pipeline configuration structure.
+
     hold(ax, 'on');
     plotted = false;
 
@@ -248,6 +345,23 @@ function plot_diagnostic_panel(ax, diagnostic_signals, resp_cycles, events, def,
 end
 
 function plotted = plot_metric_pair(ax, t, diagnostic_signals, lungs_field, diaph_field, y_text, title_text)
+% PLOT_METRIC_PAIR Plot metric pair.
+%
+% Syntax:
+%   plotted = plot_metric_pair(ax, t, diagnostic_signals, lungs_field, diaph_field, y_text, title_text)
+%
+% Inputs:
+%   ax - Target axes handle.
+%   t - Time coordinates in seconds.
+%   diagnostic_signals - Detector diagnostic data.
+%   lungs_field - Input value `lungs_field`.
+%   diaph_field - Input value `diaph_field`.
+%   y_text - Input value `y_text`.
+%   title_text - Input value `title_text`.
+%
+% Outputs:
+%   plotted - Computed output value `plotted`.
+
     plotted_lungs = plot_metric(ax, t, diagnostic_signals, lungs_field, [0.00 0.35 0.85], 'Lungs');
     plotted_diaph = plot_metric(ax, t, diagnostic_signals, diaph_field, [0.85 0.33 0.10], 'Diaphragm');
     plotted = plotted_lungs || plotted_diaph;
@@ -258,6 +372,22 @@ function plotted = plot_metric_pair(ax, t, diagnostic_signals, lungs_field, diap
 end
 
 function plotted = plot_metric(ax, t, diagnostic_signals, field, color, display_name)
+% PLOT_METRIC Plot metric.
+%
+% Syntax:
+%   plotted = plot_metric(ax, t, diagnostic_signals, field, color, display_name)
+%
+% Inputs:
+%   ax - Target axes handle.
+%   t - Time coordinates in seconds.
+%   diagnostic_signals - Detector diagnostic data.
+%   field - Input value `field`.
+%   color - Input value `color`.
+%   display_name - Input value `display_name`.
+%
+% Outputs:
+%   plotted - Computed output value `plotted`.
+
     plotted = false;
     if ~isfield(diagnostic_signals, field)
         return;
@@ -276,6 +406,17 @@ function plotted = plot_metric(ax, t, diagnostic_signals, field, color, display_
 end
 
 function metric = irregular_metric_name(config)
+% IRREGULAR_METRIC_NAME Perform the irregular metric name operation.
+%
+% Syntax:
+%   metric = irregular_metric_name(config)
+%
+% Inputs:
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   metric - Computed output value `metric`.
+
     detection_metric = 'cov';
     if isfield(config, 'IrB') && isfield(config.IrB, 'detection_metric')
         detection_metric = char(string(config.IrB.detection_metric));
@@ -303,6 +444,19 @@ function metric = irregular_metric_name(config)
 end
 
 function plotted = plot_async_metrics(ax, t, diagnostic_signals)
+% PLOT_ASYNC_METRICS Plot async metrics.
+%
+% Syntax:
+%   plotted = plot_async_metrics(ax, t, diagnostic_signals)
+%
+% Inputs:
+%   ax - Target axes handle.
+%   t - Time coordinates in seconds.
+%   diagnostic_signals - Detector diagnostic data.
+%
+% Outputs:
+%   plotted - Computed output value `plotted`.
+
     plotted = false;
     plotted = plot_metric(ax, t, diagnostic_signals, 'resp_asynchrony_phase_coherence_high', ...
         [0.00 0.35 0.85], 'High coherence') || plotted;
@@ -318,6 +472,18 @@ function plotted = plot_async_metrics(ax, t, diagnostic_signals)
 end
 
 function plotted = plot_resp_amplitude(ax, resp_cycles)
+% PLOT_RESP_AMPLITUDE Plot resp amplitude.
+%
+% Syntax:
+%   plotted = plot_resp_amplitude(ax, resp_cycles)
+%
+% Inputs:
+%   ax - Target axes handle.
+%   resp_cycles - Respiratory-cycle structure.
+%
+% Outputs:
+%   plotted - Computed output value `plotted`.
+
     plotted = false;
     if isfield(resp_cycles, 'lungs') && isfield(resp_cycles.lungs, 'peak_t') && isfield(resp_cycles.lungs, 'amp') && ...
             ~isempty(resp_cycles.lungs.peak_t) && ~isempty(resp_cycles.lungs.amp)
@@ -340,6 +506,17 @@ function plotted = plot_resp_amplitude(ax, resp_cycles)
 end
 
 function yline_if_finite(ax, value, style, label_text)
+% YLINE_IF_FINITE Perform the yline if finite operation.
+%
+% Syntax:
+%   yline_if_finite(ax, value, style, label_text)
+%
+% Inputs:
+%   ax - Target axes handle.
+%   value - Input value `value`.
+%   style - Input value `style`.
+%   label_text - Label identifier or label metadata.
+
     if isempty(value) || ~isscalar(value) || ~isfinite(value)
         return;
     end

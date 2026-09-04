@@ -1,4 +1,18 @@
 function ev = runs_to_events(cond, fs_like, min_sec, label)
+% RUNS_TO_EVENTS Perform the runs to events operation.
+%
+% Syntax:
+%   ev = runs_to_events(cond, fs_like, min_sec, label)
+%
+% Inputs:
+%   cond - Input value `cond`.
+%   fs_like - Input value `fs_like`.
+%   min_sec - Duration or window length in seconds.
+%   label - Label identifier or label metadata.
+%
+% Outputs:
+%   ev - Event structure array.
+
     cond = cond(:) ~= 0;
 
     d = diff([false; cond; false]);

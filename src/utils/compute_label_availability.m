@@ -1,9 +1,22 @@
 function [label_available, reason] = compute_label_availability( ...
     label_names, resp_features, diagnostics_Des, rea, apnea, sigh, csr)
-% compute_label_availability
-% Central recording-level scientific assessability for canonical labels.
-% input_config only describes whether detector execution can be attempted;
-% this function checks the evidence actually produced by that attempt.
+% COMPUTE_LABEL_AVAILABILITY Compute label availability.
+%
+% Syntax:
+%   [label_available, reason] = compute_label_availability(label_names, resp_features, diagnostics_Des, rea, apnea, sigh, csr)
+%
+% Inputs:
+%   label_names - Label identifier or label metadata.
+%   resp_features - Respiratory-feature structure.
+%   diagnostics_Des - Detector diagnostic data.
+%   rea - Input value `rea`.
+%   apnea - Input value `apnea`.
+%   sigh - Input value `sigh`.
+%   csr - Input value `csr`.
+%
+% Outputs:
+%   label_available - Logical availability result.
+%   reason - Output text or identifier.
 
     label_names = cellstr(string(label_names));
     label_available = false(1, numel(label_names));
@@ -104,6 +117,19 @@ function [label_available, reason] = compute_label_availability( ...
 end
 
 function [available, reason] = amplitude_availability(session_amp, any_resp)
+% AMPLITUDE_AVAILABILITY Perform the amplitude availability operation.
+%
+% Syntax:
+%   [available, reason] = amplitude_availability(session_amp, any_resp)
+%
+% Inputs:
+%   session_amp - Input value `session_amp`.
+%   any_resp - Input value `any_resp`.
+%
+% Outputs:
+%   available - Logical availability result.
+%   reason - Output text or identifier.
+
     available = logical(session_amp);
     if available
         reason = 'available';
@@ -115,6 +141,19 @@ function [available, reason] = amplitude_availability(session_amp, any_resp)
 end
 
 function [available, reason] = respiratory_feature_availability(evidence, any_resp)
+% RESPIRATORY_FEATURE_AVAILABILITY Perform the respiratory feature availability operation.
+%
+% Syntax:
+%   [available, reason] = respiratory_feature_availability(evidence, any_resp)
+%
+% Inputs:
+%   evidence - Input value `evidence`.
+%   any_resp - Input value `any_resp`.
+%
+% Outputs:
+%   available - Logical availability result.
+%   reason - Output text or identifier.
+
     available = logical(evidence);
     if available
         reason = 'available';
@@ -126,16 +165,49 @@ function [available, reason] = respiratory_feature_availability(evidence, any_re
 end
 
 function tf = diagnostic_available(value)
+% DIAGNOSTIC_AVAILABLE Perform the diagnostic available operation.
+%
+% Syntax:
+%   tf = diagnostic_available(value)
+%
+% Inputs:
+%   value - Input value `value`.
+%
+% Outputs:
+%   tf - Computed output value `tf`.
+
     tf = isstruct(value) && isfield(value, 'available') && ...
         isscalar(value.available) && logical(value.available);
 end
 
 function tf = has_spo2_signal(diagnostics_Des)
+% HAS_SPO2_SIGNAL Determine whether spo2 signal.
+%
+% Syntax:
+%   tf = has_spo2_signal(diagnostics_Des)
+%
+% Inputs:
+%   diagnostics_Des - Detector diagnostic data.
+%
+% Outputs:
+%   tf - Computed output value `tf`.
+
     tf = isstruct(diagnostics_Des) && ...
         isfield(diagnostics_Des, 'signal_available') && ...
         logical(diagnostics_Des.signal_available);
 end
 
 function tf = any_finite(values)
+% ANY_FINITE Perform the any finite operation.
+%
+% Syntax:
+%   tf = any_finite(values)
+%
+% Inputs:
+%   values - Input value `values`.
+%
+% Outputs:
+%   tf - Computed output value `tf`.
+
     tf = any(isfinite(values(:)));
 end

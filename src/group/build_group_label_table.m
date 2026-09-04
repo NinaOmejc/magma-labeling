@@ -1,11 +1,14 @@
 function group_table = build_group_label_table(config_or_results_path)
-% build_group_label_table
-% Join saved master-timeline label files into one group-level CSV summary.
+% BUILD_GROUP_LABEL_TABLE Build group label table.
 %
-% Usage:
-%   build_group_label_table()
-%   build_group_label_table(config)
-%   build_group_label_table('D:\Projects\MAGMA\data_analysis\disorder_classification')
+% Syntax:
+%   group_table = build_group_label_table(config_or_results_path)
+%
+% Inputs:
+%   config_or_results_path - Configuration structure or results-directory path.
+%
+% Outputs:
+%   group_table - Output table.
 
     if nargin < 1 || isempty(config_or_results_path)
         config = get_config();
@@ -64,6 +67,19 @@ function group_table = build_group_label_table(config_or_results_path)
 end
 
 function row = label_file_to_summary_row(label_file, config, canonical_labels)
+% LABEL_FILE_TO_SUMMARY_ROW Perform the label file to summary row operation.
+%
+% Syntax:
+%   row = label_file_to_summary_row(label_file, config, canonical_labels)
+%
+% Inputs:
+%   label_file - File or dataset path.
+%   config - Pipeline configuration structure.
+%   canonical_labels - Label identifier or label metadata.
+%
+% Outputs:
+%   row - Computed output value `row`.
+
     loaded = load(label_file);
 
     row = struct();
@@ -101,6 +117,20 @@ function row = label_file_to_summary_row(label_file, config, canonical_labels)
 end
 
 function row = add_label_summaries(row, loaded, config, canonical_labels)
+% ADD_LABEL_SUMMARIES Add label summaries.
+%
+% Syntax:
+%   row = add_label_summaries(row, loaded, config, canonical_labels)
+%
+% Inputs:
+%   row - Input value `row`.
+%   loaded - Input value `loaded`.
+%   config - Pipeline configuration structure.
+%   canonical_labels - Label identifier or label metadata.
+%
+% Outputs:
+%   row - Computed output value `row`.
+
     row.duration_sec = nan;
     saved_labels = {};
     if isfield(loaded, 'label_names')
@@ -151,6 +181,20 @@ function row = add_label_summaries(row, loaded, config, canonical_labels)
 end
 
 function row = add_annotation_provenance_summaries(row, loaded, config, canonical_labels)
+% ADD_ANNOTATION_PROVENANCE_SUMMARIES Add annotation provenance summaries.
+%
+% Syntax:
+%   row = add_annotation_provenance_summaries(row, loaded, config, canonical_labels)
+%
+% Inputs:
+%   row - Input value `row`.
+%   loaded - Input value `loaded`.
+%   config - Pipeline configuration structure.
+%   canonical_labels - Label identifier or label metadata.
+%
+% Outputs:
+%   row - Computed output value `row`.
+
     saved_labels = canonical_labels;
     if isfield(loaded, 'label_names')
         saved_labels = canonicalize_label_names(loaded.label_names);
@@ -214,6 +258,18 @@ function row = add_annotation_provenance_summaries(row, loaded, config, canonica
 end
 
 function available = saved_label_availability(loaded, saved_labels)
+% SAVED_LABEL_AVAILABILITY Perform the saved label availability operation.
+%
+% Syntax:
+%   available = saved_label_availability(loaded, saved_labels)
+%
+% Inputs:
+%   loaded - Input value `loaded`.
+%   saved_labels - Label identifier or label metadata.
+%
+% Outputs:
+%   available - Logical availability result.
+
     available = true(1, numel(saved_labels));
     if isfield(loaded, 'label_available') && ...
             (isnumeric(loaded.label_available) || islogical(loaded.label_available)) && ...
@@ -227,6 +283,19 @@ function available = saved_label_availability(loaded, saved_labels)
 end
 
 function mask = get_saved_mask(loaded, preferred, fallback)
+% GET_SAVED_MASK Return saved mask.
+%
+% Syntax:
+%   mask = get_saved_mask(loaded, preferred, fallback)
+%
+% Inputs:
+%   loaded - Input value `loaded`.
+%   preferred - Input value `preferred`.
+%   fallback - Input value `fallback`.
+%
+% Outputs:
+%   mask - Logical output mask.
+
     mask = [];
     if ~isempty(preferred) && isfield(loaded, preferred) && ...
             (isnumeric(loaded.(preferred)) || islogical(loaded.(preferred)))
@@ -238,6 +307,21 @@ function mask = get_saved_mask(loaded, preferred, fallback)
 end
 
 function assessable = saved_assessable_column(loaded, N, L, idx, available)
+% SAVED_ASSESSABLE_COLUMN Perform the saved assessable column operation.
+%
+% Syntax:
+%   assessable = saved_assessable_column(loaded, N, L, idx, available)
+%
+% Inputs:
+%   loaded - Input value `loaded`.
+%   N - Number of samples.
+%   L - Input value `L`.
+%   idx - Input value `idx`.
+%   available - Input value `available`.
+%
+% Outputs:
+%   assessable - Computed output value `assessable`.
+
     assessable = repmat(logical(available), N, 1);
     if isfield(loaded, 'label_assessable_mask') && ...
             (isnumeric(loaded.label_assessable_mask) || ...
@@ -248,6 +332,19 @@ function assessable = saved_assessable_column(loaded, N, L, idx, available)
 end
 
 function events = get_saved_events(loaded, preferred, fallback)
+% GET_SAVED_EVENTS Return saved events.
+%
+% Syntax:
+%   events = get_saved_events(loaded, preferred, fallback)
+%
+% Inputs:
+%   loaded - Input value `loaded`.
+%   preferred - Input value `preferred`.
+%   fallback - Input value `fallback`.
+%
+% Outputs:
+%   events - Event structure array.
+
     events = empty_events();
     if ~isempty(preferred) && isfield(loaded, preferred) && isstruct(loaded.(preferred))
         events = loaded.(preferred);
@@ -257,6 +354,18 @@ function events = get_saved_events(loaded, preferred, fallback)
 end
 
 function count = count_events(events, label)
+% COUNT_EVENTS Perform the count events operation.
+%
+% Syntax:
+%   count = count_events(events, label)
+%
+% Inputs:
+%   events - Event structure data.
+%   label - Label identifier or label metadata.
+%
+% Outputs:
+%   count - Computed index or count value.
+
     count = 0;
     if ~isempty(events) && isfield(events, 'type')
         count = nnz(strcmp(canonicalize_label_names({events.type}), label));
@@ -264,6 +373,19 @@ function count = count_events(events, label)
 end
 
 function durations = event_durations(events, label, fs)
+% EVENT_DURATIONS Perform the event durations operation.
+%
+% Syntax:
+%   durations = event_durations(events, label, fs)
+%
+% Inputs:
+%   events - Event structure data.
+%   label - Label identifier or label metadata.
+%   fs - Sampling frequency in hertz.
+%
+% Outputs:
+%   durations - Computed numeric value.
+
     durations = [];
     if isempty(events) || ~isfield(events, 'type')
         return;
@@ -278,6 +400,18 @@ function durations = event_durations(events, label, fs)
 end
 
 function row = add_belt_availability_summary(row, loaded)
+% ADD_BELT_AVAILABILITY_SUMMARY Add belt availability summary.
+%
+% Syntax:
+%   row = add_belt_availability_summary(row, loaded)
+%
+% Inputs:
+%   row - Input value `row`.
+%   loaded - Input value `loaded`.
+%
+% Outputs:
+%   row - Computed output value `row`.
+
     lungs = false;
     diaph = false;
     if isfield(loaded, 'resp_features') && isstruct(loaded.resp_features) && ...
@@ -309,6 +443,18 @@ function row = add_belt_availability_summary(row, loaded)
 end
 
 function row = add_overlap_summaries(row, loaded)
+% ADD_OVERLAP_SUMMARIES Add overlap summaries.
+%
+% Syntax:
+%   row = add_overlap_summaries(row, loaded)
+%
+% Inputs:
+%   row - Input value `row`.
+%   loaded - Input value `loaded`.
+%
+% Outputs:
+%   row - Computed output value `row`.
+
     layers = {'weak', 'reviewed'};
     fields = {'label_overlap_summary_weak', 'label_overlap_summary_reviewed'};
     for i = 1:numel(layers)
@@ -333,10 +479,33 @@ function row = add_overlap_summaries(row, loaded)
 end
 
 function labels = current_canonical_labels(~)
+% CURRENT_CANONICAL_LABELS Perform the current canonical labels operation.
+%
+% Syntax:
+%   labels = current_canonical_labels(~)
+%
+% Inputs:
+%   ~ - Unused positional input.
+%
+% Outputs:
+%   labels - Output text or identifier.
+
     labels = canonical_label_names();
 end
 
 function row = add_respiratory_reference_summary(row, resp_ref)
+% ADD_RESPIRATORY_REFERENCE_SUMMARY Add respiratory reference summary.
+%
+% Syntax:
+%   row = add_respiratory_reference_summary(row, resp_ref)
+%
+% Inputs:
+%   row - Input value `row`.
+%   resp_ref - Respiratory-reference structure.
+%
+% Outputs:
+%   row - Computed output value `row`.
+
     row = add_belt_reference_fields(row, resp_ref, 'lungs');
     row = add_belt_reference_fields(row, resp_ref, 'diaph');
 
@@ -347,6 +516,19 @@ function row = add_respiratory_reference_summary(row, resp_ref)
 end
 
 function row = add_belt_reference_fields(row, resp_ref, belt_name)
+% ADD_BELT_REFERENCE_FIELDS Add belt reference fields.
+%
+% Syntax:
+%   row = add_belt_reference_fields(row, resp_ref, belt_name)
+%
+% Inputs:
+%   row - Input value `row`.
+%   resp_ref - Respiratory-reference structure.
+%   belt_name - Input value `belt_name`.
+%
+% Outputs:
+%   row - Computed output value `row`.
+
     prefix = [belt_name '_'];
     row.([prefix 'start_end_ratio']) = NaN;
     row.([prefix 'change_detected']) = NaN;
@@ -392,6 +574,17 @@ function row = add_belt_reference_fields(row, resp_ref, belt_name)
 end
 
 function out_csv = write_measure_comparability_table(out_dir)
+% WRITE_MEASURE_COMPARABILITY_TABLE Write measure comparability table.
+%
+% Syntax:
+%   out_csv = write_measure_comparability_table(out_dir)
+%
+% Inputs:
+%   out_dir - File or dataset path.
+%
+% Outputs:
+%   out_csv - Computed output value `out_csv`.
+
     measure_family = [ ...
         "respiratory_rate"; ...
         "event_duration_or_fraction"; ...
@@ -447,6 +640,19 @@ function out_csv = write_measure_comparability_table(out_dir)
 end
 
 function value = get_struct_value(s, name, default_value)
+% GET_STRUCT_VALUE Return struct value.
+%
+% Syntax:
+%   value = get_struct_value(s, name, default_value)
+%
+% Inputs:
+%   s - Input value `s`.
+%   name - Input value `name`.
+%   default_value - Input value `default_value`.
+%
+% Outputs:
+%   value - Computed numeric value.
+
     value = default_value;
     if isfield(s, name)
         value = s.(name);
@@ -454,6 +660,19 @@ function value = get_struct_value(s, name, default_value)
 end
 
 function value = get_loaded_value(loaded, field_name, default_value)
+% GET_LOADED_VALUE Return loaded value.
+%
+% Syntax:
+%   value = get_loaded_value(loaded, field_name, default_value)
+%
+% Inputs:
+%   loaded - Input value `loaded`.
+%   field_name - Input value `field_name`.
+%   default_value - Input value `default_value`.
+%
+% Outputs:
+%   value - Computed numeric value.
+
     if isfield(loaded, field_name)
         value = loaded.(field_name);
     else
@@ -462,6 +681,18 @@ function value = get_loaded_value(loaded, field_name, default_value)
 end
 
 function fs = get_results_fs(loaded, config)
+% GET_RESULTS_FS Return results fs.
+%
+% Syntax:
+%   fs = get_results_fs(loaded, config)
+%
+% Inputs:
+%   loaded - Input value `loaded`.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   fs - Computed output value `fs`.
+
     fs = nan;
     if isfield(loaded, 'config') && isfield(loaded.config, 'fs')
         fs = loaded.config.fs;
@@ -474,6 +705,19 @@ function fs = get_results_fs(loaded, config)
 end
 
 function row = add_event_counts(row, events, canonical_labels)
+% ADD_EVENT_COUNTS Add event counts.
+%
+% Syntax:
+%   row = add_event_counts(row, events, canonical_labels)
+%
+% Inputs:
+%   row - Input value `row`.
+%   events - Event structure data.
+%   canonical_labels - Label identifier or label metadata.
+%
+% Outputs:
+%   row - Computed output value `row`.
+
     event_types = {};
     if ~isempty(events) && isfield(events, 'type')
         event_types = canonicalize_label_names({events.type});
@@ -492,11 +736,37 @@ function row = add_event_counts(row, events, canonical_labels)
 end
 
 function row = add_diagnostic_summaries(row, diagnostic_signals)
+% ADD_DIAGNOSTIC_SUMMARIES Add diagnostic summaries.
+%
+% Syntax:
+%   row = add_diagnostic_summaries(row, diagnostic_signals)
+%
+% Inputs:
+%   row - Input value `row`.
+%   diagnostic_signals - Detector diagnostic data.
+%
+% Outputs:
+%   row - Computed output value `row`.
+
     row = add_numeric_struct_summaries(row, diagnostic_signals, ...
         'diagnostic', {'time_sec'});
 end
 
 function row = add_numeric_struct_summaries(row, source, prefix, skip_names)
+% ADD_NUMERIC_STRUCT_SUMMARIES Add numeric struct summaries.
+%
+% Syntax:
+%   row = add_numeric_struct_summaries(row, source, prefix, skip_names)
+%
+% Inputs:
+%   row - Input value `row`.
+%   source - Input value `source`.
+%   prefix - Input value `prefix`.
+%   skip_names - Input value `skip_names`.
+%
+% Outputs:
+%   row - Computed output value `row`.
+
     names = fieldnames(source);
     for i = 1:numel(names)
         name = names{i};
@@ -538,6 +808,18 @@ function row = add_numeric_struct_summaries(row, source, prefix, skip_names)
 end
 
 function rows = fill_missing_fields(rows, all_fields)
+% FILL_MISSING_FIELDS Perform the fill missing fields operation.
+%
+% Syntax:
+%   rows = fill_missing_fields(rows, all_fields)
+%
+% Inputs:
+%   rows - Input value `rows`.
+%   all_fields - Input value `all_fields`.
+%
+% Outputs:
+%   rows - Computed output value `rows`.
+
     for i = 1:numel(rows)
         for j = 1:numel(all_fields)
             name = all_fields{j};
@@ -550,6 +832,17 @@ function rows = fill_missing_fields(rows, all_fields)
 end
 
 function value = missing_value_for_field(name)
+% MISSING_VALUE_FOR_FIELD Perform the missing value for field operation.
+%
+% Syntax:
+%   value = missing_value_for_field(name)
+%
+% Inputs:
+%   name - Input value `name`.
+%
+% Outputs:
+%   value - Computed numeric value.
+
     if strcmp(name, 'label_file') || strcmp(name, 'subject_group') || ...
             strcmp(name, 'label_schema_version') || ...
             strcmp(name, 'change_pattern') || endsWith(name, '_quality') || ...
@@ -568,6 +861,18 @@ function value = missing_value_for_field(name)
 end
 
 function files = filter_result_files(files, config)
+% FILTER_RESULT_FILES Filter result files.
+%
+% Syntax:
+%   files = filter_result_files(files, config)
+%
+% Inputs:
+%   files - Input value `files`.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   files - Computed output value `files`.
+
     subjects = get_group_filter(config, 'subjects');
     measures = get_group_filter(config, 'measurements');
 
@@ -589,6 +894,18 @@ function files = filter_result_files(files, config)
 end
 
 function value = get_group_filter(config, name)
+% GET_GROUP_FILTER Return group filter.
+%
+% Syntax:
+%   value = get_group_filter(config, name)
+%
+% Inputs:
+%   config - Pipeline configuration structure.
+%   name - Input value `name`.
+%
+% Outputs:
+%   value - Computed numeric value.
+
     value = [];
     if isfield(config, 'group') && isfield(config.group, name)
         value = config.group.(name);
@@ -599,6 +916,18 @@ function value = get_group_filter(config, name)
 end
 
 function group_name = subject_group_for_subject(subject, config)
+% SUBJECT_GROUP_FOR_SUBJECT Perform the subject group for subject operation.
+%
+% Syntax:
+%   group_name = subject_group_for_subject(subject, config)
+%
+% Inputs:
+%   subject - Subject identifier.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   group_name - Output text or identifier.
+
     group_name = 'Unknown';
     if isempty(subject) || ~isnumeric(subject) || ~isscalar(subject) || ~isfinite(subject)
         return;
@@ -615,6 +944,18 @@ function group_name = subject_group_for_subject(subject, config)
 end
 
 function subjects = get_subject_group_list(config, name)
+% GET_SUBJECT_GROUP_LIST Return subject group list.
+%
+% Syntax:
+%   subjects = get_subject_group_list(config, name)
+%
+% Inputs:
+%   config - Pipeline configuration structure.
+%   name - Input value `name`.
+%
+% Outputs:
+%   subjects - Computed output value `subjects`.
+
     subjects = [];
     if isfield(config, 'group') && isfield(config.group, name)
         subjects = config.group.(name);
@@ -625,6 +966,18 @@ function subjects = get_subject_group_list(config, name)
 end
 
 function [subject, measure] = parse_subject_measure(label_file)
+% PARSE_SUBJECT_MEASURE Parse subject measure.
+%
+% Syntax:
+%   [subject, measure] = parse_subject_measure(label_file)
+%
+% Inputs:
+%   label_file - File or dataset path.
+%
+% Outputs:
+%   subject - Computed output value `subject`.
+%   measure - Computed output value `measure`.
+
     subject = nan;
     measure = nan;
     [~, name] = fileparts(label_file);
@@ -639,6 +992,17 @@ function [subject, measure] = parse_subject_measure(label_file)
 end
 
 function event_table = build_group_event_duration_table(files)
+% BUILD_GROUP_EVENT_DURATION_TABLE Build group event duration table.
+%
+% Syntax:
+%   event_table = build_group_event_duration_table(files)
+%
+% Inputs:
+%   files - Input value `files`.
+%
+% Outputs:
+%   event_table - Output table.
+
     subject = zeros(0,1);
     measurement = zeros(0,1);
     provenance = strings(0,1);
@@ -673,6 +1037,18 @@ function event_table = build_group_event_duration_table(files)
 end
 
 function duration = authoritative_event_duration(event, fs)
+% AUTHORITATIVE_EVENT_DURATION Perform the authoritative event duration operation.
+%
+% Syntax:
+%   duration = authoritative_event_duration(event, fs)
+%
+% Inputs:
+%   event - Event structure data.
+%   fs - Sampling frequency in hertz.
+%
+% Outputs:
+%   duration - Computed numeric value.
+
     duration = NaN;
     if isfield(event, 'start_idx') && isfield(event, 'end_idx') && ...
             isnumeric(event.start_idx) && isnumeric(event.end_idx) && ...
@@ -687,6 +1063,17 @@ function duration = authoritative_event_duration(event, fs)
 end
 
 function boundary_table = build_group_boundary_qc_table(files)
+% BUILD_GROUP_BOUNDARY_QC_TABLE Build group boundary qc table.
+%
+% Syntax:
+%   boundary_table = build_group_boundary_qc_table(files)
+%
+% Inputs:
+%   files - Input value `files`.
+%
+% Outputs:
+%   boundary_table - Event-boundary provenance structure.
+
     subject = zeros(0,1);
     measurement = zeros(0,1);
     label = strings(0,1);
@@ -755,6 +1142,19 @@ function boundary_table = build_group_boundary_qc_table(files)
 end
 
 function value = numeric_record_field(record, name, default_value)
+% NUMERIC_RECORD_FIELD Perform the numeric record field operation.
+%
+% Syntax:
+%   value = numeric_record_field(record, name, default_value)
+%
+% Inputs:
+%   record - Input value `record`.
+%   name - Input value `name`.
+%   default_value - Input value `default_value`.
+%
+% Outputs:
+%   value - Computed numeric value.
+
     value = default_value;
     if isfield(record, name) && isnumeric(record.(name)) && ...
             isscalar(record.(name)) && isfinite(record.(name))
@@ -766,6 +1166,19 @@ function value = numeric_record_field(record, name, default_value)
 end
 
 function value = text_record_field(record, name, default_value)
+% TEXT_RECORD_FIELD Perform the text record field operation.
+%
+% Syntax:
+%   value = text_record_field(record, name, default_value)
+%
+% Inputs:
+%   record - Input value `record`.
+%   name - Input value `name`.
+%   default_value - Input value `default_value`.
+%
+% Outputs:
+%   value - Computed numeric value.
+
     value = default_value;
     if isfield(record, name) && ~isempty(record.(name))
         value = char(string(record.(name)));

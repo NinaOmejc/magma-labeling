@@ -1,8 +1,14 @@
 function export_results_hdf5(filename, results, signals_raw, signals_preprocessed)
-% export_results_hdf5
-% Write one flat, MATLAB-object-free HDF5 file for a subject x measurement.
-% Numeric/logical values are datasets; text is UTF-8 encoded in zero-padded
-% uint8 columns. Empty values are explicit scalar datasets with is_empty=1.
+% EXPORT_RESULTS_HDF5 Perform the export results hdf5 operation.
+%
+% Syntax:
+%   export_results_hdf5(filename, results, signals_raw, signals_preprocessed)
+%
+% Inputs:
+%   filename - File or dataset path.
+%   results - Input value `results`.
+%   signals_raw - Input physiological signal data.
+%   signals_preprocessed - Preprocessed physiological signal data.
 
     filename = char(string(filename));
     validate_export_inputs(filename, results, signals_raw, signals_preprocessed);
@@ -87,6 +93,17 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
 end
 
 function validate_export_inputs(filename, results, raw, preprocessed)
+% VALIDATE_EXPORT_INPUTS Validate export inputs.
+%
+% Syntax:
+%   validate_export_inputs(filename, results, raw, preprocessed)
+%
+% Inputs:
+%   filename - File or dataset path.
+%   results - Input value `results`.
+%   raw - Input physiological signal data.
+%   preprocessed - Preprocessed physiological signal data.
+
     if isempty(filename)
         error('MAGMA:HDF5:InvalidFilename', 'A nonempty output filename is required.');
     end
@@ -153,6 +170,17 @@ function validate_export_inputs(filename, results, raw, preprocessed)
 end
 
 function validate_session_reference(reference, N, fs, measurement)
+% VALIDATE_SESSION_REFERENCE Validate session reference.
+%
+% Syntax:
+%   validate_session_reference(reference, N, fs, measurement)
+%
+% Inputs:
+%   reference - Session-reference metadata.
+%   N - Number of samples.
+%   fs - Sampling frequency in hertz.
+%   measurement - Measurement identifier.
+
     required = {'reference_start_idx', 'reference_end_idx', ...
         'reference_start_t', 'reference_end_t', 'reference_duration_sec', ...
         'protocol_phase', 'measurement', 'reference_schema_version', ...
@@ -187,6 +215,16 @@ function validate_session_reference(reference, N, fs, measurement)
 end
 
 function validate_canonical_events(events, fs, labels)
+% VALIDATE_CANONICAL_EVENTS Validate canonical events.
+%
+% Syntax:
+%   validate_canonical_events(events, fs, labels)
+%
+% Inputs:
+%   events - Event structure data.
+%   fs - Sampling frequency in hertz.
+%   labels - Label identifier or label metadata.
+
     required = {'type', 'start_idx', 'end_idx', 'start_t', 'end_t', ...
         'duration', 'belt'};
     if ~isstruct(events) || ~all(isfield(events, required))
@@ -215,6 +253,16 @@ function validate_canonical_events(events, fs, labels)
 end
 
 function write_resp_belt(filename, path, belt)
+% WRITE_RESP_BELT Write resp belt.
+%
+% Syntax:
+%   write_resp_belt(filename, path, belt)
+%
+% Inputs:
+%   filename - File or dataset path.
+%   path - File or dataset path.
+%   belt - Respiratory-cycle or belt-evidence structure.
+
     fields = {'peak_idx', 'peak_t', 'amp', 'ibi', 'rr_bpm', ...
         'amp_ratio_session', 'amp_ratio_global'};
     for i = 1:numel(fields)
@@ -228,6 +276,16 @@ function write_resp_belt(filename, path, belt)
 end
 
 function write_events(filename, path, events)
+% WRITE_EVENTS Write events.
+%
+% Syntax:
+%   write_events(filename, path, events)
+%
+% Inputs:
+%   filename - File or dataset path.
+%   path - File or dataset path.
+%   events - Event structure data.
+
     write_text(filename, [path '/type'], event_field(events, 'type', 'text'));
     write_numeric(filename, [path '/start_idx'], event_field(events, 'start_idx', 'numeric'));
     write_numeric(filename, [path '/end_idx'], event_field(events, 'end_idx', 'numeric'));
@@ -238,6 +296,16 @@ function write_events(filename, path, events)
 end
 
 function write_review_history(filename, path, history)
+% WRITE_REVIEW_HISTORY Write review history.
+%
+% Syntax:
+%   write_review_history(filename, path, history)
+%
+% Inputs:
+%   filename - File or dataset path.
+%   path - File or dataset path.
+%   history - Input value `history`.
+
     write_numeric(filename, [path '/number_of_rounds'], numel(history));
     for i = 1:numel(history)
         round_path = sprintf('%s/round_%06d', path, history(i).round_id);
@@ -273,6 +341,19 @@ function write_review_history(filename, path, history)
 end
 
 function values = event_field(events, name, kind)
+% EVENT_FIELD Perform the event field operation.
+%
+% Syntax:
+%   values = event_field(events, name, kind)
+%
+% Inputs:
+%   events - Event structure data.
+%   name - Input value `name`.
+%   kind - Input value `kind`.
+%
+% Outputs:
+%   values - Computed numeric value.
+
     if isempty(events) || ~isfield(events, name)
         if strcmp(kind, 'text'), values = {}; else, values = []; end
     elseif strcmp(kind, 'text')
@@ -283,6 +364,16 @@ function values = event_field(events, name, kind)
 end
 
 function write_value(filename, path, value)
+% WRITE_VALUE Write value.
+%
+% Syntax:
+%   write_value(filename, path, value)
+%
+% Inputs:
+%   filename - File or dataset path.
+%   path - File or dataset path.
+%   value - Input value `value`.
+
     if isstruct(value)
         if isempty(value)
             write_empty(filename, [path '/empty_struct']);
@@ -307,6 +398,16 @@ function write_value(filename, path, value)
 end
 
 function write_struct_array(filename, path, values)
+% WRITE_STRUCT_ARRAY Write struct array.
+%
+% Syntax:
+%   write_struct_array(filename, path, values)
+%
+% Inputs:
+%   filename - File or dataset path.
+%   path - File or dataset path.
+%   values - Input value `values`.
+
     names = fieldnames(values);
     for i = 1:numel(names)
         parts = {values.(names{i})};
@@ -324,6 +425,16 @@ function write_struct_array(filename, path, values)
 end
 
 function write_cell(filename, path, values)
+% WRITE_CELL Write cell.
+%
+% Syntax:
+%   write_cell(filename, path, values)
+%
+% Inputs:
+%   filename - File or dataset path.
+%   path - File or dataset path.
+%   values - Input value `values`.
+
     if isempty(values)
         write_empty(filename, path);
     elseif all(cellfun(@(x) ischar(x) || (isstring(x) && isscalar(x)), values(:)))
@@ -338,6 +449,16 @@ function write_cell(filename, path, values)
 end
 
 function write_numeric(filename, path, value)
+% WRITE_NUMERIC Write numeric.
+%
+% Syntax:
+%   write_numeric(filename, path, value)
+%
+% Inputs:
+%   filename - File or dataset path.
+%   path - File or dataset path.
+%   value - Input value `value`.
+
     if islogical(value)
         value = uint8(value);
         logical_value = true;
@@ -360,6 +481,16 @@ function write_numeric(filename, path, value)
 end
 
 function write_text(filename, path, value)
+% WRITE_TEXT Write text.
+%
+% Syntax:
+%   write_text(filename, path, value)
+%
+% Inputs:
+%   filename - File or dataset path.
+%   path - File or dataset path.
+%   value - Input value `value`.
+
     values = cellstr(string(value));
     if isempty(values)
         write_empty(filename, path);
@@ -379,12 +510,32 @@ function write_text(filename, path, value)
 end
 
 function write_empty(filename, path)
+% WRITE_EMPTY Write empty.
+%
+% Syntax:
+%   write_empty(filename, path)
+%
+% Inputs:
+%   filename - File or dataset path.
+%   path - File or dataset path.
+
     h5create(filename, path, [1 1], 'Datatype', 'uint8');
     h5write(filename, path, uint8(0));
     h5writeatt(filename, path, 'is_empty', uint8(1));
 end
 
 function name = safe_name(name)
+% SAFE_NAME Perform the safe name operation.
+%
+% Syntax:
+%   name = safe_name(name)
+%
+% Inputs:
+%   name - Input value `name`.
+%
+% Outputs:
+%   name - Output text or identifier.
+
     name = regexprep(char(string(name)), '[^A-Za-z0-9_]', '_');
     if isempty(name), name = 'unnamed'; end
 end

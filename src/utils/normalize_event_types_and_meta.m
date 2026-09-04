@@ -1,15 +1,15 @@
 function events = normalize_event_types_and_meta(raw_events, fs)
-% normalize_event_types_and_meta
-% Convert detector-specific event names to one of the eleven independent
-% canonical labels and retain only explicit belt provenance.
+% NORMALIZE_EVENT_TYPES_AND_META Normalize event types and meta.
 %
-% Final schema:
-%   type, start_idx, end_idx, start_t, end_t, duration, belt
-% where belt is '', 'lungs', 'diaph', or 'both'. Times are half-open:
-% [start_t,end_t), while start_idx:end_idx are included samples. When fs is
-% supplied, indices are authoritative and canonical times are recomputed.
-% Overlapping events of the
-% same canonical type are merged; overlapping different labels are kept.
+% Syntax:
+%   events = normalize_event_types_and_meta(raw_events, fs)
+%
+% Inputs:
+%   raw_events - Event structure data.
+%   fs - Sampling frequency in hertz.
+%
+% Outputs:
+%   events - Event structure array.
 
     if nargin < 2
         fs = [];
@@ -53,6 +53,14 @@ function events = normalize_event_types_and_meta(raw_events, fs)
 end
 
 function template = normalized_template()
+% NORMALIZED_TEMPLATE Perform the normalized template operation.
+%
+% Syntax:
+%   template = normalized_template()
+%
+% Outputs:
+%   template - Computed output value `template`.
+
     template = struct( ...
         'type', '', ...
         'start_idx', 0, ...
@@ -64,17 +72,47 @@ function template = normalized_template()
 end
 
 function events = empty_normalized_events()
+% EMPTY_NORMALIZED_EVENTS Create an empty normalized events value.
+%
+% Syntax:
+%   events = empty_normalized_events()
+%
+% Outputs:
+%   events - Event structure array.
+
     template = normalized_template();
     events = template([]);
 end
 
 function key = normalize_key(value)
+% NORMALIZE_KEY Normalize key.
+%
+% Syntax:
+%   key = normalize_key(value)
+%
+% Inputs:
+%   value - Input value `value`.
+%
+% Outputs:
+%   key - Computed output value `key`.
+
     key = lower(strtrim(char(string(value))));
     key = strrep(key, ' ', '_');
     key = strrep(key, '-', '_');
 end
 
 function type = canonical_type(key)
+% CANONICAL_TYPE Perform the canonical type operation.
+%
+% Syntax:
+%   type = canonical_type(key)
+%
+% Inputs:
+%   key - Input value `key`.
+%
+% Outputs:
+%   type - Computed output value `type`.
+
     if matches_label(key, {'shallow', 'shallow_breathing', 'shallowb', 'shb', 'shallowbreathing'})
         type = 'shallow';
     elseif matches_label(key, {'irregular', 'irregular_breathing', 'irregb', 'irb', 'irregularbreathing'})
@@ -107,6 +145,14 @@ function type = canonical_type(key)
 end
 
 function validate_fs(fs)
+% VALIDATE_FS Validate fs.
+%
+% Syntax:
+%   validate_fs(fs)
+%
+% Inputs:
+%   fs - Sampling frequency in hertz.
+
     if ~isnumeric(fs) || ~isscalar(fs) || ~isfinite(fs) || fs <= 0
         error('MAGMA:Events:InvalidSamplingRate', ...
             'fs must be a finite positive numeric scalar.');
@@ -114,6 +160,18 @@ function validate_fs(fs)
 end
 
 function tf = matches_label(key, bases)
+% MATCHES_LABEL Perform the matches label operation.
+%
+% Syntax:
+%   tf = matches_label(key, bases)
+%
+% Inputs:
+%   key - Input value `key`.
+%   bases - Input value `bases`.
+%
+% Outputs:
+%   tf - Computed output value `tf`.
+
     tf = false;
     suffixes = {'', '_lungs', '_diaph', '_both'};
     for i = 1:numel(bases)
@@ -127,6 +185,18 @@ function tf = matches_label(key, bases)
 end
 
 function belt = belt_from_event(key, event)
+% BELT_FROM_EVENT Perform the belt from event operation.
+%
+% Syntax:
+%   belt = belt_from_event(key, event)
+%
+% Inputs:
+%   key - Input value `key`.
+%   event - Event structure data.
+%
+% Outputs:
+%   belt - Updated respiratory-cycle or belt structure.
+
     belt = '';
     if endsWith(key, '_lungs')
         belt = 'lungs';
@@ -143,6 +213,18 @@ function belt = belt_from_event(key, event)
 end
 
 function value = required_text_field(event, field)
+% REQUIRED_TEXT_FIELD Perform the required text field operation.
+%
+% Syntax:
+%   value = required_text_field(event, field)
+%
+% Inputs:
+%   event - Event structure data.
+%   field - Input value `field`.
+%
+% Outputs:
+%   value - Computed numeric value.
+
     if ~isfield(event, field) || isempty(event.(field))
         error('MAGMA:Events:MissingField', 'Event is missing required field "%s".', field);
     end
@@ -150,6 +232,18 @@ function value = required_text_field(event, field)
 end
 
 function value = required_numeric_field(event, field)
+% REQUIRED_NUMERIC_FIELD Perform the required numeric field operation.
+%
+% Syntax:
+%   value = required_numeric_field(event, field)
+%
+% Inputs:
+%   event - Event structure data.
+%   field - Input value `field`.
+%
+% Outputs:
+%   value - Computed numeric value.
+
     if ~isfield(event, field) || ~isnumeric(event.(field)) || ...
             ~isscalar(event.(field)) || ~isfinite(event.(field))
         error('MAGMA:Events:InvalidField', ...
@@ -159,6 +253,18 @@ function value = required_numeric_field(event, field)
 end
 
 function events = merge_normalized_belt_events(events, fs)
+% MERGE_NORMALIZED_BELT_EVENTS Merge normalized belt events.
+%
+% Syntax:
+%   events = merge_normalized_belt_events(events, fs)
+%
+% Inputs:
+%   events - Event structure data.
+%   fs - Sampling frequency in hertz.
+%
+% Outputs:
+%   events - Event structure array.
+
     if numel(events) <= 1
         return;
     end
@@ -196,6 +302,18 @@ function events = merge_normalized_belt_events(events, fs)
 end
 
 function belt = merge_belt_labels(a, b)
+% MERGE_BELT_LABELS Merge belt labels.
+%
+% Syntax:
+%   belt = merge_belt_labels(a, b)
+%
+% Inputs:
+%   a - Input value `a`.
+%   b - Respiratory-cycle or belt-evidence structure.
+%
+% Outputs:
+%   belt - Updated respiratory-cycle or belt structure.
+
     if strcmp(a, b) || isempty(b)
         belt = a;
     elseif isempty(a)

@@ -1,11 +1,18 @@
 function [output, config, trend] = preprocess_data(t_series, config)
-% preprocess_data
-% Detrend configured respiratory belts without changing the master timeline.
-% Output dimensions and sample indices match the native config.fs input.
+% PREPROCESS_DATA Perform the preprocess data operation.
+%
+% Syntax:
+%   [output, config, trend] = preprocess_data(t_series, config)
+%
+% Inputs:
+%   t_series - Input value `t_series`.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   output - Computed output value `output`.
+%   config - Pipeline configuration structure.
+%   trend - Computed output value `trend`.
 
-    % -----------------------------
-    % Defaults
-    % -----------------------------
     method = 'hpfilter';
     sampl_freq = 200;
     highpass_cutoff = 0.01;   % Hz
@@ -198,6 +205,18 @@ function [output, config, trend] = preprocess_data(t_series, config)
 end
 
 function signal_cols = resolved_resp_signal_cols(config, fallback_signals)
+% RESOLVED_RESP_SIGNAL_COLS Perform the resolved resp signal cols operation.
+%
+% Syntax:
+%   signal_cols = resolved_resp_signal_cols(config, fallback_signals)
+%
+% Inputs:
+%   config - Pipeline configuration structure.
+%   fallback_signals - Input value `fallback_signals`.
+%
+% Outputs:
+%   signal_cols - Computed output value `signal_cols`.
+
     requested = struct('data_columns', {cellstr(string(fallback_signals))});
     requested = resolve_signal_channels(requested);
 
@@ -216,8 +235,21 @@ end
 
 
 function y = highpass_with_reflect_padding(x, sos, g, fs, cutoff_hz, pad_sec_cfg)
-% Apply zero-phase high-pass filtering with reflected edge padding.
-% This reduces endpoint ringing artifacts from filtfilt.
+% HIGHPASS_WITH_REFLECT_PADDING Perform the highpass with reflect padding operation.
+%
+% Syntax:
+%   y = highpass_with_reflect_padding(x, sos, g, fs, cutoff_hz, pad_sec_cfg)
+%
+% Inputs:
+%   x - Input value `x`.
+%   sos - Input value `sos`.
+%   g - Input value `g`.
+%   fs - Sampling frequency in hertz.
+%   cutoff_hz - Input value `cutoff_hz`.
+%   pad_sec_cfg - Duration or window length in seconds.
+%
+% Outputs:
+%   y - Computed output value `y`.
 
     x = x(:);
     n = numel(x);

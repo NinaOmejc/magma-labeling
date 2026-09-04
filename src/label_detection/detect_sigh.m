@@ -1,18 +1,24 @@
 function [events, diagnostics, review_info] = detect_sigh( ...
     data, resp_features, resp_cycles, spo2_ref, session_reference, ...
     diagnostics_Des, config)
-% detect_sigh
-% Label 7 – Sigh
+% DETECT_SIGH Detect sigh.
 %
-% Default method: global nonparametric outlier detection on normalized breath amplitude.
-% ratio = breath_amp / whole-record global breath-amplitude reference
-% sigh if ratio >= prctile(ratio_valid, ratio_prctile)
+% Syntax:
+%   [events, diagnostics, review_info] = detect_sigh(data, resp_features, resp_cycles, spo2_ref, session_reference, diagnostics_Des, config)
 %
-% The whole-record reference is intentional for this global outlier method;
-% sustained amplitude labels use the separate fixed session reference.
+% Inputs:
+%   data - Input physiological signal data.
+%   resp_features - Respiratory-feature structure.
+%   resp_cycles - Respiratory-cycle structure.
+%   spo2_ref - SpO2-reference structure.
+%   session_reference - Session-reference metadata.
+%   diagnostics_Des - Detector diagnostic data.
+%   config - Pipeline configuration structure.
 %
-% Legacy method (optional): previous-window thresholding.
-% Breath and event times map to master samples using config.fs.
+% Outputs:
+%   events - Event structure array.
+%   diagnostics - Detector diagnostic structure.
+%   review_info - Computed summary or metadata structure.
 
     events = empty_events();
 
@@ -222,6 +228,17 @@ function [events, diagnostics, review_info] = detect_sigh( ...
 end
 
 function diagnostics = empty_sigh_belt_diagnostics(belt)
+% EMPTY_SIGH_BELT_DIAGNOSTICS Create an empty sigh belt diagnostics value.
+%
+% Syntax:
+%   diagnostics = empty_sigh_belt_diagnostics(belt)
+%
+% Inputs:
+%   belt - Respiratory-cycle or belt-evidence structure.
+%
+% Outputs:
+%   diagnostics - Detector diagnostic structure.
+
     diagnostics = struct( ...
         'available', belt.global_amplitude_available, ...
         'reference_quality', belt.reference_quality, ...
@@ -233,6 +250,18 @@ function diagnostics = empty_sigh_belt_diagnostics(belt)
 end
 
 function tf = event_sets_equal(a, b)
+% EVENT_SETS_EQUAL Perform the event sets equal operation.
+%
+% Syntax:
+%   tf = event_sets_equal(a, b)
+%
+% Inputs:
+%   a - Input value `a`.
+%   b - Respiratory-cycle or belt-evidence structure.
+%
+% Outputs:
+%   tf - Computed output value `tf`.
+
     if numel(a) ~= numel(b)
         tf = false;
         return;
@@ -249,7 +278,24 @@ end
 
 function [sigh_flags, local_ref, ratio, ratio_thr] = sigh_flags_global_ratio_outlier( ...
     b, ratio_prctile, min_abs_ratio, iqr_k, min_gap_sec)
-    
+% SIGH_FLAGS_GLOBAL_RATIO_OUTLIER Perform the sigh flags global ratio outlier operation.
+%
+% Syntax:
+%   [sigh_flags, local_ref, ratio, ratio_thr] = sigh_flags_global_ratio_outlier(b, ratio_prctile, min_abs_ratio, iqr_k, min_gap_sec)
+%
+% Inputs:
+%   b - Respiratory-cycle or belt-evidence structure.
+%   ratio_prctile - Input value `ratio_prctile`.
+%   min_abs_ratio - Input value `min_abs_ratio`.
+%   iqr_k - Input value `iqr_k`.
+%   min_gap_sec - Duration or window length in seconds.
+%
+% Outputs:
+%   sigh_flags - Logical output mask.
+%   local_ref - Computed output value `local_ref`.
+%   ratio - Computed numeric value.
+%   ratio_thr - Computed numeric value.
+
     peak_t = b.peak_t(:);
     amp = b.amp(:);
 
@@ -292,6 +338,20 @@ end
 
 
 function sigh_flags = sigh_flags_legacy_60s(b, prev_win_sec, amp_ratio_thr, min_prev_breaths)
+% SIGH_FLAGS_LEGACY_60S Perform the sigh flags legacy 60s operation.
+%
+% Syntax:
+%   sigh_flags = sigh_flags_legacy_60s(b, prev_win_sec, amp_ratio_thr, min_prev_breaths)
+%
+% Inputs:
+%   b - Respiratory-cycle or belt-evidence structure.
+%   prev_win_sec - Duration or window length in seconds.
+%   amp_ratio_thr - Selection threshold value.
+%   min_prev_breaths - Input value `min_prev_breaths`.
+%
+% Outputs:
+%   sigh_flags - Logical output mask.
+
     peak_t = b.peak_t(:);
     amp = b.amp(:);
     L = min(numel(peak_t), numel(amp));
@@ -316,6 +376,21 @@ end
 % rest unchanged
 
 function events = sigh_flags_to_events(peak_t, flags, N, fs, belt)
+% SIGH_FLAGS_TO_EVENTS Perform the sigh flags to events operation.
+%
+% Syntax:
+%   events = sigh_flags_to_events(peak_t, flags, N, fs, belt)
+%
+% Inputs:
+%   peak_t - Input value `peak_t`.
+%   flags - Logical state or selection mask.
+%   N - Number of samples.
+%   fs - Sampling frequency in hertz.
+%   belt - Respiratory-cycle or belt-evidence structure.
+%
+% Outputs:
+%   events - Event structure array.
+
     events = empty_events();
     peak_t = peak_t(:);
     flags  = logical(flags(:));
@@ -380,6 +455,20 @@ function events = sigh_flags_to_events(peak_t, flags, N, fs, belt)
 end
 
 function flags_out = enforce_min_gap_by_strength(flags_in, peak_t, strength, min_gap_sec)
+% ENFORCE_MIN_GAP_BY_STRENGTH Perform the enforce min gap by strength operation.
+%
+% Syntax:
+%   flags_out = enforce_min_gap_by_strength(flags_in, peak_t, strength, min_gap_sec)
+%
+% Inputs:
+%   flags_in - Logical state or selection mask.
+%   peak_t - Input value `peak_t`.
+%   strength - Input value `strength`.
+%   min_gap_sec - Duration or window length in seconds.
+%
+% Outputs:
+%   flags_out - Logical output mask.
+
     flags_in = logical(flags_in(:));
     peak_t = peak_t(:);
     strength = strength(:);
@@ -417,6 +506,16 @@ function flags_out = enforce_min_gap_by_strength(flags_in, peak_t, strength, min
 end
 
 function add_axis_legend(ax, handles, labels)
+% ADD_AXIS_LEGEND Add axis legend.
+%
+% Syntax:
+%   add_axis_legend(ax, handles, labels)
+%
+% Inputs:
+%   ax - Target axes handle.
+%   handles - Input value `handles`.
+%   labels - Label identifier or label metadata.
+
     keep = false(size(handles));
     for i = 1:numel(handles)
         h = handles(i);

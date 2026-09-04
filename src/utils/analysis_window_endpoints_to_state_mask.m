@@ -1,13 +1,16 @@
 function state_mask = analysis_window_endpoints_to_state_mask(endpoint_mask, t_grid, analysis_win_sec)
-% analysis_window_endpoints_to_state_mask
-% Convert qualifying trailing-window endpoints into candidate support.
+% ANALYSIS_WINDOW_ENDPOINTS_TO_STATE_MASK Perform the analysis window endpoints to state mask operation.
 %
-% endpoint_mask(i) says that the analysis window ending at t_grid(i)
-% qualified. The returned mask marks the union of those complete preceding
-% windows. For aggregate detectors this is confirmation support, not a
-% precisely localized final state. A later minimum-duration filter may
-% reject short candidates; it must not require the endpoint mask itself to
-% persist for another full analysis window.
+% Syntax:
+%   state_mask = analysis_window_endpoints_to_state_mask(endpoint_mask, t_grid, analysis_win_sec)
+%
+% Inputs:
+%   endpoint_mask - Logical state or selection mask.
+%   t_grid - Time coordinates in seconds.
+%   analysis_win_sec - Duration or window length in seconds.
+%
+% Outputs:
+%   state_mask - Logical output mask.
 
     endpoint_mask = endpoint_mask(:) ~= 0;
     t_grid = t_grid(:);

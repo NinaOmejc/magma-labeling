@@ -1,14 +1,15 @@
 function overview = plot_group_diagnostic_overview(config_or_results_path, group_table)
-% plot_group_diagnostic_overview
-% Descriptive group-level plots for diagnostic traces and label summaries.
+% PLOT_GROUP_DIAGNOSTIC_OVERVIEW Plot group diagnostic overview.
 %
-% This is intended as a first-pass QC/overview, not formal statistics.
-% See group_measure_comparability.csv for cross-subject interpretation.
-% It saves:
-%   1) per-measure time-series overlays across subjects,
-%   2) per-measure boxplots of each subject's within-recording median,
-%   3) per-measure boxplots of within-recording spread (p90 - p10),
-%   4) heatmaps and CSV summaries for label fractions and event counts.
+% Syntax:
+%   overview = plot_group_diagnostic_overview(config_or_results_path, group_table)
+%
+% Inputs:
+%   config_or_results_path - Configuration structure or results-directory path.
+%   group_table - Input value `group_table`.
+%
+% Outputs:
+%   overview - Computed output value `overview`.
 
     if nargin < 1 || isempty(config_or_results_path)
         config = get_config();
@@ -52,6 +53,14 @@ function overview = plot_group_diagnostic_overview(config_or_results_path, group
 end
 
 function specs = default_diagnostic_signal_specs()
+% DEFAULT_DIAGNOSTIC_SIGNAL_SPECS Perform the default diagnostic signal specs operation.
+%
+% Syntax:
+%   specs = default_diagnostic_signal_specs()
+%
+% Outputs:
+%   specs - Computed output value `specs`.
+
     specs = struct( ...
         'source', {}, ...
         'field', {}, ...
@@ -106,6 +115,22 @@ function specs = default_diagnostic_signal_specs()
 end
 
 function spec = make_signal_spec(source, field, summary_prefix, title_text, ylabel_text, file_stub)
+% MAKE_SIGNAL_SPEC Create signal spec.
+%
+% Syntax:
+%   spec = make_signal_spec(source, field, summary_prefix, title_text, ylabel_text, file_stub)
+%
+% Inputs:
+%   source - Input value `source`.
+%   field - Input value `field`.
+%   summary_prefix - Input value `summary_prefix`.
+%   title_text - Input value `title_text`.
+%   ylabel_text - Label identifier or label metadata.
+%   file_stub - Input value `file_stub`.
+%
+% Outputs:
+%   spec - Computed output value `spec`.
+
     spec = struct( ...
         'source', source, ...
         'field', field, ...
@@ -116,6 +141,17 @@ function spec = make_signal_spec(source, field, summary_prefix, title_text, ylab
 end
 
 function records = result_records_from_table(group_table)
+% RESULT_RECORDS_FROM_TABLE Perform the result records from table operation.
+%
+% Syntax:
+%   records = result_records_from_table(group_table)
+%
+% Inputs:
+%   group_table - Input value `group_table`.
+%
+% Outputs:
+%   records - Computed output value `records`.
+
     records = struct('label_file', {}, 'subject', {}, 'measure', {}, 'subject_group', {});
     if isempty(group_table) || height(group_table) == 0 || ...
             ~ismember('label_file', group_table.Properties.VariableNames)
@@ -141,6 +177,20 @@ function records = result_records_from_table(group_table)
 end
 
 function saved_files = plot_time_series_overlays(records, specs, config, out_dir)
+% PLOT_TIME_SERIES_OVERLAYS Plot time series overlays.
+%
+% Syntax:
+%   saved_files = plot_time_series_overlays(records, specs, config, out_dir)
+%
+% Inputs:
+%   records - Input value `records`.
+%   specs - Input value `specs`.
+%   config - Pipeline configuration structure.
+%   out_dir - File or dataset path.
+%
+% Outputs:
+%   saved_files - Computed output value `saved_files`.
+
     saved_files = {};
     if isempty(records)
         return;
@@ -182,6 +232,20 @@ function saved_files = plot_time_series_overlays(records, specs, config, out_dir
 end
 
 function has_signal = plot_measure_time_series(ax, records, spec, config)
+% PLOT_MEASURE_TIME_SERIES Plot measure time series.
+%
+% Syntax:
+%   has_signal = plot_measure_time_series(ax, records, spec, config)
+%
+% Inputs:
+%   ax - Target axes handle.
+%   records - Input value `records`.
+%   spec - Input value `spec`.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   has_signal - Computed output value `has_signal`.
+
     has_signal = false;
     hold(ax, 'on');
 
@@ -220,6 +284,19 @@ function has_signal = plot_measure_time_series(ax, records, spec, config)
 end
 
 function [t, y] = load_record_signal(label_file, spec)
+% LOAD_RECORD_SIGNAL Perform the load record signal operation.
+%
+% Syntax:
+%   [t, y] = load_record_signal(label_file, spec)
+%
+% Inputs:
+%   label_file - File or dataset path.
+%   spec - Input value `spec`.
+%
+% Outputs:
+%   t - Output table.
+%   y - Computed output value `y`.
+
     t = [];
     y = [];
 
@@ -249,6 +326,20 @@ function [t, y] = load_record_signal(label_file, spec)
 end
 
 function [t_plot, y_plot] = thin_trace(t, y, step_sec)
+% THIN_TRACE Perform the thin trace operation.
+%
+% Syntax:
+%   [t_plot, y_plot] = thin_trace(t, y, step_sec)
+%
+% Inputs:
+%   t - Time coordinates in seconds.
+%   y - Input value `y`.
+%   step_sec - Duration or window length in seconds.
+%
+% Outputs:
+%   t_plot - Computed output value `t_plot`.
+%   y_plot - Computed output value `y_plot`.
+
     if numel(t) <= 2 || ~isfinite(step_sec) || step_sec <= 0
         t_plot = t;
         y_plot = y;
@@ -269,6 +360,19 @@ function [t_plot, y_plot] = thin_trace(t, y, step_sec)
 end
 
 function [common_t, median_y] = median_trace(traces, step_sec)
+% MEDIAN_TRACE Perform the median trace operation.
+%
+% Syntax:
+%   [common_t, median_y] = median_trace(traces, step_sec)
+%
+% Inputs:
+%   traces - Input value `traces`.
+%   step_sec - Duration or window length in seconds.
+%
+% Outputs:
+%   common_t - Computed output value `common_t`.
+%   median_y - Computed output value `median_y`.
+
     common_t = [];
     median_y = [];
     max_t = 0;
@@ -302,6 +406,21 @@ function [common_t, median_y] = median_trace(traces, step_sec)
 end
 
 function saved_file = plot_diagnostic_boxplots(group_table, specs, config, out_dir, mode)
+% PLOT_DIAGNOSTIC_BOXPLOTS Plot diagnostic boxplots.
+%
+% Syntax:
+%   saved_file = plot_diagnostic_boxplots(group_table, specs, config, out_dir, mode)
+%
+% Inputs:
+%   group_table - Input value `group_table`.
+%   specs - Input value `specs`.
+%   config - Pipeline configuration structure.
+%   out_dir - File or dataset path.
+%   mode - Input value `mode`.
+%
+% Outputs:
+%   saved_file - Computed output value `saved_file`.
+
     saved_file = '';
     if isempty(group_table) || height(group_table) == 0 || ...
             ~ismember('measure', group_table.Properties.VariableNames)
@@ -335,6 +454,19 @@ function saved_file = plot_diagnostic_boxplots(group_table, specs, config, out_d
 end
 
 function plot_specs = specs_with_available_summary(group_table, specs, mode)
+% SPECS_WITH_AVAILABLE_SUMMARY Perform the specs with available summary operation.
+%
+% Syntax:
+%   plot_specs = specs_with_available_summary(group_table, specs, mode)
+%
+% Inputs:
+%   group_table - Input value `group_table`.
+%   specs - Input value `specs`.
+%   mode - Input value `mode`.
+%
+% Outputs:
+%   plot_specs - Computed output value `plot_specs`.
+
     keep = false(size(specs));
     vars = group_table.Properties.VariableNames;
     for i = 1:numel(specs)
@@ -349,6 +481,19 @@ function plot_specs = specs_with_available_summary(group_table, specs, mode)
 end
 
 function y = summary_values(group_table, spec, mode)
+% SUMMARY_VALUES Perform the summary values operation.
+%
+% Syntax:
+%   y = summary_values(group_table, spec, mode)
+%
+% Inputs:
+%   group_table - Input value `group_table`.
+%   spec - Input value `spec`.
+%   mode - Input value `mode`.
+%
+% Outputs:
+%   y - Computed output value `y`.
+
     if strcmp(mode, 'median')
         y = group_table.([spec.summary_prefix '_median']);
     else
@@ -358,6 +503,17 @@ function y = summary_values(group_table, spec, mode)
 end
 
 function plot_measure_boxplot(ax, group_table, y, ylabel_text)
+% PLOT_MEASURE_BOXPLOT Plot measure boxplot.
+%
+% Syntax:
+%   plot_measure_boxplot(ax, group_table, y, ylabel_text)
+%
+% Inputs:
+%   ax - Target axes handle.
+%   group_table - Input value `group_table`.
+%   y - Input value `y`.
+%   ylabel_text - Label identifier or label metadata.
+
     measure = table_numeric_column(group_table, 'measure', nan(height(group_table), 1));
     subject = table_numeric_column(group_table, 'subject', (1:height(group_table))');
     subject_group = table_text_column(group_table, 'subject_group', "Unknown");
@@ -387,6 +543,21 @@ function plot_measure_boxplot(ax, group_table, y, ylabel_text)
 end
 
 function [label_fraction_file, event_count_file, summary_csv] = plot_label_event_overviews(group_table, config, out_dir)
+% PLOT_LABEL_EVENT_OVERVIEWS Plot label event overviews.
+%
+% Syntax:
+%   [label_fraction_file, event_count_file, summary_csv] = plot_label_event_overviews(group_table, config, out_dir)
+%
+% Inputs:
+%   group_table - Input value `group_table`.
+%   config - Pipeline configuration structure.
+%   out_dir - File or dataset path.
+%
+% Outputs:
+%   label_fraction_file - Output text or identifier.
+%   event_count_file - Computed index or count value.
+%   summary_csv - Computed summary or metadata structure.
+
     label_fraction_file = '';
     event_count_file = '';
     summary_csv = '';
@@ -421,6 +592,19 @@ function [label_fraction_file, event_count_file, summary_csv] = plot_label_event
 end
 
 function plot_measure_metric_heatmap(group_table, metric_cols, title_text, colorbar_text, file_path, config)
+% PLOT_MEASURE_METRIC_HEATMAP Plot measure metric heatmap.
+%
+% Syntax:
+%   plot_measure_metric_heatmap(group_table, metric_cols, title_text, colorbar_text, file_path, config)
+%
+% Inputs:
+%   group_table - Input value `group_table`.
+%   metric_cols - Input value `metric_cols`.
+%   title_text - Input value `title_text`.
+%   colorbar_text - Input value `colorbar_text`.
+%   file_path - File or dataset path.
+%   config - Pipeline configuration structure.
+
     measure = table_numeric_column(group_table, 'measure', nan(height(group_table), 1));
     measures = unique(measure(isfinite(measure)));
     if isempty(measures)
@@ -456,6 +640,19 @@ function plot_measure_metric_heatmap(group_table, metric_cols, title_text, color
 end
 
 function selected_cols = top_metric_columns(group_table, metric_cols, max_cols)
+% TOP_METRIC_COLUMNS Perform the top metric columns operation.
+%
+% Syntax:
+%   selected_cols = top_metric_columns(group_table, metric_cols, max_cols)
+%
+% Inputs:
+%   group_table - Input value `group_table`.
+%   metric_cols - Input value `metric_cols`.
+%   max_cols - Input value `max_cols`.
+%
+% Outputs:
+%   selected_cols - Computed output value `selected_cols`.
+
     if numel(metric_cols) <= max_cols
         selected_cols = metric_cols;
         return;
@@ -471,6 +668,19 @@ function selected_cols = top_metric_columns(group_table, metric_cols, max_cols)
 end
 
 function csv_path = write_metric_summary_by_measure(group_table, metric_cols, csv_path)
+% WRITE_METRIC_SUMMARY_BY_MEASURE Write metric summary by measure.
+%
+% Syntax:
+%   csv_path = write_metric_summary_by_measure(group_table, metric_cols, csv_path)
+%
+% Inputs:
+%   group_table - Input value `group_table`.
+%   metric_cols - Input value `metric_cols`.
+%   csv_path - Input value `csv_path`.
+%
+% Outputs:
+%   csv_path - Computed output value `csv_path`.
+
     if isempty(group_table) || height(group_table) == 0 || isempty(metric_cols) || ...
             ~ismember('measure', group_table.Properties.VariableNames)
         csv_path = '';
@@ -519,6 +729,18 @@ function csv_path = write_metric_summary_by_measure(group_table, metric_cols, cs
 end
 
 function cols = diagnostic_summary_columns(group_table, specs)
+% DIAGNOSTIC_SUMMARY_COLUMNS Perform the diagnostic summary columns operation.
+%
+% Syntax:
+%   cols = diagnostic_summary_columns(group_table, specs)
+%
+% Inputs:
+%   group_table - Input value `group_table`.
+%   specs - Input value `specs`.
+%
+% Outputs:
+%   cols - Computed output value `cols`.
+
     cols = {};
     if isempty(group_table)
         return;
@@ -542,6 +764,19 @@ function cols = diagnostic_summary_columns(group_table, specs)
 end
 
 function values = table_numeric_column(T, name, default_values)
+% TABLE_NUMERIC_COLUMN Perform the table numeric column operation.
+%
+% Syntax:
+%   values = table_numeric_column(T, name, default_values)
+%
+% Inputs:
+%   T - Time coordinates in seconds.
+%   name - Input value `name`.
+%   default_values - Input value `default_values`.
+%
+% Outputs:
+%   values - Computed numeric value.
+
     if ismember(name, T.Properties.VariableNames)
         values = T.(name);
         if iscell(values)
@@ -554,6 +789,19 @@ function values = table_numeric_column(T, name, default_values)
 end
 
 function values = table_text_column(T, name, default_value)
+% TABLE_TEXT_COLUMN Perform the table text column operation.
+%
+% Syntax:
+%   values = table_text_column(T, name, default_value)
+%
+% Inputs:
+%   T - Time coordinates in seconds.
+%   name - Input value `name`.
+%   default_value - Input value `default_value`.
+%
+% Outputs:
+%   values - Computed numeric value.
+
     if ismember(name, T.Properties.VariableNames)
         raw = T.(name);
         if iscell(raw)
@@ -576,6 +824,18 @@ function values = table_text_column(T, name, default_value)
 end
 
 function c = group_color(group_name, faint)
+% GROUP_COLOR Perform the group color operation.
+%
+% Syntax:
+%   c = group_color(group_name, faint)
+%
+% Inputs:
+%   group_name - Input value `group_name`.
+%   faint - Input value `faint`.
+%
+% Outputs:
+%   c - Computed output value `c`.
+
     group_name = lower(char(string(group_name)));
     switch group_name
         case 'control'
@@ -592,6 +852,18 @@ function c = group_color(group_name, faint)
 end
 
 function colors = group_colors(group_names, faint)
+% GROUP_COLORS Perform the group colors operation.
+%
+% Syntax:
+%   colors = group_colors(group_names, faint)
+%
+% Inputs:
+%   group_names - Input value `group_names`.
+%   faint - Input value `faint`.
+%
+% Outputs:
+%   colors - Computed output value `colors`.
+
     group_names = string(group_names);
     colors = nan(numel(group_names), 3);
     for i = 1:numel(group_names)
@@ -600,6 +872,15 @@ function colors = group_colors(group_names, faint)
 end
 
 function add_group_legend(ax, groups)
+% ADD_GROUP_LEGEND Add group legend.
+%
+% Syntax:
+%   add_group_legend(ax, groups)
+%
+% Inputs:
+%   ax - Target axes handle.
+%   groups - Input value `groups`.
+
     if isstruct(groups) && isfield(groups, 'subject_group')
         groups = string({groups.subject_group});
     else
@@ -624,10 +905,33 @@ function add_group_legend(ax, groups)
 end
 
 function jitter = deterministic_jitter(subject, width)
+% DETERMINISTIC_JITTER Perform the deterministic jitter operation.
+%
+% Syntax:
+%   jitter = deterministic_jitter(subject, width)
+%
+% Inputs:
+%   subject - Subject identifier.
+%   width - Input value `width`.
+%
+% Outputs:
+%   jitter - Computed output value `jitter`.
+
     jitter = width .* sin(double(subject(:)) .* 12.9898);
 end
 
 function labels = friendly_metric_names(metric_cols)
+% FRIENDLY_METRIC_NAMES Perform the friendly metric names operation.
+%
+% Syntax:
+%   labels = friendly_metric_names(metric_cols)
+%
+% Inputs:
+%   metric_cols - Input value `metric_cols`.
+%
+% Outputs:
+%   labels - Output text or identifier.
+
     labels = string(metric_cols);
     labels = erase(labels, "label_");
     labels = erase(labels, "_fraction");
@@ -637,6 +941,19 @@ function labels = friendly_metric_names(metric_cols)
 end
 
 function value = group_option(config, name, default_value)
+% GROUP_OPTION Perform the group option operation.
+%
+% Syntax:
+%   value = group_option(config, name, default_value)
+%
+% Inputs:
+%   config - Pipeline configuration structure.
+%   name - Input value `name`.
+%   default_value - Input value `default_value`.
+%
+% Outputs:
+%   value - Computed numeric value.
+
     value = default_value;
     if isfield(config, 'group') && isfield(config.group, name)
         value = config.group.(name);
@@ -649,6 +966,18 @@ function value = group_option(config, name, default_value)
 end
 
 function fig = make_group_figure(config, figure_name)
+% MAKE_GROUP_FIGURE Create group figure.
+%
+% Syntax:
+%   fig = make_group_figure(config, figure_name)
+%
+% Inputs:
+%   config - Pipeline configuration structure.
+%   figure_name - Input value `figure_name`.
+%
+% Outputs:
+%   fig - Figure handle.
+
     fig = figure( ...
         'Units', 'pixels', ...
         'Position', [100 100 1400 850], ...
@@ -658,15 +987,49 @@ function fig = make_group_figure(config, figure_name)
 end
 
 function save_group_figure(fig, file_path, config)
+% SAVE_GROUP_FIGURE Save group figure.
+%
+% Syntax:
+%   save_group_figure(fig, file_path, config)
+%
+% Inputs:
+%   fig - Figure handle.
+%   file_path - File or dataset path.
+%   config - Pipeline configuration structure.
+
     save_figure(config, 'group_diagnostic_overview', false, file_path);
 end
 
 function file_path = group_plot_filename(out_dir, file_stem, config)
+% GROUP_PLOT_FILENAME Perform the group plot filename operation.
+%
+% Syntax:
+%   file_path = group_plot_filename(out_dir, file_stem, config)
+%
+% Inputs:
+%   out_dir - File or dataset path.
+%   file_stem - Input value `file_stem`.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   file_path - Computed output value `file_path`.
+
     fmt = group_plot_format(config);
     file_path = fullfile(out_dir, [file_stem '.' fmt]);
 end
 
 function fmt = group_plot_format(config)
+% GROUP_PLOT_FORMAT Perform the group plot format operation.
+%
+% Syntax:
+%   fmt = group_plot_format(config)
+%
+% Inputs:
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   fmt - Computed output value `fmt`.
+
     fmt = 'png';
     if isfield(config, 'plot_format') && ~isempty(config.plot_format)
         fmt = lower(strtrim(char(string(config.plot_format))));
@@ -680,6 +1043,17 @@ function fmt = group_plot_format(config)
 end
 
 function visibility = resolve_visibility(config)
+% RESOLVE_VISIBILITY Resolve visibility.
+%
+% Syntax:
+%   visibility = resolve_visibility(config)
+%
+% Inputs:
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   visibility - Computed output value `visibility`.
+
     visibility = 'off';
     if isfield(config, 'make_figs_visible') && ~isempty(config.make_figs_visible)
         visibility = char(string(config.make_figs_visible));

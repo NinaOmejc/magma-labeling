@@ -1,6 +1,15 @@
 function desat_mask = get_desaturation_mask(desat_events, t_grid)
-% get_desaturation_mask
-% Returns true at grid points that fall inside any desaturation event.
+% GET_DESATURATION_MASK Return desaturation mask.
+%
+% Syntax:
+%   desat_mask = get_desaturation_mask(desat_events, t_grid)
+%
+% Inputs:
+%   desat_events - Event structure data.
+%   t_grid - Time coordinates in seconds.
+%
+% Outputs:
+%   desat_mask - Logical output mask.
 
     desat_mask = false(size(t_grid));
 

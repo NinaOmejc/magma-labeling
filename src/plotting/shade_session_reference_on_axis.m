@@ -1,6 +1,16 @@
 function h = shade_session_reference_on_axis(ax, session_reference, display_name)
-% shade_session_reference_on_axis
-% Shade the common session physiological reference interval.
+% SHADE_SESSION_REFERENCE_ON_AXIS Perform the shade session reference on axis operation.
+%
+% Syntax:
+%   h = shade_session_reference_on_axis(ax, session_reference, display_name)
+%
+% Inputs:
+%   ax - Target axes handle.
+%   session_reference - Session-reference metadata.
+%   display_name - Input value `display_name`.
+%
+% Outputs:
+%   h - Graphics handle or array.
 
     h = gobjects(0);
     if nargin < 1 || isempty(ax)

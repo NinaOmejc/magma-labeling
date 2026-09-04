@@ -1,10 +1,21 @@
 function bundle = build_db_phenotype_evidence_bundle( ...
     weak_burden, weak_overlap, weak_evidence, ...
     reviewed_burden, reviewed_overlap, reviewed_evidence)
-% build_db_phenotype_evidence_bundle
-% Keep the same five prespecified profiles while distinguishing the label
-% provenance used to derive them. External clinical values are placeholders
-% only and remain explicitly unavailable.
+% BUILD_DB_PHENOTYPE_EVIDENCE_BUNDLE Build db phenotype evidence bundle.
+%
+% Syntax:
+%   bundle = build_db_phenotype_evidence_bundle(weak_burden, weak_overlap, weak_evidence, reviewed_burden, reviewed_overlap, reviewed_evidence)
+%
+% Inputs:
+%   weak_burden - Input value `weak_burden`.
+%   weak_overlap - Input value `weak_overlap`.
+%   weak_evidence - Input value `weak_evidence`.
+%   reviewed_burden - Input value `reviewed_burden`.
+%   reviewed_overlap - Input value `reviewed_overlap`.
+%   reviewed_evidence - Input value `reviewed_evidence`.
+%
+% Outputs:
+%   bundle - Computed output value `bundle`.
 
     bundle = struct();
     bundle.version = 'magma_db_phenotype_evidence_bundle_v1';

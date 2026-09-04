@@ -1,14 +1,20 @@
 function test_specs = create_artificial_test_data(config, output_dir, source_subject, source_measure, test_subject, trange_min, force_overwrite)
-%CREATE_ARTIFICIAL_TEST_DATA Create target-label artificial raw datasets.
+% CREATE_ARTIFICIAL_TEST_DATA Create artificial test data.
 %
-% The generated files keep the standard raw-data filename convention, so
-% load_raw_data can process them without a special test loader:
+% Syntax:
+%   test_specs = create_artificial_test_data(config, output_dir, source_subject, source_measure, test_subject, trange_min, force_overwrite)
 %
-%   ECG1_ECG2_SpO2_RespL_BP_RespD_fs200_Sub0_Pom1_DeTr_Norm.dat
-%   ...
-%   ECG1_ECG2_SpO2_RespL_BP_RespD_fs200_Sub0_Pom11_DeTr_Norm.dat
+% Inputs:
+%   config - Pipeline configuration structure.
+%   output_dir - File or dataset path.
+%   source_subject - Subject identifier.
+%   source_measure - Measurement identifier.
+%   test_subject - Subject identifier.
+%   trange_min - Input value `trange_min`.
+%   force_overwrite - Input value `force_overwrite`.
 %
-% Measurements 1-11 map to the eleven independent canonical labels.
+% Outputs:
+%   test_specs - Computed output value `test_specs`.
 
     if nargin < 2 || isempty(output_dir)
         repo_root = fileparts(fileparts(mfilename('fullpath')));
@@ -74,9 +80,18 @@ function test_specs = create_artificial_test_data(config, output_dir, source_sub
 end
 
 function data_out = clean_template_from_source(source_data, config)
-% Keep source ECG/BP columns and replace channels that drive the detectors
-% with clean nominal signals. This prevents accidental labels from the
-% real source recording while preserving the original recording length.
+% CLEAN_TEMPLATE_FROM_SOURCE Perform the clean template from source operation.
+%
+% Syntax:
+%   data_out = clean_template_from_source(source_data, config)
+%
+% Inputs:
+%   source_data - Input physiological signal data.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   data_out - Computed output value `data_out`.
+
     data_out = source_data;
     fs = config.fs;
     N = size(source_data, 1);
@@ -101,6 +116,19 @@ function data_out = clean_template_from_source(source_data, config)
 end
 
 function test_specs = build_test_specs(idx_spo2, idx_lungs, idx_diaph)
+% BUILD_TEST_SPECS Build test specs.
+%
+% Syntax:
+%   test_specs = build_test_specs(idx_spo2, idx_lungs, idx_diaph)
+%
+% Inputs:
+%   idx_spo2 - Input value `idx_spo2`.
+%   idx_lungs - Input value `idx_lungs`.
+%   idx_diaph - Input value `idx_diaph`.
+%
+% Outputs:
+%   test_specs - Computed output value `test_specs`.
+
     resp_columns = [idx_lungs idx_diaph];
     resp_columns = resp_columns(isfinite(resp_columns) & resp_columns > 0);
 
@@ -127,6 +155,21 @@ function test_specs = build_test_specs(idx_spo2, idx_lungs, idx_diaph)
 end
 
 function spec = make_spec(measure, label_short, label_long, modification_type, columns)
+% MAKE_SPEC Create spec.
+%
+% Syntax:
+%   spec = make_spec(measure, label_short, label_long, modification_type, columns)
+%
+% Inputs:
+%   measure - Measurement identifier.
+%   label_short - Label identifier or label metadata.
+%   label_long - Label identifier or label metadata.
+%   modification_type - Input value `modification_type`.
+%   columns - Input value `columns`.
+%
+% Outputs:
+%   spec - Computed output value `spec`.
+
     spec = struct( ...
         'measure', measure, ...
         'label_short', label_short, ...
@@ -137,10 +180,37 @@ function spec = make_spec(measure, label_short, label_long, modification_type, c
 end
 
 function trange_out = test_trange_for_spec(~, default_trange_min, ~, ~)
+% TEST_TRANGE_FOR_SPEC Perform the test trange for spec operation.
+%
+% Syntax:
+%   trange_out = test_trange_for_spec(~, default_trange_min, ~, ~)
+%
+% Inputs:
+%   ~ - Unused positional input.
+%   default_trange_min - Input value `default_trange_min`.
+%   ~ - Unused positional input.
+%   ~ - Unused positional input.
+%
+% Outputs:
+%   trange_out - Computed output value `trange_out`.
+
     trange_out = default_trange_min;
 end
 
 function write_expected_labels(output_dir, test_specs, test_subject, trange_min, n_samples, fs)
+% WRITE_EXPECTED_LABELS Write expected labels.
+%
+% Syntax:
+%   write_expected_labels(output_dir, test_specs, test_subject, trange_min, n_samples, fs)
+%
+% Inputs:
+%   output_dir - File or dataset path.
+%   test_specs - Input value `test_specs`.
+%   test_subject - Subject identifier.
+%   trange_min - Input value `trange_min`.
+%   n_samples - Number of samples.
+%   fs - Sampling frequency in hertz.
+
     measure = [test_specs.measure]';
     label_short = {test_specs.label_short}';
     label_long = {test_specs.label_long}';
@@ -161,6 +231,18 @@ function write_expected_labels(output_dir, test_specs, test_subject, trange_min,
 end
 
 function idx = find_column(config, pattern)
+% FIND_COLUMN Find column.
+%
+% Syntax:
+%   idx = find_column(config, pattern)
+%
+% Inputs:
+%   config - Pipeline configuration structure.
+%   pattern - Input value `pattern`.
+%
+% Outputs:
+%   idx - Computed index or count value.
+
     idx = find(contains(config.data_columns, pattern), 1);
     if isempty(idx)
         idx = NaN;
@@ -168,6 +250,19 @@ function idx = find_column(config, pattern)
 end
 
 function filename = raw_filename(folder, subject, measure)
+% RAW_FILENAME Perform the raw filename operation.
+%
+% Syntax:
+%   filename = raw_filename(folder, subject, measure)
+%
+% Inputs:
+%   folder - Input value `folder`.
+%   subject - Subject identifier.
+%   measure - Measurement identifier.
+%
+% Outputs:
+%   filename - Output text or identifier.
+
     filename = fullfile(folder, sprintf( ...
         'ECG1_ECG2_SpO2_RespL_BP_RespD_fs200_Sub%d_Pom%d_DeTr_Norm.dat', ...
         subject, measure));

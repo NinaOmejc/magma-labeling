@@ -1,7 +1,28 @@
 function [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags( ...
     data, bL, bD, flags_lungs, flags_diaph, spo2_ref, ...
     session_reference, diagnostics_Des, config, window_sec)
-% Edit sigh flags using click times on the config.fs master timeline.
+% MANUAL_EDIT_SIGH_FLAGS Perform the manual edit sigh flags operation.
+%
+% Syntax:
+%   [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags(data, bL, bD, flags_lungs, flags_diaph, spo2_ref, session_reference, diagnostics_Des, config, window_sec)
+%
+% Inputs:
+%   data - Input physiological signal data.
+%   bL - Input value `bL`.
+%   bD - Input value `bD`.
+%   flags_lungs - Logical state or selection mask.
+%   flags_diaph - Logical state or selection mask.
+%   spo2_ref - SpO2-reference structure.
+%   session_reference - Session-reference metadata.
+%   diagnostics_Des - Detector diagnostic data.
+%   config - Pipeline configuration structure.
+%   window_sec - Duration or window length in seconds.
+%
+% Outputs:
+%   flags_lungs - Logical output mask.
+%   flags_diaph - Logical output mask.
+%   review_mask - Logical output mask.
+
     review_mask = false(size(data,1), 1);
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
@@ -64,11 +85,24 @@ function [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags( ...
     uiwait(fh);
 
     function set_xlim(x0)
+    % SET_XLIM Perform the set xlim operation.
+    %
+    % Syntax:
+    %   set_xlim(x0)
+    %
+    % Inputs:
+    %   x0 - Input value `x0`.
+
         xlim(ax1, [x0 min(x0+window_sec, t_raw(end))]);
         mark_current_view_reviewed();
     end
 
     function mark_current_view_reviewed()
+    % MARK_CURRENT_VIEW_REVIEWED Mark current view reviewed.
+    %
+    % Syntax:
+    %   mark_current_view_reviewed()
+
         if ~isgraphics(ax1), return; end
         limits = xlim(ax1);
         start_idx = max(1, min(N, floor(limits(1) * fs) + 1));
@@ -77,6 +111,17 @@ function [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags( ...
     end
 
     function edit_flag(evt, ax, belt, target)
+    % EDIT_FLAG Perform the edit flag operation.
+    %
+    % Syntax:
+    %   edit_flag(evt, ax, belt, target)
+    %
+    % Inputs:
+    %   evt - Input value `evt`.
+    %   ax - Target axes handle.
+    %   belt - Respiratory-cycle or belt-evidence structure.
+    %   target - Input value `target`.
+
         if ~strcmp(get(fh, 'SelectionType'), 'normal')
             return;
         end
@@ -115,6 +160,18 @@ function [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags( ...
     end
 
     function t_click = get_click_time(evt, ax)
+    % GET_CLICK_TIME Return click time.
+    %
+    % Syntax:
+    %   t_click = get_click_time(evt, ax)
+    %
+    % Inputs:
+    %   evt - Input value `evt`.
+    %   ax - Target axes handle.
+    %
+    % Outputs:
+    %   t_click - Computed output value `t_click`.
+
         t_click = NaN;
         if ~isempty(evt)
             if isstruct(evt) && isfield(evt, 'IntersectionPoint') && ~isempty(evt.IntersectionPoint)
@@ -132,6 +189,19 @@ function [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags( ...
     end
 
     function i = nearest_flagged_index(peak_t, flags, t_click)
+    % NEAREST_FLAGGED_INDEX Perform the nearest flagged index operation.
+    %
+    % Syntax:
+    %   i = nearest_flagged_index(peak_t, flags, t_click)
+    %
+    % Inputs:
+    %   peak_t - Input value `peak_t`.
+    %   flags - Logical state or selection mask.
+    %   t_click - Input value `t_click`.
+    %
+    % Outputs:
+    %   i - Computed output value `i`.
+
         flagged_idx = find(flags(:));
         if isempty(flagged_idx)
             i = [];
@@ -143,6 +213,17 @@ function [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags( ...
     end
 
     function update_marker_plot(marker_plot, breaths, flags, signal_idx)
+    % UPDATE_MARKER_PLOT Update marker plot.
+    %
+    % Syntax:
+    %   update_marker_plot(marker_plot, breaths, flags, signal_idx)
+    %
+    % Inputs:
+    %   marker_plot - Input value `marker_plot`.
+    %   breaths - Respiratory-cycle or belt-evidence structure.
+    %   flags - Logical state or selection mask.
+    %   signal_idx - Input value `signal_idx`.
+
         marker_t = breaths.peak_t(flags);
         set(marker_plot, ...
             'XData', marker_t, ...
@@ -150,6 +231,16 @@ function [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags( ...
     end
 
     function update_axis_legend(ax, handles, labels)
+    % UPDATE_AXIS_LEGEND Update axis legend.
+    %
+    % Syntax:
+    %   update_axis_legend(ax, handles, labels)
+    %
+    % Inputs:
+    %   ax - Target axes handle.
+    %   handles - Input value `handles`.
+    %   labels - Label identifier or label metadata.
+
         keep = false(size(handles));
         for i = 1:numel(handles)
             h = handles(i);
@@ -174,6 +265,11 @@ function [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags( ...
     end
 
     function align_sigh_axes()
+    % ALIGN_SIGH_AXES Perform the align sigh axes operation.
+    %
+    % Syntax:
+    %   align_sigh_axes()
+
         axes_to_align = gobjects(0);
         if exist('ax1', 'var') && isgraphics(ax1)
             axes_to_align(end+1,1) = ax1;
@@ -188,6 +284,17 @@ function [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags( ...
     end
 
     function y_limits = compute_global_ylim(signal)
+    % COMPUTE_GLOBAL_YLIM Compute global ylim.
+    %
+    % Syntax:
+    %   y_limits = compute_global_ylim(signal)
+    %
+    % Inputs:
+    %   signal - Input value `signal`.
+    %
+    % Outputs:
+    %   y_limits - Computed output value `y_limits`.
+
         signal = signal(isfinite(signal));
         if isempty(signal)
             y_limits = [-1, 1];

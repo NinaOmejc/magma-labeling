@@ -1,8 +1,21 @@
 function h = plot_spo2_diagnostic_panel( ...
     ax, data, spo2_ref, session_reference, diagnostics_Des, config, title_text)
-% plot_spo2_diagnostic_panel
-% Shared SpO2 panel using the common session-reference interval and its
-% independently estimated SpO2 reference statistic.
+% PLOT_SPO2_DIAGNOSTIC_PANEL Plot spo2 diagnostic panel.
+%
+% Syntax:
+%   h = plot_spo2_diagnostic_panel(ax, data, spo2_ref, session_reference, diagnostics_Des, config, title_text)
+%
+% Inputs:
+%   ax - Target axes handle.
+%   data - Input physiological signal data.
+%   spo2_ref - SpO2-reference structure.
+%   session_reference - Session-reference metadata.
+%   diagnostics_Des - Detector diagnostic data.
+%   config - Pipeline configuration structure.
+%   title_text - Input value `title_text`.
+%
+% Outputs:
+%   h - Graphics handle or array.
 
     if nargin < 1 || isempty(ax)
         ax = gca;
@@ -63,6 +76,20 @@ function h = plot_spo2_diagnostic_panel( ...
 end
 
 function [t_spo2, spo2] = get_spo2_trace(data, diagnostics_Des, config)
+% GET_SPO2_TRACE Return spo2 trace.
+%
+% Syntax:
+%   [t_spo2, spo2] = get_spo2_trace(data, diagnostics_Des, config)
+%
+% Inputs:
+%   data - Input physiological signal data.
+%   diagnostics_Des - Detector diagnostic data.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   t_spo2 - Computed output value `t_spo2`.
+%   spo2 - Computed output value `spo2`.
+
     if nargin >= 2 && ~isempty(diagnostics_Des) && ...
             isstruct(diagnostics_Des) && ...
             isfield(diagnostics_Des, 'spo2') && ...
@@ -105,6 +132,18 @@ function [t_spo2, spo2] = get_spo2_trace(data, diagnostics_Des, config)
 end
 
 function set_spo2_limits(ax, spo2, spo2_ref, floor_thr, drop_thr)
+% SET_SPO2_LIMITS Perform the set spo2 limits operation.
+%
+% Syntax:
+%   set_spo2_limits(ax, spo2, spo2_ref, floor_thr, drop_thr)
+%
+% Inputs:
+%   ax - Target axes handle.
+%   spo2 - Input value `spo2`.
+%   spo2_ref - SpO2-reference structure.
+%   floor_thr - Selection threshold value.
+%   drop_thr - Selection threshold value.
+
     values = spo2(isfinite(spo2));
     values = [values; floor_thr; 89; 100];
     if isstruct(spo2_ref) && isfield(spo2_ref, 'median_percent') && ...
@@ -125,6 +164,15 @@ function set_spo2_limits(ax, spo2, spo2_ref, floor_thr, drop_thr)
 end
 
 function add_spo2_legend(ax, h)
+% ADD_SPO2_LEGEND Add spo2 legend.
+%
+% Syntax:
+%   add_spo2_legend(ax, h)
+%
+% Inputs:
+%   ax - Target axes handle.
+%   h - Input value `h`.
+
     handles = gobjects(0);
     if isfield(h, 'spo2'), handles(end+1,1) = h.spo2; end
     if isfield(h, 'reference'), handles = append_graphics_handle(handles, h.reference); end
@@ -146,6 +194,18 @@ function add_spo2_legend(ax, h)
 end
 
 function handles = append_graphics_handle(handles, h)
+% APPEND_GRAPHICS_HANDLE Perform the append graphics handle operation.
+%
+% Syntax:
+%   handles = append_graphics_handle(handles, h)
+%
+% Inputs:
+%   handles - Input value `handles`.
+%   h - Input value `h`.
+%
+% Outputs:
+%   handles - Graphics handle or array.
+
     if isempty(h)
         return;
     end

@@ -1,31 +1,17 @@
 function b = extract_respiration_feature(x, config, basename)
-% Unified respiration breath extraction:
-% - detrends (robustly)
-% - finds peaks (breaths)
-% - finds troughs between peaks (robust, percentile-based by default)
-% - returns per-breath amplitudes, peak/trough indices, RR (respiratory rate) and IBI (time between breaths in seconds)
+% EXTRACT_RESPIRATION_FEATURE Extract respiration feature.
 %
-% Output struct b fields:
-%   b.x0                detrended signal
-%   b.peak_idx, b.peak_t, b.peak_val
-%   b.trough_idx, b.trough_t, b.trough_val     (between peak i and i+1)
-%   b.amp                 peak(i) - following trough(i), length n_peaks;
-%                         amp(i) belongs to peak i and the final entry is
-%                         NaN because no next peak/trough interval exists
-%   b.ibi                                 inter-breath intervals (seconds)
-%   b.rr_bpm                                instantaneous RR per interval (bpm)
-%   b.rr_mean_bpm                           mean RR in segment
-%   b.ok                                   true if enough peaks found
+% Syntax:
+%   b = extract_respiration_feature(x, config, basename)
 %
-% Notes:
-% - For amplitude, we compute trough in each interval [peak(i), peak(i+1)].
-% - Use params.trough_method = 'min' or 'prctile' (default).
-% - Peak/trough times use (sample_idx - 1) / config.fs.
+% Inputs:
+%   x - Input value `x`.
+%   config - Pipeline configuration structure.
+%   basename - Input value `basename`.
 %
-% Usage:
-%   params = resp_default_params(fs);
-%   b = resp_extract_breaths(x, fs, params);
-    
+% Outputs:
+%   b - Updated respiratory-cycle or belt structure.
+
     if nargin < 3 || isempty(basename)
         basename = '';
     end
@@ -106,6 +92,21 @@ function b = extract_respiration_feature(x, config, basename)
 end
 
 function [peak_idx, qc] = apply_respiration_peak_qc(x, peak_idx, peak_prom, config)
+% APPLY_RESPIRATION_PEAK_QC Apply respiration peak qc.
+%
+% Syntax:
+%   [peak_idx, qc] = apply_respiration_peak_qc(x, peak_idx, peak_prom, config)
+%
+% Inputs:
+%   x - Input value `x`.
+%   peak_idx - Input value `peak_idx`.
+%   peak_prom - Input value `peak_prom`.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   peak_idx - Computed index or count value.
+%   qc - Computed summary or metadata structure.
+
     peak_idx = peak_idx(:);
     peak_prom = peak_prom(:);
     min_num_peaks = 3;
@@ -241,6 +242,20 @@ function [peak_idx, qc] = apply_respiration_peak_qc(x, peak_idx, peak_prom, conf
 end
 
 function noise_level = estimate_local_peak_noise(x, peak_idx, fs, noise_window_sec)
+% ESTIMATE_LOCAL_PEAK_NOISE Perform the estimate local peak noise operation.
+%
+% Syntax:
+%   noise_level = estimate_local_peak_noise(x, peak_idx, fs, noise_window_sec)
+%
+% Inputs:
+%   x - Input value `x`.
+%   peak_idx - Input value `peak_idx`.
+%   fs - Sampling frequency in hertz.
+%   noise_window_sec - Duration or window length in seconds.
+%
+% Outputs:
+%   noise_level - Computed output value `noise_level`.
+
     half_win = max(1, round(0.5 * noise_window_sec * fs));
     lo = max(1, peak_idx - half_win);
     hi = min(numel(x), peak_idx + half_win);

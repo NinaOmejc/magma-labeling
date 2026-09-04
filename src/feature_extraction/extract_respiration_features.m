@@ -1,6 +1,16 @@
 function resp_cycles = extract_respiration_features(data, config)
-% Extract respiratory cycles using master sample indices at config.fs.
-    
+% EXTRACT_RESPIRATION_FEATURES Extract respiration features.
+%
+% Syntax:
+%   resp_cycles = extract_respiration_features(data, config)
+%
+% Inputs:
+%   data - Input physiological signal data.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   resp_cycles - Respiratory-cycle structure.
+
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
     end
@@ -73,11 +83,31 @@ function resp_cycles = extract_respiration_features(data, config)
 end
 
 function tf = peak_indices_changed(before, after)
+% PEAK_INDICES_CHANGED Perform the peak indices changed operation.
+%
+% Syntax:
+%   tf = peak_indices_changed(before, after)
+%
+% Inputs:
+%   before - Input value `before`.
+%   after - Input value `after`.
+%
+% Outputs:
+%   tf - Computed output value `tf`.
+
     tf = ~isequal(before(:), after(:));
 end
 
 function save_final_respiration_feature_figure(b, config, basename)
-% Save the post-GUI respiration feature figure, overwriting the pre-GUI one.
+% SAVE_FINAL_RESPIRATION_FEATURE_FIGURE Save final respiration feature figure.
+%
+% Syntax:
+%   save_final_respiration_feature_figure(b, config, basename)
+%
+% Inputs:
+%   b - Respiratory-cycle or belt-evidence structure.
+%   config - Pipeline configuration structure.
+%   basename - Input value `basename`.
 
     if ~isfield(b, 'x0') || isempty(b.x0)
         return;
@@ -107,6 +137,22 @@ function save_final_respiration_feature_figure(b, config, basename)
 end
 
 function h = plot_breath_markers(b, marker_name, fs, marker_style, marker_color, display_name)
+% PLOT_BREATH_MARKERS Plot breath markers.
+%
+% Syntax:
+%   h = plot_breath_markers(b, marker_name, fs, marker_style, marker_color, display_name)
+%
+% Inputs:
+%   b - Respiratory-cycle or belt-evidence structure.
+%   marker_name - Input value `marker_name`.
+%   fs - Sampling frequency in hertz.
+%   marker_style - Input value `marker_style`.
+%   marker_color - Input value `marker_color`.
+%   display_name - Input value `display_name`.
+%
+% Outputs:
+%   h - Graphics handle or array.
+
     idx_field = [marker_name '_idx'];
     time_field = [marker_name '_t'];
     val_field = [marker_name '_val'];

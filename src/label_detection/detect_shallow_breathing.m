@@ -1,20 +1,23 @@
-function [events, boundary_info] = detect_shallow_breathing(data, phys_feat, config)
-% detect_shallow_breathing
-% Label 1 - sustained relative respiratory-belt excursion in the configured
-% shallow band. Lungs and diaphragm provide independent evidence; either
-% usable belt may generate the label. SpO2 and respiratory rate do not
-% modify shallow-breathing events.
-% A TRUE endpoint means every eligible breath in the preceding analysis
-% window is in-band. That all-breath condition confirms the event; boundary
-% times are then placed at deterministic midpoint cells around qualifying
-% respiratory cycles. Localized runs shorter than config.ShB.min_dur_sec are
-% retained as boundary QC, but are not final events.
+function [events, boundary_info] = detect_shallow_breathing(data, resp_features, config)
+% DETECT_SHALLOW_BREATHING Detect shallow breathing.
+%
+% Syntax:
+%   [events, boundary_info] = detect_shallow_breathing(data, resp_features, config)
+%
+% Inputs:
+%   data - Input physiological signal data.
+%   resp_features - Respiratory-feature structure.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   events - Event structure array.
+%   boundary_info - Event-boundary provenance structure.
 
     events = empty_events();
     N = size(data, 1);
-    t_grid = phys_feat.resp.time_sec;
-    lungs = phys_feat.resp.lungs;
-    diaph = phys_feat.resp.diaph;
+    t_grid = resp_features.resp.time_sec;
+    lungs = resp_features.resp.lungs;
+    diaph = resp_features.resp.diaph;
     boundary_info = make_label_boundary_info('shallow', ...
         'detect_shallow_breathing', 'not_evaluated', empty_events(), ...
         empty_events(), NaN, '', [], [], []);
@@ -83,16 +86,40 @@ function [events, boundary_info] = detect_shallow_breathing(data, phys_feat, con
             'localized_mask_diaph', localized_diaph, ...
             'output_name', 'shallow_breathing');
         plot_amplitude_state_diagnostic( ...
-            phys_feat, events_lungs, events_diaph, config, opts);
+            resp_features, events_lungs, events_diaph, config, opts);
     end
 end
 
 function mask = get_endpoint_mask(belt, field, t_grid)
+% GET_ENDPOINT_MASK Return endpoint mask.
+%
+% Syntax:
+%   mask = get_endpoint_mask(belt, field, t_grid)
+%
+% Inputs:
+%   belt - Respiratory-cycle or belt-evidence structure.
+%   field - Input value `field`.
+%   t_grid - Time coordinates in seconds.
+%
+% Outputs:
+%   mask - Logical output mask.
+
     mask = false(size(t_grid));
     if isfield(belt, field), mask = logical(belt.(field)); end
 end
 
 function records = normalize_records(records)
+% NORMALIZE_RECORDS Normalize records.
+%
+% Syntax:
+%   records = normalize_records(records)
+%
+% Inputs:
+%   records - Input value `records`.
+%
+% Outputs:
+%   records - Computed output value `records`.
+
     for i = 1:numel(records)
         records(i).label = 'shallow';
         records(i).detector = 'detect_shallow_breathing';
@@ -100,5 +127,16 @@ function records = normalize_records(records)
 end
 
 function value = record_uncertainty(records)
+% RECORD_UNCERTAINTY Perform the record uncertainty operation.
+%
+% Syntax:
+%   value = record_uncertainty(records)
+%
+% Inputs:
+%   records - Input value `records`.
+%
+% Outputs:
+%   value - Computed numeric value.
+
     if isempty(records), value = NaN; else, value = [records.uncertainty_sec]'; end
 end

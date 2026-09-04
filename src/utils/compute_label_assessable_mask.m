@@ -1,12 +1,21 @@
 function [assessable_mask, info] = compute_label_assessable_mask( ...
     N, label_names, label_available, diagnostics_Des, rea_diagnostics, config)
-% compute_label_assessable_mask
-% Label-aligned sample-level assessability. Only unambiguous partial gaps
-% are encoded: non-finite SpO2 samples for desaturation and invalid local
-% wavelet evidence for respiratory asynchrony. Other respiratory detectors
-% retain recording-level assessability: an estimator being undefined before
-% its first complete rolling window does not make the underlying physiology
-% unavailable.
+% COMPUTE_LABEL_ASSESSABLE_MASK Compute label assessable mask.
+%
+% Syntax:
+%   [assessable_mask, info] = compute_label_assessable_mask(N, label_names, label_available, diagnostics_Des, rea_diagnostics, config)
+%
+% Inputs:
+%   N - Number of samples.
+%   label_names - Label identifier or label metadata.
+%   label_available - Label identifier or label metadata.
+%   diagnostics_Des - Detector diagnostic data.
+%   rea_diagnostics - Detector diagnostic data.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   assessable_mask - Logical output mask.
+%   info - Computed summary or metadata structure.
 
     label_names = cellstr(string(label_names));
     label_available = logical(label_available(:)');
@@ -49,6 +58,20 @@ function [assessable_mask, info] = compute_label_assessable_mask( ...
 end
 
 function master_mask = grid_to_master_mask(grid_mask, t_grid, N, fs)
+% GRID_TO_MASTER_MASK Perform the grid to master mask operation.
+%
+% Syntax:
+%   master_mask = grid_to_master_mask(grid_mask, t_grid, N, fs)
+%
+% Inputs:
+%   grid_mask - Logical state or selection mask.
+%   t_grid - Time coordinates in seconds.
+%   N - Number of samples.
+%   fs - Sampling frequency in hertz.
+%
+% Outputs:
+%   master_mask - Logical output mask.
+
     grid_mask = logical(grid_mask(:));
     t_grid = t_grid(:);
     if numel(grid_mask) ~= numel(t_grid) || isempty(t_grid)

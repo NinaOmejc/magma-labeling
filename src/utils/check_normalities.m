@@ -1,20 +1,16 @@
 function [signals_normality, normality_stats] = check_normalities(sigs, config)
-%CHECK_NORMALITIES Check normality of multiple signal fields and optionally plot.
+% CHECK_NORMALITIES Perform the check normalities operation.
+%
+% Syntax:
+%   [signals_normality, normality_stats] = check_normalities(sigs, config)
 %
 % Inputs:
-%   sigs   - struct containing fields such as x0, peak_val, trough_val, amp, ibi_s, rr_bpm
-%   config - config struct, optional fields:
-%       config.normality.do_plot = true/false
-%       config.normality.alpha   = 0.05
-%       config.normality.method  = 'lillie', 'ad', or 'jb'
+%   sigs - Input value `sigs`.
+%   config - Pipeline configuration structure.
 %
 % Outputs:
-%   signals_normality - logical vector, true if field is approximately normal
-%   normality_stats   - struct with p-values and descriptive stats per field
-
-    % -----------------------------
-    % Defaults
-    % -----------------------------
+%   signals_normality - Computed output value `signals_normality`.
+%   normality_stats - Computed summary or metadata structure.
 
     if ~sigs.ok 
         return

@@ -1,7 +1,17 @@
 function [mask, labelNames] = events_to_time_mask(events, N, config)
-% events_to_time_mask
-% Build an N-by-L logical mask using only the configured canonical labels.
-% Unknown event types are rejected rather than silently adding columns.
+% EVENTS_TO_TIME_MASK Perform the events to time mask operation.
+%
+% Syntax:
+%   [mask, labelNames] = events_to_time_mask(events, N, config)
+%
+% Inputs:
+%   events - Event structure data.
+%   N - Number of samples.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   mask - Logical output mask.
+%   labelNames - Output text or identifier.
 
     if nargin < 3 || ~isstruct(config) || ~isfield(config, 'labels') || ...
             ~isfield(config.labels, 'short')

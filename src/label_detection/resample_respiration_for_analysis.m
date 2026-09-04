@@ -1,11 +1,20 @@
 function [lungs_analysis, diaph_analysis, fs_analysis] = resample_respiration_for_analysis( ...
     lungs_master, diaph_master, master_fs, analysis_fs)
-% resample_respiration_for_analysis
-% Create an anti-aliased, detector-local respiratory representation.
-% Master signals and sample indices are not modified.
-
-% MATLAB resample applies the required low-pass anti-aliasing filter before
-% downsampling. analysis_fs is capped at master_fs to avoid local upsampling.
+% RESAMPLE_RESPIRATION_FOR_ANALYSIS Perform the resample respiration for analysis operation.
+%
+% Syntax:
+%   [lungs_analysis, diaph_analysis, fs_analysis] = resample_respiration_for_analysis(lungs_master, diaph_master, master_fs, analysis_fs)
+%
+% Inputs:
+%   lungs_master - Input value `lungs_master`.
+%   diaph_master - Input value `diaph_master`.
+%   master_fs - Input value `master_fs`.
+%   analysis_fs - Input value `analysis_fs`.
+%
+% Outputs:
+%   lungs_analysis - Computed output value `lungs_analysis`.
+%   diaph_analysis - Computed output value `diaph_analysis`.
+%   fs_analysis - Computed output value `fs_analysis`.
 
     if ~isscalar(master_fs) || ~isfinite(master_fs) || master_fs <= 0
         error('master_fs must be a positive finite scalar.');

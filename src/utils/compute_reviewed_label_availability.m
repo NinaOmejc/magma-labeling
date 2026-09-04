@@ -2,10 +2,21 @@ function [reviewed_assessable_mask, reviewed_available, reviewed_reasons] = ...
     compute_reviewed_label_availability( ...
         label_available, label_availability_reason, ...
         label_assessable_mask, gold_review_mask)
-% compute_reviewed_label_availability
-% A reviewed label is available only when at least one sample is both
-% explicitly reviewed and scientifically assessable. Reviewed negatives
-% remain valid; a review drawn only over unavailable samples does not.
+% COMPUTE_REVIEWED_LABEL_AVAILABILITY Compute reviewed label availability.
+%
+% Syntax:
+%   [reviewed_assessable_mask, reviewed_available, reviewed_reasons] = compute_reviewed_label_availability(label_available, label_availability_reason, label_assessable_mask, gold_review_mask)
+%
+% Inputs:
+%   label_available - Label identifier or label metadata.
+%   label_availability_reason - Label identifier or label metadata.
+%   label_assessable_mask - Logical state or selection mask.
+%   gold_review_mask - Logical state or selection mask.
+%
+% Outputs:
+%   reviewed_assessable_mask - Logical output mask.
+%   reviewed_available - Logical availability result.
+%   reviewed_reasons - Output text or identifier.
 
     if ~isequal(size(label_assessable_mask), size(gold_review_mask))
         error('MAGMA:ReviewedAvailability:MaskAlignment', ...

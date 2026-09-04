@@ -1,5 +1,15 @@
 function tf = is_valid_breath_signal(breaths, require_amp)
-% True when a breaths struct is usable for detection logic.
+% IS_VALID_BREATH_SIGNAL Determine whether valid breath signal.
+%
+% Syntax:
+%   tf = is_valid_breath_signal(breaths, require_amp)
+%
+% Inputs:
+%   breaths - Respiratory-cycle or belt-evidence structure.
+%   require_amp - Input value `require_amp`.
+%
+% Outputs:
+%   tf - Computed output value `tf`.
 
     if nargin < 2
         require_amp = false;

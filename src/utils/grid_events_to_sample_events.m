@@ -1,6 +1,18 @@
 
 function ev_samp = grid_events_to_sample_events(ev_grid, fs, N)
-% Map half-open grid events to included master samples.
+% GRID_EVENTS_TO_SAMPLE_EVENTS Convert time-grid events to sample-aligned events.
+%
+% Syntax:
+%   ev_samp = grid_events_to_sample_events(ev_grid, fs, N)
+%
+% Inputs:
+%   ev_grid - Event structure array with time boundaries.
+%   fs - Sampling frequency in hertz.
+%   N - Number of samples.
+%
+% Outputs:
+%   ev_samp - Event structure array with sample-aligned boundaries.
+
     ev_samp = ev_grid;
     for i = 1:numel(ev_samp)
         s = round(ev_samp(i).start_t*fs) + 1;

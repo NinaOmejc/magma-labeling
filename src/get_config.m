@@ -1,9 +1,15 @@
 function config = get_config()
+% GET_CONFIG Create the pipeline configuration.
+%
+% Syntax:
+%   config = get_config()
+%
+% Outputs:
+%   config - Pipeline configuration structure.
 
-    %---- GENERAL SETTINGS ----
     config = struct;                                                                                   % main configuration container
     config.path_data_in = 'D:\Projects\MAGMA\raw_data';                                                % *** folder with raw input .dat files
-    config.path_results_out = 'D:\Projects\MAGMA\data_analysis\disorder_classification';               % *** root output folder
+    config.path_results_out = 'D:\Projects\MAGMA\data_analysis\statistical_labeling';               % *** root output folder
     config.subjects = 1:2;                                                                                % *** subjects to analyze
     config.remove_subjects = [3 30 91];                                                                % *** subjects to not analyze
     config.measurements = [1 2];                                                                       % *** measurements to analyze - 1: pre-rehab-pre-stress, 2: pre-rehab-post-stress, 3:post-rehab-pre-stress, 4:post-rehab-post-stress
@@ -66,7 +72,7 @@ function config = get_config()
     config.reference.pre_end_min = 6;            % M1/M3 common reference end
     config.reference.post_start_min = 19;        % M2/M4 common reference start
     config.reference.post_end_min = 22;          % M2/M4 common reference end
-    config.reference.resp_min_breaths = 10;      % reviewed finite positive breaths required per belt
+    config.reference.resp_min_breaths = 10;      % finite positive respiratory cycles required per belt
     config.reference.spo2_min_valid_samples = 2; % finite SpO2 samples required for a reference statistic
     config.reference.do_plot = true;             % save respiratory-reference QC figure
 
@@ -256,6 +262,14 @@ end
 
 
 function labels = get_labels()
+% GET_LABELS Return labels.
+%
+% Syntax:
+%   labels = get_labels()
+%
+% Outputs:
+%   labels - Output text or identifier.
+
     labels_long = {'ShallowBreathing', 'DeepBreathing', 'SlowBreathing', 'RapidBreathing', 'IrregularBreathing', 'Apnea', 'Sigh', 'PeriodicBreathingCheyneStokesLike', 'ThoracicDominantBreathing', 'RespiratoryAsynchrony', 'Desaturation'};
     labels_short = canonical_label_names();
     labels_idx = 1:11;

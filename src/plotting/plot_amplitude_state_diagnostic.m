@@ -1,6 +1,15 @@
 function plot_amplitude_state_diagnostic(resp_features, events_lungs, events_diaph, config, opts)
-% plot_amplitude_state_diagnostic
-% Show raw and session-normalized respiratory-cycle excursions per belt.
+% PLOT_AMPLITUDE_STATE_DIAGNOSTIC Plot amplitude state diagnostic.
+%
+% Syntax:
+%   plot_amplitude_state_diagnostic(resp_features, events_lungs, events_diaph, config, opts)
+%
+% Inputs:
+%   resp_features - Respiratory-feature structure.
+%   events_lungs - Event structure data.
+%   events_diaph - Event structure data.
+%   config - Pipeline configuration structure.
+%   opts - Input value `opts`.
 
     lungs = resp_features.resp.lungs;
     diaph = resp_features.resp.diaph;
@@ -44,6 +53,22 @@ end
 
 function plot_belt_amplitude(ax, belt, opts, normalized, belt_name, t_grid, ...
     candidate_mask, localized_mask, final_mask)
+% PLOT_BELT_AMPLITUDE Plot belt amplitude.
+%
+% Syntax:
+%   plot_belt_amplitude(ax, belt, opts, normalized, belt_name, t_grid, candidate_mask, localized_mask, final_mask)
+%
+% Inputs:
+%   ax - Target axes handle.
+%   belt - Respiratory-cycle or belt-evidence structure.
+%   opts - Input value `opts`.
+%   normalized - Input value `normalized`.
+%   belt_name - Input value `belt_name`.
+%   t_grid - Time coordinates in seconds.
+%   candidate_mask - Logical state or selection mask.
+%   localized_mask - Logical state or selection mask.
+%   final_mask - Logical state or selection mask.
+
     hold(ax, 'on');
     if normalized
         values = belt.amp_ratio_session;
@@ -63,7 +88,7 @@ function plot_belt_amplitude(ax, belt, opts, normalized, belt_name, t_grid, ...
     n = min(numel(belt.peak_t), numel(values));
     if belt.session_amplitude_available && n > 0 && any(isfinite(values(1:n)))
         scatter(ax, belt.peak_t(1:n), values(1:n), 10, 'k', 'filled', ...
-            'DisplayName', 'Reviewed breaths');
+            'DisplayName', 'Respiratory cycles');
         add_threshold_line(ax, lower, 'Lower threshold');
         add_threshold_line(ax, upper, 'Upper threshold');
     else
@@ -82,6 +107,16 @@ function plot_belt_amplitude(ax, belt, opts, normalized, belt_name, t_grid, ...
 end
 
 function add_threshold_line(ax, value, label_text)
+% ADD_THRESHOLD_LINE Add threshold line.
+%
+% Syntax:
+%   add_threshold_line(ax, value, label_text)
+%
+% Inputs:
+%   ax - Target axes handle.
+%   value - Input value `value`.
+%   label_text - Label identifier or label metadata.
+
     if isscalar(value) && isfinite(value)
         yline(ax, value, 'r--', label_text, ...
             'LabelHorizontalAlignment', 'left', 'HandleVisibility', 'off');
@@ -89,6 +124,19 @@ function add_threshold_line(ax, value, label_text)
 end
 
 function value = get_option(opts, name, default_value)
+% GET_OPTION Return option.
+%
+% Syntax:
+%   value = get_option(opts, name, default_value)
+%
+% Inputs:
+%   opts - Input value `opts`.
+%   name - Input value `name`.
+%   default_value - Input value `default_value`.
+%
+% Outputs:
+%   value - Computed numeric value.
+
     value = default_value;
     if isfield(opts, name) && ~isempty(opts.(name))
         value = opts.(name);

@@ -1,8 +1,20 @@
 function [final_event_sets, review_round] = create_manual_review_round( ...
     source_event_sets, edited_event_sets, review_coverage_mask, config, metadata)
-% create_manual_review_round
-% Compose one manual-review round without changing its source annotations.
-% Only values inside this round's coverage replace the source values.
+% CREATE_MANUAL_REVIEW_ROUND Create manual review round.
+%
+% Syntax:
+%   [final_event_sets, review_round] = create_manual_review_round(source_event_sets, edited_event_sets, review_coverage_mask, config, metadata)
+%
+% Inputs:
+%   source_event_sets - Input value `source_event_sets`.
+%   edited_event_sets - Input value `edited_event_sets`.
+%   review_coverage_mask - Logical state or selection mask.
+%   config - Pipeline configuration structure.
+%   metadata - Input value `metadata`.
+%
+% Outputs:
+%   final_event_sets - Computed output value `final_event_sets`.
+%   review_round - Computed output value `review_round`.
 
     defs = manual_label_definitions();
     label_names = {config.labels.short};
@@ -71,6 +83,20 @@ function [final_event_sets, review_round] = create_manual_review_round( ...
 end
 
 function mask = event_sets_to_mask(event_sets, defs, N, config)
+% EVENT_SETS_TO_MASK Perform the event sets to mask operation.
+%
+% Syntax:
+%   mask = event_sets_to_mask(event_sets, defs, N, config)
+%
+% Inputs:
+%   event_sets - Input value `event_sets`.
+%   defs - Input value `defs`.
+%   N - Number of samples.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   mask - Logical output mask.
+
     parts = cell(1, numel(defs));
     for i = 1:numel(defs)
         parts{i} = normalize_event_types_and_meta(empty_events(), config.fs);
@@ -88,6 +114,18 @@ function mask = event_sets_to_mask(event_sets, defs, N, config)
 end
 
 function event_sets = events_to_event_sets(events, defs)
+% EVENTS_TO_EVENT_SETS Perform the events to event sets operation.
+%
+% Syntax:
+%   event_sets = events_to_event_sets(events, defs)
+%
+% Inputs:
+%   events - Event structure data.
+%   defs - Input value `defs`.
+%
+% Outputs:
+%   event_sets - Computed output value `event_sets`.
+
     event_sets = struct();
     for i = 1:numel(defs)
         if isempty(events)
@@ -100,6 +138,17 @@ function event_sets = events_to_event_sets(events, defs)
 end
 
 function metadata = normalize_metadata(metadata)
+% NORMALIZE_METADATA Normalize metadata.
+%
+% Syntax:
+%   metadata = normalize_metadata(metadata)
+%
+% Inputs:
+%   metadata - Input value `metadata`.
+%
+% Outputs:
+%   metadata - Computed output value `metadata`.
+
     if nargin < 1 || isempty(metadata), metadata = struct(); end
     metadata = with_default(metadata, 'round_id', 1);
     metadata = with_default(metadata, 'timestamp', current_timestamp());
@@ -123,10 +172,31 @@ function metadata = normalize_metadata(metadata)
 end
 
 function value = current_timestamp()
+% CURRENT_TIMESTAMP Perform the current timestamp operation.
+%
+% Syntax:
+%   value = current_timestamp()
+%
+% Outputs:
+%   value - Computed numeric value.
+
     value = char(datetime('now', 'Format', 'yyyy-MM-dd HH:mm:ss'));
 end
 
 function source = with_default(source, field, value)
+% WITH_DEFAULT Perform the with default operation.
+%
+% Syntax:
+%   source = with_default(source, field, value)
+%
+% Inputs:
+%   source - Input value `source`.
+%   field - Input value `field`.
+%   value - Input value `value`.
+%
+% Outputs:
+%   source - Computed output value `source`.
+
     if ~isfield(source, field) || isempty(source.(field))
         source.(field) = value;
     end

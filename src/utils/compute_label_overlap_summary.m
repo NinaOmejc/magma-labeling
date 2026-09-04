@@ -1,8 +1,19 @@
 function summary = compute_label_overlap_summary( ...
     mask, label_names, label_available, fs, assessable_mask)
-% compute_label_overlap_summary
-% Prespecified directional overlaps between elementary labels. This helper
-% creates derived recording statistics, never new labels or mask columns.
+% COMPUTE_LABEL_OVERLAP_SUMMARY Compute label overlap summary.
+%
+% Syntax:
+%   summary = compute_label_overlap_summary(mask, label_names, label_available, fs, assessable_mask)
+%
+% Inputs:
+%   mask - Logical state or selection mask.
+%   label_names - Label identifier or label metadata.
+%   label_available - Label identifier or label metadata.
+%   fs - Sampling frequency in hertz.
+%   assessable_mask - Logical state or selection mask.
+%
+% Outputs:
+%   summary - Computed summary or metadata structure.
 
     if ~(isnumeric(mask) || islogical(mask)) || ~ismatrix(mask) || ~isreal(mask)
         error('MAGMA:Overlap:InvalidMaskType', ...
@@ -77,6 +88,18 @@ function summary = compute_label_overlap_summary( ...
     summary.thoracic_dominance_asynchrony = pair_summary('thoracic', 'async');
 
     function out = pair_summary(a_name, b_name)
+    % PAIR_SUMMARY Perform the pair summary operation.
+    %
+    % Syntax:
+    %   out = pair_summary(a_name, b_name)
+    %
+    % Inputs:
+    %   a_name - Input value `a_name`.
+    %   b_name - Input value `b_name`.
+    %
+    % Outputs:
+    %   out - Computed output value `out`.
+
         ia = find(strcmp(label_names, a_name), 1);
         ib = find(strcmp(label_names, b_name), 1);
         out = struct('label_a', a_name, 'label_b', b_name, ...
@@ -102,6 +125,18 @@ function summary = compute_label_overlap_summary( ...
 end
 
 function value = directional_fraction(overlap, reference)
+% DIRECTIONAL_FRACTION Perform the directional fraction operation.
+%
+% Syntax:
+%   value = directional_fraction(overlap, reference)
+%
+% Inputs:
+%   overlap - Input value `overlap`.
+%   reference - Session-reference metadata.
+%
+% Outputs:
+%   value - Computed numeric value.
+
     denominator = nnz(reference);
     if denominator == 0
         value = 0;

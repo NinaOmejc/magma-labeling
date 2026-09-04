@@ -1,8 +1,15 @@
 function ev = expand_events_for_delayed_overlap(ev, delay_sec)
-% expand_events_for_delayed_overlap
-% Move event starts earlier so an event ending after the source event can be
-% associated as a delayed response without also matching events that ended
-% before the source event.
+% EXPAND_EVENTS_FOR_DELAYED_OVERLAP Expand events for delayed overlap.
+%
+% Syntax:
+%   ev = expand_events_for_delayed_overlap(ev, delay_sec)
+%
+% Inputs:
+%   ev - Event structure data.
+%   delay_sec - Duration or window length in seconds.
+%
+% Outputs:
+%   ev - Event structure array.
 
     if isempty(ev) || delay_sec <= 0
         return;

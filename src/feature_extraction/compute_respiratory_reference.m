@@ -1,9 +1,16 @@
 function resp_ref = compute_respiratory_reference(resp_cycles, session_reference, config)
-% compute_respiratory_reference
-% Compute one respiratory-excursion reference per belt from detected cycles
-% in the common session physiological reference interval. Whole-record and
-% stability diagnostics remain descriptive. Warnings retain the session
-% value and never trigger automatic correction.
+% COMPUTE_RESPIRATORY_REFERENCE Compute respiratory reference.
+%
+% Syntax:
+%   resp_ref = compute_respiratory_reference(resp_cycles, session_reference, config)
+%
+% Inputs:
+%   resp_cycles - Respiratory-cycle structure.
+%   session_reference - Session-reference metadata.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   resp_ref - Respiratory-reference structure.
 
     cfg = respiratory_reference_config(config);
     validate_session_reference(session_reference);
@@ -23,6 +30,19 @@ function resp_ref = compute_respiratory_reference(resp_cycles, session_reference
 end
 
 function belt = analyze_belt(breaths, cfg, session_reference)
+% ANALYZE_BELT Perform the analyze belt operation.
+%
+% Syntax:
+%   belt = analyze_belt(breaths, cfg, session_reference)
+%
+% Inputs:
+%   breaths - Respiratory-cycle or belt-evidence structure.
+%   cfg - Pipeline configuration structure.
+%   session_reference - Session-reference metadata.
+%
+% Outputs:
+%   belt - Updated respiratory-cycle or belt structure.
+
     belt = empty_belt_reference();
     if isempty(breaths) || ~isstruct(breaths) || ...
             ~isfield(breaths, 'peak_t') || ~isfield(breaths, 'amp')
@@ -172,6 +192,18 @@ function belt = analyze_belt(breaths, cfg, session_reference)
 end
 
 function quality = warning_quality(current_quality, warning_value)
+% WARNING_QUALITY Perform the warning quality operation.
+%
+% Syntax:
+%   quality = warning_quality(current_quality, warning_value)
+%
+% Inputs:
+%   current_quality - Input value `current_quality`.
+%   warning_value - Input value `warning_value`.
+%
+% Outputs:
+%   quality - Computed output value `quality`.
+
     quality = current_quality;
     if strcmp(current_quality, 'good')
         quality = warning_value;
@@ -179,6 +211,18 @@ function quality = warning_quality(current_quality, warning_value)
 end
 
 function candidate = best_single_change_candidate(z, min_segment_breaths)
+% BEST_SINGLE_CHANGE_CANDIDATE Perform the best single change candidate operation.
+%
+% Syntax:
+%   candidate = best_single_change_candidate(z, min_segment_breaths)
+%
+% Inputs:
+%   z - Input value `z`.
+%   min_segment_breaths - Input value `min_segment_breaths`.
+%
+% Outputs:
+%   candidate - Computed output value `candidate`.
+
     candidate = struct( ...
         'available', false, ...
         'split_idx', NaN, ...
@@ -249,6 +293,17 @@ function candidate = best_single_change_candidate(z, min_segment_breaths)
 end
 
 function d = segment_edge_change(z)
+% SEGMENT_EDGE_CHANGE Perform the segment edge change operation.
+%
+% Syntax:
+%   d = segment_edge_change(z)
+%
+% Inputs:
+%   z - Input value `z`.
+%
+% Outputs:
+%   d - Computed output value `d`.
+
     edge_n = max(1, floor(numel(z) / 3));
     first_level = median(z(1:edge_n), 'omitnan');
     last_level = median(z(end-edge_n+1:end), 'omitnan');
@@ -256,6 +311,17 @@ function d = segment_edge_change(z)
 end
 
 function value = symmetric_fractional_change(ratio)
+% SYMMETRIC_FRACTIONAL_CHANGE Perform the symmetric fractional change operation.
+%
+% Syntax:
+%   value = symmetric_fractional_change(ratio)
+%
+% Inputs:
+%   ratio - Input value `ratio`.
+%
+% Outputs:
+%   value - Computed numeric value.
+
     if ~isfinite(ratio) || ratio <= 0
         value = NaN;
     else
@@ -264,6 +330,18 @@ function value = symmetric_fractional_change(ratio)
 end
 
 function resp_ref = add_belt_agreement(resp_ref, cfg)
+% ADD_BELT_AGREEMENT Add belt agreement.
+%
+% Syntax:
+%   resp_ref = add_belt_agreement(resp_ref, cfg)
+%
+% Inputs:
+%   resp_ref - Respiratory-reference structure.
+%   cfg - Pipeline configuration structure.
+%
+% Outputs:
+%   resp_ref - Respiratory-reference structure.
+
     resp_ref.change_pattern = 'insufficient_data';
     resp_ref.change_time_difference_sec = NaN;
     resp_ref.change_ratio_log_difference = NaN;
@@ -312,11 +390,34 @@ function resp_ref = add_belt_agreement(resp_ref, cfg)
 end
 
 function tf = belt_is_analyzable(belt)
+% BELT_IS_ANALYZABLE Perform the belt is analyzable operation.
+%
+% Syntax:
+%   tf = belt_is_analyzable(belt)
+%
+% Inputs:
+%   belt - Respiratory-cycle or belt-evidence structure.
+%
+% Outputs:
+%   tf - Computed output value `tf`.
+
     tf = belt.available && ~strcmp(belt.quality, 'insufficient_data') && ...
         ~strcmp(belt.quality, 'insufficient_edge_breaths');
 end
 
 function breaths = get_belt_features(resp_cycles, name)
+% GET_BELT_FEATURES Return belt features.
+%
+% Syntax:
+%   breaths = get_belt_features(resp_cycles, name)
+%
+% Inputs:
+%   resp_cycles - Respiratory-cycle structure.
+%   name - Input value `name`.
+%
+% Outputs:
+%   breaths - Updated respiratory-cycle or belt structure.
+
     breaths = [];
     if isstruct(resp_cycles) && isfield(resp_cycles, name)
         breaths = resp_cycles.(name);
@@ -324,6 +425,14 @@ function breaths = get_belt_features(resp_cycles, name)
 end
 
 function belt = empty_belt_reference()
+% EMPTY_BELT_REFERENCE Create an empty belt reference value.
+%
+% Syntax:
+%   belt = empty_belt_reference()
+%
+% Outputs:
+%   belt - Updated respiratory-cycle or belt structure.
+
     belt = struct( ...
         'available', false, ...
         'session', struct( ...
@@ -364,6 +473,17 @@ function belt = empty_belt_reference()
 end
 
 function cfg = respiratory_reference_config(config)
+% RESPIRATORY_REFERENCE_CONFIG Perform the respiratory reference config operation.
+%
+% Syntax:
+%   cfg = respiratory_reference_config(config)
+%
+% Inputs:
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   cfg - Computed output value `cfg`.
+
     cfg = struct( ...
         'min_breaths', 10, ...
         'edge_window_sec', 300, ...
@@ -406,6 +526,14 @@ function cfg = respiratory_reference_config(config)
 end
 
 function validate_session_reference(reference)
+% VALIDATE_SESSION_REFERENCE Validate session reference.
+%
+% Syntax:
+%   validate_session_reference(reference)
+%
+% Inputs:
+%   reference - Session-reference metadata.
+
     required = {'reference_start_idx', 'reference_end_idx', ...
         'reference_start_t', 'reference_end_t', 'available', 'complete', ...
         'reference_schema_version'};

@@ -1,185 +1,21 @@
-%Version 1.01 stable 
-%**************************************************************************
-%*************************** Wavelet Transform ****************************
-%**************************************************************************
-%-------------------------------Copyright----------------------------------
-%
-% Author: Dmytro Iatsenko
-% Information about these codes (e.g. links to the Video Instructions),
-% as well as other MatLab programs and many more can be found at
-% http://www.physics.lancs.ac.uk/research/nbmphysics/diats/tfr
-% 
-% Related articles:
-% [1] D. Iatsenko, A. Stefanovska and P.V.E. McClintock,
-% "Linear and synchrosqueezed time-frequency representations revisited.
-%  Part I: Overview, standards of use, related issues and algorithms."
-% {preprint:arXiv:1310.7215}
-% [2] D. Iatsenko, A. Stefanovska and P.V.E. McClintock,
-% "Linear and synchrosqueezed time-frequency representations revisited.
-%  Part II: Resolution, reconstruction and concentration."
-% {preprint:arXiv:1310.7274}
-%
-%------------------------------Documentation-------------------------------
-%
-% [WT,freq,Optional:wopt]=wt(sig,fs,Optional:'PropertyName',PropertyValue)
-% - calculate wavelet transform [WT] of a signal [sig] sampled at [fs] Hz.
-% 
-% INPUT:
-% sig - signal for which to calculate WT
-% fs  - sampling frequency of the signal
-% 
-% Properties: ({{...}} denotes default)
-% ################################ BASIC ##################################
-% 'fmin':value (default is the minimal frequency for which at least one WT
-%               coefficient is determined up to a specified relative
-%               accuracy [RelTol] with respect to boundary errors)
-%            minimal frequency for which to calculate WT
-% 'fmax':value (default = fs/2, i.e. the Nyquist frequency)
-%            maximal frequency for which to calculate WT
-% 'nv':{{'auto'}}|'auto-NB'|value
-%            "number of voices", which determines frequency discretization,
-%            so that the next frequency equals previous one multiplied on
-%            [2^(1/nv)]; when set to 'auto-NB' (e.g. 'auto-20') determines
-%            [nv] automatically as described in [1], so that 1/nv equals
-%            1/NB of the logarithmic frequency region containing 50% of the
-%            wavelet function; the default 'auto' is equivalent to 'auto-10'
-% 'f0':value (default = 1)
-%            wavelet resolution parameter, which determines the tradeoff
-%            between the time and frequency resolutions: the higher it is,
-%            the closer in frequency components can be resolved in WT,
-%            but the slower time-variations, e.g. amplitude/frequency
-%            modulation, can be reliably represented; for the way it is
-%            introduced for each wavelet see Appendix E in [1], while if the
-%            wavelet is user-defined in terms of its function in frequency
-%            and/or time (see 'Wavelet' property), then 'f0' obviously does
-%            not influence anything.
-% 'Padding':{{'predictive'}}|0|'symmetric'|'none'|'periodic'|value|{padleft,padright}
-%            what padding to use when computing transform (for a list of
-%            all paddings and their effects see [1]); when set to some
-%            numeric value, pads with that values; most useful are the
-%            zero-padding, for which boundary errors are well-determined,
-%            and 'predictive' padding (default), for which they are
-%            most reduced, while other choices are not very useful;
-%            alternatively, one can specify it as {padleft,padright}, where
-%            [padleft] and [padright] can be any of those (except 'none'),
-%            e.g. {0,'symmetric'} will pad signal to the left with zeros,
-%            and to the right by symmetric reflection; additionally,
-%            [padleft] and [padright] can be vectors to pad with (if there
-%            needed more values than padleft/padright lengths,
-%            pads additionally with zeros), e.g. if you want to consider
-%            only some part of the signal, from indexes n1 to n2, but do
-%            not introduce additional boundary effects to it, then use:
-%            wt(signal(n1:n2),fs,'Padding',{signal(1:n1-1),signal(n2+1:end)});
-%            the same applies if you can predict signal out of the time-limits
-% 'Plot':  {{'off'}} - do not plot anything
-%          'amp'   - plots WT amplitude (i.e. its absolute value) together
-%                    with line denoting the cone of influence
-%          'amp+'  - additionally shows time-averaged WT amplitude
-%          'amp++' - additionally shows 95% range of WT amplitude
-%          'pow','pow+','pow++' - the same but for the WT power (i.e. its 
-%                                 squared modulus)
-%          'pow+tm' - pow plus time plus time-averaged pow
-%           IMPORTANT: to avoid plotting huge data (in which case it might
-%           be very slow to render and modify the figure, and MatLab can
-%           even crash), the plotted WT is resampled to have no more than
-%           few data points displayed per pixel (for the current screen
-%           resolution). Unless 'Display' is 'off', it will always notify if
-%           the WT size exceeds the number of pixels on the plot and the
-%           resamling is therefore performed. Note, that in this case considerable
-%           zooming in of the parts of displayed plots might not show the full
-%           structure of the original WT. If one wants to investigate the
-%           resultant plot in fine details (and not only see how it looks),
-%           then the original, full WT might be displayed without resampling
-%           by adding '-wr' to the end of this option, e.g. 'amp-wr' or 'pow++-wr'.
-% 'Display':{{'on'}} - displays all relevant information about progress etc.
-%            'on-'   - more compact display
-%           'notify' - displays only information if something went wrong
-%            'off'   - does not display anything
-% 'CutEdges':{{'off'}}|'on'
-%           determine should WT coefficients be set to NaNs out of the cone
-%           of influence (see [1]); set it to 'on' if you wish to analyze
-%           only WT within the cone of influence (which is recommended if
-%           you want to estimate e.g. only the time-averaged quantities).
-% ############################## ADVANCED #################################
-% 'Wavelet':{{'Lognorm'}}|'Morlet'|'Bump'|'Morse-a'|{@(xi)fwt(xi),[xi1,xi2],@(t)twf(t),[t1,t2]}
-%            wavelet used in WT calculation, for a list of all supported
-%            names and their properties see Appendix E in [1]. However, you
-%            can use any wavelet by specifying its frequency domain form,
-%            i.e. wavelet FT (defined by function [fwt], the argument of
-%            which is cyclic frequency) and/or time-domain form [twf] (the
-%            argument is time) together with corresponding full supports;
-%            only [fwt] or [twf] is enough, so if one of them is not known
-%            just put empty field [] for it and its support (but it is
-%            better to specify both [fwt] and [twf] when available). Thus,
-%            the Lognormal wavelet with [f0=1] can be alternatively
-%            defined as {@(xi)exp(-(6^2/2)*(log(xi)).^2),[0,Inf],[],[]}.
-% 'Preprocess':{{'on'}}|'off'
-%            perform or not an initial signal preprocessing, which consists
-%            of subtracting 3rd order polynomial fit and then bandpassing
-%            the signal in the band of interest [fmin,fmax], for which WT
-%            is calculated
-% 'RelTol':value (default = 0.01) (in [1] commonly referred as \epsilon)
-%            relative tolerance (e.g. 0.01 means 1%), which specifies cone
-%            of influence for WT (i.e. range of WT coefficients which are
-%            determined up to this accuracy in respect of boundary errors);
-%            determines also the minimal number of values to pad signal
-%            with, so that relative contribution of effects of implicit
-%            periodic signal continuation due to convolution in frequency
-%            domain is smaller [RelTol], see [1] for details.
-%
-%
-% OUTPUT:
-% WT   - wavelet transform of the signal [sig],
-%        with rows corresponding to frequencies and columns - to time;
-%        represents FNxL matrix, where FN is the number of frequencies
-%        and L is the length of the signal in samples
-% freq - frequencies corresponding to rows of WT
-% mx - average along xof the WT ( {{pow}} or amp according to what is called in 'Plot')
-% wopt - structure with all parameters of the wavelet and simulation
-%
-%-------------------------------Examples-----------------------------------
-%
-% [WT,freq]=wt(sig,100,'fmin',0.1,'fmax',10,'f0',2)
-% given a signal [sig] sampled at 100 Hz, returns its WT [WT] based on a
-% Lognormal wavelet (default) with [f0=2], calculated for frequencies from
-% 0.1 to 10 Hz, returned in [freq].
-%
-%-----------------------Additional possibilities---------------------------
-%
-% One can also pass the structure with the properties as a third input
-% argument instead of specifying them by pairs, e.g.
-% opts=struct; opts.f0=2; opts.fmax=12; opts.Padding='predictive';
-% [WT,freq]=wt(sig,fs,opts);
-% You can also add further parameters in the usual way, e.g.
-% [WT,freq]=wt(sig,fs,opts,'Display','off');
-% If you add a parameter contained in [opts], it will be ovewritten, e.g.
-% [WT,freq]=wt(sig,fs,opts,'fmax',10);
-% will change 'fmax' property from 12 specified in [opts.fmax] to 10.
-%
-% When one needs to calculate WT using the same wavelet and simulation
-% parameters, but for different signals, it is a good idea to do it like
-% [WT1,freq1,wopt]=wt(sig1,fs1,...(parameters));
-% [WT2,freq2]=wt(sig2,fs2,wopt); [WT3,freq3]=wt(sig3,fs3,wopt); ...
-% This will also avoid recalculating wavelet parameters each time, thus
-% slightly speeding up the computations.
-%
-% The same can be done if you calculated WT of a signal but want to obtain
-% it using some different parameter (e.g. Padding), for example
-% [WT1,freq1,wopt]=wt(sig,fs,'Padding',0,...(other parameters));
-% [WT2,freq2]=wt(sig,fs,wopt,'Padding','predictive');
-% Unless you overwrite 'f0', 'Wavelet' or 'RelTol' properties, the wavelet
-% parameters will not be recalculated for the second time.
-%
-%------------------------------Changelog-----------------------------------
-%
-% v1.01:
-% - improved speed of predictive padding
-% - some minor changes (Optimization/Display)
-%
-%--------------------------------------------------------------------------
-
-
+% Wavelet-transform implementation by Dmytro Iatsenko.
+% Related publications: arXiv:1310.7215 and arXiv:1310.7274.
 function [WT,freq,mx,varargout] = wtI(signal,fs,varargin)
+% WTI Compute a wavelet transform for a sampled signal.
+%
+% Syntax:
+%   [WT, freq, mx, varargout] = wtI(signal, fs, varargin)
+%
+% Inputs:
+%   signal - Input value `signal`.
+%   fs - Sampling frequency in hertz.
+%   varargin - Optional positional or name-value inputs.
+%
+% Outputs:
+%   WT - Computed output value `WT`.
+%   freq - Computed numeric value.
+%   mx - Computed output value `mx`.
+%   varargout - Optional function outputs.
 
 L=length(signal); signal=signal(:);
 p=1; %WT normalization
@@ -698,6 +534,14 @@ end
     % and number of voices [nv] (if 'auto') for specified relative accuracy [racc] (=epsilon);
     % assigns all these values into the wavelet parameters structure [wp].
     function parcalc(racc)
+    % PARCALC Perform the parcalc operation.
+    %
+    % Syntax:
+    %   parcalc(racc)
+    %
+    % Inputs:
+    %   racc - Input value `racc`.
+
         racc=min(racc,1-10^(-6)); %current \epsilon
         ctol=max([racc/1000,10^(-12)]); %parameter of numerical accuracy
         MIC=max([10000,10*L]); %maximum interval count for one-time calculations
@@ -735,7 +579,7 @@ end
             end
             vfun=@(u)conj(fwt(exp(u))); xp=log(wp.ompeak); lim1=log(max([wp.xi1,0])); lim2=log(wp.xi2);
             
-            %Test admissibility %¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬
+            %Test admissibility %ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
             wstate=warning('off','all');
             if wp.xi1<=0, AC=fwt(0); else AC=0; end
             if isnan(AC)
@@ -744,7 +588,7 @@ end
                 while isnan(fwt(cx0)), cx0=cx0*2; end
                 AC=fwt(cx0);
             end
-            if AC>10^(-12) && ~strcmpi(DispMode,'off') %¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬
+            if AC>10^(-12) && ~strcmpi(DispMode,'off') %ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
                 fprintf(2,'--------------------------------------------- Warning! ---------------------------------------------\n');
                 fprintf(2,'Wavelet does not seem to be admissible (its Fourier transform does not vanish at zero frequency)!\n');
                 fprintf(2,'Parameters estimated from its frequency domain form, e.g. integration constant Cpsi (which is \n');
@@ -756,10 +600,10 @@ end
             warning(wstate);
             
             [QQ,wflag,xx,ss]=sqeps(vfun,xp,[lim1,lim2],racc,MIC,...
-                [log((wp.ompeak/fmax)*fs/L/8),log(8*(wp.ompeak/(fs/L))*fs)]); %¬¬¬¬¬¬¬¬
+                [log((wp.ompeak/fmax)*fs/L/8),log(8*(wp.ompeak/(fs/L))*fs)]); %ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
             wp.xi1e=exp(ss(1,1)); wp.xi2e=exp(ss(1,2)); wp.xi1h=exp(ss(2,1)); wp.xi2h=exp(ss(2,2));
-            if isempty(wp.C), wp.C=(QQ(1,1)+QQ(1,2))/2; end %¬¬¬¬¬¬¬¬¬¬¬¬¬¬
-            if isempty(wp.D) %¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬
+            if isempty(wp.C), wp.C=(QQ(1,1)+QQ(1,2))/2; end %ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+            if isempty(wp.D) %ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
                 wstate=warning('off','all');
                 [D1,errD1]=quadgk(@(u)conj(fwt(1./u)),1/wp.ompeak,exp(-xx(1,1)),'MaxIntervalCount',2*MIC,'AbsTol',0,'RelTol',10^(-12));
                 [D2,errD2]=quadgk(@(u)-conj(fwt(1./u)),1/wp.ompeak,exp(-xx(1,2)),'MaxIntervalCount',2*MIC,'AbsTol',0,'RelTol',10^(-12));
@@ -767,8 +611,8 @@ end
                 [D4,errD4]=quadgk(@(u)-conj(fwt(1./u)),exp(-xx(1,2)),exp(-xx(4,2)),'MaxIntervalCount',2*MIC,'AbsTol',0,'RelTol',10^(-12));
                 if abs((errD1+errD2+errD3+errD4)/(D1+D2+D3+D4))<10^(-4), wp.D=(wp.ompeak/2)*(D1+D2+D3+D4); else wp.D=Inf; end
                 warning(wstate);
-            end %¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬
-            if wflag==1 && ~strcmpi(DispMode,'off') %¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬
+            end %ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+            if wflag==1 && ~strcmpi(DispMode,'off') %ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
                 fprintf(2,'--------------------------------------------- Warning! ---------------------------------------------\n');
                 fprintf('The frequency-domain wavelet function is not well-behaved (e.g. decays very slowly as frequency tends to zero\n');
                 fprintf('or infinity). The integration might be not accurate (and therefore e.g. the calculated number-of-voices ''nv'',\n');
@@ -778,7 +622,7 @@ end
             
             if isempty(twf) %if time domain form is not known
                 [PP,wflag,xx,ss]=sqeps(@(x)abs(fwt(x)).^2,wp.ompeak,[max([wp.xi1,0]),wp.xi2],racc,MIC,...
-                    [0,8*(wp.ompeak/(fs/L))*fs]); %¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬
+                    [0,8*(wp.ompeak/(fs/L))*fs]); %ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
                 Etot=sum(PP(1,:))/2/pi;
                 
                 CL=2^nextpow2(MIC/8); CT=CL/(2*abs(ss(1,2)-ss(1,1)));
@@ -811,7 +655,7 @@ end
                 Iest2=(1/CT)*sum(abs(Efwt(3:end)-2*Efwt(2:end-1)+Efwt(1:end-2)))/24; %error of integration in frequency
                 Eest=(CT/CL)*sum(Etwf);
                 
-                if (abs(Etot-Eest)+Iest1+Iest2)/Etot>0.01 && ~strcmpi(DispMode,'off') %¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬
+                if (abs(Etot-Eest)+Iest1+Iest2)/Etot>0.01 && ~strcmpi(DispMode,'off') %ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
                     fprintf(2,'--------------------------------------------- Warning! ---------------------------------------------\n');
                     fprintf(['Cannot accurately invert the specified frequency-domain form of the wavelet function to find its\n',...
                         'time domain form and corresponding characteristics (e.g. cone-of-influence borders).\n',...
@@ -821,7 +665,7 @@ end
                 
                 Ctwf=Ctwf(1:2*CNq-3); ct=(CT/CL)*(-(CNq-2):CNq-2)'; %make symmetric
                 wp.twf={Ctwf,ct};
-                Ctwf=Ctwf.*exp(-1i*wp.ompeak*ct); %demodulate (wavelet only) %¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬
+                Ctwf=Ctwf.*exp(-1i*wp.ompeak*ct); %demodulate (wavelet only) %ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
                 
                 %Estimate general parameters
                 if isempty(wp.tpeak) %peak time
@@ -907,13 +751,13 @@ end
                 if isnan(wp.twfmax), wp.twfmax=twf(wp.tpeak+10^(-14)); end
             end
             
-            %Test admissibility %¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬
+            %Test admissibility %ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
             wstate=warning('off','all');
             AC=quadgk(@(u)-twf(u),wp.tpeak,xx(1,1),'MaxIntervalCount',MIC,'AbsTol',10^(-16),'RelTol',0)+...
                 quadgk(@(u)-twf(u),xx(1,1),xx(4,1),'MaxIntervalCount',MIC,'AbsTol',10^(-16),'RelTol',0)+...
                 quadgk(@(u)twf(u),wp.tpeak,xx(1,2),'MaxIntervalCount',MIC,'AbsTol',10^(-16),'RelTol',0)+...
                 quadgk(@(u)twf(u),xx(1,2),xx(4,2),'MaxIntervalCount',MIC,'AbsTol',10^(-16),'RelTol',0);
-            if AC>10^(-8) && ~strcmpi(DispMode,'off') %¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬
+            if AC>10^(-8) && ~strcmpi(DispMode,'off') %ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
                 fprintf(2,'--------------------------------------------- Warning! ---------------------------------------------\n');
                 fprintf(2,'Wavelet does not seem to be admissible (its Fourier transform does not vanish at zero frequency)!\n');
                 fprintf(2,'Parameters estimated from its frequency domain form, e.g. integration constant Cpsi (which is \n');
@@ -936,7 +780,7 @@ end
                     [~,imax]=max(abs(Bfwt(ix))); compeak=bxi(ix(imax));
                 end
                 [PP,wflag,xx,ss]=sqeps(@(x)abs(twf(x)).^2,wp.tpeak,[wp.t1,wp.t2],racc,MIC,...
-                    [-8*(2*pi*fmax/compeak)*L/fs,8*(2*pi*fmax/compeak)*L/fs]); %¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬
+                    [-8*(2*pi*fmax/compeak)*L/fs,8*(2*pi*fmax/compeak)*L/fs]); %ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
                 Etot=sum(PP(1,:));
                 
                 CL=2^nextpow2(MIC/8); CT=2*abs(ss(1,2)-ss(1,1));
@@ -969,7 +813,7 @@ end
                 Iest2=(1/CT)*sum(abs(Efwt(3:end)-2*Efwt(2:end-1)+Efwt(1:end-2)))/24; %error of integration in frequency
                 Eest=(1/CT)*sum(Efwt);
                 
-                if (abs(Etot-Eest)+Iest1+Iest2)/Etot>0.01 && ~strcmpi(DispMode,'off') %¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬
+                if (abs(Etot-Eest)+Iest1+Iest2)/Etot>0.01 && ~strcmpi(DispMode,'off') %ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
                     fprintf(2,'--------------------------------------------- Warning! ---------------------------------------------\n');
                     fprintf(['Cannot accurately invert the specified time-domain form of the wavelet function to find its\n',...
                         'frequency-domain form and corresponding characteristics (e.g. optimal number-of-voices ''nv'').\n',...
@@ -1021,13 +865,13 @@ end
                     [~,ipeak]=min(abs(cxi-wp.ompeak));
                     wp.fwtmax=interp1(cxi(ipeak-1:ipeak+1),abs(Cfwt(ipeak-1:ipeak+1)),wp.ompeak,'spline');
                 end
-                if isempty(wp.C), wp.C=(1/2)*sum(conj(Zfwt).*dbxi); end %¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬
-                if isempty(wp.D) %¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬
+                if isempty(wp.C), wp.C=(1/2)*sum(conj(Zfwt).*dbxi); end %ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+                if isempty(wp.D) %ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
                     wp.D=Inf;
                     if abs(Zfwt(2)/Zfwt(1))>exp(zxi(2)-zxi(1)) %determine if Dpsi is finite, i.e. fwt\sim\xi^(1+a>0) when xi->0
                         wp.D=(wp.ompeak/2)*sum(exp(-zxi).*conj(Zfwt).*dbxi);
                     end
-                end %¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬
+                end %ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
                 
                 %Calculate the cumulative integrals
                 CS=CS0+cumsum(Zfwt.*dbxi); CS=[CS0;CS(:)]/CS(end); CS=abs(CS);
@@ -1066,9 +910,9 @@ end
             xp=wp.tpeak; lim1=wp.t1; lim2=wp.t2;
             
             [QQ,wflag,xx,ss]=sqeps(vfun,xp,[lim1,lim2],racc,MIC,...
-                [-8*(2*pi*fmax/wp.ompeak)*L/fs,8*(2*pi*fmax/wp.ompeak)*L/fs]); %¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬
+                [-8*(2*pi*fmax/wp.ompeak)*L/fs,8*(2*pi*fmax/wp.ompeak)*L/fs]); %ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
             wp.t1e=ss(1,1); wp.t2e=ss(1,2); wp.t1h=ss(2,1); wp.t2h=ss(2,2);
-            if wflag==1 && ~strcmpi(DispMode,'off') %¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬
+            if wflag==1 && ~strcmpi(DispMode,'off') %ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
                 fprintf(2,'--------------------------------------------- Warning! ---------------------------------------------\n');
                 fprintf('The time-domain wavelet function is not well-behaved (e.g. decays very slowly as time tends to +/- infinity).\n');
                 fprintf('The integration might be not accurate (and therefore e.g. cone-of-influence borders).\n');
@@ -1111,6 +955,24 @@ end
 %     [s1e,s2e] - epsilon-support
 %     [s1h,s2h] - 0.5-support
 function [QQ,wflag,xx,ss]=sqeps(vfun,xp,lims,racc,MIC,nlims)
+% SQEPS Perform the sqeps operation.
+%
+% Syntax:
+%   [QQ, wflag, xx, ss] = sqeps(vfun, xp, lims, racc, MIC, nlims)
+%
+% Inputs:
+%   vfun - Input value `vfun`.
+%   xp - Input value `xp`.
+%   lims - Input value `lims`.
+%   racc - Input value `racc`.
+%   MIC - Input value `MIC`.
+%   nlims - Input value `nlims`.
+%
+% Outputs:
+%   QQ - Computed output value `QQ`.
+%   wflag - Computed output value `wflag`.
+%   xx - Computed output value `xx`.
+%   ss - Computed output value `ss`.
 
 wflag=0; %indicates are there any problems with integration
 ctol=max([racc/1000,10^(-12)]); %numerical accuracy
@@ -1274,6 +1136,17 @@ warning(wstate); %restore the warning settings
 
     %function for finding the epsilon-supports
     function x0=fz(zv)
+    % FZ Perform the fz operation.
+    %
+    % Syntax:
+    %   x0 = fz(zv)
+    %
+    % Inputs:
+    %   zv - Input value `zv`.
+    %
+    % Outputs:
+    %   x0 - Computed output value `x0`.
+
         if zv<abs(Q1/Q), cx1=x1m; cq1=Q1+q1m; ra=exp(-1/2); rb=exp(1/2);
         else cx1=x2m; cq1=Q1+q2m; ra=exp(1/2); rb=exp(-1/2); end
         if abs(1-abs((Q-cq1)/Q))<zv
@@ -1318,6 +1191,20 @@ end
 % (Schwarz) information criterion, but it cannot exceed [MaxOrder].
 
 function fsig = fcast(sig,fs,NP,fint,varargin)
+% FCAST Perform the fcast operation.
+%
+% Syntax:
+%   fsig = fcast(sig, fs, NP, fint, varargin)
+%
+% Inputs:
+%   sig - Input value `sig`.
+%   fs - Sampling frequency in hertz.
+%   NP - Input value `NP`.
+%   fint - Input value `fint`.
+%   varargin - Optional positional or name-value inputs.
+%
+% Outputs:
+%   fsig - Computed output value `fsig`.
 
 MaxOrder=length(sig); if nargin>3 && ~isempty(varargin{1}), MaxOrder=varargin{1}; end
 w=[]; if nargin>4 && ~isempty(varargin{2}), w=varargin{2}(:); end, rw=sqrt(w);
@@ -1479,8 +1366,22 @@ end
 % always. 
 
 function ZI = aminterp(X,Y,Z,XI,YI,method)
+% AMINTERP Perform the aminterp operation.
+%
+% Syntax:
+%   ZI = aminterp(X, Y, Z, XI, YI, method)
+%
+% Inputs:
+%   X - Input value `X`.
+%   Y - Input value `Y`.
+%   Z - Input value `Z`.
+%   XI - Input value `XI`.
+%   YI - Input value `YI`.
+%   method - Input value `method`.
+%
+% Outputs:
+%   ZI - Computed output value `ZI`.
 
-%Interpolation over X
 ZI=zeros(size(Z,1),length(XI))*NaN;
 xstep=mean(diff(XI));
 xind=1+floor((1/2)+(X-XI(1))/xstep); xind=xind(:);

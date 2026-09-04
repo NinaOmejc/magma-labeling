@@ -1,5 +1,11 @@
 function shade_mask_on_axis(varargin)
-% Shades regions where mask == true
+% SHADE_MASK_ON_AXIS Perform the shade mask on axis operation.
+%
+% Syntax:
+%   shade_mask_on_axis(varargin)
+%
+% Inputs:
+%   varargin - Optional positional or name-value inputs.
 
     h = gobjects(0);
     if nargin >= 3 && isgraphics(varargin{1}, 'axes')

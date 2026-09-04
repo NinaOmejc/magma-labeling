@@ -1,12 +1,17 @@
 function [events, boundary_info] = detect_thoracic_dominant_breathing(data, resp_features, config)
-% detect_thoracic_dominant_breathing
-% Label 9 - sustained relative thoracoabdominal excursion dominance.
-% Both belts and both fixed per-belt session references are required. This
-% weak label is not a calibrated rib-cage contribution or clinical cutoff.
-% A qualifying endpoint summarizes an aggregate median ratio. There is no
-% validated breath-pairing rule that can localize this state without adding
-% a new physiological definition. The retained candidate support therefore
-% carries analysis-window-scale onset/offset uncertainty.
+% DETECT_THORACIC_DOMINANT_BREATHING Detect thoracic dominant breathing.
+%
+% Syntax:
+%   [events, boundary_info] = detect_thoracic_dominant_breathing(data, resp_features, config)
+%
+% Inputs:
+%   data - Input physiological signal data.
+%   resp_features - Respiratory-feature structure.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   events - Event structure array.
+%   boundary_info - Event-boundary provenance structure.
 
     events = empty_events();
     evidence = resp_features.resp.thoracoabdominal_balance;

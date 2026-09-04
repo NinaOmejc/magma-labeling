@@ -1,5 +1,14 @@
 function tf = is_lung_belt_ignored(config)
-% is_lung_belt_ignored  True for a configured subject-measurement exclusion.
+% IS_LUNG_BELT_IGNORED Determine whether lung belt ignored.
+%
+% Syntax:
+%   tf = is_lung_belt_ignored(config)
+%
+% Inputs:
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   tf - Computed output value `tf`.
 
     tf = false;
 

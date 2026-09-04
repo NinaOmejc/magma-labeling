@@ -1,14 +1,17 @@
 function [fig, ax, ph] = plot_raw_data(data, config)
-% plotPhysSignals  Plot physiological signals (columns)
+% PLOT_RAW_DATA Plot raw data.
 %
-% Usage:
-%   [fig, ax, ph] = plotPhysSignals(data, fs)
-%   [fig, ax, ph] = plotPhysSignals(data, fs, [5 10])
+% Syntax:
+%   [fig, ax, ph] = plot_raw_data(data, config)
+%
+% Inputs:
+%   data - Input physiological signal data.
+%   config - Pipeline configuration structure.
 %
 % Outputs:
-%   fig - figure handle
-%   ax  - axes handles
-%   ph  - plot line handles
+%   fig - Figure handle.
+%   ax - Axes handle or array.
+%   ph - Computed output value `ph`.
 
     if ~config.plot_raw_data
         fig = [];

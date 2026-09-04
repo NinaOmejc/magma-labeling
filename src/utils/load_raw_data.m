@@ -1,5 +1,16 @@
 function [data, config, do_analysis] = load_raw_data(config)
-% Load native-rate aligned signals; config.fs defines their master timeline.
+% LOAD_RAW_DATA Perform the load raw data operation.
+%
+% Syntax:
+%   [data, config, do_analysis] = load_raw_data(config)
+%
+% Inputs:
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   data - Computed output value `data`.
+%   config - Pipeline configuration structure.
+%   do_analysis - Computed output value `do_analysis`.
 
     [config, input_config] = resolve_signal_channels(config);
 
@@ -58,6 +69,17 @@ function [data, config, do_analysis] = load_raw_data(config)
 end
 
 function filename = resolve_input_filename(config)
+% RESOLVE_INPUT_FILENAME Resolve input filename.
+%
+% Syntax:
+%   filename = resolve_input_filename(config)
+%
+% Inputs:
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   filename - Output text or identifier.
+
     pattern = 'ECG1_ECG2_SpO2_RespL_BP_RespD_fs200_Sub{subject}_Pom{measure}_DeTr_Norm.dat';
     if isfield(config, 'input') && isfield(config.input, 'filename_pattern') && ...
             ~isempty(config.input.filename_pattern)
@@ -72,6 +94,19 @@ function filename = resolve_input_filename(config)
 end
 
 function data = reshape_loaded_data(raw_data, n_cols, filename)
+% RESHAPE_LOADED_DATA Perform the reshape loaded data operation.
+%
+% Syntax:
+%   data = reshape_loaded_data(raw_data, n_cols, filename)
+%
+% Inputs:
+%   raw_data - Input value `raw_data`.
+%   n_cols - Input value `n_cols`.
+%   filename - File or dataset path.
+%
+% Outputs:
+%   data - Computed output value `data`.
+
     if isempty(raw_data)
         error('Loaded data is empty: %s', filename);
     end
@@ -98,5 +133,13 @@ function data = reshape_loaded_data(raw_data, n_cols, filename)
 end
 
 function print_input_configuration(input_config)
+% PRINT_INPUT_CONFIGURATION Perform the print input configuration operation.
+%
+% Syntax:
+%   print_input_configuration(input_config)
+%
+% Inputs:
+%   input_config - Input value `input_config`.
+
     fprintf('Detected input configuration: %s\n', input_config.description);
 end

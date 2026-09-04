@@ -1,13 +1,17 @@
 function [reviewed_event_sets, edit_info] = manual_edit_label_events(data, config, weak_event_sets)
-% manual_edit_label_events
-% Final manual interval editor for label events, excluding sigh. Automatic
-% events are immutable input; a separate reviewed working copy and
-% explicit per-label review scope are returned.
+% MANUAL_EDIT_LABEL_EVENTS Perform the manual edit label events operation.
 %
-% This editor works at the event level. It can reuse persisted edits on
-% rerun, lets the user drag on a non-shaded region to add an interval, and
-% removes an existing interval when its shade is clicked.
-% Click times and saved sample indices use the config.fs master timeline.
+% Syntax:
+%   [reviewed_event_sets, edit_info] = manual_edit_label_events(data, config, weak_event_sets)
+%
+% Inputs:
+%   data - Input physiological signal data.
+%   config - Pipeline configuration structure.
+%   weak_event_sets - Input value `weak_event_sets`.
+%
+% Outputs:
+%   reviewed_event_sets - Computed output value `reviewed_event_sets`.
+%   edit_info - Computed summary or metadata structure.
 
     label_defs = manual_label_definitions();
     N = size(data, 1);
@@ -101,6 +105,17 @@ end
 
 
 function cfg = label_edit_config(config)
+% LABEL_EDIT_CONFIG Perform the label edit config operation.
+%
+% Syntax:
+%   cfg = label_edit_config(config)
+%
+% Inputs:
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   cfg - Computed output value `cfg`.
+
     cfg = struct();
     cfg.manual_control = false;
     cfg.apply_saved_edits = true;
@@ -142,6 +157,17 @@ function cfg = label_edit_config(config)
 end
 
 function edit_info = init_edit_info(edit_file)
+% INIT_EDIT_INFO Perform the init edit info operation.
+%
+% Syntax:
+%   edit_info = init_edit_info(edit_file)
+%
+% Inputs:
+%   edit_file - Input value `edit_file`.
+%
+% Outputs:
+%   edit_info - Computed summary or metadata structure.
+
     edit_info = struct( ...
         'edit_file', edit_file, ...
         'applied_saved_edits', false, ...
@@ -164,6 +190,21 @@ function edit_info = init_edit_info(edit_file)
 end
 
 function edit_info = apply_active_round_info(edit_info, history, active_round_id, defs, N)
+% APPLY_ACTIVE_ROUND_INFO Apply active round info.
+%
+% Syntax:
+%   edit_info = apply_active_round_info(edit_info, history, active_round_id, defs, N)
+%
+% Inputs:
+%   edit_info - Input value `edit_info`.
+%   history - Input value `history`.
+%   active_round_id - Input value `active_round_id`.
+%   defs - Input value `defs`.
+%   N - Number of samples.
+%
+% Outputs:
+%   edit_info - Computed summary or metadata structure.
+
     edit_info.review_history = history;
     edit_info.review_provenance = make_review_provenance(history, active_round_id);
     edit_info.review_coverage_mask = false(N, numel(defs));
@@ -198,6 +239,20 @@ function edit_info = apply_active_round_info(edit_info, history, active_round_id
 end
 
 function event_sets = ensure_event_sets(source_sets, label_defs, fs, N)
+% ENSURE_EVENT_SETS Perform the ensure event sets operation.
+%
+% Syntax:
+%   event_sets = ensure_event_sets(source_sets, label_defs, fs, N)
+%
+% Inputs:
+%   source_sets - Input value `source_sets`.
+%   label_defs - Label identifier or label metadata.
+%   fs - Sampling frequency in hertz.
+%   N - Number of samples.
+%
+% Outputs:
+%   event_sets - Computed output value `event_sets`.
+
     if nargin < 3, fs = []; end
     if nargin < 4, N = []; end
     event_sets = struct();
@@ -219,6 +274,19 @@ function event_sets = ensure_event_sets(source_sets, label_defs, fs, N)
 end
 
 function events = sanitize_events(events, fs, N)
+% SANITIZE_EVENTS Perform the sanitize events operation.
+%
+% Syntax:
+%   events = sanitize_events(events, fs, N)
+%
+% Inputs:
+%   events - Event structure data.
+%   fs - Sampling frequency in hertz.
+%   N - Number of samples.
+%
+% Outputs:
+%   events - Event structure array.
+
     if nargin < 2, fs = []; end
     if nargin < 3, N = []; end
     if isempty(events)
@@ -257,6 +325,19 @@ function events = sanitize_events(events, fs, N)
 end
 
 function value = get_event_field(event, field, default_value)
+% GET_EVENT_FIELD Return event field.
+%
+% Syntax:
+%   value = get_event_field(event, field, default_value)
+%
+% Inputs:
+%   event - Event structure data.
+%   field - Input value `field`.
+%   default_value - Input value `default_value`.
+%
+% Outputs:
+%   value - Computed numeric value.
+
     value = default_value;
     if isfield(event, field) && ~isempty(event.(field))
         value = event.(field);
@@ -264,6 +345,18 @@ function value = get_event_field(event, field, default_value)
 end
 
 function edit_file = manual_edit_file(config, cfg)
+% MANUAL_EDIT_FILE Perform the manual edit file operation.
+%
+% Syntax:
+%   edit_file = manual_edit_file(config, cfg)
+%
+% Inputs:
+%   config - Pipeline configuration structure.
+%   cfg - Pipeline configuration structure.
+%
+% Outputs:
+%   edit_file - Computed output value `edit_file`.
+
     if isfield(config, 'sub_results_path') && ~isempty(config.sub_results_path)
         out_dir = config.sub_results_path;
     else
@@ -277,6 +370,27 @@ end
 function [loaded_sets, reviewed_fields, schema_version, review_coverage_mask, ...
     review_history, active_round_id] = load_manual_event_sets( ...
     edit_file, automatic_sets, label_defs, config, N, fs)
+% LOAD_MANUAL_EVENT_SETS Perform the load manual event sets operation.
+%
+% Syntax:
+%   [loaded_sets, reviewed_fields, schema_version, review_coverage_mask, review_history, active_round_id] = load_manual_event_sets(edit_file, automatic_sets, label_defs, config, N, fs)
+%
+% Inputs:
+%   edit_file - Input value `edit_file`.
+%   automatic_sets - Input value `automatic_sets`.
+%   label_defs - Label identifier or label metadata.
+%   config - Pipeline configuration structure.
+%   N - Number of samples.
+%   fs - Sampling frequency in hertz.
+%
+% Outputs:
+%   loaded_sets - Computed output value `loaded_sets`.
+%   reviewed_fields - Computed output value `reviewed_fields`.
+%   schema_version - Computed output value `schema_version`.
+%   review_coverage_mask - Logical output mask.
+%   review_history - Computed output value `review_history`.
+%   active_round_id - Computed output value `active_round_id`.
+
     loaded_sets = [];
     reviewed_fields = {};
     schema_version = NaN;
@@ -415,6 +529,20 @@ function [loaded_sets, reviewed_fields, schema_version, review_coverage_mask, ..
 end
 
 function ok = is_valid_manual_meta(meta, config, N, fs)
+% IS_VALID_MANUAL_META Determine whether valid manual meta.
+%
+% Syntax:
+%   ok = is_valid_manual_meta(meta, config, N, fs)
+%
+% Inputs:
+%   meta - Input value `meta`.
+%   config - Pipeline configuration structure.
+%   N - Number of samples.
+%   fs - Sampling frequency in hertz.
+%
+% Outputs:
+%   ok - Computed output value `ok`.
+
     ok = isstruct(meta) && ...
         isfield(meta, 'subject') && isequal(meta.subject, config.subject) && ...
         isfield(meta, 'measure') && isequal(meta.measure, config.measure) && ...
@@ -423,6 +551,19 @@ function ok = is_valid_manual_meta(meta, config, N, fs)
 end
 
 function history = normalize_saved_review_history(saved_history, N, config)
+% NORMALIZE_SAVED_REVIEW_HISTORY Normalize saved review history.
+%
+% Syntax:
+%   history = normalize_saved_review_history(saved_history, N, config)
+%
+% Inputs:
+%   saved_history - Input value `saved_history`.
+%   N - Number of samples.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   history - Computed output value `history`.
+
     history = empty_review_history();
     required = {'round_id', 'timestamp', 'reviewer_role', 'start_from', ...
         'source_review_round', 'events', 'mask', 'review_mask', ...
@@ -485,6 +626,19 @@ function history = normalize_saved_review_history(saved_history, N, config)
 end
 
 function value = optional_text(source, field, default_value)
+% OPTIONAL_TEXT Perform the optional text operation.
+%
+% Syntax:
+%   value = optional_text(source, field, default_value)
+%
+% Inputs:
+%   source - Input value `source`.
+%   field - Input value `field`.
+%   default_value - Input value `default_value`.
+%
+% Outputs:
+%   value - Computed numeric value.
+
     if nargin < 3, default_value = ''; end
     value = default_value;
     if isfield(source, field) && ~isempty(source.(field))
@@ -493,6 +647,20 @@ function value = optional_text(source, field, default_value)
 end
 
 function event_sets = event_sets_from_review_round(round_info, defs, fs, N)
+% EVENT_SETS_FROM_REVIEW_ROUND Perform the event sets from review round operation.
+%
+% Syntax:
+%   event_sets = event_sets_from_review_round(round_info, defs, fs, N)
+%
+% Inputs:
+%   round_info - Input value `round_info`.
+%   defs - Input value `defs`.
+%   fs - Sampling frequency in hertz.
+%   N - Number of samples.
+%
+% Outputs:
+%   event_sets - Computed output value `event_sets`.
+
     event_sets = struct();
     events = normalize_event_types_and_meta(round_info.events, fs);
     for i = 1:numel(defs)
@@ -502,6 +670,19 @@ function event_sets = event_sets_from_review_round(round_info, defs, fs, N)
 end
 
 function coverage = generic_coverage_from_round(round_info, defs, N)
+% GENERIC_COVERAGE_FROM_ROUND Perform the generic coverage from round operation.
+%
+% Syntax:
+%   coverage = generic_coverage_from_round(round_info, defs, N)
+%
+% Inputs:
+%   round_info - Input value `round_info`.
+%   defs - Input value `defs`.
+%   N - Number of samples.
+%
+% Outputs:
+%   coverage - Computed output value `coverage`.
+
     coverage = false(N, numel(defs));
     label_names = canonical_label_names();
     if ~isequal(size(round_info.review_mask), [N numel(label_names)])
@@ -515,10 +696,26 @@ function coverage = generic_coverage_from_round(round_info, defs, N)
 end
 
 function history = empty_review_history()
+% EMPTY_REVIEW_HISTORY Create an empty review history value.
+%
+% Syntax:
+%   history = empty_review_history()
+%
+% Outputs:
+%   history - Computed output value `history`.
+
     history = repmat(review_round_template(), 0, 1);
 end
 
 function value = review_round_template()
+% REVIEW_ROUND_TEMPLATE Perform the review round template operation.
+%
+% Syntax:
+%   value = review_round_template()
+%
+% Outputs:
+%   value - Computed numeric value.
+
     value = struct( ...
         'round_id', NaN, ...
         'timestamp', '', ...
@@ -537,6 +734,17 @@ function value = review_round_template()
 end
 
 function round_id = next_round_id(history)
+% NEXT_ROUND_ID Perform the next round id operation.
+%
+% Syntax:
+%   round_id = next_round_id(history)
+%
+% Inputs:
+%   history - Input value `history`.
+%
+% Outputs:
+%   round_id - Computed output value `round_id`.
+
     if isempty(history)
         round_id = 1;
     else
@@ -545,6 +753,18 @@ function round_id = next_round_id(history)
 end
 
 function provenance = make_review_provenance(history, active_round_id)
+% MAKE_REVIEW_PROVENANCE Create review provenance.
+%
+% Syntax:
+%   provenance = make_review_provenance(history, active_round_id)
+%
+% Inputs:
+%   history - Input value `history`.
+%   active_round_id - Input value `active_round_id`.
+%
+% Outputs:
+%   provenance - Provenance metadata structure.
+
     provenance = struct( ...
         'version', 'manual_review_provenance_v1', ...
         'latest_round_id', NaN, ...
@@ -567,6 +787,22 @@ end
 
 function save_manual_event_sets(edit_file, weak_event_sets, reviewed_event_sets, ...
     review_history, active_round_id, label_defs, config, N, fs)
+% SAVE_MANUAL_EVENT_SETS Save manual event sets.
+%
+% Syntax:
+%   save_manual_event_sets(edit_file, weak_event_sets, reviewed_event_sets, review_history, active_round_id, label_defs, config, N, fs)
+%
+% Inputs:
+%   edit_file - Input value `edit_file`.
+%   weak_event_sets - Input value `weak_event_sets`.
+%   reviewed_event_sets - Input value `reviewed_event_sets`.
+%   review_history - Input value `review_history`.
+%   active_round_id - Input value `active_round_id`.
+%   label_defs - Label identifier or label metadata.
+%   config - Pipeline configuration structure.
+%   N - Number of samples.
+%   fs - Sampling frequency in hertz.
+
     out_dir = fileparts(edit_file);
     if ~isfolder(out_dir)
         mkdir(out_dir);
@@ -610,6 +846,27 @@ end
 function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
     data, config, event_sets, auto_event_sets, start_event_sets, label_defs, cfg, ...
     reviewed_fields, review_coverage_mask)
+% RUN_EDITOR Perform the run editor operation.
+%
+% Syntax:
+%   [event_sets, reviewed_fields, review_coverage_mask] = run_editor(data, config, event_sets, auto_event_sets, start_event_sets, label_defs, cfg, reviewed_fields, review_coverage_mask)
+%
+% Inputs:
+%   data - Input physiological signal data.
+%   config - Pipeline configuration structure.
+%   event_sets - Input value `event_sets`.
+%   auto_event_sets - Input value `auto_event_sets`.
+%   start_event_sets - Input value `start_event_sets`.
+%   label_defs - Label identifier or label metadata.
+%   cfg - Pipeline configuration structure.
+%   reviewed_fields - Input value `reviewed_fields`.
+%   review_coverage_mask - Logical state or selection mask.
+%
+% Outputs:
+%   event_sets - Computed output value `event_sets`.
+%   reviewed_fields - Computed output value `reviewed_fields`.
+%   review_coverage_mask - Logical output mask.
+
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
     end
@@ -701,6 +958,18 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
     reviewed_fields = {label_defs(reviewed).field};
 
     function steps = slider_step(total_sec, visible_sec)
+    % SLIDER_STEP Perform the slider step operation.
+    %
+    % Syntax:
+    %   steps = slider_step(total_sec, visible_sec)
+    %
+    % Inputs:
+    %   total_sec - Duration or window length in seconds.
+    %   visible_sec - Duration or window length in seconds.
+    %
+    % Outputs:
+    %   steps - Computed output value `steps`.
+
         max_val = max(0, total_sec - visible_sec);
         if max_val <= 0
             steps = [1 1];
@@ -710,18 +979,39 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
     end
 
     function set_xlim(x0)
+    % SET_XLIM Perform the set xlim operation.
+    %
+    % Syntax:
+    %   set_xlim(x0)
+    %
+    % Inputs:
+    %   x0 - Input value `x0`.
+
         x0 = max(0, min(x0, max(0, t_end - window_sec)));
         xlim(ax1, [x0 min(x0 + window_sec, t_end)]);
         mark_current_view_reviewed();
     end
 
     function change_label(value)
+    % CHANGE_LABEL Perform the change label operation.
+    %
+    % Syntax:
+    %   change_label(value)
+    %
+    % Inputs:
+    %   value - Input value `value`.
+
         current_label_idx = value;
         mark_current_view_reviewed();
         refresh_event_patches();
     end
 
     function reset_current_label()
+    % RESET_CURRENT_LABEL Perform the reset current label operation.
+    %
+    % Syntax:
+    %   reset_current_label()
+
         field = label_defs(current_label_idx).field;
         mark_current_view_reviewed();
         event_sets.(field) = start_event_sets.(field);
@@ -729,12 +1019,22 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
     end
 
     function reset_all_labels()
+    % RESET_ALL_LABELS Perform the reset all labels operation.
+    %
+    % Syntax:
+    %   reset_all_labels()
+
         event_sets = start_event_sets;
         mark_current_view_reviewed();
         refresh_event_patches();
     end
 
     function mark_current_view_reviewed()
+    % MARK_CURRENT_VIEW_REVIEWED Mark current view reviewed.
+    %
+    % Syntax:
+    %   mark_current_view_reviewed()
+
         if ~isgraphics(ax1), return; end
         limits = xlim(ax1);
         start_idx = max(1, min(N, floor(limits(1) * fs) + 1));
@@ -744,6 +1044,14 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
     end
 
     function begin_drag(clicked_ax)
+    % BEGIN_DRAG Perform the begin drag operation.
+    %
+    % Syntax:
+    %   begin_drag(clicked_ax)
+    %
+    % Inputs:
+    %   clicked_ax - Input value `clicked_ax`.
+
         if ~strcmp(get(fh, 'SelectionType'), 'normal')
             return;
         end
@@ -758,6 +1066,11 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
     end
 
     function update_drag()
+    % UPDATE_DRAG Update drag.
+    %
+    % Syntax:
+    %   update_drag()
+
         if ~drag_active || ~isgraphics(fh)
             return;
         end
@@ -772,6 +1085,11 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
     end
 
     function finish_drag()
+    % FINISH_DRAG Perform the finish drag operation.
+    %
+    % Syntax:
+    %   finish_drag()
+
         if ~drag_active
             return;
         end
@@ -790,6 +1108,15 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
     end
 
     function add_interval(t0, t1)
+    % ADD_INTERVAL Add interval.
+    %
+    % Syntax:
+    %   add_interval(t0, t1)
+    %
+    % Inputs:
+    %   t0 - Input value `t0`.
+    %   t1 - Input value `t1`.
+
         t0 = clamp_time(t0);
         t1 = clamp_time(t1);
         if t1 < t0
@@ -809,6 +1136,15 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
     end
 
     function remove_events_at_time(target_ax, fallback_index)
+    % REMOVE_EVENTS_AT_TIME Perform the remove events at time operation.
+    %
+    % Syntax:
+    %   remove_events_at_time(target_ax, fallback_index)
+    %
+    % Inputs:
+    %   target_ax - Target axes handle.
+    %   fallback_index - Input value `fallback_index`.
+
         field = label_defs(current_label_idx).field;
         events = event_sets.(field);
         if isempty(events)
@@ -834,6 +1170,11 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
     end
 
     function refresh_event_patches()
+    % REFRESH_EVENT_PATCHES Perform the refresh event patches operation.
+    %
+    % Syntax:
+    %   refresh_event_patches()
+
         delete(findall(fh, 'Tag', 'ManualLabelEventPatch'));
         delete(findall(fh, 'Tag', 'ManualLabelAutomaticPatch'));
         delete_temp_patches();
@@ -861,6 +1202,15 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
     end
 
     function add_automatic_reference_patch(target_ax, ev)
+    % ADD_AUTOMATIC_REFERENCE_PATCH Add automatic reference patch.
+    %
+    % Syntax:
+    %   add_automatic_reference_patch(target_ax, ev)
+    %
+    % Inputs:
+    %   target_ax - Target axes handle.
+    %   ev - Event structure data.
+
         y_limits = ylim(target_ax);
         p = patch(target_ax, [ev.start_t ev.end_t ev.end_t ev.start_t], ...
             [y_limits(1) y_limits(1) y_limits(2) y_limits(2)], ...
@@ -874,6 +1224,16 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
     end
 
     function add_event_patch(target_ax, ev, event_index)
+    % ADD_EVENT_PATCH Add event patch.
+    %
+    % Syntax:
+    %   add_event_patch(target_ax, ev, event_index)
+    %
+    % Inputs:
+    %   target_ax - Target axes handle.
+    %   ev - Event structure data.
+    %   event_index - Input value `event_index`.
+
         y_limits = ylim(target_ax);
         p = patch(target_ax, [ev.start_t ev.end_t ev.end_t ev.start_t], ...
             [y_limits(1) y_limits(1) y_limits(2) y_limits(2)], ...
@@ -888,6 +1248,15 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
     end
 
     function draw_temp_interval(t0, t1)
+    % DRAW_TEMP_INTERVAL Perform the draw temp interval operation.
+    %
+    % Syntax:
+    %   draw_temp_interval(t0, t1)
+    %
+    % Inputs:
+    %   t0 - Input value `t0`.
+    %   t1 - Input value `t1`.
+
         delete_temp_patches();
         if t1 < t0
             tmp = t0;
@@ -905,6 +1274,11 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
     end
 
     function delete_temp_patches()
+    % DELETE_TEMP_PATCHES Perform the delete temp patches operation.
+    %
+    % Syntax:
+    %   delete_temp_patches()
+
         if ~isempty(temp_patches)
             delete(temp_patches(isgraphics(temp_patches)));
         end
@@ -915,6 +1289,17 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
     end
 
     function t = current_axis_time(target_ax)
+    % CURRENT_AXIS_TIME Perform the current axis time operation.
+    %
+    % Syntax:
+    %   t = current_axis_time(target_ax)
+    %
+    % Inputs:
+    %   target_ax - Target axes handle.
+    %
+    % Outputs:
+    %   t - Output table.
+
         cp = get(target_ax, 'CurrentPoint');
         if isempty(cp)
             t = NaN;
@@ -924,10 +1309,26 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
     end
 
     function t = clamp_time(t)
+    % CLAMP_TIME Perform the clamp time operation.
+    %
+    % Syntax:
+    %   t = clamp_time(t)
+    %
+    % Inputs:
+    %   t - Time coordinates in seconds.
+    %
+    % Outputs:
+    %   t - Output table.
+
         t = max(0, min(t_end, t));
     end
 
     function finish_editing()
+    % FINISH_EDITING Perform the finish editing operation.
+    %
+    % Syntax:
+    %   finish_editing()
+
         if isgraphics(fh)
             uiresume(fh);
         end
@@ -935,6 +1336,18 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
 end
 
 function plot_trace_or_message(ax, t_raw, data, idx, label_text)
+% PLOT_TRACE_OR_MESSAGE Plot trace or message.
+%
+% Syntax:
+%   plot_trace_or_message(ax, t_raw, data, idx, label_text)
+%
+% Inputs:
+%   ax - Target axes handle.
+%   t_raw - Time coordinates in seconds.
+%   data - Input physiological signal data.
+%   idx - Input value `idx`.
+%   label_text - Label identifier or label metadata.
+
     if isempty(idx)
         text(ax, 0.5, 0.5, [label_text ' channel not found'], ...
             'Units', 'normalized', 'HorizontalAlignment', 'center');
@@ -946,6 +1359,16 @@ function plot_trace_or_message(ax, t_raw, data, idx, label_text)
 end
 
 function set_global_ylim_from_channel(ax, data, idx)
+% SET_GLOBAL_YLIM_FROM_CHANNEL Perform the set global ylim from channel operation.
+%
+% Syntax:
+%   set_global_ylim_from_channel(ax, data, idx)
+%
+% Inputs:
+%   ax - Target axes handle.
+%   data - Input physiological signal data.
+%   idx - Input value `idx`.
+
     if isempty(idx) || ~isgraphics(ax)
         return;
     end
@@ -953,6 +1376,17 @@ function set_global_ylim_from_channel(ax, data, idx)
 end
 
 function y_limits = compute_global_ylim(signal)
+% COMPUTE_GLOBAL_YLIM Compute global ylim.
+%
+% Syntax:
+%   y_limits = compute_global_ylim(signal)
+%
+% Inputs:
+%   signal - Input value `signal`.
+%
+% Outputs:
+%   y_limits - Computed output value `y_limits`.
+
     signal = signal(isfinite(signal));
     if isempty(signal)
         y_limits = [-1, 1];
@@ -970,6 +1404,21 @@ function y_limits = compute_global_ylim(signal)
 end
 
 function ev = make_event(event_type, start_t, end_t, N, fs)
+% MAKE_EVENT Create event.
+%
+% Syntax:
+%   ev = make_event(event_type, start_t, end_t, N, fs)
+%
+% Inputs:
+%   event_type - Input value `event_type`.
+%   start_t - Input value `start_t`.
+%   end_t - Input value `end_t`.
+%   N - Number of samples.
+%   fs - Sampling frequency in hertz.
+%
+% Outputs:
+%   ev - Event structure array.
+
     start_idx = max(1, min(N, round(start_t * fs) + 1));
     end_idx = max(start_idx, min(N, round(end_t * fs)));
     if end_idx < start_idx
@@ -990,6 +1439,17 @@ function ev = make_event(event_type, start_t, end_t, N, fs)
 end
 
 function events = sort_events_by_time(events)
+% SORT_EVENTS_BY_TIME Perform the sort events by time operation.
+%
+% Syntax:
+%   events = sort_events_by_time(events)
+%
+% Inputs:
+%   events - Event structure data.
+%
+% Outputs:
+%   events - Event structure array.
+
     if numel(events) <= 1
         return;
     end

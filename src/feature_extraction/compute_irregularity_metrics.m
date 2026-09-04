@@ -1,10 +1,27 @@
 function [irregular_condition, cov_trace, robust_cov_trace, rmssd_trace, endpoint_condition, pause_exclusion_mask] = compute_irregularity_metrics( ...
     breaths, t_grid, win_sec, cov_thr, robust_cov_thr, rmssd_thr, pause_thr_sec, detection_metric)
-% compute_irregularity_metrics (irregularity in time)
-% Return an analysis-window irregularity mask, endpoint condition, and
-% endpoint IBI variability traces on t_grid. Both plain CoV and robust CoV
-% are always computed when possible. detection_metric controls which trace
-% is used for the label.
+% COMPUTE_IRREGULARITY_METRICS Compute irregularity metrics.
+%
+% Syntax:
+%   [irregular_condition, cov_trace, robust_cov_trace, rmssd_trace, endpoint_condition, pause_exclusion_mask] = compute_irregularity_metrics(breaths, t_grid, win_sec, cov_thr, robust_cov_thr, rmssd_thr, pause_thr_sec, detection_metric)
+%
+% Inputs:
+%   breaths - Respiratory-cycle or belt-evidence structure.
+%   t_grid - Time coordinates in seconds.
+%   win_sec - Duration or window length in seconds.
+%   cov_thr - Selection threshold value.
+%   robust_cov_thr - Selection threshold value.
+%   rmssd_thr - Selection threshold value.
+%   pause_thr_sec - Selection threshold value.
+%   detection_metric - Input value `detection_metric`.
+%
+% Outputs:
+%   irregular_condition - Computed output value `irregular_condition`.
+%   cov_trace - Computed output value `cov_trace`.
+%   robust_cov_trace - Computed output value `robust_cov_trace`.
+%   rmssd_trace - Computed output value `rmssd_trace`.
+%   endpoint_condition - Computed output value `endpoint_condition`.
+%   pause_exclusion_mask - Logical output mask.
 
     irregular_condition = false(size(t_grid));
     endpoint_condition = false(size(t_grid));
@@ -98,6 +115,19 @@ function [irregular_condition, cov_trace, robust_cov_trace, rmssd_trace, endpoin
 end
 
 function tf = select_irregularity_metric(cov_is_irregular, robust_cov_is_irregular, detection_metric)
+% SELECT_IRREGULARITY_METRIC Perform the select irregularity metric operation.
+%
+% Syntax:
+%   tf = select_irregularity_metric(cov_is_irregular, robust_cov_is_irregular, detection_metric)
+%
+% Inputs:
+%   cov_is_irregular - Input value `cov_is_irregular`.
+%   robust_cov_is_irregular - Input value `robust_cov_is_irregular`.
+%   detection_metric - Input value `detection_metric`.
+%
+% Outputs:
+%   tf - Computed output value `tf`.
+
     switch lower(strtrim(detection_metric))
         case {'cov', 'plain_cov'}
             tf = cov_is_irregular;

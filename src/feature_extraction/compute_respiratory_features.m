@@ -1,13 +1,17 @@
 function resp_features = compute_respiratory_features(data, resp_cycles, resp_ref, config)
-% compute_respiratory_features
-% Build a modest respiratory evidence layer from detected respiratory cycles.
-% This function does not detect peaks and does not create labels or events.
+% COMPUTE_RESPIRATORY_FEATURES Compute respiratory features.
 %
-% Alignment convention:
-%   peak_idx(i), peak_t(i), and amp(i) are peak-based. amp(i) is the
-%   excursion from peak i to the trough before peak i+1, so the final amp
-%   may be NaN. ibi(i) and rr_bpm(i) describe peak i -> peak i+1 and have
-%   length numel(peak_t)-1.
+% Syntax:
+%   resp_features = compute_respiratory_features(data, resp_cycles, resp_ref, config)
+%
+% Inputs:
+%   data - Input physiological signal data.
+%   resp_cycles - Respiratory-cycle structure.
+%   resp_ref - Respiratory-reference structure.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   resp_features - Respiratory-feature structure.
 
     N = size(data, 1);
     t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';
@@ -76,6 +80,17 @@ function resp_features = compute_respiratory_features(data, resp_cycles, resp_re
 end
 
 function provenance = respiratory_cycle_provenance(resp_cycles)
+% RESPIRATORY_CYCLE_PROVENANCE Perform the respiratory cycle provenance operation.
+%
+% Syntax:
+%   provenance = respiratory_cycle_provenance(resp_cycles)
+%
+% Inputs:
+%   resp_cycles - Respiratory-cycle structure.
+%
+% Outputs:
+%   provenance - Provenance metadata structure.
+
     review_status = 'automatic';
     loaded_from_cache = false;
     if isstruct(resp_cycles) && isfield(resp_cycles, 'provenance') && ...
@@ -100,6 +115,22 @@ function provenance = respiratory_cycle_provenance(resp_cycles)
 end
 
 function belt = build_belt_evidence(source, reference, ignored, t_grid, cfg, config)
+% BUILD_BELT_EVIDENCE Build belt evidence.
+%
+% Syntax:
+%   belt = build_belt_evidence(source, reference, ignored, t_grid, cfg, config)
+%
+% Inputs:
+%   source - Input value `source`.
+%   reference - Session-reference metadata.
+%   ignored - Input value `ignored`.
+%   t_grid - Time coordinates in seconds.
+%   cfg - Pipeline configuration structure.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   belt - Updated respiratory-cycle or belt structure.
+
     belt = empty_belt_evidence(t_grid);
     belt.ignored = logical(ignored);
     if ~isstruct(source)
@@ -198,6 +229,20 @@ function belt = build_belt_evidence(source, reference, ignored, t_grid, cfg, con
 end
 
 function balance = build_thoracoabdominal_balance(lungs, diaph, t_grid, cfg)
+% BUILD_THORACOABDOMINAL_BALANCE Build thoracoabdominal balance.
+%
+% Syntax:
+%   balance = build_thoracoabdominal_balance(lungs, diaph, t_grid, cfg)
+%
+% Inputs:
+%   lungs - Respiratory-cycle or belt-evidence structure.
+%   diaph - Respiratory-cycle or belt-evidence structure.
+%   t_grid - Time coordinates in seconds.
+%   cfg - Pipeline configuration structure.
+%
+% Outputs:
+%   balance - Computed output value `balance`.
+
     balance = struct( ...
         'available', false, ...
         'analysis_window_sec', cfg.thoracic_balance_win_sec, ...
@@ -260,6 +305,20 @@ function balance = build_thoracoabdominal_balance(lungs, diaph, t_grid, cfg)
 end
 
 function values = values_in_window(peak_t, values, start_t, end_t)
+% VALUES_IN_WINDOW Perform the values in window operation.
+%
+% Syntax:
+%   values = values_in_window(peak_t, values, start_t, end_t)
+%
+% Inputs:
+%   peak_t - Input value `peak_t`.
+%   values - Input value `values`.
+%   start_t - Input value `start_t`.
+%   end_t - Input value `end_t`.
+%
+% Outputs:
+%   values - Computed numeric value.
+
     [peak_t, values] = paired_peak_values(peak_t, values);
     in_window = peak_t >= start_t & peak_t <= end_t & ...
         isfinite(values) & values > 0;
@@ -267,6 +326,17 @@ function values = values_in_window(peak_t, values, start_t, end_t)
 end
 
 function belt = empty_belt_evidence(t_grid)
+% EMPTY_BELT_EVIDENCE Create an empty belt evidence value.
+%
+% Syntax:
+%   belt = empty_belt_evidence(t_grid)
+%
+% Inputs:
+%   t_grid - Time coordinates in seconds.
+%
+% Outputs:
+%   belt - Updated respiratory-cycle or belt structure.
+
     belt = struct( ...
         'available', false, ...
         'amplitude_available', false, ...
@@ -313,6 +383,19 @@ function belt = empty_belt_evidence(t_grid)
 end
 
 function ratio = amplitude_ratio(amp, reference, reference_available)
+% AMPLITUDE_RATIO Perform the amplitude ratio operation.
+%
+% Syntax:
+%   ratio = amplitude_ratio(amp, reference, reference_available)
+%
+% Inputs:
+%   amp - Input value `amp`.
+%   reference - Session-reference metadata.
+%   reference_available - Session-reference metadata.
+%
+% Outputs:
+%   ratio - Computed numeric value.
+
     ratio = nan(size(amp));
     if ~reference_available || ~isscalar(reference) || ...
             ~isfinite(reference) || reference <= 0
@@ -323,6 +406,19 @@ function ratio = amplitude_ratio(amp, reference, reference_available)
 end
 
 function trace = breath_rate_trace(peak_t, t_grid, win_sec)
+% BREATH_RATE_TRACE Perform the breath rate trace operation.
+%
+% Syntax:
+%   trace = breath_rate_trace(peak_t, t_grid, win_sec)
+%
+% Inputs:
+%   peak_t - Input value `peak_t`.
+%   t_grid - Time coordinates in seconds.
+%   win_sec - Duration or window length in seconds.
+%
+% Outputs:
+%   trace - Computed output value `trace`.
+
     trace = nan(size(t_grid));
     peak_t = peak_t(:);
     for i = 1:numel(t_grid)
@@ -349,6 +445,22 @@ end
 
 function [endpoint_mask, state_mask] = amplitude_all_le_mask( ...
     peak_t, ratio, t_grid, win_sec, threshold, min_breaths)
+% AMPLITUDE_ALL_LE_MASK Perform the amplitude all le mask operation.
+%
+% Syntax:
+%   [endpoint_mask, state_mask] = amplitude_all_le_mask(peak_t, ratio, t_grid, win_sec, threshold, min_breaths)
+%
+% Inputs:
+%   peak_t - Input value `peak_t`.
+%   ratio - Input value `ratio`.
+%   t_grid - Time coordinates in seconds.
+%   win_sec - Duration or window length in seconds.
+%   threshold - Selection threshold value.
+%   min_breaths - Input value `min_breaths`.
+%
+% Outputs:
+%   endpoint_mask - Logical output mask.
+%   state_mask - Logical output mask.
 
     endpoint_mask = false(size(t_grid));
     [peak_t, ratio] = paired_peak_values(peak_t, ratio);
@@ -368,6 +480,23 @@ function [endpoint_mask, state_mask] = amplitude_all_le_mask( ...
 end
 
 function [endpoint_mask, state_mask] = amplitude_band_mask(peak_t, ratio, t_grid, win_sec, r_lo, r_hi)
+% AMPLITUDE_BAND_MASK Perform the amplitude band mask operation.
+%
+% Syntax:
+%   [endpoint_mask, state_mask] = amplitude_band_mask(peak_t, ratio, t_grid, win_sec, r_lo, r_hi)
+%
+% Inputs:
+%   peak_t - Input value `peak_t`.
+%   ratio - Input value `ratio`.
+%   t_grid - Time coordinates in seconds.
+%   win_sec - Duration or window length in seconds.
+%   r_lo - Input value `r_lo`.
+%   r_hi - Input value `r_hi`.
+%
+% Outputs:
+%   endpoint_mask - Logical output mask.
+%   state_mask - Logical output mask.
+
     endpoint_mask = false(size(t_grid));
     [peak_t, ratio] = paired_peak_values(peak_t, ratio);
     for i = 1:numel(t_grid)
@@ -388,6 +517,22 @@ function [endpoint_mask, state_mask] = amplitude_band_mask(peak_t, ratio, t_grid
 end
 
 function [endpoint_mask, state_mask] = amplitude_threshold_mask(peak_t, ratio, t_grid, win_sec, threshold)
+% AMPLITUDE_THRESHOLD_MASK Perform the amplitude threshold mask operation.
+%
+% Syntax:
+%   [endpoint_mask, state_mask] = amplitude_threshold_mask(peak_t, ratio, t_grid, win_sec, threshold)
+%
+% Inputs:
+%   peak_t - Input value `peak_t`.
+%   ratio - Input value `ratio`.
+%   t_grid - Time coordinates in seconds.
+%   win_sec - Duration or window length in seconds.
+%   threshold - Selection threshold value.
+%
+% Outputs:
+%   endpoint_mask - Logical output mask.
+%   state_mask - Logical output mask.
+
     endpoint_mask = false(size(t_grid));
     [peak_t, ratio] = paired_peak_values(peak_t, ratio);
     for i = 1:numel(t_grid)
@@ -409,6 +554,22 @@ end
 
 function [raw_trace, ratio_trace] = amplitude_window_medians( ...
     peak_t, amp, ratio, t_grid, win_sec, min_breaths)
+% AMPLITUDE_WINDOW_MEDIANS Perform the amplitude window medians operation.
+%
+% Syntax:
+%   [raw_trace, ratio_trace] = amplitude_window_medians(peak_t, amp, ratio, t_grid, win_sec, min_breaths)
+%
+% Inputs:
+%   peak_t - Input value `peak_t`.
+%   amp - Input value `amp`.
+%   ratio - Input value `ratio`.
+%   t_grid - Time coordinates in seconds.
+%   win_sec - Duration or window length in seconds.
+%   min_breaths - Input value `min_breaths`.
+%
+% Outputs:
+%   raw_trace - Computed output value `raw_trace`.
+%   ratio_trace - Computed numeric value.
 
     raw_trace = nan(size(t_grid));
     ratio_trace = nan(size(t_grid));
@@ -434,6 +595,18 @@ function [raw_trace, ratio_trace] = amplitude_window_medians( ...
 end
 
 function [varargout] = paired_peak_values(peak_t, varargin)
+% PAIRED_PEAK_VALUES Perform the paired peak values operation.
+%
+% Syntax:
+%   varargout = paired_peak_values(peak_t, varargin)
+%
+% Inputs:
+%   peak_t - Input value `peak_t`.
+%   varargin - Optional positional or name-value inputs.
+%
+% Outputs:
+%   varargout - Optional function outputs.
+
     n = numel(peak_t);
     for i = 1:numel(varargin)
         n = min(n, numel(varargin{i}));
@@ -447,6 +620,22 @@ function [varargout] = paired_peak_values(peak_t, varargin)
 end
 
 function [values, source_name] = interval_values(source, field_name, peak_idx, peak_t, fs)
+% INTERVAL_VALUES Perform the interval values operation.
+%
+% Syntax:
+%   [values, source_name] = interval_values(source, field_name, peak_idx, peak_t, fs)
+%
+% Inputs:
+%   source - Input value `source`.
+%   field_name - Input value `field_name`.
+%   peak_idx - Input value `peak_idx`.
+%   peak_t - Input value `peak_t`.
+%   fs - Sampling frequency in hertz.
+%
+% Outputs:
+%   values - Computed numeric value.
+%   source_name - Output text or identifier.
+
     values = get_field(source, field_name, []);
     source_name = 'resp_cycles';
     if isempty(values) && numel(peak_t) >= 2
@@ -462,6 +651,19 @@ function [values, source_name] = interval_values(source, field_name, peak_idx, p
 end
 
 function [values, source_name] = rate_values(source, ibi)
+% RATE_VALUES Perform the rate values operation.
+%
+% Syntax:
+%   [values, source_name] = rate_values(source, ibi)
+%
+% Inputs:
+%   source - Input value `source`.
+%   ibi - Input value `ibi`.
+%
+% Outputs:
+%   values - Computed numeric value.
+%   source_name - Output text or identifier.
+
     values = get_field(source, 'rr_bpm', []);
     source_name = 'resp_cycles';
     if isempty(values) && ~isempty(ibi)
@@ -472,6 +674,14 @@ function [values, source_name] = rate_values(source, ibi)
 end
 
 function validate_available_alignment(belt)
+% VALIDATE_AVAILABLE_ALIGNMENT Validate available alignment.
+%
+% Syntax:
+%   validate_available_alignment(belt)
+%
+% Inputs:
+%   belt - Respiratory-cycle or belt-evidence structure.
+
     if ~belt.available
         return;
     end
@@ -487,6 +697,18 @@ function validate_available_alignment(belt)
 end
 
 function varargout = reference_value(reference, kind)
+% REFERENCE_VALUE Perform the reference value operation.
+%
+% Syntax:
+%   varargout = reference_value(reference, kind)
+%
+% Inputs:
+%   reference - Session-reference metadata.
+%   kind - Input value `kind`.
+%
+% Outputs:
+%   varargout - Optional function outputs.
+
     value = NaN;
     available = false;
     quality = 'belt_unavailable';
@@ -509,6 +731,19 @@ function varargout = reference_value(reference, kind)
 end
 
 function value = get_field(source, name, default_value)
+% GET_FIELD Return field.
+%
+% Syntax:
+%   value = get_field(source, name, default_value)
+%
+% Inputs:
+%   source - Input value `source`.
+%   name - Input value `name`.
+%   default_value - Input value `default_value`.
+%
+% Outputs:
+%   value - Computed numeric value.
+
     value = default_value;
     if isstruct(source) && isfield(source, name)
         value = source.(name);
@@ -516,6 +751,18 @@ function value = get_field(source, name, default_value)
 end
 
 function value = get_belt(source, name)
+% GET_BELT Return belt.
+%
+% Syntax:
+%   value = get_belt(source, name)
+%
+% Inputs:
+%   source - Input value `source`.
+%   name - Input value `name`.
+%
+% Outputs:
+%   value - Computed numeric value.
+
     value = struct();
     if isstruct(source) && isfield(source, name)
         value = source.(name);
@@ -523,6 +770,17 @@ function value = get_belt(source, name)
 end
 
 function cfg = evidence_config(config)
+% EVIDENCE_CONFIG Perform the evidence config operation.
+%
+% Syntax:
+%   cfg = evidence_config(config)
+%
+% Inputs:
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   cfg - Computed output value `cfg`.
+
     cfg = struct();
     cfg.slow_win_sec = get_config_value(config, 'SlB', 'analysis_win_sec', 60);
     cfg.rapid_win_sec = get_config_value(config, 'RaB', 'analysis_win_sec', 60);

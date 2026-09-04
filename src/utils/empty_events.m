@@ -1,4 +1,12 @@
 function ev = empty_events()
+% EMPTY_EVENTS Create an empty events value.
+%
+% Syntax:
+%   ev = empty_events()
+%
+% Outputs:
+%   ev - Event structure array.
+
     ev = struct( ...
         'type', {}, ...
         'start_idx', {}, ...

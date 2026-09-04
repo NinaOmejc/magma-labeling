@@ -1,7 +1,19 @@
 function [events_Des, diagnostics_Des] = detect_desaturation( ...
     data, spo2_ref, session_reference, config)
-% detect_desaturation
-% Label 11 - Desaturation (Hypoxia)
+% DETECT_DESATURATION Detect desaturation.
+%
+% Syntax:
+%   [events_Des, diagnostics_Des] = detect_desaturation(data, spo2_ref, session_reference, config)
+%
+% Inputs:
+%   data - Input physiological signal data.
+%   spo2_ref - SpO2-reference structure.
+%   session_reference - Session-reference metadata.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   events_Des - Event structure array.
+%   diagnostics_Des - Detector diagnostic structure.
 
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
@@ -89,7 +101,21 @@ end
 
 function desat_events = detect_desaturation_events( ...
     spo2, spo2_base, fs, spo2_floor, drop_thr, min_dur_sec)
-% Detect sustained SpO2 desaturation episodes.
+% DETECT_DESATURATION_EVENTS Detect desaturation events.
+%
+% Syntax:
+%   desat_events = detect_desaturation_events(spo2, spo2_base, fs, spo2_floor, drop_thr, min_dur_sec)
+%
+% Inputs:
+%   spo2 - Input value `spo2`.
+%   spo2_base - Input value `spo2_base`.
+%   fs - Sampling frequency in hertz.
+%   spo2_floor - Input value `spo2_floor`.
+%   drop_thr - Selection threshold value.
+%   min_dur_sec - Duration or window length in seconds.
+%
+% Outputs:
+%   desat_events - Event structure array.
 
     desat_events = empty_events();
 

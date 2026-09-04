@@ -1,9 +1,19 @@
 function handles = shade_state_support_on_axis( ...
     ax, t_grid, candidate_mask, localized_mask, final_mask)
-% shade_state_support_on_axis
-% Draw confirmation support, all localized support, and retained final state.
-% The three layers are intentionally distinct so rejected localized runs
-% remain visible even when no final event survives the duration criterion.
+% SHADE_STATE_SUPPORT_ON_AXIS Perform the shade state support on axis operation.
+%
+% Syntax:
+%   handles = shade_state_support_on_axis(ax, t_grid, candidate_mask, localized_mask, final_mask)
+%
+% Inputs:
+%   ax - Target axes handle.
+%   t_grid - Time coordinates in seconds.
+%   candidate_mask - Logical state or selection mask.
+%   localized_mask - Logical state or selection mask.
+%   final_mask - Logical state or selection mask.
+%
+% Outputs:
+%   handles - Graphics handle or array.
 
     three_layer_mode = ~isempty(candidate_mask) || ~isempty(localized_mask);
     layers = { ...

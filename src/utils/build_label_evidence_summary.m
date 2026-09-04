@@ -1,9 +1,22 @@
 function summary = build_label_evidence_summary( ...
     label_names, label_available, reasons, resp_features, diagnostic_signals, ...
     detector_diagnostics, label_burden)
-% build_label_evidence_summary
-% Recording-level descriptive detector evidence. Values retain their native
-% physiological scales; no generic confidence or probability is created.
+% BUILD_LABEL_EVIDENCE_SUMMARY Build label evidence summary.
+%
+% Syntax:
+%   summary = build_label_evidence_summary(label_names, label_available, reasons, resp_features, diagnostic_signals, detector_diagnostics, label_burden)
+%
+% Inputs:
+%   label_names - Label identifier or label metadata.
+%   label_available - Label identifier or label metadata.
+%   reasons - Input value `reasons`.
+%   resp_features - Respiratory-feature structure.
+%   diagnostic_signals - Detector diagnostic data.
+%   detector_diagnostics - Detector diagnostic data.
+%   label_burden - Label identifier or label metadata.
+%
+% Outputs:
+%   summary - Computed summary or metadata structure.
 
     label_names = cellstr(string(label_names));
     summary = struct('version', 'detector_specific_evidence_summary_v1', ...
@@ -135,29 +148,107 @@ function summary = build_label_evidence_summary( ...
 end
 
 function values = cycle_values(cycles)
+% CYCLE_VALUES Perform the cycle values operation.
+%
+% Syntax:
+%   values = cycle_values(cycles)
+%
+% Inputs:
+%   cycles - Input value `cycles`.
+%
+% Outputs:
+%   values - Computed numeric value.
+
     if isempty(cycles), values = []; else, values = [cycles.modulation_ratio]; end
 end
 
 function value = finite_median(x)
+% FINITE_MEDIAN Perform the finite median operation.
+%
+% Syntax:
+%   value = finite_median(x)
+%
+% Inputs:
+%   x - Input value `x`.
+%
+% Outputs:
+%   value - Computed numeric value.
+
     x = x(isfinite(x));
     if isempty(x), value = NaN; else, value = median(x, 'omitnan'); end
 end
 function value = finite_mean(x)
+% FINITE_MEAN Perform the finite mean operation.
+%
+% Syntax:
+%   value = finite_mean(x)
+%
+% Inputs:
+%   x - Input value `x`.
+%
+% Outputs:
+%   value - Computed numeric value.
+
     x = double(x(:)); x = x(isfinite(x));
     if isempty(x), value = NaN; else, value = mean(x, 'omitnan'); end
 end
 function value = finite_min(x)
+% FINITE_MIN Perform the finite min operation.
+%
+% Syntax:
+%   value = finite_min(x)
+%
+% Inputs:
+%   x - Input value `x`.
+%
+% Outputs:
+%   value - Computed numeric value.
+
     x = x(isfinite(x));
     if isempty(x), value = NaN; else, value = min(x); end
 end
 function value = finite_max(x)
+% FINITE_MAX Perform the finite max operation.
+%
+% Syntax:
+%   value = finite_max(x)
+%
+% Inputs:
+%   x - Input value `x`.
+%
+% Outputs:
+%   value - Computed numeric value.
+
     x = x(isfinite(x));
     if isempty(x), value = NaN; else, value = max(x); end
 end
 function tf = any_finite(x)
+% ANY_FINITE Perform the any finite operation.
+%
+% Syntax:
+%   tf = any_finite(x)
+%
+% Inputs:
+%   x - Input value `x`.
+%
+% Outputs:
+%   tf - Computed output value `tf`.
+
     tf = any(isfinite(x(:)));
 end
 function belt = belt_support(lungs, diaph)
+% BELT_SUPPORT Perform the belt support operation.
+%
+% Syntax:
+%   belt = belt_support(lungs, diaph)
+%
+% Inputs:
+%   lungs - Respiratory-cycle or belt-evidence structure.
+%   diaph - Respiratory-cycle or belt-evidence structure.
+%
+% Outputs:
+%   belt - Updated respiratory-cycle or belt structure.
+
     if lungs && diaph
         belt = 'both';
     elseif lungs

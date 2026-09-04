@@ -1,6 +1,11 @@
 function label_defs = manual_label_definitions()
-% manual_label_definitions
-% Labels handled by the final manual event editor.
+% MANUAL_LABEL_DEFINITIONS Perform the manual label definitions operation.
+%
+% Syntax:
+%   label_defs = manual_label_definitions()
+%
+% Outputs:
+%   label_defs - Output text or identifier.
 
     label_defs = struct( ...
         'field',        {'shallow', 'deep', 'slow', 'rapid', 'irregular', 'apnea', 'csr', 'thoracic', 'async', 'desat'}, ...

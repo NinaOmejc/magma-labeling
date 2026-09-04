@@ -1,7 +1,22 @@
 function diagnostic_signals = compute_label_diagnostic_signals( ...
     resp_features, spo2_ref, diagnostics_Des, config, rea_metrics, apnea_metrics, sigh_metrics, csr_metrics)
-% compute_label_diagnostic_signals
-% Save detector-adjacent signals on the config.fs master recording timeline.
+% COMPUTE_LABEL_DIAGNOSTIC_SIGNALS Compute label diagnostic signals.
+%
+% Syntax:
+%   diagnostic_signals = compute_label_diagnostic_signals(resp_features, spo2_ref, diagnostics_Des, config, rea_metrics, apnea_metrics, sigh_metrics, csr_metrics)
+%
+% Inputs:
+%   resp_features - Respiratory-feature structure.
+%   spo2_ref - SpO2-reference structure.
+%   diagnostics_Des - Detector diagnostic data.
+%   config - Pipeline configuration structure.
+%   rea_metrics - Input value `rea_metrics`.
+%   apnea_metrics - Input value `apnea_metrics`.
+%   sigh_metrics - Input value `sigh_metrics`.
+%   csr_metrics - Input value `csr_metrics`.
+%
+% Outputs:
+%   diagnostic_signals - Detector diagnostic structure.
 
     t_grid = resp_features.resp.time_sec;
 
@@ -163,6 +178,18 @@ function diagnostic_signals = compute_label_diagnostic_signals( ...
 end
 
 function values = cycle_field(cycles, name)
+% CYCLE_FIELD Perform the cycle field operation.
+%
+% Syntax:
+%   values = cycle_field(cycles, name)
+%
+% Inputs:
+%   cycles - Input value `cycles`.
+%   name - Input value `name`.
+%
+% Outputs:
+%   values - Computed numeric value.
+
     if isempty(cycles)
         values = [];
     else
@@ -172,6 +199,23 @@ end
 
 function [metric_lungs, metric_diaph, margin_lungs, margin_diaph] = ...
     selected_irregularity_evidence(resp_features, metric_name, cov_thr, robust_thr, rmssd_thr)
+% SELECTED_IRREGULARITY_EVIDENCE Perform the selected irregularity evidence operation.
+%
+% Syntax:
+%   [metric_lungs, metric_diaph, margin_lungs, margin_diaph] = selected_irregularity_evidence(resp_features, metric_name, cov_thr, robust_thr, rmssd_thr)
+%
+% Inputs:
+%   resp_features - Respiratory-feature structure.
+%   metric_name - Input value `metric_name`.
+%   cov_thr - Selection threshold value.
+%   robust_thr - Selection threshold value.
+%   rmssd_thr - Selection threshold value.
+%
+% Outputs:
+%   metric_lungs - Computed output value `metric_lungs`.
+%   metric_diaph - Computed output value `metric_diaph`.
+%   margin_lungs - Computed output value `margin_lungs`.
+%   margin_diaph - Computed output value `margin_diaph`.
 
     [metric_lungs, margin_lungs] = selected_for_belt( ...
         resp_features.resp.lungs.irregularity, metric_name, cov_thr, robust_thr, rmssd_thr);
@@ -180,6 +224,22 @@ function [metric_lungs, metric_diaph, margin_lungs, margin_diaph] = ...
 end
 
 function [metric, margin] = selected_for_belt(irregularity, metric_name, cov_thr, robust_thr, rmssd_thr)
+% SELECTED_FOR_BELT Perform the selected for belt operation.
+%
+% Syntax:
+%   [metric, margin] = selected_for_belt(irregularity, metric_name, cov_thr, robust_thr, rmssd_thr)
+%
+% Inputs:
+%   irregularity - Input value `irregularity`.
+%   metric_name - Input value `metric_name`.
+%   cov_thr - Selection threshold value.
+%   robust_thr - Selection threshold value.
+%   rmssd_thr - Selection threshold value.
+%
+% Outputs:
+%   metric - Computed output value `metric`.
+%   margin - Computed output value `margin`.
+
     cov_margin = irregularity.cov - cov_thr;
     robust_margin = irregularity.robust_cov - robust_thr;
     switch lower(strtrim(char(string(metric_name))))
@@ -203,6 +263,20 @@ function [metric, margin] = selected_for_belt(irregularity, metric_name, cov_thr
 end
 
 function [spo2_grid, spo2_drop_grid] = spo2_on_grid(diagnostics_Des, spo2_ref, t_grid)
+% SPO2_ON_GRID Perform the spo2 on grid operation.
+%
+% Syntax:
+%   [spo2_grid, spo2_drop_grid] = spo2_on_grid(diagnostics_Des, spo2_ref, t_grid)
+%
+% Inputs:
+%   diagnostics_Des - Detector diagnostic data.
+%   spo2_ref - SpO2-reference structure.
+%   t_grid - Time coordinates in seconds.
+%
+% Outputs:
+%   spo2_grid - Computed output value `spo2_grid`.
+%   spo2_drop_grid - Computed output value `spo2_drop_grid`.
+
     spo2_grid = nan(size(t_grid));
     spo2_drop_grid = nan(size(t_grid));
 
@@ -226,6 +300,18 @@ function [spo2_grid, spo2_drop_grid] = spo2_on_grid(diagnostics_Des, spo2_ref, t
 end
 
 function diagnostic_signals = add_respiratory_asynchrony_diagnostics(diagnostic_signals, rea)
+% ADD_RESPIRATORY_ASYNCHRONY_DIAGNOSTICS Add respiratory asynchrony diagnostics.
+%
+% Syntax:
+%   diagnostic_signals = add_respiratory_asynchrony_diagnostics(diagnostic_signals, rea)
+%
+% Inputs:
+%   diagnostic_signals - Detector diagnostic data.
+%   rea - Input value `rea`.
+%
+% Outputs:
+%   diagnostic_signals - Detector diagnostic structure.
+
     diagnostic_signals.resp_asynchrony_analysis_fs = rea.analysis_fs;
     diagnostic_signals.resp_asynchrony_analysis_n_samples = rea.analysis_n_samples;
     diagnostic_signals.resp_asynchrony_valid_analysis = double(rea.valid_analysis);

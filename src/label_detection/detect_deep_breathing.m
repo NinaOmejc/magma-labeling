@@ -1,12 +1,17 @@
 function [events, boundary_info] = detect_deep_breathing(data, resp_features, config)
-% detect_deep_breathing
-% Label 2 - sustained relative increase in respiratory-belt excursion.
-% A respiratory cycle is deep when its excursion divided by that belt's fixed
-% session reference is >= config.DeB.amp_ratio_thr. This is an uncalibrated,
-% within-record belt-amplitude state, not absolute tidal volume.
-% The all-breath rolling condition confirms an event. Boundaries are placed
-% at deterministic midpoint cells around qualifying respiratory cycles.
-% Localized runs shorter than config.DeB.min_dur_sec remain QC only.
+% DETECT_DEEP_BREATHING Detect deep breathing.
+%
+% Syntax:
+%   [events, boundary_info] = detect_deep_breathing(data, resp_features, config)
+%
+% Inputs:
+%   data - Input physiological signal data.
+%   resp_features - Respiratory-feature structure.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   events - Event structure array.
+%   boundary_info - Event-boundary provenance structure.
 
     events = empty_events();
     N = size(data, 1);
@@ -78,11 +83,35 @@ function [events, boundary_info] = detect_deep_breathing(data, resp_features, co
 end
 
 function mask = get_endpoint_mask(belt, field, t_grid)
+% GET_ENDPOINT_MASK Return endpoint mask.
+%
+% Syntax:
+%   mask = get_endpoint_mask(belt, field, t_grid)
+%
+% Inputs:
+%   belt - Respiratory-cycle or belt-evidence structure.
+%   field - Input value `field`.
+%   t_grid - Time coordinates in seconds.
+%
+% Outputs:
+%   mask - Logical output mask.
+
     mask = false(size(t_grid));
     if isfield(belt, field), mask = logical(belt.(field)); end
 end
 
 function records = normalize_records(records)
+% NORMALIZE_RECORDS Normalize records.
+%
+% Syntax:
+%   records = normalize_records(records)
+%
+% Inputs:
+%   records - Input value `records`.
+%
+% Outputs:
+%   records - Computed output value `records`.
+
     for i = 1:numel(records)
         records(i).label = 'deep';
         records(i).detector = 'detect_deep_breathing';
@@ -90,5 +119,16 @@ function records = normalize_records(records)
 end
 
 function value = record_uncertainty(records)
+% RECORD_UNCERTAINTY Perform the record uncertainty operation.
+%
+% Syntax:
+%   value = record_uncertainty(records)
+%
+% Inputs:
+%   records - Input value `records`.
+%
+% Outputs:
+%   value - Computed numeric value.
+
     if isempty(records), value = NaN; else, value = [records.uncertainty_sec]'; end
 end

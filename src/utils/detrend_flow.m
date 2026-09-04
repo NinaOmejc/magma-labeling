@@ -1,7 +1,18 @@
-% Subtract the moving trend and global mean offset from a time series.
-% Uses centered moving mean with shrinking endpoints to avoid edge artifacts.
-
 function [output, trend, trend1] = detrend_flow(t_series, sampl_freq, window_l)
+% DETREND_FLOW Subtract a moving trend and global mean offset from a time series.
+%
+% Syntax:
+%   [output, trend, trend1] = detrend_flow(t_series, sampl_freq, window_l)
+%
+% Inputs:
+%   t_series - Input time series.
+%   sampl_freq - Sampling frequency in hertz.
+%   window_l - Moving-mean window length in seconds.
+%
+% Outputs:
+%   output - Detrended time series.
+%   trend - Moving trend including the global mean offset.
+%   trend1 - Centered moving-mean trend.
 
 input_was_row = isrow(t_series);
 x = t_series(:);

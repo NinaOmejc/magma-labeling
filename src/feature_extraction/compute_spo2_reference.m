@@ -1,7 +1,16 @@
 function spo2_ref = compute_spo2_reference(data, session_reference, config)
-% compute_spo2_reference
-% Estimate the recording-specific SpO2 statistic from the common session
-% physiological reference interval. No alternate interval is used.
+% COMPUTE_SPO2_REFERENCE Compute spo2 reference.
+%
+% Syntax:
+%   spo2_ref = compute_spo2_reference(data, session_reference, config)
+%
+% Inputs:
+%   data - Input physiological signal data.
+%   session_reference - Session-reference metadata.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   spo2_ref - SpO2-reference structure.
 
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);

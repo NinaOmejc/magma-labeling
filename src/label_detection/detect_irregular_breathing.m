@@ -1,22 +1,17 @@
 function [irregular_events, boundary_info] = detect_irregular_breathing(data, resp_features, config)
-% detect_irregular_breathing
-% Label 5 - Irregular Breathing
+% DETECT_IRREGULAR_BREATHING Detect irregular breathing.
 %
-% Definition:
-%   Irregular breathing means that durations of consecutive breathing cycles
-%   vary unpredictably and without a clear pattern.
+% Syntax:
+%   [irregular_events, boundary_info] = detect_irregular_breathing(data, resp_features, config)
 %
-% Measurements (per config.IrB.analysis_win_sec segments):
-%   - Compute IBI = time between consecutive respiratory peaks.
-%   - Compute CoV = std(IBI) / mean(IBI).
-%   - Compute robust CoV = 1.4826 * MAD(IBI) / median(IBI).
-%   - Compute RMSSD = sqrt(mean(diff(IBI).^2)).
-%   - Use config.IrB.detection_metric to choose the detection metric.
-% Detector grids map to master samples using config.fs.
-%   - No breathing pauses allowed in analyzed segment.
-%   - CoV is intrinsically a multi-breath/window property. Candidate support
-%     is retained with explicit analysis-window timing uncertainty; no
-%     unsupported instantaneous onset is claimed.
+% Inputs:
+%   data - Input physiological signal data.
+%   resp_features - Respiratory-feature structure.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   irregular_events - Event structure array.
+%   boundary_info - Event-boundary provenance structure.
 
     irregular_events = empty_events();
 
@@ -90,7 +85,7 @@ function [irregular_events, boundary_info] = detect_irregular_breathing(data, re
         'detect_irregular_breathing', ...
         'multi_breath_window_candidate_support_with_explicit_uncertainty', ...
         irregular_events, irregular_events, analysis_win_sec, ...
-        ['reviewed_interbreath_intervals_' lower(strtrim(detection_metric))], ...
+        ['interbreath_intervals_' lower(strtrim(detection_metric))], ...
         irregular_endpoint_lungs | irregular_endpoint_diaph, ...
         irregular_condition_lungs | irregular_condition_diaph, ...
         irregular_mask_lungs | irregular_mask_diaph);
@@ -134,6 +129,31 @@ function [primary_lungs, primary_diaph, primary_label, primary_thr, primary_used
     secondary_lungs, secondary_diaph, secondary_label, secondary_thr, secondary_used] = ...
     irregular_plot_metrics(cov_lungs, cov_diaph, robust_cov_lungs, robust_cov_diaph, ...
     cov_thr, robust_cov_thr, detection_metric)
+% IRREGULAR_PLOT_METRICS Perform the irregular plot metrics operation.
+%
+% Syntax:
+%   [primary_lungs, primary_diaph, primary_label, primary_thr, primary_used, secondary_lungs, secondary_diaph, secondary_label, secondary_thr, secondary_used] = irregular_plot_metrics(cov_lungs, cov_diaph, robust_cov_lungs, robust_cov_diaph, cov_thr, robust_cov_thr, detection_metric)
+%
+% Inputs:
+%   cov_lungs - Input value `cov_lungs`.
+%   cov_diaph - Input value `cov_diaph`.
+%   robust_cov_lungs - Input value `robust_cov_lungs`.
+%   robust_cov_diaph - Input value `robust_cov_diaph`.
+%   cov_thr - Selection threshold value.
+%   robust_cov_thr - Selection threshold value.
+%   detection_metric - Input value `detection_metric`.
+%
+% Outputs:
+%   primary_lungs - Computed output value `primary_lungs`.
+%   primary_diaph - Computed output value `primary_diaph`.
+%   primary_label - Output text or identifier.
+%   primary_thr - Computed output value `primary_thr`.
+%   primary_used - Computed output value `primary_used`.
+%   secondary_lungs - Computed output value `secondary_lungs`.
+%   secondary_diaph - Computed output value `secondary_diaph`.
+%   secondary_label - Output text or identifier.
+%   secondary_thr - Computed output value `secondary_thr`.
+%   secondary_used - Computed output value `secondary_used`.
 
     if any(strcmpi(strtrim(detection_metric), {'robust_cov','robust'}))
         primary_lungs = robust_cov_lungs;
@@ -161,6 +181,20 @@ function [primary_lungs, primary_diaph, primary_label, primary_thr, primary_used
 end
 
 function label = threshold_label(metric_name, threshold, detection_metric, used_metrics)
+% THRESHOLD_LABEL Perform the threshold label operation.
+%
+% Syntax:
+%   label = threshold_label(metric_name, threshold, detection_metric, used_metrics)
+%
+% Inputs:
+%   metric_name - Input value `metric_name`.
+%   threshold - Selection threshold value.
+%   detection_metric - Input value `detection_metric`.
+%   used_metrics - Input value `used_metrics`.
+%
+% Outputs:
+%   label - Output text or identifier.
+
     is_used = any(strcmpi(strtrim(detection_metric), used_metrics));
     used_suffix = '';
     if is_used

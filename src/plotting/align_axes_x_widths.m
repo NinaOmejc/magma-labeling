@@ -1,8 +1,11 @@
 function align_axes_x_widths(ax)
-% align_axes_x_widths  Force axes plot boxes to share the same x-span.
+% ALIGN_AXES_X_WIDTHS Perform the align axes x widths operation.
 %
-% Legends placed eastoutside can shrink individual axes by different
-% amounts. This helper aligns the plot boxes after legends are created.
+% Syntax:
+%   align_axes_x_widths(ax)
+%
+% Inputs:
+%   ax - Target axes handle.
 
     if nargin < 1 || isempty(ax)
         ax = findall(gcf, 'Type', 'axes');
@@ -49,8 +52,17 @@ function align_axes_x_widths(ax)
 end
 
 function tf = is_positionable_axis(ax)
-% Axes inside tiledlayout are positioned by the layout manager. Assigning
-% Position on them creates repeated MATLAB warnings during batch plotting.
+% IS_POSITIONABLE_AXIS Determine whether positionable axis.
+%
+% Syntax:
+%   tf = is_positionable_axis(ax)
+%
+% Inputs:
+%   ax - Target axes handle.
+%
+% Outputs:
+%   tf - Computed output value `tf`.
+
     tf = true;
     try
         tf = ~contains(class(ax.Parent), 'TiledChartLayout');
@@ -60,6 +72,15 @@ function tf = is_positionable_axis(ax)
 end
 
 function restore_units(ax, units)
+% RESTORE_UNITS Perform the restore units operation.
+%
+% Syntax:
+%   restore_units(ax, units)
+%
+% Inputs:
+%   ax - Target axes handle.
+%   units - Input value `units`.
+
     for i = 1:numel(ax)
         if isgraphics(ax(i), 'axes')
             ax(i).Units = units{i};

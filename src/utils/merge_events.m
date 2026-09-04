@@ -1,10 +1,15 @@
 function sub_events = merge_events(event_lists, merge_gap_sec)
-% merge_events
-% Concatenate and merge overlapping/adjacent events WITHIN the same type.
-% Different types are allowed to overlap and are never merged together.
+% MERGE_EVENTS Merge events.
 %
-% merge_gap_sec: optional; merge if curr.start_t <= last.end_t + merge_gap_sec
-% default = 0 (overlap/abut only)
+% Syntax:
+%   sub_events = merge_events(event_lists, merge_gap_sec)
+%
+% Inputs:
+%   event_lists - Event structure data.
+%   merge_gap_sec - Duration or window length in seconds.
+%
+% Outputs:
+%   sub_events - Event structure array.
 
     if nargin < 2 || isempty(merge_gap_sec)
         merge_gap_sec = 0;

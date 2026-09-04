@@ -1,9 +1,20 @@
 function annotations = assemble_annotation_layers( ...
     weak_event_sets, reviewed_event_sets, manual_edit_info, sigh_review, N, config)
-% assemble_annotation_layers
-% Freeze automatic annotations and construct a separate reviewed layer.
-% FALSE in mask_reviewed is interpretable as a reviewed negative only where
-% gold_review_mask is TRUE. Unreviewed samples remain unknown.
+% ASSEMBLE_ANNOTATION_LAYERS Perform the assemble annotation layers operation.
+%
+% Syntax:
+%   annotations = assemble_annotation_layers(weak_event_sets, reviewed_event_sets, manual_edit_info, sigh_review, N, config)
+%
+% Inputs:
+%   weak_event_sets - Input value `weak_event_sets`.
+%   reviewed_event_sets - Input value `reviewed_event_sets`.
+%   manual_edit_info - Input value `manual_edit_info`.
+%   sigh_review - Input value `sigh_review`.
+%   N - Number of samples.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   annotations - Computed output value `annotations`.
 
     defs = manual_label_definitions();
     label_names = {config.labels.short};
@@ -106,6 +117,20 @@ function annotations = assemble_annotation_layers( ...
 end
 
 function coverage = generic_review_coverage(info, index, N, n_labels)
+% GENERIC_REVIEW_COVERAGE Perform the generic review coverage operation.
+%
+% Syntax:
+%   coverage = generic_review_coverage(info, index, N, n_labels)
+%
+% Inputs:
+%   info - Input value `info`.
+%   index - Input value `index`.
+%   N - Number of samples.
+%   n_labels - Label identifier or label metadata.
+%
+% Outputs:
+%   coverage - Computed output value `coverage`.
+
     coverage = false(N,1);
     if isfield(info, 'review_coverage_mask') && ...
             isequal(size(info.review_coverage_mask), [N n_labels])
@@ -118,6 +143,18 @@ function coverage = generic_review_coverage(info, index, N, n_labels)
 end
 
 function coverage = sigh_review_coverage(info, N)
+% SIGH_REVIEW_COVERAGE Perform the sigh review coverage operation.
+%
+% Syntax:
+%   coverage = sigh_review_coverage(info, N)
+%
+% Inputs:
+%   info - Input value `info`.
+%   N - Number of samples.
+%
+% Outputs:
+%   coverage - Computed output value `coverage`.
+
     coverage = false(N,1);
     if isfield(info, 'review_mask') && numel(info.review_mask) == N
         coverage = logical(info.review_mask(:));
@@ -128,6 +165,18 @@ function coverage = sigh_review_coverage(info, N)
 end
 
 function events = field_events(source, field)
+% FIELD_EVENTS Perform the field events operation.
+%
+% Syntax:
+%   events = field_events(source, field)
+%
+% Inputs:
+%   source - Input value `source`.
+%   field - Input value `field`.
+%
+% Outputs:
+%   events - Event structure array.
+
     events = empty_events();
     if isstruct(source) && isfield(source, field) && ~isempty(source.(field))
         events = source.(field);
@@ -135,6 +184,14 @@ function events = field_events(source, field)
 end
 
 function validate_label_order(label_names)
+% VALIDATE_LABEL_ORDER Validate label order.
+%
+% Syntax:
+%   validate_label_order(label_names)
+%
+% Inputs:
+%   label_names - Label identifier or label metadata.
+
     expected = canonical_label_names();
     if ~isequal(label_names, expected)
         error('MAGMA:Annotations:CanonicalLabels', ...

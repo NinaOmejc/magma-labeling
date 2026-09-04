@@ -1,12 +1,21 @@
 function [events, sustained_mask, grid_events] = sustained_condition_to_events(cond, t_grid, fs, N, min_dur_sec, label)
-% sustained_condition_to_events
-% Convert a grid diagnostic condition into sustained events.
+% SUSTAINED_CONDITION_TO_EVENTS Perform the sustained condition to events operation.
 %
-% The input condition should already represent the detector's intended
-% diagnostic mask on t_grid. Rolling-window detectors may pass either an
-% endpoint mask or a candidate-support mask, depending on their confirmation
-% semantics. This helper only keeps runs where the provided condition stays
-% true for min_dur_sec; detector-specific localization happens separately.
+% Syntax:
+%   [events, sustained_mask, grid_events] = sustained_condition_to_events(cond, t_grid, fs, N, min_dur_sec, label)
+%
+% Inputs:
+%   cond - Input value `cond`.
+%   t_grid - Time coordinates in seconds.
+%   fs - Sampling frequency in hertz.
+%   N - Number of samples.
+%   min_dur_sec - Duration or window length in seconds.
+%   label - Label identifier or label metadata.
+%
+% Outputs:
+%   events - Event structure array.
+%   sustained_mask - Logical output mask.
+%   grid_events - Event structure array.
 
     cond = cond(:) ~= 0;
     t_grid = t_grid(:);

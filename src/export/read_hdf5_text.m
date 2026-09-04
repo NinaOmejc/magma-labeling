@@ -1,5 +1,16 @@
 function values = read_hdf5_text(filename, dataset)
-% read_hdf5_text  Decode text written by export_results_hdf5.
+% READ_HDF5_TEXT Read hdf5 text.
+%
+% Syntax:
+%   values = read_hdf5_text(filename, dataset)
+%
+% Inputs:
+%   filename - File or dataset path.
+%   dataset - File or dataset path.
+%
+% Outputs:
+%   values - Computed numeric value.
+
     encoded = h5read(filename, dataset);
     info = h5info(filename, dataset);
     if any(strcmp({info.Attributes.Name}, 'is_empty'))

@@ -1,24 +1,20 @@
 function [events, diagnostics, boundary_info] = detect_apnea( ...
     data, resp_features, session_reference, config)
-% detect_apnea
-% Label 6 - Apnea
+% DETECT_APNEA Detect apnea.
 %
-% Evidence paths:
-%   1) Peak-amplitude path: every usable breath in the analysis window is
-%      <= threshold relative to the respiratory amplitude reference.
-%   2) Optional raw-flat path: direct low-motion/plateau detection on the
-%      preprocessed respiration belts, independent of detected breath peaks.
-%      Its raw motion/slope anchor is estimated from the common session
-%      physiological reference interval.
+% Syntax:
+%   [events, diagnostics, boundary_info] = detect_apnea(data, resp_features, session_reference, config)
 %
-% If both belts are usable, both must support the apnea evidence. If only
-% one belt is usable, that belt is used alone. SpO2 does not modify apnea
-% events; coincident desaturation remains a separate label.
-% Rolling evidence confirms candidate episodes. Once confirmed, raw-flat
-% plateau timing is preferred for localization; otherwise low-amplitude
-% respiratory-cycle cells localize the episode. Candidate timing is retained
-% as an explicit fallback and event existence is never changed by the
-% localization step.
+% Inputs:
+%   data - Input physiological signal data.
+%   resp_features - Respiratory-feature structure.
+%   session_reference - Session-reference metadata.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   events - Event structure array.
+%   diagnostics - Detector diagnostic structure.
+%   boundary_info - Event-boundary provenance structure.
 
     events = empty_events();
 
@@ -247,6 +243,18 @@ function [events, diagnostics, boundary_info] = detect_apnea( ...
 end
 
 function belt = support_belts(use_lungs, use_diaph)
+% SUPPORT_BELTS Perform the support belts operation.
+%
+% Syntax:
+%   belt = support_belts(use_lungs, use_diaph)
+%
+% Inputs:
+%   use_lungs - Input value `use_lungs`.
+%   use_diaph - Input value `use_diaph`.
+%
+% Outputs:
+%   belt - Updated respiratory-cycle or belt structure.
+
     if use_lungs && use_diaph
         belt = 'both';
     elseif use_lungs
@@ -265,6 +273,25 @@ end
 function [combined_mask, diag] = raw_flat_apnea_condition_on_grid( ...
     data, session_reference, config, t_grid, idx_lungs, idx_diaph, ...
     use_lungs, use_diaph, raw_cfg)
+% RAW_FLAT_APNEA_CONDITION_ON_GRID Perform the raw flat apnea condition on grid operation.
+%
+% Syntax:
+%   [combined_mask, diag] = raw_flat_apnea_condition_on_grid(data, session_reference, config, t_grid, idx_lungs, idx_diaph, use_lungs, use_diaph, raw_cfg)
+%
+% Inputs:
+%   data - Input physiological signal data.
+%   session_reference - Session-reference metadata.
+%   config - Pipeline configuration structure.
+%   t_grid - Time coordinates in seconds.
+%   idx_lungs - Input value `idx_lungs`.
+%   idx_diaph - Input value `idx_diaph`.
+%   use_lungs - Input value `use_lungs`.
+%   use_diaph - Input value `use_diaph`.
+%   raw_cfg - Input value `raw_cfg`.
+%
+% Outputs:
+%   combined_mask - Logical output mask.
+%   diag - Computed output value `diag`.
 
     combined_mask = false(size(t_grid));
     diag = init_raw_flat_diag(t_grid, size(data, 1));
@@ -305,6 +332,18 @@ function [combined_mask, diag] = raw_flat_apnea_condition_on_grid( ...
 end
 
 function diag = init_raw_flat_diag(t_grid, N)
+% INIT_RAW_FLAT_DIAG Perform the init raw flat diag operation.
+%
+% Syntax:
+%   diag = init_raw_flat_diag(t_grid, N)
+%
+% Inputs:
+%   t_grid - Time coordinates in seconds.
+%   N - Number of samples.
+%
+% Outputs:
+%   diag - Computed output value `diag`.
+
     if nargin < 2
         N = numel(t_grid);
     end
@@ -340,6 +379,21 @@ end
 
 function mask = amplitude_apnea_support_mask( ...
     lungs, diaph, use_lungs, use_diaph, threshold, t_grid)
+% AMPLITUDE_APNEA_SUPPORT_MASK Perform the amplitude apnea support mask operation.
+%
+% Syntax:
+%   mask = amplitude_apnea_support_mask(lungs, diaph, use_lungs, use_diaph, threshold, t_grid)
+%
+% Inputs:
+%   lungs - Respiratory-cycle or belt-evidence structure.
+%   diaph - Respiratory-cycle or belt-evidence structure.
+%   use_lungs - Input value `use_lungs`.
+%   use_diaph - Input value `use_diaph`.
+%   threshold - Selection threshold value.
+%   t_grid - Time coordinates in seconds.
+%
+% Outputs:
+%   mask - Logical output mask.
 
     lungs_mask = breath_amplitude_mask(lungs, threshold, t_grid);
     diaph_mask = breath_amplitude_mask(diaph, threshold, t_grid);
@@ -355,6 +409,19 @@ function mask = amplitude_apnea_support_mask( ...
 end
 
 function mask = breath_amplitude_mask(belt, threshold, t_grid)
+% BREATH_AMPLITUDE_MASK Perform the breath amplitude mask operation.
+%
+% Syntax:
+%   mask = breath_amplitude_mask(belt, threshold, t_grid)
+%
+% Inputs:
+%   belt - Respiratory-cycle or belt-evidence structure.
+%   threshold - Selection threshold value.
+%   t_grid - Time coordinates in seconds.
+%
+% Outputs:
+%   mask - Logical output mask.
+
     mask = false(size(t_grid));
     if ~isstruct(belt) || ~isfield(belt, 'peak_t') || ...
             ~isfield(belt, 'amp_ratio_session')
@@ -391,6 +458,27 @@ end
 function [events, records] = localize_apnea_candidates( ...
     candidates, amplitude_local, amplitude_candidate, raw_plateau_native, ...
     raw_window_local, raw_candidate, t_grid, N, fs, amp_window_sec, raw_window_sec)
+% LOCALIZE_APNEA_CANDIDATES Perform the localize apnea candidates operation.
+%
+% Syntax:
+%   [events, records] = localize_apnea_candidates(candidates, amplitude_local, amplitude_candidate, raw_plateau_native, raw_window_local, raw_candidate, t_grid, N, fs, amp_window_sec, raw_window_sec)
+%
+% Inputs:
+%   candidates - Event structure data.
+%   amplitude_local - Input value `amplitude_local`.
+%   amplitude_candidate - Input value `amplitude_candidate`.
+%   raw_plateau_native - Input value `raw_plateau_native`.
+%   raw_window_local - Duration or window length in seconds.
+%   raw_candidate - Input value `raw_candidate`.
+%   t_grid - Time coordinates in seconds.
+%   N - Number of samples.
+%   fs - Sampling frequency in hertz.
+%   amp_window_sec - Duration or window length in seconds.
+%   raw_window_sec - Duration or window length in seconds.
+%
+% Outputs:
+%   events - Event structure array.
+%   records - Computed output value `records`.
 
     events = empty_events();
     template = struct('label', 'apnea', 'detector', 'detect_apnea', ...
@@ -469,6 +557,21 @@ function [events, records] = localize_apnea_candidates( ...
 end
 
 function [t0, t1, found] = longest_grid_run(mask, t_grid, grid_step)
+% LONGEST_GRID_RUN Perform the longest grid run operation.
+%
+% Syntax:
+%   [t0, t1, found] = longest_grid_run(mask, t_grid, grid_step)
+%
+% Inputs:
+%   mask - Logical state or selection mask.
+%   t_grid - Time coordinates in seconds.
+%   grid_step - Input value `grid_step`.
+%
+% Outputs:
+%   t0 - Computed output value `t0`.
+%   t1 - Computed output value `t1`.
+%   found - Computed output value `found`.
+
     d = diff([false; logical(mask(:)); false]);
     starts = find(d == 1);
     ends = find(d == -1) - 1;
@@ -482,6 +585,21 @@ function [t0, t1, found] = longest_grid_run(mask, t_grid, grid_step)
 end
 
 function event = event_from_times(event, start_t, end_t, N, fs)
+% EVENT_FROM_TIMES Perform the event from times operation.
+%
+% Syntax:
+%   event = event_from_times(event, start_t, end_t, N, fs)
+%
+% Inputs:
+%   event - Event structure data.
+%   start_t - Input value `start_t`.
+%   end_t - Input value `end_t`.
+%   N - Number of samples.
+%   fs - Sampling frequency in hertz.
+%
+% Outputs:
+%   event - Computed output value `event`.
+
     recording_end = N / fs;
     start_t = max(0, min(recording_end, start_t));
     end_t = max(start_t, min(recording_end, end_t));
@@ -494,6 +612,22 @@ end
 
 function [mask, diag] = raw_flat_belt_mask( ...
     x, session_reference, config, t_grid, raw_cfg)
+% RAW_FLAT_BELT_MASK Perform the raw flat belt mask operation.
+%
+% Syntax:
+%   [mask, diag] = raw_flat_belt_mask(x, session_reference, config, t_grid, raw_cfg)
+%
+% Inputs:
+%   x - Input value `x`.
+%   session_reference - Session-reference metadata.
+%   config - Pipeline configuration structure.
+%   t_grid - Time coordinates in seconds.
+%   raw_cfg - Input value `raw_cfg`.
+%
+% Outputs:
+%   mask - Logical output mask.
+%   diag - Computed output value `diag`.
+
     x = x(:);
     fs = config.fs;
     N = numel(x);
@@ -610,10 +744,24 @@ end
 
 function [motion_ref, slope_ref, adaptive_reference_used] = raw_reference_at_time( ...
     x, t, fs, session_motion_ref, session_slope_ref, raw_cfg)
+% RAW_REFERENCE_AT_TIME Perform the raw reference at time operation.
+%
+% Syntax:
+%   [motion_ref, slope_ref, adaptive_reference_used] = raw_reference_at_time(x, t, fs, session_motion_ref, session_slope_ref, raw_cfg)
+%
+% Inputs:
+%   x - Input value `x`.
+%   t - Time coordinates in seconds.
+%   fs - Sampling frequency in hertz.
+%   session_motion_ref - Input value `session_motion_ref`.
+%   session_slope_ref - Input value `session_slope_ref`.
+%   raw_cfg - Input value `raw_cfg`.
+%
+% Outputs:
+%   motion_ref - Computed output value `motion_ref`.
+%   slope_ref - Computed output value `slope_ref`.
+%   adaptive_reference_used - Computed output value `adaptive_reference_used`.
 
-    % Preserve the detector's causal local comparator, but require and
-    % anchor it to the common session reference. A missing session reference
-    % is handled before this function; no other interval substitutes for it.
     motion_ref = session_motion_ref;
     slope_ref = session_slope_ref;
     adaptive_reference_used = false;
@@ -656,6 +804,23 @@ function [motion_ref, slope_ref, adaptive_reference_used] = raw_reference_at_tim
 end
 
 function [peak_frac, run_start_t, run_end_t, run_dur_sec] = strongest_histogram_plateau(x, sample_t, fs, raw_cfg)
+% STRONGEST_HISTOGRAM_PLATEAU Perform the strongest histogram plateau operation.
+%
+% Syntax:
+%   [peak_frac, run_start_t, run_end_t, run_dur_sec] = strongest_histogram_plateau(x, sample_t, fs, raw_cfg)
+%
+% Inputs:
+%   x - Input value `x`.
+%   sample_t - Time coordinates in seconds.
+%   fs - Sampling frequency in hertz.
+%   raw_cfg - Input value `raw_cfg`.
+%
+% Outputs:
+%   peak_frac - Computed output value `peak_frac`.
+%   run_start_t - Computed output value `run_start_t`.
+%   run_end_t - Computed output value `run_end_t`.
+%   run_dur_sec - Computed output value `run_dur_sec`.
+
     peak_frac = NaN;
     run_start_t = NaN;
     run_end_t = NaN;
@@ -706,6 +871,18 @@ function [peak_frac, run_start_t, run_end_t, run_dur_sec] = strongest_histogram_
 end
 
 function r = robust_excursion(x, raw_cfg)
+% ROBUST_EXCURSION Perform the robust excursion operation.
+%
+% Syntax:
+%   r = robust_excursion(x, raw_cfg)
+%
+% Inputs:
+%   x - Input value `x`.
+%   raw_cfg - Input value `raw_cfg`.
+%
+% Outputs:
+%   r - Computed output value `r`.
+
     x = x(isfinite(x));
     if numel(x) < 3
         r = NaN;
@@ -715,6 +892,17 @@ function r = robust_excursion(x, raw_cfg)
 end
 
 function s = raw_slope_level(x)
+% RAW_SLOPE_LEVEL Perform the raw slope level operation.
+%
+% Syntax:
+%   s = raw_slope_level(x)
+%
+% Inputs:
+%   x - Input value `x`.
+%
+% Outputs:
+%   s - Computed output value `s`.
+
     x = x(:);
     x = x(isfinite(x));
     if numel(x) < 3
@@ -725,6 +913,17 @@ function s = raw_slope_level(x)
 end
 
 function f = finite_fraction(x)
+% FINITE_FRACTION Perform the finite fraction operation.
+%
+% Syntax:
+%   f = finite_fraction(x)
+%
+% Inputs:
+%   x - Input value `x`.
+%
+% Outputs:
+%   f - Computed output value `f`.
+
     if isempty(x)
         f = 0;
     else
@@ -733,11 +932,39 @@ function f = finite_fraction(x)
 end
 
 function [i1, i2] = time_window_to_indices(t1, t2, fs, N)
+% TIME_WINDOW_TO_INDICES Perform the time window to indices operation.
+%
+% Syntax:
+%   [i1, i2] = time_window_to_indices(t1, t2, fs, N)
+%
+% Inputs:
+%   t1 - Input value `t1`.
+%   t2 - Input value `t2`.
+%   fs - Sampling frequency in hertz.
+%   N - Number of samples.
+%
+% Outputs:
+%   i1 - Computed output value `i1`.
+%   i2 - Computed output value `i2`.
+
     i1 = max(1, floor(t1 * fs) + 1);
     i2 = min(N, floor(t2 * fs) + 1);
 end
 
 function grid_idx = mark_time_range_on_grid(t_grid, t0, t1)
+% MARK_TIME_RANGE_ON_GRID Mark time range on grid.
+%
+% Syntax:
+%   grid_idx = mark_time_range_on_grid(t_grid, t0, t1)
+%
+% Inputs:
+%   t_grid - Time coordinates in seconds.
+%   t0 - Input value `t0`.
+%   t1 - Input value `t1`.
+%
+% Outputs:
+%   grid_idx - Computed index or count value.
+
     if ~isfinite(t0) || ~isfinite(t1)
         grid_idx = false(size(t_grid));
         return;
@@ -753,6 +980,20 @@ function grid_idx = mark_time_range_on_grid(t_grid, t0, t1)
 end
 
 function [run_start_idx, run_end_idx, run_dur_sec] = longest_true_run(mask, fs)
+% LONGEST_TRUE_RUN Perform the longest true run operation.
+%
+% Syntax:
+%   [run_start_idx, run_end_idx, run_dur_sec] = longest_true_run(mask, fs)
+%
+% Inputs:
+%   mask - Logical state or selection mask.
+%   fs - Sampling frequency in hertz.
+%
+% Outputs:
+%   run_start_idx - Computed index or count value.
+%   run_end_idx - Computed index or count value.
+%   run_dur_sec - Computed output value `run_dur_sec`.
+
     mask = mask(:) ~= 0;
     d = diff([false; mask; false]);
     starts = find(d == 1);
@@ -772,6 +1013,17 @@ function [run_start_idx, run_end_idx, run_dur_sec] = longest_true_run(mask, fs)
 end
 
 function plot_resp_trace_or_message(t_raw, data, idx, label_text)
+% PLOT_RESP_TRACE_OR_MESSAGE Plot resp trace or message.
+%
+% Syntax:
+%   plot_resp_trace_or_message(t_raw, data, idx, label_text)
+%
+% Inputs:
+%   t_raw - Time coordinates in seconds.
+%   data - Input physiological signal data.
+%   idx - Input value `idx`.
+%   label_text - Label identifier or label metadata.
+
     if isempty(idx)
         text(0.5, 0.5, [label_text ' channel not found'], ...
             'Units', 'normalized', 'HorizontalAlignment', 'center')

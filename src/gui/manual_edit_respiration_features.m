@@ -1,5 +1,20 @@
 function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b_l, b_d, config)
-% Edit master-sample breath peaks and recompute their config.fs timing.
+% MANUAL_EDIT_RESPIRATION_FEATURES Edit respiratory cycles and explicitly confirm review.
+%
+% Syntax:
+%   [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b_l, b_d, config)
+%
+% Inputs:
+%   data - Input physiological signal data.
+%   b_l - Respiratory-cycle or belt-evidence structure.
+%   b_d - Respiratory-cycle or belt-evidence structure.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   b_l - Updated respiratory-cycle or belt structure.
+%   b_d - Updated respiratory-cycle or belt structure.
+%   review_confirmed - True when the user confirms the respiratory-cycle review.
+
     fs = config.fs;
     N = size(data, 1);
     t_raw = (0:N-1) / fs;
@@ -90,6 +105,11 @@ function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b
     end
 
     function confirm_review()
+    % CONFIRM_REVIEW Perform the confirm review operation.
+    %
+    % Syntax:
+    %   confirm_review()
+
         review_confirmed = true;
         if isgraphics(fh)
             uiresume(fh);
@@ -97,6 +117,11 @@ function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b
     end
 
     function cancel_review()
+    % CANCEL_REVIEW Perform the cancel review operation.
+    %
+    % Syntax:
+    %   cancel_review()
+
         review_confirmed = false;
         if isgraphics(fh)
             uiresume(fh);
@@ -105,10 +130,29 @@ function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b
     end
 
     function set_xlim(x0)
+    % SET_XLIM Perform the set xlim operation.
+    %
+    % Syntax:
+    %   set_xlim(x0)
+    %
+    % Inputs:
+    %   x0 - Input value `x0`.
+
         xlim(ax1, [x0 min(x0+window_sec, t_raw(end))]);
     end
 
     function edit_peak(evt, ax, belt, target)
+    % EDIT_PEAK Perform the edit peak operation.
+    %
+    % Syntax:
+    %   edit_peak(evt, ax, belt, target)
+    %
+    % Inputs:
+    %   evt - Input value `evt`.
+    %   ax - Target axes handle.
+    %   belt - Respiratory-cycle or belt-evidence structure.
+    %   target - Input value `target`.
+
         if ~strcmp(get(fh, 'SelectionType'), 'normal')
             return;
         end
@@ -135,6 +179,19 @@ function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b
     end
 
     function b = update_breath_peaks(b, t_click, target)
+    % UPDATE_BREATH_PEAKS Update breath peaks.
+    %
+    % Syntax:
+    %   b = update_breath_peaks(b, t_click, target)
+    %
+    % Inputs:
+    %   b - Respiratory-cycle or belt-evidence structure.
+    %   t_click - Input value `t_click`.
+    %   target - Input value `target`.
+    %
+    % Outputs:
+    %   b - Updated respiratory-cycle or belt structure.
+
         peak_idx = [];
         if isfield(b, 'peak_idx')
             peak_idx = b.peak_idx(:);
@@ -160,6 +217,18 @@ function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b
     end
 
     function idx = nearest_local_peak_idx(x, t_click)
+    % NEAREST_LOCAL_PEAK_IDX Perform the nearest local peak idx operation.
+    %
+    % Syntax:
+    %   idx = nearest_local_peak_idx(x, t_click)
+    %
+    % Inputs:
+    %   x - Input value `x`.
+    %   t_click - Input value `t_click`.
+    %
+    % Outputs:
+    %   idx - Computed index or count value.
+
         idx = [];
         if isempty(x)
             return;
@@ -179,11 +248,33 @@ function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b
     end
 
     function update_breath_plots(peak_plot, trough_plot, b)
+    % UPDATE_BREATH_PLOTS Update breath plots.
+    %
+    % Syntax:
+    %   update_breath_plots(peak_plot, trough_plot, b)
+    %
+    % Inputs:
+    %   peak_plot - Input value `peak_plot`.
+    %   trough_plot - Input value `trough_plot`.
+    %   b - Respiratory-cycle or belt-evidence structure.
+
         set(peak_plot, 'XData', b.peak_t, 'YData', b.peak_val);
         set(trough_plot, 'XData', b.trough_t, 'YData', b.trough_val);
     end
 
     function t_click = get_click_time(evt, ax)
+    % GET_CLICK_TIME Return click time.
+    %
+    % Syntax:
+    %   t_click = get_click_time(evt, ax)
+    %
+    % Inputs:
+    %   evt - Input value `evt`.
+    %   ax - Target axes handle.
+    %
+    % Outputs:
+    %   t_click - Computed output value `t_click`.
+
         t_click = NaN;
         if ~isempty(evt)
             if isstruct(evt) && isfield(evt, 'IntersectionPoint') && ~isempty(evt.IntersectionPoint)
@@ -201,6 +292,25 @@ function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b
     end
 
     function [signal_plot, peak_plot, trough_plot] = plot_belt_panel(ax, t, b, title_text, label_text, can_edit, unavailable_message)
+    % PLOT_BELT_PANEL Plot belt panel.
+    %
+    % Syntax:
+    %   [signal_plot, peak_plot, trough_plot] = plot_belt_panel(ax, t, b, title_text, label_text, can_edit, unavailable_message)
+    %
+    % Inputs:
+    %   ax - Target axes handle.
+    %   t - Time coordinates in seconds.
+    %   b - Respiratory-cycle or belt-evidence structure.
+    %   title_text - Input value `title_text`.
+    %   label_text - Label identifier or label metadata.
+    %   can_edit - Input value `can_edit`.
+    %   unavailable_message - Input value `unavailable_message`.
+    %
+    % Outputs:
+    %   signal_plot - Computed output value `signal_plot`.
+    %   peak_plot - Computed output value `peak_plot`.
+    %   trough_plot - Computed output value `trough_plot`.
+
         signal_plot = gobjects(0);
         peak_plot = gobjects(0);
         trough_plot = gobjects(0);
@@ -228,6 +338,20 @@ function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b
     end
 
     function [marker_t, marker_val] = paired_marker_fields(b, t_field, val_field)
+    % PAIRED_MARKER_FIELDS Perform the paired marker fields operation.
+    %
+    % Syntax:
+    %   [marker_t, marker_val] = paired_marker_fields(b, t_field, val_field)
+    %
+    % Inputs:
+    %   b - Respiratory-cycle or belt-evidence structure.
+    %   t_field - Input value `t_field`.
+    %   val_field - Input value `val_field`.
+    %
+    % Outputs:
+    %   marker_t - Computed output value `marker_t`.
+    %   marker_val - Computed output value `marker_val`.
+
         marker_t = [];
         marker_val = [];
         if ~isfield(b, t_field) || ~isfield(b, val_field)
@@ -242,6 +366,17 @@ function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b
     end
 
     function msg = lungs_unavailable_message(cfg)
+    % LUNGS_UNAVAILABLE_MESSAGE Perform the lungs unavailable message operation.
+    %
+    % Syntax:
+    %   msg = lungs_unavailable_message(cfg)
+    %
+    % Inputs:
+    %   cfg - Pipeline configuration structure.
+    %
+    % Outputs:
+    %   msg - Computed output value `msg`.
+
         if is_lung_belt_ignored(cfg)
             msg = 'Resp-Lungs ignored for this recording';
         else
@@ -250,6 +385,16 @@ function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b
     end
 
     function set_panel_global_ylim(target_ax, b, can_edit)
+    % SET_PANEL_GLOBAL_YLIM Perform the set panel global ylim operation.
+    %
+    % Syntax:
+    %   set_panel_global_ylim(target_ax, b, can_edit)
+    %
+    % Inputs:
+    %   target_ax - Target axes handle.
+    %   b - Respiratory-cycle or belt-evidence structure.
+    %   can_edit - Input value `can_edit`.
+
         if ~can_edit || ~isgraphics(target_ax) || ~isfield(b, 'x0') || isempty(b.x0)
             return;
         end
@@ -257,6 +402,17 @@ function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b
     end
 
     function y_limits = compute_global_ylim(signal)
+    % COMPUTE_GLOBAL_YLIM Compute global ylim.
+    %
+    % Syntax:
+    %   y_limits = compute_global_ylim(signal)
+    %
+    % Inputs:
+    %   signal - Input value `signal`.
+    %
+    % Outputs:
+    %   y_limits - Computed output value `y_limits`.
+
         signal = signal(isfinite(signal));
         if isempty(signal)
             y_limits = [-1, 1];

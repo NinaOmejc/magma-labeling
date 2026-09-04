@@ -1,31 +1,18 @@
 function [is_normal, p_value, stats] = check_normality(x, varargin)
-%CHECK_NORMALITY Test whether a vector is approximately normally distributed.
+% CHECK_NORMALITY Perform the check normality operation.
 %
-% Usage:
-%   is_normal = check_normality(x)
-%   [is_normal, p_value, stats] = check_normality(x, 'Alpha', 0.05, 'DoPlot', true)
+% Syntax:
+%   [is_normal, p_value, stats] = check_normality(x, varargin)
 %
 % Inputs:
-%   x       - numeric vector
-%
-% Optional name-value pairs:
-%   'Alpha'   - significance level, default = 0.05
-%   'DoPlot'  - true/false, default = false
-%   'Method'  - 'lillie', 'jb', or 'ad', default = 'lillie'
+%   x - Input value `x`.
+%   varargin - Optional positional or name-value inputs.
 %
 % Outputs:
-%   is_normal - true if normality is NOT rejected
-%   p_value   - p-value of the selected normality test
-%   stats     - struct with test details
-%
-% Notes:
-%   H0: data comes from a normal distribution
-%   If p_value >= alpha, normality is not rejected -> is_normal = true
-%   If p_value <  alpha, normality is rejected     -> is_normal = false
+%   is_normal - Computed output value `is_normal`.
+%   p_value - Computed numeric value.
+%   stats - Computed summary or metadata structure.
 
-    % -----------------------------
-    % Defaults
-    % -----------------------------
     alpha = 0.05;
     do_plot = false;
     method = 'lillie';

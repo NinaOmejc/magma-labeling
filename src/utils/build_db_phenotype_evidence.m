@@ -1,8 +1,18 @@
 function evidence = build_db_phenotype_evidence( ...
     label_burden, overlaps, label_evidence, source_provenance)
-% build_db_phenotype_evidence
-% Prespecified MAGMA WP1 phenotype evidence. These five structures are not
-% diagnoses, mutually exclusive classes, or additions to the label mask.
+% BUILD_DB_PHENOTYPE_EVIDENCE Build db phenotype evidence.
+%
+% Syntax:
+%   evidence = build_db_phenotype_evidence(label_burden, overlaps, label_evidence, source_provenance)
+%
+% Inputs:
+%   label_burden - Label identifier or label metadata.
+%   overlaps - Input value `overlaps`.
+%   label_evidence - Label identifier or label metadata.
+%   source_provenance - Input value `source_provenance`.
+%
+% Outputs:
+%   evidence - Computed summary or metadata structure.
 
     if nargin < 4 || isempty(source_provenance)
         source_provenance = 'weak_labels';
@@ -94,6 +104,22 @@ function evidence = build_db_phenotype_evidence( ...
 end
 
 function out = phenotype(name, assessable, available, measures, required, limitations)
+% PHENOTYPE Perform the phenotype operation.
+%
+% Syntax:
+%   out = phenotype(name, assessable, available, measures, required, limitations)
+%
+% Inputs:
+%   name - Input value `name`.
+%   assessable - Input value `assessable`.
+%   available - Input value `available`.
+%   measures - Measurement identifier.
+%   required - Input value `required`.
+%   limitations - Input value `limitations`.
+%
+% Outputs:
+%   out - Computed output value `out`.
+
     out = struct( ...
         'name', name, ...
         'assessable_from_current_signals', logical(assessable), ...
@@ -104,6 +130,14 @@ function out = phenotype(name, assessable, available, measures, required, limita
 end
 
 function external = empty_external_clinical_data()
+% EMPTY_EXTERNAL_CLINICAL_DATA Create an empty external clinical data value.
+%
+% Syntax:
+%   external = empty_external_clinical_data()
+%
+% Outputs:
+%   external - Computed output value `external`.
+
     missing_entry = struct('available', false, 'value', [], 'source', 'not_integrated');
     external = struct( ...
         'status', 'not_integrated', ...

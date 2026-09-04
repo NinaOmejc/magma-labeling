@@ -1,8 +1,14 @@
 function canonical = canonicalize_label_names(names)
-% canonicalize_label_names
-% Map historical canonical label identities to the frozen v3 names without
-% relying on historical column position. Unknown names are retained so the
-% caller can reject or report them explicitly.
+% CANONICALIZE_LABEL_NAMES Convert label names to canonical form.
+%
+% Syntax:
+%   canonical = canonicalize_label_names(names)
+%
+% Inputs:
+%   names - Input value `names`.
+%
+% Outputs:
+%   canonical - Computed output value `canonical`.
 
     canonical = cellstr(string(names));
     for i = 1:numel(canonical)

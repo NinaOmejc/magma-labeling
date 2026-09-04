@@ -1,11 +1,18 @@
-% [phcoh,Optional:phdiff] = wphcoh(WT1,WT2)
-% returns time-averaged wavelet phase coherence between two signals;
-% WT1 and WT2 are wavelet transforms of these signals.
-%
-% Author: Dmytro Iatsenko (http://www.physics.lancs.ac.uk/research/nbmphysics/diats)
-%--------------------------------------------------------------------------
+% Wavelet phase-coherence implementation by Dmytro Iatsenko.
 
 function [phcoh,varargout] = wphcoh(WT1,WT2)
+% WPHCOH Compute wavelet phase coherence.
+%
+% Syntax:
+%   [phcoh, varargout] = wphcoh(WT1, WT2)
+%
+% Inputs:
+%   WT1 - Wavelet transform of the first signal.
+%   WT2 - Wavelet transform of the second signal.
+%
+% Outputs:
+%   phcoh - Time-averaged phase coherence at each frequency.
+%   varargout - Optional phase-difference output.
 
 FN=min([size(WT1,1),size(WT2,1)]);
 WT1=WT1(1:FN,:); WT2=WT2(1:FN,:);
@@ -27,4 +34,3 @@ end
 if nargout>1, varargout{1}=phdiff; end
 
 end
-

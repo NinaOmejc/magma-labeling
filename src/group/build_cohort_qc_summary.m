@@ -1,7 +1,18 @@
 function qc = build_cohort_qc_summary( ...
     group_table, label_names, event_duration_table, localized_boundary_qc)
-% build_cohort_qc_summary
-% Cohort-ready descriptive QC only. This function never tunes thresholds.
+% BUILD_COHORT_QC_SUMMARY Build cohort qc summary.
+%
+% Syntax:
+%   qc = build_cohort_qc_summary(group_table, label_names, event_duration_table, localized_boundary_qc)
+%
+% Inputs:
+%   group_table - Input value `group_table`.
+%   label_names - Label identifier or label metadata.
+%   event_duration_table - Duration or window length in seconds.
+%   localized_boundary_qc - Input value `localized_boundary_qc`.
+%
+% Outputs:
+%   qc - Computed summary or metadata structure.
 
     label_names = cellstr(string(label_names));
     if nargin < 3
@@ -108,6 +119,19 @@ function qc = build_cohort_qc_summary( ...
 end
 
 function [durations, shortfalls] = rejected_localized_values(T, label_name)
+% REJECTED_LOCALIZED_VALUES Perform the rejected localized values operation.
+%
+% Syntax:
+%   [durations, shortfalls] = rejected_localized_values(T, label_name)
+%
+% Inputs:
+%   T - Time coordinates in seconds.
+%   label_name - Label identifier or label metadata.
+%
+% Outputs:
+%   durations - Computed numeric value.
+%   shortfalls - Computed output value `shortfalls`.
+
     durations = [];
     shortfalls = [];
     required = {'label', 'localized_duration_sec', ...
@@ -124,6 +148,18 @@ function [durations, shortfalls] = rejected_localized_values(T, label_name)
 end
 
 function values = pooled_weak_duration(T, label_name)
+% POOLED_WEAK_DURATION Perform the pooled weak duration operation.
+%
+% Syntax:
+%   values = pooled_weak_duration(T, label_name)
+%
+% Inputs:
+%   T - Time coordinates in seconds.
+%   label_name - Label identifier or label metadata.
+%
+% Outputs:
+%   values - Computed numeric value.
+
     values = [];
     required = {'provenance','label','duration_sec'};
     if isempty(T) || ~all(ismember(required,T.Properties.VariableNames))
@@ -135,6 +171,18 @@ function values = pooled_weak_duration(T, label_name)
 end
 
 function values = numeric_column(T, name)
+% NUMERIC_COLUMN Perform the numeric column operation.
+%
+% Syntax:
+%   values = numeric_column(T, name)
+%
+% Inputs:
+%   T - Time coordinates in seconds.
+%   name - Input value `name`.
+%
+% Outputs:
+%   values - Computed numeric value.
+
     values = nan(height(T), 1);
     if ismember(name, T.Properties.VariableNames) && isnumeric(T.(name))
         values = double(T.(name));
@@ -142,11 +190,33 @@ function values = numeric_column(T, name)
 end
 
 function value = finite_mean(values)
+% FINITE_MEAN Perform the finite mean operation.
+%
+% Syntax:
+%   value = finite_mean(values)
+%
+% Inputs:
+%   values - Input value `values`.
+%
+% Outputs:
+%   value - Computed numeric value.
+
     values = values(isfinite(values));
     if isempty(values), value = NaN; else, value = mean(values); end
 end
 
 function value = finite_median(values)
+% FINITE_MEDIAN Perform the finite median operation.
+%
+% Syntax:
+%   value = finite_median(values)
+%
+% Inputs:
+%   values - Input value `values`.
+%
+% Outputs:
+%   value - Computed numeric value.
+
     values = values(isfinite(values));
     if isempty(values), value = NaN; else, value = median(values); end
 end

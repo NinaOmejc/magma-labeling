@@ -1,5 +1,14 @@
 function b = empty_respiration_feature(basename)
-% empty_respiration_feature  Invalid breath feature struct for missing belts.
+% EMPTY_RESPIRATION_FEATURE Create an empty respiration feature value.
+%
+% Syntax:
+%   b = empty_respiration_feature(basename)
+%
+% Inputs:
+%   basename - Input value `basename`.
+%
+% Outputs:
+%   b - Updated respiratory-cycle or belt structure.
 
     if nargin < 1
         basename = '';

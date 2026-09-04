@@ -1,20 +1,20 @@
-%----------------Time-localized wavelet phase coherence--------------------
-% TPC = tlphcoh(WT1,WT2,freq,fs,Optional:numcycles)
-% calculates time-localized wavelet phase coherence TPC.
-%
-% Input:
-% WT1,WT2 - wavelet transforms of two signals
-% freq - frequencies used in wavelet transform
-% fs - sampling frequency of a signals from which WT1, WT2 were calculated
-% numcycles - number of cycles for calculating TPC (determines adaptive
-%             window length, i.e. at 0.1 Hz it will be (1/0.1)*numcycles
-%             seconds); default=10.
-%
-% Author: Dmytro Iatsenko (http://www.physics.lancs.ac.uk/research/nbmphysics/diats)
-%--------------------------------------------------------------------------
-
+% Time-localized wavelet phase-coherence implementation by Dmytro Iatsenko.
 
 function TPC = tlphcoh(TFR1,TFR2,freq,fs,varargin)
+% TLPHCOH Compute time-localized wavelet phase coherence.
+%
+% Syntax:
+%   TPC = tlphcoh(TFR1, TFR2, freq, fs, varargin)
+%
+% Inputs:
+%   TFR1 - Wavelet transform of the first signal.
+%   TFR2 - Wavelet transform of the second signal.
+%   freq - Wavelet frequencies in hertz.
+%   fs - Sampling frequency in hertz.
+%   varargin - Optional number of cycles used for the adaptive window.
+%
+% Outputs:
+%   TPC - Time-localized phase coherence.
 
 [NF,L]=size(TFR1);
 if nargin>4, wsize=varargin{1}; else wsize=10; end
@@ -35,4 +35,3 @@ for fn=1:NF
 end
 
 end
-

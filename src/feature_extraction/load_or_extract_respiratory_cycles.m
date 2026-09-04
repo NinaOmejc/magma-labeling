@@ -1,5 +1,15 @@
 function resp_cycles = load_or_extract_respiratory_cycles(data, config)
-% Load or extract respiratory cycles on the native config.fs master timeline.
+% LOAD_OR_EXTRACT_RESPIRATORY_CYCLES Load cached respiratory cycles or extract them from input data.
+%
+% Syntax:
+%   resp_cycles = load_or_extract_respiratory_cycles(data, config)
+%
+% Inputs:
+%   data - Input physiological signal data.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   resp_cycles - Respiratory-cycle structure.
 
     cache_file = feature_cache_file(config);
     cache_version = current_feature_cache_version();
@@ -42,6 +52,17 @@ function resp_cycles = load_or_extract_respiratory_cycles(data, config)
 end
 
 function cache_file = feature_cache_file(config)
+% FEATURE_CACHE_FILE Perform the feature cache file operation.
+%
+% Syntax:
+%   cache_file = feature_cache_file(config)
+%
+% Inputs:
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   cache_file - Computed output value `cache_file`.
+
     if isfield(config, 'sub_features_filename') && ~isempty(config.sub_features_filename)
         filename = config.sub_features_filename;
     else
@@ -56,6 +77,20 @@ function cache_file = feature_cache_file(config)
 end
 
 function ok = is_valid_feature_cache(cached, n_samples, cache_version, config)
+% IS_VALID_FEATURE_CACHE Determine whether valid feature cache.
+%
+% Syntax:
+%   ok = is_valid_feature_cache(cached, n_samples, cache_version, config)
+%
+% Inputs:
+%   cached - Input value `cached`.
+%   n_samples - Number of samples.
+%   cache_version - Input value `cache_version`.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   ok - Computed output value `ok`.
+
     required_meta = {'cache_version', 'subject', 'measurement', 'fs', 'n_samples', 'data_columns'};
     ok = isfield(cached, 'feature_cache_meta') && isstruct(cached.feature_cache_meta) && ...
         all(isfield(cached.feature_cache_meta, required_meta));
@@ -84,10 +119,33 @@ function ok = is_valid_feature_cache(cached, n_samples, cache_version, config)
 end
 
 function resp_cycles = cached_resp_cycles(cached)
+% CACHED_RESP_CYCLES Perform the cached resp cycles operation.
+%
+% Syntax:
+%   resp_cycles = cached_resp_cycles(cached)
+%
+% Inputs:
+%   cached - Input value `cached`.
+%
+% Outputs:
+%   resp_cycles - Respiratory-cycle structure.
+
     resp_cycles = cached.resp_cycles;
 end
 
 function ok = is_valid_resp_cycles(resp_cycles, n_samples)
+% IS_VALID_RESP_CYCLES Determine whether valid resp cycles.
+%
+% Syntax:
+%   ok = is_valid_resp_cycles(resp_cycles, n_samples)
+%
+% Inputs:
+%   resp_cycles - Respiratory-cycle structure.
+%   n_samples - Number of samples.
+%
+% Outputs:
+%   ok - Computed output value `ok`.
+
     ok = isstruct(resp_cycles) && isfield(resp_cycles, 'lungs') && ...
          isfield(resp_cycles, 'diaph') && isfield(resp_cycles, 'provenance') && ...
          isstruct(resp_cycles.lungs) && isstruct(resp_cycles.diaph) && ...
@@ -112,6 +170,17 @@ function ok = is_valid_resp_cycles(resp_cycles, n_samples)
 end
 
 function ok = is_valid_cycle_provenance(provenance)
+% IS_VALID_CYCLE_PROVENANCE Determine whether valid cycle provenance.
+%
+% Syntax:
+%   ok = is_valid_cycle_provenance(provenance)
+%
+% Inputs:
+%   provenance - Input value `provenance`.
+%
+% Outputs:
+%   ok - Computed output value `ok`.
+
     required = {'review_status', 'manual_review_performed', ...
         'manual_edits_made', 'loaded_from_cache'};
     valid_states = {'automatic', 'manual_reviewed_unchanged', ...
@@ -132,5 +201,13 @@ function ok = is_valid_cycle_provenance(provenance)
 end
 
 function v = current_feature_cache_version()
+% CURRENT_FEATURE_CACHE_VERSION Perform the current feature cache version operation.
+%
+% Syntax:
+%   v = current_feature_cache_version()
+%
+% Outputs:
+%   v - Computed output value `v`.
+
     v = 7;
 end

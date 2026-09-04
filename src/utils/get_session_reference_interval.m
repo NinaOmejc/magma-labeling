@@ -1,15 +1,15 @@
 function reference = get_session_reference_interval(N, config)
-% get_session_reference_interval
-% Resolve the one common physiological reference interval on config.fs.
+% GET_SESSION_REFERENCE_INTERVAL Return session reference interval.
 %
-% The returned interval follows the repository's half-open convention:
-%   start_t = (start_idx - 1) / fs
-%   end_t   = end_idx / fs
-%   samples = start_idx:end_idx
+% Syntax:
+%   reference = get_session_reference_interval(N, config)
 %
-% M1/M3 use 3-6 min and M2/M4 use 19-22 min by default. A recording
-% ending inside the requested interval is explicitly marked as truncated;
-% the interval is never shifted to another part of the recording.
+% Inputs:
+%   N - Number of samples.
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   reference - Computed output value `reference`.
 
     validate_inputs(N, config);
     cfg = reference_config(config);
@@ -83,6 +83,17 @@ function reference = get_session_reference_interval(N, config)
 end
 
 function cfg = reference_config(config)
+% REFERENCE_CONFIG Perform the reference config operation.
+%
+% Syntax:
+%   cfg = reference_config(config)
+%
+% Inputs:
+%   config - Pipeline configuration structure.
+%
+% Outputs:
+%   cfg - Computed output value `cfg`.
+
     cfg = struct( ...
         'pre_start_min', 3, ...
         'pre_end_min', 6, ...
@@ -99,6 +110,15 @@ function cfg = reference_config(config)
 end
 
 function validate_inputs(N, config)
+% VALIDATE_INPUTS Validate inputs.
+%
+% Syntax:
+%   validate_inputs(N, config)
+%
+% Inputs:
+%   N - Number of samples.
+%   config - Pipeline configuration structure.
+
     if ~isscalar(N) || ~isnumeric(N) || ~isfinite(N) || N < 0 || N ~= round(N)
         error('MAGMA:SessionReference:InvalidLength', ...
             'N must be a nonnegative integer sample count.');
@@ -116,6 +136,16 @@ function validate_inputs(N, config)
 end
 
 function validate_minutes(start_min, end_min, interval_name)
+% VALIDATE_MINUTES Validate minutes.
+%
+% Syntax:
+%   validate_minutes(start_min, end_min, interval_name)
+%
+% Inputs:
+%   start_min - Input value `start_min`.
+%   end_min - Input value `end_min`.
+%   interval_name - Input value `interval_name`.
+
     if ~isscalar(start_min) || ~isscalar(end_min) || ...
             ~isfinite(start_min) || ~isfinite(end_min) || ...
             start_min < 0 || end_min <= start_min

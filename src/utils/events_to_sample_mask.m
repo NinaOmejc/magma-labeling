@@ -1,4 +1,17 @@
 function mask = events_to_sample_mask(events, N, fs)
+% EVENTS_TO_SAMPLE_MASK Perform the events to sample mask operation.
+%
+% Syntax:
+%   mask = events_to_sample_mask(events, N, fs)
+%
+% Inputs:
+%   events - Event structure data.
+%   N - Number of samples.
+%   fs - Sampling frequency in hertz.
+%
+% Outputs:
+%   mask - Logical output mask.
+
     mask = false(N,1);
     for k = 1:numel(events)
         has_indices = isfield(events, 'start_idx') && isfield(events, 'end_idx') && ...

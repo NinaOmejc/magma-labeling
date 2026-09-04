@@ -1,5 +1,17 @@
 function events = label_mask_to_events(mask, label_names, fs)
-% label_mask_to_events  Convert a label-aligned sample mask to canonical events.
+% LABEL_MASK_TO_EVENTS Perform the label mask to events operation.
+%
+% Syntax:
+%   events = label_mask_to_events(mask, label_names, fs)
+%
+% Inputs:
+%   mask - Logical state or selection mask.
+%   label_names - Label identifier or label metadata.
+%   fs - Sampling frequency in hertz.
+%
+% Outputs:
+%   events - Event structure array.
+
     label_names = cellstr(string(label_names));
     if size(mask,2) ~= numel(label_names)
         error('MAGMA:Annotations:MaskAlignment', ...

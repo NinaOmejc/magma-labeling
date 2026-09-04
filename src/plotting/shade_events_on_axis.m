@@ -1,5 +1,17 @@
 function h = shade_events_on_axis(ax, events, display_name)
-% Shade each event interval on the specified axes.
+% SHADE_EVENTS_ON_AXIS Perform the shade events on axis operation.
+%
+% Syntax:
+%   h = shade_events_on_axis(ax, events, display_name)
+%
+% Inputs:
+%   ax - Target axes handle.
+%   events - Event structure data.
+%   display_name - Input value `display_name`.
+%
+% Outputs:
+%   h - Graphics handle or array.
+
     h = gobjects(0);
     if nargin < 1 || isempty(ax)
         ax = gca;
