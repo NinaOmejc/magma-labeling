@@ -59,6 +59,12 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
 
     write_events(filename, '/events/weak', results.events_weak);
     write_events(filename, '/events/reviewed', results.events_reviewed);
+    if isfield(results, 'review_provenance')
+        write_value(filename, '/review/provenance', results.review_provenance);
+    end
+    if isfield(results, 'review_history')
+        write_review_history(filename, '/review/history', results.review_history);
+    end
     if isfield(results, 'event_boundary_info')
         write_value(filename, '/events/boundary_info', results.event_boundary_info);
     end
@@ -229,6 +235,41 @@ function write_events(filename, path, events)
     write_numeric(filename, [path '/end_t'], event_field(events, 'end_t', 'numeric'));
     write_numeric(filename, [path '/duration'], event_field(events, 'duration', 'numeric'));
     write_text(filename, [path '/belt'], event_field(events, 'belt', 'text'));
+end
+
+function write_review_history(filename, path, history)
+    write_numeric(filename, [path '/number_of_rounds'], numel(history));
+    for i = 1:numel(history)
+        round_path = sprintf('%s/round_%06d', path, history(i).round_id);
+        write_numeric(filename, [round_path '/round_id'], history(i).round_id);
+        write_text(filename, [round_path '/timestamp'], history(i).timestamp);
+        write_text(filename, [round_path '/reviewer_role'], history(i).reviewer_role);
+        write_text(filename, [round_path '/start_from'], history(i).start_from);
+        write_numeric(filename, [round_path '/source_review_round'], ...
+            history(i).source_review_round);
+        write_events(filename, [round_path '/events'], history(i).events);
+        write_numeric(filename, [round_path '/mask'], uint8(history(i).mask));
+        write_numeric(filename, [round_path '/review_mask'], ...
+            uint8(history(i).review_mask));
+        write_text(filename, [round_path '/review_status'], ...
+            history(i).review_status);
+        write_text(filename, [round_path '/changed_labels'], ...
+            history(i).changed_labels);
+        if isfield(history, 'reviewer_id')
+            write_text(filename, [round_path '/reviewer_id'], history(i).reviewer_id);
+        end
+        if isfield(history, 'notes')
+            write_text(filename, [round_path '/notes'], history(i).notes);
+        end
+        if isfield(history, 'schema_version')
+            write_text(filename, [round_path '/schema_version'], ...
+                history(i).schema_version);
+        end
+        if isfield(history, 'accepted_as_active')
+            write_numeric(filename, [round_path '/accepted_as_active'], ...
+                uint8(history(i).accepted_as_active));
+        end
+    end
 end
 
 function values = event_field(events, name, kind)

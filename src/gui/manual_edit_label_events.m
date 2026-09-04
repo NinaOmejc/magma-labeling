@@ -1,7 +1,7 @@
 function [reviewed_event_sets, edit_info] = manual_edit_label_events(data, config, weak_event_sets)
 % manual_edit_label_events
 % Final manual interval editor for label events, excluding sigh. Automatic
-% weak events are immutable input; a separate reviewed working copy and
+% events are immutable input; a separate reviewed working copy and
 % explicit per-label review scope are returned.
 %
 % This editor works at the event level. It can reuse persisted edits on
@@ -13,45 +13,89 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events(data, confi
     N = size(data, 1);
     fs = config.fs;
     weak_event_sets = ensure_event_sets(weak_event_sets, label_defs, fs, N);
-    reviewed_event_sets = weak_event_sets;
-
     cfg = label_edit_config(config);
     edit_file = manual_edit_file(config, cfg);
     edit_info = init_edit_info(edit_file);
-    reviewed_fields = {};
-    review_coverage_mask = false(N, numel(label_defs));
+    reviewed_event_sets = weak_event_sets;
+    loaded_event_sets = [];
+    review_history = empty_review_history();
+    active_round_id = NaN;
 
-    if cfg.apply_saved_edits && exist(edit_file, 'file')
-        [loaded, loaded_reviewed_fields, loaded_schema, loaded_coverage] = load_manual_event_sets( ...
-            edit_file, reviewed_event_sets, label_defs, config, N, fs);
+    should_load = exist(edit_file, 'file') && ...
+        (cfg.manual_control || cfg.apply_saved_edits || ...
+         strcmp(cfg.start_from, 'latest_reviewed'));
+    if should_load
+        [loaded, ~, loaded_schema, ~, loaded_history, ...
+            loaded_active_round_id] = load_manual_event_sets( ...
+            edit_file, weak_event_sets, label_defs, config, N, fs);
         if ~isempty(loaded)
-            reviewed_event_sets = loaded;
-            reviewed_fields = loaded_reviewed_fields;
-            review_coverage_mask = loaded_coverage;
-            edit_info.applied_saved_edits = true;
+            loaded_event_sets = loaded;
+            review_history = loaded_history;
+            active_round_id = loaded_active_round_id;
             edit_info.loaded_schema_version = loaded_schema;
-            fprintf('Loaded manual label event edits: %s\n', edit_file);
+            fprintf('Loaded manual label review history: %s\n', edit_file);
         end
     end
 
     if ~cfg.manual_control
-        edit_info = finalize_edit_info(edit_info, weak_event_sets, ...
-            reviewed_event_sets, label_defs, reviewed_fields, review_coverage_mask);
+        if cfg.apply_saved_edits && ~isempty(loaded_event_sets)
+            reviewed_event_sets = loaded_event_sets;
+            edit_info.applied_saved_edits = true;
+            edit_info = apply_active_round_info(edit_info, review_history, ...
+                active_round_id, label_defs, N);
+        else
+            edit_info.review_history = empty_review_history();
+            edit_info.review_provenance = make_review_provenance( ...
+                edit_info.review_history, NaN);
+        end
         return;
     end
 
-    [reviewed_event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
-        data, config, reviewed_event_sets, weak_event_sets, label_defs, cfg, ...
-        reviewed_fields, review_coverage_mask);
+    source_review_round = NaN;
+    start_event_sets = weak_event_sets;
+    if strcmp(cfg.start_from, 'latest_reviewed')
+        if isempty(loaded_event_sets) || ~isfinite(active_round_id)
+            error('MAGMA:ManualLabelEdit:MissingLatestReviewed', ...
+                ['start_from is latest_reviewed, but no compatible active ' ...
+                 'manual review is available for this recording.']);
+        end
+        start_event_sets = loaded_event_sets;
+        source_review_round = active_round_id;
+    end
+
+    edited_event_sets = start_event_sets;
+    new_coverage = false(N, numel(label_defs));
+    [edited_event_sets, ~, new_coverage] = run_editor( ...
+        data, config, edited_event_sets, weak_event_sets, start_event_sets, ...
+        label_defs, cfg, {}, new_coverage);
     edit_info.editor_opened = true;
+
+    round_meta = struct( ...
+        'round_id', next_round_id(review_history), ...
+        'reviewer_role', cfg.reviewer_role, ...
+        'start_from', cfg.start_from, ...
+        'source_review_round', source_review_round, ...
+        'reviewer_id', cfg.reviewer_id, ...
+        'notes', cfg.notes);
+    [new_event_sets, new_round] = create_manual_review_round( ...
+        start_event_sets, edited_event_sets, new_coverage, config, round_meta);
+    review_history(end+1, 1) = new_round;
+
+    if cfg.replace_reviewed || isempty(loaded_event_sets) || ~isfinite(active_round_id)
+        reviewed_event_sets = new_event_sets;
+        active_round_id = new_round.round_id;
+    else
+        review_history(end).accepted_as_active = false;
+        reviewed_event_sets = loaded_event_sets;
+    end
 
     if cfg.save_edits
         save_manual_event_sets(edit_file, weak_event_sets, reviewed_event_sets, ...
-            reviewed_fields, review_coverage_mask, label_defs, config, N, fs);
-        fprintf('Saved manual label event edits: %s\n', edit_file);
+            review_history, active_round_id, label_defs, config, N, fs);
+        fprintf('Saved manual label review round: %s\n', edit_file);
     end
-    edit_info = finalize_edit_info(edit_info, weak_event_sets, ...
-        reviewed_event_sets, label_defs, reviewed_fields, review_coverage_mask);
+    edit_info = apply_active_round_info(edit_info, review_history, ...
+        active_round_id, label_defs, N);
 end
 
 
@@ -64,6 +108,11 @@ function cfg = label_edit_config(config)
     cfg.window_sec = 300;
     cfg.min_interval_sec = 1;
     cfg.filename_suffix = '_manual_label_events.mat';
+    cfg.start_from = 'automatic';
+    cfg.replace_reviewed = true;
+    cfg.reviewer_role = 'researcher';
+    cfg.reviewer_id = '';
+    cfg.notes = '';
 
     if isfield(config, 'LabelEdit')
         names = fieldnames(cfg);
@@ -78,8 +127,18 @@ function cfg = label_edit_config(config)
     cfg.manual_control = logical(cfg.manual_control);
     cfg.apply_saved_edits = logical(cfg.apply_saved_edits);
     cfg.save_edits = logical(cfg.save_edits);
+    cfg.replace_reviewed = logical(cfg.replace_reviewed);
     cfg.window_sec = max(30, cfg.window_sec);
     cfg.min_interval_sec = max(0, cfg.min_interval_sec);
+    cfg.start_from = char(string(cfg.start_from));
+    if ~ismember(cfg.start_from, {'automatic', 'latest_reviewed'})
+        error('MAGMA:ManualLabelEdit:InvalidStartFrom', ...
+            'LabelEdit.start_from must be automatic or latest_reviewed.');
+    end
+    cfg.reviewer_role = strtrim(char(string(cfg.reviewer_role)));
+    if isempty(cfg.reviewer_role), cfg.reviewer_role = 'unknown'; end
+    cfg.reviewer_id = char(string(cfg.reviewer_id));
+    cfg.notes = char(string(cfg.notes));
 end
 
 function edit_info = init_edit_info(edit_file)
@@ -88,6 +147,9 @@ function edit_info = init_edit_info(edit_file)
         'applied_saved_edits', false, ...
         'loaded_schema_version', NaN, ...
         'editor_opened', false, ...
+        'start_from', '', ...
+        'source_review_round', NaN, ...
+        'reviewer_role', '', ...
         'review_scope', 'explicitly_viewed_or_edited_regions_per_label', ...
         'review_coverage_mask', false(0, 0), ...
         'reviewed_fields', {{}}, ...
@@ -96,61 +158,43 @@ function edit_info = init_edit_info(edit_file)
         'changed_fields', {{}}, ...
         'changed_labels', {{}}, ...
         'changed_plot_names', {{}} );
+    edit_info.review_history = empty_review_history();
+    edit_info.review_provenance = make_review_provenance( ...
+        edit_info.review_history, NaN);
 end
 
-function edit_info = finalize_edit_info(edit_info, weak_event_sets, event_sets, ...
-    label_defs, reviewed_fields, review_coverage_mask)
-    changed = false(1, numel(label_defs));
-    reviewed = false(1, numel(label_defs));
+function edit_info = apply_active_round_info(edit_info, history, active_round_id, defs, N)
+    edit_info.review_history = history;
+    edit_info.review_provenance = make_review_provenance(history, active_round_id);
+    edit_info.review_coverage_mask = false(N, numel(defs));
     status = struct();
-    for i = 1:numel(label_defs)
-        field = label_defs(i).field;
-        changed(i) = ~event_sets_equal(weak_event_sets.(field), event_sets.(field));
-        reviewed(i) = any(strcmp(reviewed_fields, field));
-        if ~reviewed(i)
-            value = 'unreviewed';
-        elseif ~changed(i)
-            value = 'reviewed_accepted';
-        elseif ~isempty(weak_event_sets.(field)) && isempty(event_sets.(field))
-            value = 'reviewed_rejected';
-        else
-            value = 'reviewed_edited';
-        end
-        status.(field) = value;
-    end
+    for i = 1:numel(defs), status.(defs(i).field) = 'unreviewed'; end
 
-    edit_info.reviewed_fields = {label_defs(reviewed).field};
-    edit_info.reviewed_labels = {label_defs(reviewed).type};
-    edit_info.status_by_label = status;
-    edit_info.review_coverage_mask = logical(review_coverage_mask);
-    edit_info.changed_fields = {label_defs(changed).field};
-    edit_info.changed_labels = {label_defs(changed).name};
-    edit_info.changed_plot_names = {label_defs(changed).plot_name};
-end
-
-function tf = event_sets_equal(a, b)
-    a_table = event_signature_table(a);
-    b_table = event_signature_table(b);
-    tf = isequal(a_table, b_table);
-end
-
-function T = event_signature_table(events)
-    if isempty(events)
-        T = table(string.empty(0,1), zeros(0,1), zeros(0,1), zeros(0,1), zeros(0,1), ...
-            'VariableNames', {'type', 'start_idx', 'end_idx', 'start_t', 'end_t'});
+    active_index = find([history.round_id] == active_round_id, 1, 'last');
+    if isempty(active_index)
+        edit_info.status_by_label = status;
         return;
     end
-
-    events = sanitize_events(events);
-    event_type = string({events.type}');
-    start_idx = round([events.start_idx]');
-    end_idx = round([events.end_idx]');
-    start_t = round([events.start_t]' * 1000) / 1000;
-    end_t = round([events.end_t]' * 1000) / 1000;
-
-    T = table(event_type, start_idx, end_idx, start_t, end_t, ...
-        'VariableNames', {'type', 'start_idx', 'end_idx', 'start_t', 'end_t'});
-    T = sortrows(T, {'type', 'start_idx', 'end_idx', 'start_t', 'end_t'});
+    active = history(active_index);
+    label_names = canonical_label_names();
+    reviewed = false(1, numel(defs));
+    changed = false(1, numel(defs));
+    for i = 1:numel(defs)
+        label_index = find(strcmp(label_names, defs(i).type), 1);
+        edit_info.review_coverage_mask(:, i) = active.review_mask(:, label_index);
+        reviewed(i) = any(edit_info.review_coverage_mask(:, i));
+        status.(defs(i).field) = active.review_status{label_index};
+        changed(i) = any(strcmp(active.changed_labels, defs(i).type));
+    end
+    edit_info.start_from = active.start_from;
+    edit_info.source_review_round = active.source_review_round;
+    edit_info.reviewer_role = active.reviewer_role;
+    edit_info.reviewed_fields = {defs(reviewed).field};
+    edit_info.reviewed_labels = {defs(reviewed).type};
+    edit_info.status_by_label = status;
+    edit_info.changed_fields = {defs(changed).field};
+    edit_info.changed_labels = {defs(changed).name};
+    edit_info.changed_plot_names = {defs(changed).plot_name};
 end
 
 function event_sets = ensure_event_sets(source_sets, label_defs, fs, N)
@@ -230,12 +274,15 @@ function edit_file = manual_edit_file(config, cfg)
     edit_file = fullfile(out_dir, sprintf('Sub%d_M%d%s', config.subject, config.measure, suffix));
 end
 
-function [loaded_sets, reviewed_fields, schema_version, review_coverage_mask] = load_manual_event_sets( ...
+function [loaded_sets, reviewed_fields, schema_version, review_coverage_mask, ...
+    review_history, active_round_id] = load_manual_event_sets( ...
     edit_file, automatic_sets, label_defs, config, N, fs)
     loaded_sets = [];
     reviewed_fields = {};
     schema_version = NaN;
     review_coverage_mask = false(N, numel(label_defs));
+    review_history = empty_review_history();
+    active_round_id = NaN;
     try
         loaded = load(edit_file);
     catch ME
@@ -313,6 +360,58 @@ function [loaded_sets, reviewed_fields, schema_version, review_coverage_mask] = 
             ['Manual review coverage was not migrated because its saved ' ...
              'label_names are missing or misaligned. Event edits remain migrated by field identity.']);
     end
+
+    if isfield(loaded, 'manual_label_review_history') && ...
+            isstruct(loaded.manual_label_review_history) && ...
+            ~isempty(loaded.manual_label_review_history)
+        review_history = normalize_saved_review_history( ...
+            loaded.manual_label_review_history, N, config);
+        if ~isempty(review_history)
+            if isfield(loaded, 'manual_label_active_round_id') && ...
+                    isnumeric(loaded.manual_label_active_round_id) && ...
+                    isscalar(loaded.manual_label_active_round_id)
+                active_round_id = loaded.manual_label_active_round_id;
+            elseif isfield(meta, 'active_round_id') && ...
+                    isnumeric(meta.active_round_id) && isscalar(meta.active_round_id)
+                active_round_id = meta.active_round_id;
+            else
+                active_round_id = review_history(end).round_id;
+            end
+            active_index = find([review_history.round_id] == active_round_id, 1, 'last');
+            if isempty(active_index)
+                warning('MAGMA:ManualLabelEdit:InvalidActiveRound', ...
+                    'Saved active round is missing; using the most recent review round.');
+                active_index = numel(review_history);
+                active_round_id = review_history(active_index).round_id;
+            end
+            loaded_sets = event_sets_from_review_round( ...
+                review_history(active_index), label_defs, fs, N);
+            review_coverage_mask = generic_coverage_from_round( ...
+                review_history(active_index), label_defs, N);
+            reviewed_fields = {label_defs(any(review_coverage_mask, 1)).field};
+            return;
+        end
+    end
+
+    % A pre-history file is represented as an immutable first round. When
+    % exact historical coverage was not stored, its review mask remains
+    % false rather than inventing reviewed-negative regions.
+    saved_timestamp = 'unknown';
+    if isfield(meta, 'saved_on') && ~isempty(meta.saved_on)
+        saved_timestamp = char(string(meta.saved_on));
+    end
+    legacy_meta = struct('round_id', 1, 'timestamp', saved_timestamp, ...
+        'reviewer_role', 'unknown', 'start_from', 'automatic', ...
+        'source_review_round', NaN, 'reviewer_id', '', ...
+        'notes', sprintf('Migrated from manual-review schema %g.', schema_version));
+    [~, legacy_round] = create_manual_review_round(loaded_sets, loaded_sets, ...
+        review_coverage_mask, config, legacy_meta);
+    [~, comparison] = create_manual_review_round(automatic_sets, loaded_sets, ...
+        review_coverage_mask, config, legacy_meta);
+    legacy_round.review_status = comparison.review_status;
+    legacy_round.changed_labels = comparison.changed_labels;
+    review_history = legacy_round;
+    active_round_id = 1;
 end
 
 function ok = is_valid_manual_meta(meta, config, N, fs)
@@ -323,8 +422,151 @@ function ok = is_valid_manual_meta(meta, config, N, fs)
         isfield(meta, 'fs') && isequal(meta.fs, fs);
 end
 
+function history = normalize_saved_review_history(saved_history, N, config)
+    history = empty_review_history();
+    required = {'round_id', 'timestamp', 'reviewer_role', 'start_from', ...
+        'source_review_round', 'events', 'mask', 'review_mask', ...
+        'review_status', 'changed_labels'};
+    if ~all(isfield(saved_history, required))
+        warning('MAGMA:ManualLabelEdit:InvalidHistory', ...
+            'Saved review history is missing required fields; migrating the active state instead.');
+        return;
+    end
+
+    L = numel(canonical_label_names());
+    normalized = repmat(review_round_template(), numel(saved_history), 1);
+    for i = 1:numel(saved_history)
+        source = saved_history(i);
+        if ~isequal(size(source.mask), [N L]) || ...
+                ~isequal(size(source.review_mask), [N L]) || ...
+                numel(source.review_status) ~= L
+            warning('MAGMA:ManualLabelEdit:InvalidHistory', ...
+                'Saved review round %d has misaligned masks or status; migrating the active state instead.', i);
+            return;
+        end
+        if ~isnumeric(source.round_id) || ~isscalar(source.round_id) || ...
+                ~isfinite(source.round_id) || source.round_id < 1
+            warning('MAGMA:ManualLabelEdit:InvalidHistory', ...
+                'Saved review round %d has an invalid round id.', i);
+            return;
+        end
+        start_from = char(string(source.start_from));
+        if ~ismember(start_from, {'automatic', 'latest_reviewed'})
+            warning('MAGMA:ManualLabelEdit:InvalidHistory', ...
+                'Saved review round %d has an invalid start source.', i);
+            return;
+        end
+
+        normalized(i).round_id = round(source.round_id);
+        normalized(i).timestamp = char(string(source.timestamp));
+        normalized(i).reviewer_role = char(string(source.reviewer_role));
+        normalized(i).start_from = start_from;
+        normalized(i).source_review_round = source.source_review_round;
+        normalized(i).events = normalize_event_types_and_meta(source.events, config.fs);
+        normalized(i).mask = logical(source.mask);
+        normalized(i).review_mask = logical(source.review_mask);
+        normalized(i).review_status = reshape(cellstr(string(source.review_status)), 1, []);
+        normalized(i).changed_labels = reshape(cellstr(string(source.changed_labels)), 1, []);
+        normalized(i).reviewer_id = optional_text(source, 'reviewer_id');
+        normalized(i).notes = optional_text(source, 'notes');
+        normalized(i).schema_version = optional_text( ...
+            source, 'schema_version', 'manual_review_round_v1');
+        if isfield(source, 'accepted_as_active') && ...
+                isscalar(source.accepted_as_active)
+            normalized(i).accepted_as_active = logical(source.accepted_as_active);
+        end
+    end
+    if numel(unique([normalized.round_id])) ~= numel(normalized)
+        warning('MAGMA:ManualLabelEdit:InvalidHistory', ...
+            'Saved review history contains duplicate round ids.');
+        return;
+    end
+    history = normalized;
+end
+
+function value = optional_text(source, field, default_value)
+    if nargin < 3, default_value = ''; end
+    value = default_value;
+    if isfield(source, field) && ~isempty(source.(field))
+        value = char(string(source.(field)));
+    end
+end
+
+function event_sets = event_sets_from_review_round(round_info, defs, fs, N)
+    event_sets = struct();
+    events = normalize_event_types_and_meta(round_info.events, fs);
+    for i = 1:numel(defs)
+        keep = strcmp({events.type}, defs(i).type);
+        event_sets.(defs(i).field) = sanitize_events(events(keep), fs, N);
+    end
+end
+
+function coverage = generic_coverage_from_round(round_info, defs, N)
+    coverage = false(N, numel(defs));
+    label_names = canonical_label_names();
+    if ~isequal(size(round_info.review_mask), [N numel(label_names)])
+        error('MAGMA:ManualLabelEdit:ReviewMaskAlignment', ...
+            'Active review coverage must be N-by-11.');
+    end
+    for i = 1:numel(defs)
+        label_index = find(strcmp(label_names, defs(i).type), 1);
+        coverage(:, i) = logical(round_info.review_mask(:, label_index));
+    end
+end
+
+function history = empty_review_history()
+    history = repmat(review_round_template(), 0, 1);
+end
+
+function value = review_round_template()
+    value = struct( ...
+        'round_id', NaN, ...
+        'timestamp', '', ...
+        'reviewer_role', '', ...
+        'start_from', '', ...
+        'source_review_round', NaN, ...
+        'events', {normalize_event_types_and_meta(empty_events())}, ...
+        'mask', false(0, numel(canonical_label_names())), ...
+        'review_mask', false(0, numel(canonical_label_names())), ...
+        'review_status', {{}}, ...
+        'changed_labels', {{}}, ...
+        'reviewer_id', '', ...
+        'notes', '', ...
+        'schema_version', 'manual_review_round_v1', ...
+        'accepted_as_active', true);
+end
+
+function round_id = next_round_id(history)
+    if isempty(history)
+        round_id = 1;
+    else
+        round_id = max([history.round_id]) + 1;
+    end
+end
+
+function provenance = make_review_provenance(history, active_round_id)
+    provenance = struct( ...
+        'version', 'manual_review_provenance_v1', ...
+        'latest_round_id', NaN, ...
+        'latest_reviewer_role', 'none', ...
+        'start_from', 'none', ...
+        'source_review_round', NaN, ...
+        'number_of_rounds', numel(history), ...
+        'most_recent_round_id', NaN);
+    if ~isempty(history)
+        provenance.most_recent_round_id = history(end).round_id;
+    end
+    active_index = find([history.round_id] == active_round_id, 1, 'last');
+    if isempty(active_index), return; end
+    active = history(active_index);
+    provenance.latest_round_id = active.round_id;
+    provenance.latest_reviewer_role = active.reviewer_role;
+    provenance.start_from = active.start_from;
+    provenance.source_review_round = active.source_review_round;
+end
+
 function save_manual_event_sets(edit_file, weak_event_sets, reviewed_event_sets, ...
-    reviewed_fields, review_coverage_mask, label_defs, config, N, fs)
+    review_history, active_round_id, label_defs, config, N, fs)
     out_dir = fileparts(edit_file);
     if ~isfolder(out_dir)
         mkdir(out_dir);
@@ -332,27 +574,41 @@ function save_manual_event_sets(edit_file, weak_event_sets, reviewed_event_sets,
 
     manual_label_weak_event_sets = ensure_event_sets(weak_event_sets, label_defs, fs, N);
     manual_label_event_sets = ensure_event_sets(reviewed_event_sets, label_defs, fs, N);
-    manual_label_review_mask = logical(review_coverage_mask);
+    active_index = find([review_history.round_id] == active_round_id, 1, 'last');
+    if isempty(active_index)
+        error('MAGMA:ManualLabelEdit:InvalidActiveRound', ...
+            'Cannot save manual review without a valid active round.');
+    end
+    manual_label_review_mask = generic_coverage_from_round( ...
+        review_history(active_index), label_defs, N);
+    manual_label_review_history = review_history;
+    manual_label_active_round_id = active_round_id;
+    manual_label_review_provenance = make_review_provenance( ...
+        review_history, active_round_id);
+    reviewed_fields = {label_defs(any(manual_label_review_mask, 1)).field};
     manual_label_edit_meta = struct( ...
-        'version', 4, ...
-        'schema_version', 4, ...
+        'version', 5, ...
+        'schema_version', 5, ...
         'subject', config.subject, ...
         'measure', config.measure, ...
         'n_samples', N, ...
         'fs', fs, ...
         'data_columns', {config.data_columns}, ...
+        'active_round_id', active_round_id, ...
         'review_scope', 'explicitly_viewed_or_edited_regions_per_label', ...
         'reviewed_fields', {reviewed_fields}, ...
         'saved_on', char(datetime('now', 'Format', 'yyyy-MM-dd HH:mm:ss')) );
     manual_label_edit_meta.label_names = {label_defs.type};
+    manual_label_edit_meta.canonical_label_names = canonical_label_names();
 
     save(edit_file, 'manual_label_weak_event_sets', ...
         'manual_label_event_sets', 'manual_label_review_mask', ...
-        'manual_label_edit_meta');
+        'manual_label_review_history', 'manual_label_active_round_id', ...
+        'manual_label_review_provenance', 'manual_label_edit_meta');
 end
 
 function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
-    data, config, event_sets, auto_event_sets, label_defs, cfg, ...
+    data, config, event_sets, auto_event_sets, start_event_sets, label_defs, cfg, ...
     reviewed_fields, review_coverage_mask)
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
@@ -414,10 +670,10 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
         'Max', max(0, t_end - window_sec), 'Value', 0, ...
         'SliderStep', slider_step(t_end, window_sec), ...
         'Callback', @(src,~) set_xlim(src.Value));
-    uicontrol(fh, 'Style', 'pushbutton', 'String', 'Reset label', ...
+    uicontrol(fh, 'Style', 'pushbutton', 'String', 'Reset label to start', ...
         'Units', 'normalized', 'Position', [0.67 0.01 0.10 0.035], ...
         'Callback', @(~,~) reset_current_label());
-    uicontrol(fh, 'Style', 'pushbutton', 'String', 'Reset all', ...
+    uicontrol(fh, 'Style', 'pushbutton', 'String', 'Reset all to start', ...
         'Units', 'normalized', 'Position', [0.78 0.01 0.10 0.035], ...
         'Callback', @(~,~) reset_all_labels());
     uicontrol(fh, 'Style', 'pushbutton', 'String', 'Done', ...
@@ -432,6 +688,7 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
     fprintf('  Choose a label from the dropdown.\n');
     fprintf('  Drag on a non-shaded area to add an interval for that label.\n');
     fprintf('  Click a shaded interval to remove it for the selected label.\n');
+    fprintf('  Reset restores the configured starting annotations (%s).\n', cfg.start_from);
     fprintf('  Close or press Done when finished.\n\n');
 
     refresh_event_patches();
@@ -467,12 +724,12 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
     function reset_current_label()
         field = label_defs(current_label_idx).field;
         mark_current_view_reviewed();
-        event_sets.(field) = auto_event_sets.(field);
+        event_sets.(field) = start_event_sets.(field);
         refresh_event_patches();
     end
 
     function reset_all_labels()
-        event_sets = auto_event_sets;
+        event_sets = start_event_sets;
         mark_current_view_reviewed();
         refresh_event_patches();
     end
@@ -578,9 +835,18 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
 
     function refresh_event_patches()
         delete(findall(fh, 'Tag', 'ManualLabelEventPatch'));
+        delete(findall(fh, 'Tag', 'ManualLabelAutomaticPatch'));
         delete_temp_patches();
 
         field = label_defs(current_label_idx).field;
+        if strcmp(cfg.start_from, 'latest_reviewed')
+            automatic_events = auto_event_sets.(field);
+            for ie = 1:numel(automatic_events)
+                for ia = 1:numel(ax)
+                    add_automatic_reference_patch(ax(ia), automatic_events(ie));
+                end
+            end
+        end
         events = event_sets.(field);
         for ie = 1:numel(events)
             for ia = 1:numel(ax)
@@ -592,6 +858,19 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
         title(ax3, sprintf('Manual label editing: SpO2 | %s', label_defs(current_label_idx).name));
         align_axes_x_widths(ax);
         drawnow;
+    end
+
+    function add_automatic_reference_patch(target_ax, ev)
+        y_limits = ylim(target_ax);
+        p = patch(target_ax, [ev.start_t ev.end_t ev.end_t ev.start_t], ...
+            [y_limits(1) y_limits(1) y_limits(2) y_limits(2)], ...
+            'none', 'EdgeColor', [0.20 0.45 0.90], 'LineStyle', '--', ...
+            'LineWidth', 1, 'Tag', 'ManualLabelAutomaticPatch', ...
+            'HitTest', 'off', 'PickableParts', 'none');
+        try
+            uistack(p, 'bottom');
+        catch
+        end
     end
 
     function add_event_patch(target_ax, ev, event_index)

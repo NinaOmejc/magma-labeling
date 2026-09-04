@@ -185,7 +185,7 @@ function config = get_config()
     %---- LABEL 9 - thoracic - DETECTION SETTINGS
     % Relative thoracoabdominal excursion dominance after normalizing each
     % uncalibrated belt to its own fixed session reference. The threshold is
-    % an operational weak-label rule, not a validated clinical cutoff.
+    % an operational automatic-label rule, not a validated clinical cutoff.
     config.TDB = struct();
     config.TDB.dominance_ratio_thr = 1.5;          % normalized thoracic / normalized abdominal excursion
     config.TDB.analysis_win_sec = 30;              % common robust-median evidence window
@@ -223,6 +223,11 @@ function config = get_config()
     config.LabelEdit.manual_control = false;      % *** open final event-interval editor before saving labels
     config.LabelEdit.apply_saved_edits = false;  % reuse saved manual event edits on rerun, even when GUI is off
     config.LabelEdit.save_edits = true;          % persist edited event intervals in the subject results folder
+    config.LabelEdit.start_from = 'automatic';   % 'automatic' or 'latest_reviewed' GUI starting annotations
+    config.LabelEdit.replace_reviewed = true;    % make a completed review round the active reviewed layer
+    config.LabelEdit.reviewer_role = 'researcher'; % flexible non-identifying role stored with the review round
+    config.LabelEdit.reviewer_id = '';           % optional reviewer identifier; may remain empty
+    config.LabelEdit.notes = '';                 % optional free-text review notes
     config.LabelEdit.window_sec = 400;           % *** visible time span for manual label GUI scrolling
     config.LabelEdit.min_interval_sec = 1;       % minimum drag interval accepted as a manual event
     config.LabelEdit.filename_suffix = '_manual_label_events.mat';

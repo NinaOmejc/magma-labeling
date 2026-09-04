@@ -137,7 +137,7 @@ The thresholds below are operational research criteria and should not be interpr
 
 Amplitude-dependent sustained labels use participant/session-relative respiratory excursion rather than absolute tidal volume. Respiratory belts are uncalibrated, so raw amplitudes should not be compared directly across subjects.
 
-For `shallow`, `deep`, `slow`, and `rapid`, rolling evidence confirms a candidate but does not define its final onset and offset. Reviewed breath-level evidence localizes every contiguous qualifying run inside that candidate. The configured `min_dur_sec` is then applied once to each localized run. Passing runs become final weak events; shorter runs remain in `results.event_boundary_info` as rejected QC evidence, including their duration, minimum duration, shortfall, evidence source, and temporal uncertainty. Diagnostic plots show rolling/candidate support, all localized qualifying support, and the final retained state even when no final event remains.
+For `shallow`, `deep`, `slow`, and `rapid`, rolling evidence confirms a candidate but does not define its final onset and offset. Reviewed breath-level evidence localizes every contiguous qualifying run inside that candidate. The configured `min_dur_sec` is then applied once to each localized run. Passing runs become final automatic events; shorter runs remain in `results.event_boundary_info` as rejected QC evidence, including their duration, minimum duration, shortfall, evidence source, and temporal uncertainty. Diagnostic plots show rolling/candidate support, all localized qualifying support, and the final retained state even when no final event remains.
 
 `irregular` and `thoracic` remain aggregate-window events with explicit boundary uncertainty because no finer localization is defensible from their current evidence. `apnea` retains its detector-specific breath-amplitude and raw-flat localization paths.
 
@@ -161,7 +161,7 @@ The 11 automatic labels are elementary physiological patterns, not 11 clinical D
 - **Forced abdominal expiration** — not reliably identifiable from respiratory belts alone because belt motion does not establish active expiratory abdominal-muscle recruitment.
 - **Thoracoabdominal asynchrony** — supported by the `async` label and continuous coherence-based evidence.
 
-Level 1 is defined as “elementary physiological labels and evidence.” Weak versus reviewed provenance is represented separately rather than embedded in that level name. These phenotype profiles are descriptive and non-diagnostic. External clinical data are integrated separately when available.
+Level 1 is defined as “elementary physiological labels and evidence.” Automatic versus manually reviewed provenance is represented separately rather than embedded in that level name. These phenotype profiles are descriptive and non-diagnostic. External clinical data are integrated separately when available.
 
 ## Manual Controls
 
@@ -172,9 +172,14 @@ Manual review is optional and controlled in `src/get_config.m`:
 - `config.LabelEdit.manual_control` — opens the final interval editor for automatic labels other than sigh.
 - `config.LabelEdit.apply_saved_edits` — reapplies previously saved manual label edits on rerun.
 - `config.LabelEdit.save_edits` — saves manual event edits to a separate manual-label file.
+- `config.LabelEdit.start_from` — uses either immutable `automatic` annotations or the `latest_reviewed` annotations as the GUI starting state.
+- `config.LabelEdit.replace_reviewed` — makes the completed round the active latest reviewed layer while retaining all earlier rounds.
+- `config.LabelEdit.reviewer_role` — stores a flexible, non-identifying role such as `researcher`, `clinician`, or `expert` with the round.
 - `config.LabelEdit.rewrite_changed_figures` — regenerates only diagnostic figures for labels whose reviewed intervals changed.
 
-Automatic annotations are always preserved separately from manually reviewed annotations. Review coverage is stored explicitly, so an unreviewed sample is not interpreted as a manually confirmed negative.
+Automatic annotations are always preserved separately from manually reviewed annotations. For a later expert review, set `start_from = 'latest_reviewed'`; the editor then opens the previous reviewed values instead of requiring relabeling from scratch. Edits replace values only inside the newly viewed regions, while prior reviewed values remain outside that scope. Each completed round has its own coverage mask, reviewer role, source, annotations, and status in `results.review_history`. The active round is summarized by `results.review_provenance`.
+
+Review coverage is stored explicitly per round, so an unreviewed sample is not interpreted as a manually confirmed negative. Starting from earlier reviewed annotations never promotes the earlier reviewer’s coverage to the new reviewer’s coverage.
 
 Reviewed availability requires at least one sample that is both reviewed and scientifically assessable. In particular, a desaturation review covering only non-finite SpO2 samples, or an asynchrony review covering only invalid wavelet-evidence samples, remains unavailable rather than becoming a reviewed negative.
 
@@ -195,9 +200,10 @@ Main outputs:
 
 The most important result fields include:
 
-- automatic annotations: `results.events_weak`, `results.mask_weak`
+- automatic annotations: `results.events_weak`, `results.mask_weak` (the `weak` suffix is retained as an internal backward-compatible field name)
 - manually reviewed annotations: `results.events_reviewed`, `results.mask_reviewed`
 - review coverage: `results.gold_review_mask`
+- review history and active provenance: `results.review_history`, `results.review_provenance`
 - label names and availability: `results.label_names`, `results.label_available`, `results.label_assessable_mask`
 - reviewed availability: `results.label_reviewed_available`, `results.label_reviewed_assessable_mask`
 - common temporal reference: `results.session_reference`
@@ -211,7 +217,7 @@ The most important result fields include:
 
 Additional detector diagnostics and intermediate evidence can be inspected directly in the saved `results` structure or in the HDF5 hierarchy.
 
-The HDF5 export schema is `magma_ml_hdf5_v2`. It stores the common metadata once under `/session_reference`, the independent respiratory-belt statistics under `/resp_reference`, and the SpO2 statistic under `/spo2_reference`. ReA, desaturation, and raw-apnea diagnostics remain with their detectors. The MAT output preserves the same distinction.
+The HDF5 export schema is `magma_ml_hdf5_v2`. Its existing top-level reviewed masks and events remain unchanged for downstream consumers, while `/review/provenance` and `/review/history` expose round metadata, annotations, and exact per-round coverage. It stores the common metadata once under `/session_reference`, the independent respiratory-belt statistics under `/resp_reference`, and the SpO2 statistic under `/spo2_reference`. ReA, desaturation, and raw-apnea diagnostics remain with their detectors. The MAT output preserves the same distinction.
 
 Group-level summaries are written under the `group_analysis/` output directory. `cohort_localized_boundary_qc.csv` preserves every localized-run duration and duration shortfall; `cohort_label_qc_summary.csv` aggregates rejected-run counts, medians, upper tails, maxima, and the smallest shortfall per label. These outputs are descriptive QC and never change thresholds automatically.
 

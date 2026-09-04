@@ -28,8 +28,7 @@ for isub = 1:length(config.subjects)
         plot_session_reference(data, resp_cycles, resp_ref, spo2_ref, session_reference, config);
 
         % RESPIRATORY FEATURES (derived; no peak redetection)
-        resp_features = compute_respiratory_features( ...
-            data, resp_cycles, resp_ref, config);
+        resp_features = compute_respiratory_features(data, resp_cycles, resp_ref, config);
 
         % LABEL DETECTIONS        
         [events_ShB, boundary_ShB] = detect_shallow_breathing(data, resp_features, config);
@@ -38,19 +37,13 @@ for isub = 1:length(config.subjects)
         [events_IrB, boundary_IrB] = detect_irregular_breathing(data, resp_features, config);
         [events_SlB, boundary_SlB] = detect_slow_breathing(data, resp_features, config);
         [events_RaB, boundary_RaB] = detect_rapid_breathing(data, resp_features, config);
-        [events_ReA, diagnostics_ReA] = detect_respiratory_asynchrony( ...
-            data, session_reference, resp_cycles, config);
-        [events_Des, diagnostics_Des] = detect_desaturation( ...
-            data, spo2_ref, session_reference, config);
-        [events_Apn, diagnostics_Apn, boundary_Apn] = detect_apnea( ...
-            data, resp_features, session_reference, config);
-        [~, diagnostics_Sigh, sigh_review] = detect_sigh( ...
-            data, resp_features, resp_cycles, spo2_ref, ...
-            session_reference, diagnostics_Des, config);
-        [events_CSR, diagnostics_CSR] = detect_periodic_breathing( ...
-            data, resp_cycles, config);
-
-        % Freeze automatic weak annotations before any interval editing.
+        [events_ReA, diagnostics_ReA] = detect_respiratory_asynchrony(data, session_reference, resp_cycles, config);
+        [events_Des, diagnostics_Des] = detect_desaturation(data, spo2_ref, session_reference, config);
+        [events_Apn, diagnostics_Apn, boundary_Apn] = detect_apnea(data, resp_features, session_reference, config);
+        [~, diagnostics_Sigh, sigh_review] = detect_sigh(data, resp_features, resp_cycles, spo2_ref, session_reference, diagnostics_Des, config);
+        [events_CSR, diagnostics_CSR] = detect_periodic_breathing(data, resp_cycles, config);
+ 
+        % Freeze automatic annotations before any interval editing.
         % Sigh is separate because it has its own breath-level GUI, whose
         % automatic candidates are retained in sigh_review.weak_events.
         weak_event_sets = struct( ...
@@ -151,7 +144,9 @@ for isub = 1:length(config.subjects)
         results.gold_review_mask = gold_review_mask;
         results.review_status = annotations.review_status;
         results.review_scope = annotations.review_scope;
-        % Backward-compatible aliases now point to immutable weak labels.
+        results.review_history = annotations.review_history;
+        results.review_provenance = annotations.review_provenance;
+        % Backward-compatible aliases now point to immutable automatic annotations.
         results.events = events_weak;
         results.mask = mask_weak;
         results.label_names = label_names;
