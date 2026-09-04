@@ -88,14 +88,14 @@ function testSpO2ReferenceUsesTheSameInterval(testCase)
     reference = get_session_reference_interval(size(data, 1), config);
 
     spo2_ref = compute_spo2_reference(data, reference, config);
-    [~, diagnostics_Des] = detect_desaturation( ...
+    [~, diagnostics_desat] = detect_desaturation( ...
         data, spo2_ref, reference, config);
 
     verifyTrue(testCase, spo2_ref.available);
     verifyEqual(testCase, spo2_ref.median_percent, 96, 'AbsTol', eps);
     verifyEqual(testCase, spo2_ref.n_interval_samples, 180);
     verifyEqual(testCase, spo2_ref.n_valid_samples, 179);
-    verifyTrue(testCase, diagnostics_Des.reference_available);
+    verifyTrue(testCase, diagnostics_desat.reference_available);
 end
 
 function testUnavailableSpO2DoesNotInvalidateRespiratoryReference(testCase)
@@ -121,13 +121,13 @@ function testSpO2ReferenceNeverFallsBackOutsideInterval(testCase)
     reference = get_session_reference_interval(size(data, 1), config);
 
     spo2_ref = compute_spo2_reference(data, reference, config);
-    [~, diagnostics_Des] = detect_desaturation( ...
+    [~, diagnostics_desat] = detect_desaturation( ...
         data, spo2_ref, reference, config);
 
     verifyFalse(testCase, spo2_ref.available);
     verifyEqual(testCase, spo2_ref.quality, 'insufficient_valid_samples');
-    verifyFalse(testCase, diagnostics_Des.reference_available);
-    verifyFalse(testCase, diagnostics_Des.detection_available);
+    verifyFalse(testCase, diagnostics_desat.reference_available);
+    verifyFalse(testCase, diagnostics_desat.detection_available);
 end
 
 function testShortRecordingsAreExplicitlyTruncatedOrUnavailable(testCase)
@@ -153,7 +153,7 @@ end
 function testReAReferenceMaskUsesCommonInterval(testCase)
     config = session_test_config(1, 10);
     config.grid_step_sec = 1;
-    config.ReA.analysis_fs = 10;
+    config.async.analysis_fs = 10;
     data = make_synthetic_master_data(400 * config.fs, config.fs);
     reference = get_session_reference_interval(size(data, 1), config);
 
@@ -181,7 +181,7 @@ end
 function testRawApneaReferenceUsesCommonInterval(testCase)
     config = session_test_config(1, 10);
     config.grid_step_sec = 1;
-    config.Apn.do_plot = false;
+    config.apnea.do_plot = false;
     N = 400 * config.fs;
     t = (0:N-1)' / config.fs;
     data = zeros(N, 6);
@@ -214,7 +214,7 @@ end
 function testRawApneaReferenceNeverFallsBackWhenIntervalIsUnavailable(testCase)
     config = session_test_config(1, 10);
     config.grid_step_sec = 1;
-    config.Apn.do_plot = false;
+    config.apnea.do_plot = false;
     N = 120 * config.fs;
     t = (0:N-1)' / config.fs;
     data = zeros(N, 6);

@@ -27,10 +27,10 @@ function [events, boundary_info] = detect_slow_breathing(data, resp_features, co
         return;
     end
 
-    rr_thr_bpm = get_config_value(config, 'SlB', 'rr_thr_bpm', 10);
-    analysis_win_sec = get_config_value(config, 'SlB', 'analysis_win_sec', 60);
-    min_dur_sec = get_config_value(config, 'SlB', 'min_dur_sec', 30);
-    plot_rr_step_sec = get_config_value(config, 'SlB', 'plot_rr_step_sec', 15);
+    rr_thr_bpm = get_config_value(config, 'slow', 'rr_thr_bpm', 10);
+    analysis_win_sec = get_config_value(config, 'slow', 'analysis_win_sec', 60);
+    min_dur_sec = get_config_value(config, 'slow', 'min_dur_sec', 30);
+    plot_rr_step_sec = get_config_value(config, 'slow', 'plot_rr_step_sec', 15);
 
     rr_lungs = nan(size(t_grid));
     slow_lungs_state = false(size(t_grid));
@@ -89,7 +89,7 @@ function [events, boundary_info] = detect_slow_breathing(data, resp_features, co
     boundary_info.events = normalize_records([records_lungs; records_diaph]);
     boundary_info.boundary_uncertainty_sec = record_uncertainty(boundary_info.events);
 
-    if isfield(config, 'SlB') && isfield(config.SlB, 'do_plot') && config.SlB.do_plot
+    if isfield(config, 'slow') && isfield(config.slow, 'do_plot') && config.slow.do_plot
         opts = struct( ...
             'figure_title', ['SLOW BREATHING' newline 'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)], ...
             'event_name', 'Slow breathing', ...

@@ -4,7 +4,7 @@ function tests = test_stage5_semantics
 end
 
 function testEvidenceVersionAndCanonicalOrder(testCase)
-    [data, resp_feat, resp_ref, diagnostics_Des, config] = physiological_fixture();
+    [data, resp_feat, resp_ref, diagnostics_desat, config] = physiological_fixture();
     phys = compute_respiratory_features(data, resp_feat, resp_ref, config);
     verifyEqual(testCase, phys.version, 'independent_respiratory_evidence_v5');
     verifyEqual(testCase, {config.labels.short}, ...
@@ -18,7 +18,7 @@ function testThoracicEndpointAndStateHaveDistinctSemantics(testCase)
     endpoint = false(size(t));
     endpoint(t == 60) = true;
     state = analysis_window_endpoints_to_state_mask( ...
-        endpoint, t, config.TDB.analysis_win_sec);
+        endpoint, t, config.thoracic.analysis_win_sec);
     verifyEqual(testCase, find(endpoint), 61);
     verifyEqual(testCase, find(state), (31:61)');
 
@@ -53,12 +53,12 @@ end
 
 function testRapidAndSlowWindowsAreSeparateFromMinimumDuration(testCase)
     config = stage_config();
-    verifyEqual(testCase, config.ShB.analysis_win_sec, 30);
-    verifyEqual(testCase, config.DeB.analysis_win_sec, 30);
-    verifyEqual(testCase, config.RaB.analysis_win_sec, 60);
-    verifyEqual(testCase, config.RaB.min_dur_sec, 30);
-    verifyEqual(testCase, config.SlB.analysis_win_sec, 60);
-    verifyEqual(testCase, config.SlB.min_dur_sec, 30);
+    verifyEqual(testCase, config.shallow.analysis_win_sec, 30);
+    verifyEqual(testCase, config.deep.analysis_win_sec, 30);
+    verifyEqual(testCase, config.rapid.analysis_win_sec, 60);
+    verifyEqual(testCase, config.rapid.min_dur_sec, 30);
+    verifyEqual(testCase, config.slow.analysis_win_sec, 60);
+    verifyEqual(testCase, config.slow.min_dur_sec, 30);
 
     t = (0:100)';
     rapid_endpoint = t == 60;
@@ -92,7 +92,7 @@ end
 
 function testRapidDetectorFallbackUsesSixtySecondConfirmationWindow(testCase)
     config = stage_config();
-    config.RaB = rmfield(config.RaB, 'analysis_win_sec');
+    config.rapid = rmfield(config.rapid, 'analysis_win_sec');
     t = (0:80)';
     endpoint = t == 60;
     lungs = empty_detector_belt(t);
@@ -116,8 +116,8 @@ end
 
 function testIrregularWindowAndDurationAreSeparateWithoutDoubleApplication(testCase)
     config = stage_config();
-    verifyEqual(testCase, config.IrB.analysis_win_sec, 60);
-    verifyEqual(testCase, config.IrB.min_dur_sec, 60);
+    verifyEqual(testCase, config.irregular.analysis_win_sec, 60);
+    verifyEqual(testCase, config.irregular.min_dur_sec, 60);
     t = (0:100)';
     lungs = empty_detector_belt(t);
     lungs.available = true;
@@ -134,7 +134,7 @@ end
 
 function testTenSecondApneaWindowDoesNotRequireTwentySeconds(testCase)
     config = stage_config();
-    config.Apn.raw_flat_enabled = false;
+    config.apnea.raw_flat_enabled = false;
     t = (0:50)';
     lungs = empty_detector_belt(t);
     lungs.available = true;
@@ -263,11 +263,11 @@ function config = stage_config()
     config = make_test_config();
     config.fs = 1;
     config.grid_step_sec = 1;
-    config.TDB.do_plot = false;
-    config.RaB.do_plot = false;
-    config.SlB.do_plot = false;
-    config.IrB.do_plot = false;
-    config.Apn.do_plot = false;
+    config.thoracic.do_plot = false;
+    config.rapid.do_plot = false;
+    config.slow.do_plot = false;
+    config.irregular.do_plot = false;
+    config.apnea.do_plot = false;
 end
 
 function belt = empty_detector_belt(t)
@@ -290,7 +290,7 @@ function belt = empty_detector_belt(t)
             'pause_exclusion_mask', false(size(t))));
 end
 
-function [data, resp_feat, resp_ref, diagnostics_Des, config] = physiological_fixture()
+function [data, resp_feat, resp_ref, diagnostics_desat, config] = physiological_fixture()
     config = stage_config();
     config.fs = 2;
     config.grid_step_sec = 1;
@@ -305,7 +305,7 @@ function [data, resp_feat, resp_ref, diagnostics_Des, config] = physiological_fi
         'reference_quality', 'good');
     resp_ref = struct('lungs', reference, 'diaph', reference);
     data = zeros(201, 6);
-    diagnostics_Des = struct('spo2', 97 * ones(201,1), ...
+    diagnostics_desat = struct('spo2', 97 * ones(201,1), ...
         'events', empty_events());
 end
 

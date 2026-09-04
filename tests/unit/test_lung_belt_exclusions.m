@@ -41,7 +41,6 @@ end
 
 function testRespiratoryReferenceAnalyzesLungInUnaffectedRecording(testCase)
     config = exclusion_test_config(7, 3);
-    config.reference.resp.min_segment_breaths = 12;
     config.reference.resp.edge_window_sec = 300;
     peak_t = (0:119)' * 3;
     amp = 1 + 0.03 * sin((1:120)' * 0.4);
@@ -62,7 +61,7 @@ end
 function config = exclusion_test_config(subject, measurement)
     config = make_test_config();
     config.fs = 10;
-    config.ReA.analysis_fs = 10;
+    config.async.analysis_fs = 10;
     config.subject = subject;
     config.measure = measurement;
     config.problems.missing_lung_belt = [7 1; 7 2];

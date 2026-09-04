@@ -24,7 +24,7 @@ function [events, rea_metrics] = detect_respiratory_asynchrony( ...
         return;
     end
 
-    do_plot = get_config_value(config, 'ReA', 'do_plot', false);
+    do_plot = get_config_value(config, 'async', 'do_plot', false);
 
     N = size(data, 1);
     [events, rea_mask] = sustained_condition_to_events( ...

@@ -1,13 +1,13 @@
-function [reviewed_event_sets, edit_info] = manual_edit_label_events(data, config, weak_event_sets)
+function [reviewed_event_sets, edit_info] = manual_edit_label_events(data, config, automatic_event_sets)
 % MANUAL_EDIT_LABEL_EVENTS Perform the manual edit label events operation.
 %
 % Syntax:
-%   [reviewed_event_sets, edit_info] = manual_edit_label_events(data, config, weak_event_sets)
+%   [reviewed_event_sets, edit_info] = manual_edit_label_events(data, config, automatic_event_sets)
 %
 % Inputs:
 %   data - Input physiological signal data.
 %   config - Pipeline configuration structure.
-%   weak_event_sets - Input value `weak_event_sets`.
+%   automatic_event_sets - Input value `automatic_event_sets`.
 %
 % Outputs:
 %   reviewed_event_sets - Computed output value `reviewed_event_sets`.
@@ -16,11 +16,11 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events(data, confi
     label_defs = manual_label_definitions();
     N = size(data, 1);
     fs = config.fs;
-    weak_event_sets = ensure_event_sets(weak_event_sets, label_defs, fs, N);
+    automatic_event_sets = ensure_event_sets(automatic_event_sets, label_defs, fs, N);
     cfg = label_edit_config(config);
     edit_file = manual_edit_file(config, cfg);
     edit_info = init_edit_info(edit_file);
-    reviewed_event_sets = weak_event_sets;
+    reviewed_event_sets = automatic_event_sets;
     loaded_event_sets = [];
     review_history = empty_review_history();
     active_round_id = NaN;
@@ -31,7 +31,7 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events(data, confi
     if should_load
         [loaded, ~, loaded_schema, ~, loaded_history, ...
             loaded_active_round_id] = load_manual_event_sets( ...
-            edit_file, weak_event_sets, label_defs, config, N, fs);
+            edit_file, automatic_event_sets, label_defs, config, N, fs);
         if ~isempty(loaded)
             loaded_event_sets = loaded;
             review_history = loaded_history;
@@ -56,7 +56,7 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events(data, confi
     end
 
     source_review_round = NaN;
-    start_event_sets = weak_event_sets;
+    start_event_sets = automatic_event_sets;
     if strcmp(cfg.start_from, 'latest_reviewed')
         if isempty(loaded_event_sets) || ~isfinite(active_round_id)
             error('MAGMA:ManualLabelEdit:MissingLatestReviewed', ...
@@ -70,7 +70,7 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events(data, confi
     edited_event_sets = start_event_sets;
     new_coverage = false(N, numel(label_defs));
     [edited_event_sets, ~, new_coverage] = run_editor( ...
-        data, config, edited_event_sets, weak_event_sets, start_event_sets, ...
+        data, config, edited_event_sets, automatic_event_sets, start_event_sets, ...
         label_defs, cfg, {}, new_coverage);
     edit_info.editor_opened = true;
 
@@ -94,7 +94,7 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events(data, confi
     end
 
     if cfg.save_edits
-        save_manual_event_sets(edit_file, weak_event_sets, reviewed_event_sets, ...
+        save_manual_event_sets(edit_file, automatic_event_sets, reviewed_event_sets, ...
             review_history, active_round_id, label_defs, config, N, fs);
         fprintf('Saved manual label review round: %s\n', edit_file);
     end
@@ -785,16 +785,16 @@ function provenance = make_review_provenance(history, active_round_id)
     provenance.source_review_round = active.source_review_round;
 end
 
-function save_manual_event_sets(edit_file, weak_event_sets, reviewed_event_sets, ...
+function save_manual_event_sets(edit_file, automatic_event_sets, reviewed_event_sets, ...
     review_history, active_round_id, label_defs, config, N, fs)
 % SAVE_MANUAL_EVENT_SETS Save manual event sets.
 %
 % Syntax:
-%   save_manual_event_sets(edit_file, weak_event_sets, reviewed_event_sets, review_history, active_round_id, label_defs, config, N, fs)
+%   save_manual_event_sets(edit_file, automatic_event_sets, reviewed_event_sets, review_history, active_round_id, label_defs, config, N, fs)
 %
 % Inputs:
 %   edit_file - Input value `edit_file`.
-%   weak_event_sets - Input value `weak_event_sets`.
+%   automatic_event_sets - Input value `automatic_event_sets`.
 %   reviewed_event_sets - Input value `reviewed_event_sets`.
 %   review_history - Input value `review_history`.
 %   active_round_id - Input value `active_round_id`.
@@ -808,7 +808,7 @@ function save_manual_event_sets(edit_file, weak_event_sets, reviewed_event_sets,
         mkdir(out_dir);
     end
 
-    manual_label_weak_event_sets = ensure_event_sets(weak_event_sets, label_defs, fs, N);
+    manual_label_automatic_event_sets = ensure_event_sets(automatic_event_sets, label_defs, fs, N);
     manual_label_event_sets = ensure_event_sets(reviewed_event_sets, label_defs, fs, N);
     active_index = find([review_history.round_id] == active_round_id, 1, 'last');
     if isempty(active_index)
@@ -837,7 +837,7 @@ function save_manual_event_sets(edit_file, weak_event_sets, reviewed_event_sets,
     manual_label_edit_meta.label_names = {label_defs.type};
     manual_label_edit_meta.canonical_label_names = canonical_label_names();
 
-    save(edit_file, 'manual_label_weak_event_sets', ...
+    save(edit_file, 'manual_label_automatic_event_sets', ...
         'manual_label_event_sets', 'manual_label_review_mask', ...
         'manual_label_review_history', 'manual_label_active_round_id', ...
         'manual_label_review_provenance', 'manual_label_edit_meta');

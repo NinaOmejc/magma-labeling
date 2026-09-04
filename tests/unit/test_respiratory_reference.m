@@ -130,7 +130,6 @@ end
 function testSuppliedBreathValuesAreUsedDirectly(testCase)
     config = reference_test_config();
     config = rmfield(config, 'resp');
-    config.reference.resp.min_segment_breaths = 5;
     config.reference.resp.edge_window_sec = 45;
     t = (0:59)' * 7.3;
     amp = [2*ones(30,1); ones(30,1)];
@@ -175,7 +174,6 @@ function config = reference_test_config()
     config = make_test_config();
     config.reference.resp.edge_window_sec = 300;
     config.reference.resp.change_trigger_frac = 0.25;
-    config.reference.resp.min_segment_breaths = 12;
     config.reference.resp.min_cost_improvement = 0.30;
     config.reference.do_plot = false;
 end

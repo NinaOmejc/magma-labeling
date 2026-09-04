@@ -1,14 +1,14 @@
 function diagnostic_signals = compute_label_diagnostic_signals( ...
-    resp_features, spo2_ref, diagnostics_Des, config, rea_metrics, apnea_metrics, sigh_metrics, csr_metrics)
+    resp_features, spo2_ref, diagnostics_desat, config, rea_metrics, apnea_metrics, sigh_metrics, csr_metrics)
 % COMPUTE_LABEL_DIAGNOSTIC_SIGNALS Compute label diagnostic signals.
 %
 % Syntax:
-%   diagnostic_signals = compute_label_diagnostic_signals(resp_features, spo2_ref, diagnostics_Des, config, rea_metrics, apnea_metrics, sigh_metrics, csr_metrics)
+%   diagnostic_signals = compute_label_diagnostic_signals(resp_features, spo2_ref, diagnostics_desat, config, rea_metrics, apnea_metrics, sigh_metrics, csr_metrics)
 %
 % Inputs:
 %   resp_features - Respiratory-feature structure.
 %   spo2_ref - SpO2-reference structure.
-%   diagnostics_Des - Detector diagnostic data.
+%   diagnostics_desat - Detector diagnostic data.
 %   config - Pipeline configuration structure.
 %   rea_metrics - Input value `rea_metrics`.
 %   apnea_metrics - Input value `apnea_metrics`.
@@ -22,21 +22,21 @@ function diagnostic_signals = compute_label_diagnostic_signals( ...
 
     rapid_win_sec = resp_features.resp.rate_windows_sec.rapid;
     slow_win_sec = resp_features.resp.rate_windows_sec.slow;
-    irregularity_win_sec = get_config_value(config, 'IrB', 'analysis_win_sec', 60);
+    irregularity_win_sec = get_config_value(config, 'irregular', 'analysis_win_sec', 60);
     amplitude_win_sec = resp_features.resp.amplitude_windows_sec.shallow;
-    cov_thr = get_config_value(config, 'IrB', 'cov_thr', 0.3);
-    robust_cov_thr = get_config_value(config, 'IrB', 'robust_cov_thr', 0.25);
-    rmssd_thr = get_config_value(config, 'IrB', 'rmssd_thr', 0.0);
-    pause_thr_sec = get_config_value(config, 'IrB', 'pause_thr_sec', 10);
-    detection_metric = get_config_value(config, 'IrB', 'detection_metric', 'cov');
+    cov_thr = get_config_value(config, 'irregular', 'cov_thr', 0.3);
+    robust_cov_thr = get_config_value(config, 'irregular', 'robust_cov_thr', 0.25);
+    rmssd_thr = get_config_value(config, 'irregular', 'rmssd_thr', 0.0);
+    pause_thr_sec = get_config_value(config, 'irregular', 'pause_thr_sec', 10);
+    detection_metric = get_config_value(config, 'irregular', 'detection_metric', 'cov');
 
     diagnostic_signals = struct();
     diagnostic_signals.time_sec = t_grid;
     diagnostic_signals.grid_step_sec = config.grid_step_sec;
     diagnostic_signals.rapid_bpm_window_sec = rapid_win_sec;
     diagnostic_signals.slow_bpm_window_sec = slow_win_sec;
-    diagnostic_signals.rapid_bpm_threshold = config.RaB.rr_thr_bpm;
-    diagnostic_signals.slow_bpm_threshold = config.SlB.rr_thr_bpm;
+    diagnostic_signals.rapid_bpm_threshold = config.rapid.rr_thr_bpm;
+    diagnostic_signals.slow_bpm_threshold = config.slow.rr_thr_bpm;
     diagnostic_signals.irregularity_window_sec = irregularity_win_sec;
     diagnostic_signals.amplitude_window_sec = amplitude_win_sec;
     diagnostic_signals.irregularity_detection_metric = detection_metric;
@@ -58,13 +58,13 @@ function diagnostic_signals = compute_label_diagnostic_signals( ...
     diagnostic_signals.slow_inferred_state_lungs = double(resp_features.resp.lungs.rate_slow_state_mask);
     diagnostic_signals.slow_inferred_state_diaph = double(resp_features.resp.diaph.rate_slow_state_mask);
     diagnostic_signals.rapid_margin_bpm_lungs = ...
-        resp_features.resp.lungs.rate_rapid_window_bpm - config.RaB.rr_thr_bpm;
+        resp_features.resp.lungs.rate_rapid_window_bpm - config.rapid.rr_thr_bpm;
     diagnostic_signals.rapid_margin_bpm_diaph = ...
-        resp_features.resp.diaph.rate_rapid_window_bpm - config.RaB.rr_thr_bpm;
+        resp_features.resp.diaph.rate_rapid_window_bpm - config.rapid.rr_thr_bpm;
     diagnostic_signals.slow_margin_bpm_lungs = ...
-        config.SlB.rr_thr_bpm - resp_features.resp.lungs.rate_slow_window_bpm;
+        config.slow.rr_thr_bpm - resp_features.resp.lungs.rate_slow_window_bpm;
     diagnostic_signals.slow_margin_bpm_diaph = ...
-        config.SlB.rr_thr_bpm - resp_features.resp.diaph.rate_slow_window_bpm;
+        config.slow.rr_thr_bpm - resp_features.resp.diaph.rate_slow_window_bpm;
 
     diagnostic_signals.irregularity_cov_lungs = resp_features.resp.lungs.irregularity.cov;
     diagnostic_signals.irregularity_robust_cov_lungs = resp_features.resp.lungs.irregularity.robust_cov;
@@ -104,17 +104,17 @@ function diagnostic_signals = compute_label_diagnostic_signals( ...
     diagnostic_signals.deep_inferred_state_lungs = double(resp_features.resp.lungs.deep_amplitude_mask);
     diagnostic_signals.deep_inferred_state_diaph = double(resp_features.resp.diaph.deep_amplitude_mask);
     diagnostic_signals.deep_margin_ratio_lungs = ...
-        resp_features.resp.lungs.deep_amp_ratio_session_window_median - config.DeB.amp_ratio_thr;
+        resp_features.resp.lungs.deep_amp_ratio_session_window_median - config.deep.amp_ratio_thr;
     diagnostic_signals.deep_margin_ratio_diaph = ...
-        resp_features.resp.diaph.deep_amp_ratio_session_window_median - config.DeB.amp_ratio_thr;
+        resp_features.resp.diaph.deep_amp_ratio_session_window_median - config.deep.amp_ratio_thr;
     diagnostic_signals.shallow_lower_margin_ratio_lungs = ...
-        resp_features.resp.lungs.amp_ratio_session_window_median - config.ShB.amp_ratio_low;
+        resp_features.resp.lungs.amp_ratio_session_window_median - config.shallow.amp_ratio_low;
     diagnostic_signals.shallow_upper_margin_ratio_lungs = ...
-        config.ShB.amp_ratio_high - resp_features.resp.lungs.amp_ratio_session_window_median;
+        config.shallow.amp_ratio_high - resp_features.resp.lungs.amp_ratio_session_window_median;
     diagnostic_signals.shallow_lower_margin_ratio_diaph = ...
-        resp_features.resp.diaph.amp_ratio_session_window_median - config.ShB.amp_ratio_low;
+        resp_features.resp.diaph.amp_ratio_session_window_median - config.shallow.amp_ratio_low;
     diagnostic_signals.shallow_upper_margin_ratio_diaph = ...
-        config.ShB.amp_ratio_high - resp_features.resp.diaph.amp_ratio_session_window_median;
+        config.shallow.amp_ratio_high - resp_features.resp.diaph.amp_ratio_session_window_median;
 
     balance = resp_features.resp.thoracoabdominal_balance;
     diagnostic_signals.thoracic_dominance_available = double(balance.available);
@@ -129,7 +129,7 @@ function diagnostic_signals = compute_label_diagnostic_signals( ...
         balance.thoracic_to_abdominal_ratio - balance.dominance_ratio_threshold;
 
     [diagnostic_signals.spo2_percent, diagnostic_signals.spo2_drop_from_reference_percent] = ...
-        spo2_on_grid(diagnostics_Des, spo2_ref, t_grid);
+        spo2_on_grid(diagnostics_desat, spo2_ref, t_grid);
 
     if nargin < 5 || isempty(rea_metrics)
         error('MAGMA:Diagnostics:MissingReAMetrics', ...
@@ -262,14 +262,14 @@ function [metric, margin] = selected_for_belt(irregularity, metric_name, cov_thr
     end
 end
 
-function [spo2_grid, spo2_drop_grid] = spo2_on_grid(diagnostics_Des, spo2_ref, t_grid)
+function [spo2_grid, spo2_drop_grid] = spo2_on_grid(diagnostics_desat, spo2_ref, t_grid)
 % SPO2_ON_GRID Perform the spo2 on grid operation.
 %
 % Syntax:
-%   [spo2_grid, spo2_drop_grid] = spo2_on_grid(diagnostics_Des, spo2_ref, t_grid)
+%   [spo2_grid, spo2_drop_grid] = spo2_on_grid(diagnostics_desat, spo2_ref, t_grid)
 %
 % Inputs:
-%   diagnostics_Des - Detector diagnostic data.
+%   diagnostics_desat - Detector diagnostic data.
 %   spo2_ref - SpO2-reference structure.
 %   t_grid - Time coordinates in seconds.
 %
@@ -280,14 +280,14 @@ function [spo2_grid, spo2_drop_grid] = spo2_on_grid(diagnostics_Des, spo2_ref, t
     spo2_grid = nan(size(t_grid));
     spo2_drop_grid = nan(size(t_grid));
 
-    if isempty(diagnostics_Des) || ~isstruct(diagnostics_Des) || ...
-            ~isfield(diagnostics_Des, 'time_sec') || ...
-            ~isfield(diagnostics_Des, 'spo2')
+    if isempty(diagnostics_desat) || ~isstruct(diagnostics_desat) || ...
+            ~isfield(diagnostics_desat, 'time_sec') || ...
+            ~isfield(diagnostics_desat, 'spo2')
         return;
     end
 
-    t_spo2 = diagnostics_Des.time_sec(:);
-    spo2 = diagnostics_Des.spo2(:);
+    t_spo2 = diagnostics_desat.time_sec(:);
+    spo2 = diagnostics_desat.spo2(:);
     valid = isfinite(t_spo2) & isfinite(spo2);
     if nnz(valid) < 2
         return;

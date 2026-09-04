@@ -1,12 +1,12 @@
 function annotations = assemble_annotation_layers( ...
-    weak_event_sets, reviewed_event_sets, manual_edit_info, sigh_review, N, config)
+    automatic_event_sets, reviewed_event_sets, manual_edit_info, sigh_review, N, config)
 % ASSEMBLE_ANNOTATION_LAYERS Perform the assemble annotation layers operation.
 %
 % Syntax:
-%   annotations = assemble_annotation_layers(weak_event_sets, reviewed_event_sets, manual_edit_info, sigh_review, N, config)
+%   annotations = assemble_annotation_layers(automatic_event_sets, reviewed_event_sets, manual_edit_info, sigh_review, N, config)
 %
 % Inputs:
-%   weak_event_sets - Input value `weak_event_sets`.
+%   automatic_event_sets - Input value `automatic_event_sets`.
 %   reviewed_event_sets - Input value `reviewed_event_sets`.
 %   manual_edit_info - Input value `manual_edit_info`.
 %   sigh_review - Input value `sigh_review`.
@@ -20,16 +20,16 @@ function annotations = assemble_annotation_layers( ...
     label_names = {config.labels.short};
     validate_label_order(label_names);
 
-    weak_parts = cell(1, numel(defs) + 1);
+    automatic_parts = cell(1, numel(defs) + 1);
     for i = 1:numel(defs)
-        weak_parts{i} = field_events(weak_event_sets, defs(i).field);
+        automatic_parts{i} = field_events(automatic_event_sets, defs(i).field);
     end
-    weak_parts{end} = field_events(sigh_review, 'weak_events');
-    events_weak = normalize_event_types_and_meta(merge_events(weak_parts), config.fs);
-    [mask_weak, mask_names] = events_to_time_mask(events_weak, N, config);
+    automatic_parts{end} = field_events(sigh_review, 'automatic_events');
+    events_automatic = normalize_event_types_and_meta(merge_events(automatic_parts), config.fs);
+    [mask_automatic, mask_names] = events_to_time_mask(events_automatic, N, config);
     if ~isequal(mask_names, label_names)
         error('MAGMA:Annotations:LabelOrder', ...
-            'Weak mask columns do not match the canonical label order.');
+            'Automatic mask columns do not match the canonical label order.');
     end
 
     reviewed_fields = {};
@@ -90,8 +90,8 @@ function annotations = assemble_annotation_layers( ...
     annotations = struct( ...
         'version', 'automatic_reviewed_annotations_v2', ...
         'label_names', {label_names}, ...
-        'events_weak', events_weak, ...
-        'mask_weak', mask_weak, ...
+        'events_automatic', events_automatic, ...
+        'mask_automatic', mask_automatic, ...
         'events_reviewed', events_reviewed, ...
         'mask_reviewed', mask_reviewed, ...
         'gold_review_mask', gold_review_mask, ...

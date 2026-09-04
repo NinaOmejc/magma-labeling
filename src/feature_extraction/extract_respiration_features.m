@@ -42,17 +42,14 @@ function resp_cycles = extract_respiration_features(data, config)
             peak_idx_lungs_before = resp_cycles.lungs.peak_idx;
             peak_idx_diaph_before = resp_cycles.diaph.peak_idx;
             [edited_lungs, edited_diaph, review_confirmed] = ...
-                manual_edit_respiration_features( ...
-                data, resp_cycles.lungs, resp_cycles.diaph, config);
+                manual_edit_respiration_features(data, resp_cycles.lungs, resp_cycles.diaph, config);
             if review_confirmed
                 resp_cycles.lungs = edited_lungs;
                 resp_cycles.diaph = edited_diaph;
                 manual_review_performed = true;
                 manual_edits_made = ...
-                    (edit_lungs && peak_indices_changed( ...
-                        peak_idx_lungs_before, resp_cycles.lungs.peak_idx)) || ...
-                    (edit_diaph && peak_indices_changed( ...
-                        peak_idx_diaph_before, resp_cycles.diaph.peak_idx));
+                    (edit_lungs && peak_indices_changed(peak_idx_lungs_before, resp_cycles.lungs.peak_idx)) || ...
+                    (edit_diaph && peak_indices_changed(peak_idx_diaph_before, resp_cycles.diaph.peak_idx));
                 if manual_edits_made
                     review_status = 'manual_reviewed_edited';
                 else
@@ -60,12 +57,10 @@ function resp_cycles = extract_respiration_features(data, config)
                 end
                 if isfield(config.resp, 'do_plot') && config.resp.do_plot
                     if edit_lungs
-                        save_final_respiration_feature_figure( ...
-                            resp_cycles.lungs, config, 'lungs');
+                        save_final_respiration_feature_figure(resp_cycles.lungs, config, 'lungs');
                     end
                     if edit_diaph
-                        save_final_respiration_feature_figure( ...
-                            resp_cycles.diaph, config, 'diaph');
+                        save_final_respiration_feature_figure(resp_cycles.diaph, config, 'diaph');
                     end
                 end
             end

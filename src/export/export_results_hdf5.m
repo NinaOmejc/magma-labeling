@@ -46,7 +46,7 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
     write_numeric(filename, '/labels/available', uint8(results.label_available(:)'));
     write_text(filename, '/labels/availability_reason', results.label_availability_reason);
     write_numeric(filename, '/labels/assessable_mask', uint8(results.label_assessable_mask));
-    write_numeric(filename, '/labels/weak_mask', uint8(results.mask_weak));
+    write_numeric(filename, '/labels/automatic_mask', uint8(results.mask_automatic));
     write_numeric(filename, '/labels/reviewed_mask', uint8(results.mask_reviewed));
     write_numeric(filename, '/labels/review_mask', uint8(results.gold_review_mask));
     write_text(filename, '/labels/review_status', results.review_status);
@@ -63,7 +63,7 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
             uint8(results.label_reviewed_assessable_mask));
     end
 
-    write_events(filename, '/events/weak', results.events_weak);
+    write_events(filename, '/events/automatic', results.events_automatic);
     write_events(filename, '/events/reviewed', results.events_reviewed);
     if isfield(results, 'review_provenance')
         write_value(filename, '/review/provenance', results.review_provenance);
@@ -75,9 +75,9 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
         write_value(filename, '/events/boundary_info', results.event_boundary_info);
     end
 
-    write_value(filename, '/burden/weak', results.label_burden_weak);
+    write_value(filename, '/burden/automatic', results.label_burden_automatic);
     write_value(filename, '/burden/reviewed', results.label_burden_reviewed);
-    write_value(filename, '/overlap/weak', results.label_overlap_summary_weak);
+    write_value(filename, '/overlap/automatic', results.label_overlap_summary_automatic);
     write_value(filename, '/overlap/reviewed', results.label_overlap_summary_reviewed);
     write_value(filename, '/phenotype_evidence', results.db_phenotype_evidence);
 
@@ -110,9 +110,9 @@ function validate_export_inputs(filename, results, raw, preprocessed)
     required = {'config', 'resp_features', 'session_reference', 'resp_ref', ...
         'spo2_ref', 'label_names', ...
         'label_available', 'label_availability_reason', 'label_assessable_mask', ...
-        'mask_weak', 'mask_reviewed', 'gold_review_mask', 'review_status', ...
-        'events_weak', 'events_reviewed', 'label_burden_weak', ...
-        'label_burden_reviewed', 'label_overlap_summary_weak', ...
+        'mask_automatic', 'mask_reviewed', 'gold_review_mask', 'review_status', ...
+        'events_automatic', 'events_reviewed', 'label_burden_automatic', ...
+        'label_burden_reviewed', 'label_overlap_summary_automatic', ...
         'label_overlap_summary_reviewed', 'db_phenotype_evidence', ...
         'label_reviewed_available', 'label_reviewed_availability_reason', ...
         'label_reviewed_assessable_mask', 'label_schema_version', ...
@@ -150,7 +150,7 @@ function validate_export_inputs(filename, results, raw, preprocessed)
         end
     end
     mask_fields = {'label_assessable_mask', 'label_reviewed_assessable_mask', ...
-        'mask_weak', 'mask_reviewed', 'gold_review_mask'};
+        'mask_automatic', 'mask_reviewed', 'gold_review_mask'};
     for i = 1:numel(mask_fields)
         if ~isequal(size(results.(mask_fields{i})), [N L])
             error('MAGMA:HDF5:MaskAlignment', ...
@@ -163,7 +163,7 @@ function validate_export_inputs(filename, results, raw, preprocessed)
         error('MAGMA:HDF5:InvalidSamplingRate', ...
             'results.config.fs must be a finite positive scalar.');
     end
-    validate_canonical_events(results.events_weak, results.config.fs, expected);
+    validate_canonical_events(results.events_automatic, results.config.fs, expected);
     validate_canonical_events(results.events_reviewed, results.config.fs, expected);
     validate_session_reference(results.session_reference, N, ...
         results.config.fs, results.measure);

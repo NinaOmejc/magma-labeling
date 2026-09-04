@@ -1,17 +1,17 @@
 function rewritten = rewrite_changed_manual_label_figures( ...
-    data, spo2_ref, session_reference, resp_cycles, diagnostics_Des, ...
+    data, spo2_ref, session_reference, resp_cycles, diagnostics_desat, ...
     diagnostic_signals, event_sets, edit_info, config)
 % REWRITE_CHANGED_MANUAL_LABEL_FIGURES Perform the rewrite changed manual label figures operation.
 %
 % Syntax:
-%   rewritten = rewrite_changed_manual_label_figures(data, spo2_ref, session_reference, resp_cycles, diagnostics_Des, diagnostic_signals, event_sets, edit_info, config)
+%   rewritten = rewrite_changed_manual_label_figures(data, spo2_ref, session_reference, resp_cycles, diagnostics_desat, diagnostic_signals, event_sets, edit_info, config)
 %
 % Inputs:
 %   data - Input physiological signal data.
 %   spo2_ref - SpO2-reference structure.
 %   session_reference - Session-reference metadata.
 %   resp_cycles - Respiratory-cycle structure.
-%   diagnostics_Des - Detector diagnostic data.
+%   diagnostics_desat - Detector diagnostic data.
 %   diagnostic_signals - Detector diagnostic data.
 %   event_sets - Input value `event_sets`.
 %   edit_info - Input value `edit_info`.
@@ -45,7 +45,7 @@ function rewritten = rewrite_changed_manual_label_figures( ...
         end
 
         plot_final_manual_label_figure( ...
-            data, spo2_ref, session_reference, resp_cycles, diagnostics_Des, ...
+            data, spo2_ref, session_reference, resp_cycles, diagnostics_desat, ...
             diagnostic_signals, event_sets.(def.field), def, config);
         rewritten{end+1} = def.plot_name; %#ok<AGROW>
         fprintf('Rewrote manual-edited label figure: %s\n', def.plot_name);
@@ -91,19 +91,19 @@ function tf = should_rewrite_label(config, def)
 end
 
 function plot_final_manual_label_figure( ...
-    data, spo2_ref, session_reference, resp_cycles, diagnostics_Des, ...
+    data, spo2_ref, session_reference, resp_cycles, diagnostics_desat, ...
     diagnostic_signals, events, def, config)
 % PLOT_FINAL_MANUAL_LABEL_FIGURE Plot final manual label figure.
 %
 % Syntax:
-%   plot_final_manual_label_figure(data, spo2_ref, session_reference, resp_cycles, diagnostics_Des, diagnostic_signals, events, def, config)
+%   plot_final_manual_label_figure(data, spo2_ref, session_reference, resp_cycles, diagnostics_desat, diagnostic_signals, events, def, config)
 %
 % Inputs:
 %   data - Input physiological signal data.
 %   spo2_ref - SpO2-reference structure.
 %   session_reference - Session-reference metadata.
 %   resp_cycles - Respiratory-cycle structure.
-%   diagnostics_Des - Detector diagnostic data.
+%   diagnostics_desat - Detector diagnostic data.
 %   diagnostic_signals - Detector diagnostic data.
 %   events - Event structure data.
 %   def - Input value `def`.
@@ -133,7 +133,7 @@ function plot_final_manual_label_figure( ...
 
     ax3 = nexttile(tl);
     plot_spo2_panel(ax3, t_raw, data, spo2_ref, session_reference, ...
-        diagnostics_Des, config, events);
+        diagnostics_desat, config, events);
 
     ax4 = nexttile(tl);
     plot_diagnostic_panel(ax4, diagnostic_signals, resp_cycles, events, def, config);
@@ -179,11 +179,11 @@ function plot_signal_panel(ax, t_raw, data, idx, events, title_text, y_text)
 end
 
 function plot_spo2_panel( ...
-    ax, t_raw, data, spo2_ref, session_reference, diagnostics_Des, config, events)
+    ax, t_raw, data, spo2_ref, session_reference, diagnostics_desat, config, events)
 % PLOT_SPO2_PANEL Plot spo2 panel.
 %
 % Syntax:
-%   plot_spo2_panel(ax, t_raw, data, spo2_ref, session_reference, diagnostics_Des, config, events)
+%   plot_spo2_panel(ax, t_raw, data, spo2_ref, session_reference, diagnostics_desat, config, events)
 %
 % Inputs:
 %   ax - Target axes handle.
@@ -191,15 +191,15 @@ function plot_spo2_panel( ...
 %   data - Input physiological signal data.
 %   spo2_ref - SpO2-reference structure.
 %   session_reference - Session-reference metadata.
-%   diagnostics_Des - Detector diagnostic data.
+%   diagnostics_desat - Detector diagnostic data.
 %   config - Pipeline configuration structure.
 %   events - Event structure data.
 
     hold(ax, 'on');
     spo2 = [];
-    if isstruct(diagnostics_Des) && isfield(diagnostics_Des, 'spo2') && ...
-            numel(diagnostics_Des.spo2) == numel(t_raw)
-        spo2 = diagnostics_Des.spo2(:);
+    if isstruct(diagnostics_desat) && isfield(diagnostics_desat, 'spo2') && ...
+            numel(diagnostics_desat.spo2) == numel(t_raw)
+        spo2 = diagnostics_desat.spo2(:);
     end
     idx = [];
     if isfield(config, 'channels')
@@ -219,8 +219,8 @@ function plot_spo2_panel( ...
             yline(ax, spo2_ref.median_percent, 'k--', 'Session reference', ...
                 'LabelHorizontalAlignment', 'left', 'HandleVisibility', 'off');
         end
-        if isfield(config, 'spo2') && isfield(config.spo2, 'spo2_floor') && isfinite(config.spo2.spo2_floor)
-            yline(ax, config.spo2.spo2_floor, 'r--', 'SpO2 floor', ...
+        if isfield(config, 'desat') && isfield(config.desat, 'spo2_floor') && isfinite(config.desat.spo2_floor)
+            yline(ax, config.desat.spo2_floor, 'r--', 'SpO2 floor', ...
                 'LabelHorizontalAlignment', 'left', 'HandleVisibility', 'off');
         end
     end
@@ -257,9 +257,9 @@ function plot_diagnostic_panel(ax, diagnostic_signals, resp_cycles, events, def,
                     'breath_amplitude_ratio_to_reference_lungs', ...
                     'breath_amplitude_ratio_to_reference_diaph', ...
                     'Amplitude ratio to reference', 'Median breath amplitude ratio');
-                if plotted && isfield(config, 'ShB')
-                    yline_if_finite(ax, config.ShB.amp_ratio_low, 'r--', 'Lower threshold');
-                    yline_if_finite(ax, config.ShB.amp_ratio_high, 'r--', 'Upper threshold');
+                if plotted && isfield(config, 'shallow')
+                    yline_if_finite(ax, config.shallow.amp_ratio_low, 'r--', 'Lower threshold');
+                    yline_if_finite(ax, config.shallow.amp_ratio_high, 'r--', 'Upper threshold');
                 end
 
             case 'deep'
@@ -268,16 +268,16 @@ function plot_diagnostic_panel(ax, diagnostic_signals, resp_cycles, events, def,
                     'deep_breath_amplitude_ratio_to_reference_diaph', ...
                     'Amplitude ratio to session reference', ...
                     'Breath excursion evidence for deep breathing');
-                if plotted && isfield(config, 'DeB')
-                    yline_if_finite(ax, config.DeB.amp_ratio_thr, 'r--', 'Deep threshold');
+                if plotted && isfield(config, 'deep')
+                    yline_if_finite(ax, config.deep.amp_ratio_thr, 'r--', 'Deep threshold');
                 end
 
             case 'thoracic'
                 plotted = plot_metric(ax, t, diagnostic_signals, ...
                     'thoracic_to_abdominal_ratio', [0.85 0.33 0.10], ...
                     'Thoracic / abdominal normalized excursion');
-                if plotted && isfield(config, 'TDB')
-                    yline_if_finite(ax, config.TDB.dominance_ratio_thr, ...
+                if plotted && isfield(config, 'thoracic')
+                    yline_if_finite(ax, config.thoracic.dominance_ratio_thr, ...
                         'r--', 'Operational dominance threshold');
                     ylabel(ax, 'Within-record ratio');
                     title(ax, 'Relative thoracoabdominal excursion balance');
@@ -296,8 +296,8 @@ function plot_diagnostic_panel(ax, diagnostic_signals, resp_cycles, events, def,
                     'breathing_rate_slow_window_bpm_lungs', ...
                     'breathing_rate_slow_window_bpm_diaph', ...
                     'Breaths/min', '60-s window RR = 60/mean(IBI) for slow breathing');
-                if plotted && isfield(config, 'SlB')
-                    yline_if_finite(ax, config.SlB.rr_thr_bpm, 'r--', 'Slow threshold');
+                if plotted && isfield(config, 'slow')
+                    yline_if_finite(ax, config.slow.rr_thr_bpm, 'r--', 'Slow threshold');
                 end
 
             case 'rapid'
@@ -305,8 +305,8 @@ function plot_diagnostic_panel(ax, diagnostic_signals, resp_cycles, events, def,
                     'breathing_rate_rapid_window_bpm_lungs', ...
                     'breathing_rate_rapid_window_bpm_diaph', ...
                     'Breaths/min', '60-s window RR = 60/mean(IBI) for rapid breathing');
-                if plotted && isfield(config, 'RaB')
-                    yline_if_finite(ax, config.RaB.rr_thr_bpm, 'r--', 'Rapid threshold');
+                if plotted && isfield(config, 'rapid')
+                    yline_if_finite(ax, config.rapid.rr_thr_bpm, 'r--', 'Rapid threshold');
                 end
 
             case 'async'
@@ -315,8 +315,8 @@ function plot_diagnostic_panel(ax, diagnostic_signals, resp_cycles, events, def,
             case 'desat'
                 plotted = plot_metric(ax, t, diagnostic_signals, 'spo2_drop_from_reference_percent', ...
                     [0.00 0.35 0.85], 'SpO2 drop from session reference');
-                if plotted && isfield(config, 'spo2')
-                    yline_if_finite(ax, config.spo2.drop_thr, 'r--', 'Drop threshold');
+                if plotted && isfield(config, 'desat')
+                    yline_if_finite(ax, config.desat.drop_thr, 'r--', 'Drop threshold');
                 end
                 ylabel(ax, 'Percent points');
                 title(ax, 'SpO2 drop diagnostic');
@@ -418,16 +418,16 @@ function metric = irregular_metric_name(config)
 %   metric - Computed output value `metric`.
 
     detection_metric = 'cov';
-    if isfield(config, 'IrB') && isfield(config.IrB, 'detection_metric')
-        detection_metric = char(string(config.IrB.detection_metric));
+    if isfield(config, 'irregular') && isfield(config.irregular, 'detection_metric')
+        detection_metric = char(string(config.irregular.detection_metric));
     end
 
     if any(strcmpi(strtrim(detection_metric), {'cov', 'plain_cov'}))
         metric.lungs = 'irregularity_cov_lungs';
         metric.diaph = 'irregularity_cov_diaph';
         metric.threshold = NaN;
-        if isfield(config, 'IrB') && isfield(config.IrB, 'cov_thr')
-            metric.threshold = config.IrB.cov_thr;
+        if isfield(config, 'irregular') && isfield(config.irregular, 'cov_thr')
+            metric.threshold = config.irregular.cov_thr;
         end
         metric.title = 'IBI CoV for irregular breathing';
         metric.ylabel = 'CoV';
@@ -435,8 +435,8 @@ function metric = irregular_metric_name(config)
         metric.lungs = 'irregularity_robust_cov_lungs';
         metric.diaph = 'irregularity_robust_cov_diaph';
         metric.threshold = NaN;
-        if isfield(config, 'IrB') && isfield(config.IrB, 'robust_cov_thr')
-            metric.threshold = config.IrB.robust_cov_thr;
+        if isfield(config, 'irregular') && isfield(config.irregular, 'robust_cov_thr')
+            metric.threshold = config.irregular.robust_cov_thr;
         end
         metric.title = 'Robust IBI CoV for irregular breathing';
         metric.ylabel = 'Robust CoV';

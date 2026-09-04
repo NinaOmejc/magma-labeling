@@ -73,22 +73,22 @@ function cfg = periodic_breathing_config(config)
 %   cfg - Computed output value `cfg`.
 
     cfg = struct();
-    cfg.min_cycle_sec = get_config_value(config, 'CSR', 'min_cycle_sec', 35);
-    cfg.max_cycle_sec = get_config_value(config, 'CSR', 'max_cycle_sec', 120);
-    cfg.min_cycles = get_config_value(config, 'CSR', 'min_cycles', 2);
-    cfg.min_modulation_ratio = get_config_value(config, 'CSR', 'min_modulation_ratio', 1.5);
-    cfg.min_breaths_per_cycle = get_config_value(config, 'CSR', 'min_breaths_per_cycle', 3);
-    cfg.min_side_breaths = get_config_value(config, 'CSR', 'min_side_breaths', 1);
-    cfg.env_smooth_breaths = odd_window(get_config_value(config, 'CSR', 'env_smooth_breaths', 3));
-    cfg.normalization_window_breaths = get_config_value(config, 'CSR', 'normalization_window_breaths', 0);
+    cfg.min_cycle_sec = get_config_value(config, 'csr', 'min_cycle_sec', 35);
+    cfg.max_cycle_sec = get_config_value(config, 'csr', 'max_cycle_sec', 120);
+    cfg.min_cycles = get_config_value(config, 'csr', 'min_cycles', 2);
+    cfg.min_modulation_ratio = get_config_value(config, 'csr', 'min_modulation_ratio', 1.5);
+    cfg.min_breaths_per_cycle = get_config_value(config, 'csr', 'min_breaths_per_cycle', 3);
+    cfg.min_side_breaths = get_config_value(config, 'csr', 'min_side_breaths', 1);
+    cfg.env_smooth_breaths = odd_window(get_config_value(config, 'csr', 'env_smooth_breaths', 3));
+    cfg.normalization_window_breaths = get_config_value(config, 'csr', 'normalization_window_breaths', 0);
     if cfg.normalization_window_breaths >= 3
         cfg.normalization_window_breaths = odd_window(cfg.normalization_window_breaths);
     end
-    cfg.min_peak_prominence = get_config_value(config, 'CSR', 'min_peak_prominence', 0.25);
-    cfg.min_trough_prominence = get_config_value(config, 'CSR', 'min_trough_prominence', 0.15);
-    cfg.min_shape_fraction = get_config_value(config, 'CSR', 'min_shape_fraction', 0.55);
-    cfg.max_cycle_gap_sec = get_config_value(config, 'CSR', 'max_cycle_gap_sec', 10);
-    cfg.do_plot = get_config_value(config, 'CSR', 'do_plot', false);
+    cfg.min_peak_prominence = get_config_value(config, 'csr', 'min_peak_prominence', 0.25);
+    cfg.min_trough_prominence = get_config_value(config, 'csr', 'min_trough_prominence', 0.15);
+    cfg.min_shape_fraction = get_config_value(config, 'csr', 'min_shape_fraction', 0.55);
+    cfg.max_cycle_gap_sec = get_config_value(config, 'csr', 'max_cycle_gap_sec', 10);
+    cfg.do_plot = get_config_value(config, 'csr', 'do_plot', false);
 end
 
 function win = odd_window(value)

@@ -58,7 +58,7 @@ function data_modified = modify_data_to_test(data, fs, columns, trange_min, modi
 
         case 'shallow_breathing'
             % Keep amplitudes in the detector's shallow band:
-            % config.ShB defaults to 0.65-0.80 of reference.
+            % config.shallow defaults to 0.65-0.80 of reference.
             data_modified = scale_selected_columns(data_modified, time_sec, trange_mask, columns, fs, 0.72);
 
         case 'deep_breathing'

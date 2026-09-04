@@ -22,13 +22,13 @@ function config = make_test_config(output_dir)
     config.resp.qc.enabled = false;
     config.reference.do_plot = false;
     config.normality.do_plot = false;
-    config.Sig.do_plot = false;
-    config.Sig.manual_control = false;
+    config.sigh.do_plot = false;
+    config.sigh.manual_control = false;
     config.LabelEdit.manual_control = false;
     config.LabelEdit.apply_saved_edits = false;
     config.LabelEdit.save_edits = false;
 
-    detector_fields = {'ShB', 'DeB', 'TDB', 'IrB', 'SlB', 'RaB', 'ReA', 'Des', 'Apn', 'CSR'};
+    detector_fields = {'shallow', 'deep', 'thoracic', 'irregular', 'slow', 'rapid', 'async', 'desat', 'apnea', 'csr'};
     for i = 1:numel(detector_fields)
         config.(detector_fields{i}).do_plot = false;
     end

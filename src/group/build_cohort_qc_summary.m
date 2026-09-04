@@ -35,9 +35,9 @@ function qc = build_cohort_qc_summary( ...
 
     n_labels = numel(label_names);
     assessable_recordings = zeros(n_labels, 1);
-    weak_event_count = zeros(n_labels, 1);
-    weak_fraction_mean = nan(n_labels, 1);
-    weak_fraction_median = nan(n_labels, 1);
+    automatic_event_count = zeros(n_labels, 1);
+    automatic_fraction_mean = nan(n_labels, 1);
+    automatic_fraction_median = nan(n_labels, 1);
     zero_event_recordings = zeros(n_labels, 1);
     reviewed_recordings = zeros(n_labels, 1);
     reviewed_coverage_mean = zeros(n_labels, 1);
@@ -53,23 +53,23 @@ function qc = build_cohort_qc_summary( ...
     for i = 1:n_labels
         token = matlab.lang.makeValidName(label_names{i});
         available = numeric_column(group_table, ['label_' token '_available']);
-        counts = numeric_column(group_table, ['events_' token '_weak_count']);
-        fractions = numeric_column(group_table, ['label_' token '_weak_fraction']);
+        counts = numeric_column(group_table, ['events_' token '_automatic_count']);
+        fractions = numeric_column(group_table, ['label_' token '_automatic_fraction']);
         coverage = numeric_column(group_table, ['label_' token '_reviewed_coverage_fraction']);
         disagreement = numeric_column(group_table, ...
-            ['label_' token '_weak_reviewed_disagreement_fraction']);
+            ['label_' token '_automatic_reviewed_disagreement_fraction']);
         duration_median = numeric_column(group_table, ...
-            ['events_' token '_weak_duration_median_sec']);
+            ['events_' token '_automatic_duration_median_sec']);
         duration_p90 = numeric_column(group_table, ...
-            ['events_' token '_weak_duration_p90_sec']);
-        pooled_duration = pooled_weak_duration(event_duration_table,label_names{i});
+            ['events_' token '_automatic_duration_p90_sec']);
+        pooled_duration = pooled_automatic_duration(event_duration_table,label_names{i});
         [rejected_duration, rejected_shortfall] = rejected_localized_values( ...
             localized_boundary_qc, label_names{i});
 
         assessable_recordings(i) = nnz(available == 1);
-        weak_event_count(i) = sum(counts(isfinite(counts)), 'omitnan');
-        weak_fraction_mean(i) = finite_mean(fractions);
-        weak_fraction_median(i) = finite_median(fractions);
+        automatic_event_count(i) = sum(counts(isfinite(counts)), 'omitnan');
+        automatic_fraction_mean(i) = finite_mean(fractions);
+        automatic_fraction_median(i) = finite_median(fractions);
         zero_event_recordings(i) = nnz(available == 1 & counts == 0);
         reviewed_recordings(i) = nnz(coverage > 0);
         reviewed_coverage_mean(i) = finite_mean(coverage);
@@ -92,8 +92,8 @@ function qc = build_cohort_qc_summary( ...
         end
     end
     label = string(label_names(:));
-    qc.by_label = table(label, assessable_recordings, weak_event_count, ...
-        weak_fraction_mean, weak_fraction_median, zero_event_recordings, ...
+    qc.by_label = table(label, assessable_recordings, automatic_event_count, ...
+        automatic_fraction_mean, automatic_fraction_median, zero_event_recordings, ...
         reviewed_recordings, reviewed_coverage_mean, disagreement_mean, ...
         event_duration_median_sec, event_duration_p90_sec, ...
         rejected_localized_run_count, rejected_localized_duration_median_sec, ...
@@ -147,11 +147,11 @@ function [durations, shortfalls] = rejected_localized_values(T, label_name)
     shortfalls = shortfalls(isfinite(shortfalls));
 end
 
-function values = pooled_weak_duration(T, label_name)
-% POOLED_WEAK_DURATION Perform the pooled weak duration operation.
+function values = pooled_automatic_duration(T, label_name)
+% POOLED_AUTOMATIC_DURATION Return pooled automatic-event durations.
 %
 % Syntax:
-%   values = pooled_weak_duration(T, label_name)
+%   values = pooled_automatic_duration(T, label_name)
 %
 % Inputs:
 %   T - Time coordinates in seconds.
@@ -165,7 +165,7 @@ function values = pooled_weak_duration(T, label_name)
     if isempty(T) || ~all(ismember(required,T.Properties.VariableNames))
         return;
     end
-    keep = string(T.provenance) == "weak" & string(T.label) == string(label_name);
+    keep = string(T.provenance) == "automatic" & string(T.label) == string(label_name);
     values = double(T.duration_sec(keep));
     values = values(isfinite(values));
 end

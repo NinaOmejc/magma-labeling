@@ -103,7 +103,7 @@ function belt = analyze_belt(breaths, cfg, session_reference)
         belt.global_to_session_ratio = belt.global.value / belt.session.value;
     end
 
-    if belt.n_valid_breaths < 2 * cfg.min_segment_breaths
+    if belt.n_valid_breaths < 2 * cfg.min_breaths
         return;
     end
 
@@ -124,7 +124,7 @@ function belt = analyze_belt(breaths, cfg, session_reference)
     belt.edge_window_sec_used = min(cfg.edge_window_sec, 0.25 * duration_sec);
     early = peak_t <= peak_t(1) + belt.edge_window_sec_used;
     late = peak_t >= peak_t(end) - belt.edge_window_sec_used;
-    if nnz(early) < cfg.min_segment_breaths || nnz(late) < cfg.min_segment_breaths
+    if nnz(early) < cfg.min_breaths || nnz(late) < cfg.min_breaths
         belt.quality = 'insufficient_edge_breaths';
         return;
     end
@@ -144,7 +144,7 @@ function belt = analyze_belt(breaths, cfg, session_reference)
     end
 
     z = log(amp);
-    candidate = best_single_change_candidate(z, cfg.min_segment_breaths);
+    candidate = best_single_change_candidate(z, cfg.min_breaths);
     if ~candidate.available
         belt.mode = 'single';
         belt.quality = 'edge_disagreement_no_step';
@@ -210,18 +210,18 @@ function quality = warning_quality(current_quality, warning_value)
     end
 end
 
-function candidate = best_single_change_candidate(z, min_segment_breaths)
-% BEST_SINGLE_CHANGE_CANDIDATE Perform the best single change candidate operation.
+function candidate = best_single_change_candidate(z, min_breaths)
+% BEST_SINGLE_CHANGE_CANDIDATE Find the best valid split in log-amplitude values.
 %
 % Syntax:
-%   candidate = best_single_change_candidate(z, min_segment_breaths)
+%   candidate = best_single_change_candidate(z, min_breaths)
 %
 % Inputs:
-%   z - Input value `z`.
-%   min_segment_breaths - Input value `min_segment_breaths`.
+%   z - Log-transformed respiratory-cycle amplitudes.
+%   min_breaths - Minimum valid respiratory cycles on each side of a split.
 %
 % Outputs:
-%   candidate - Computed output value `candidate`.
+%   candidate - Best change-point candidate and fit diagnostics.
 
     candidate = struct( ...
         'available', false, ...
@@ -242,7 +242,7 @@ function candidate = best_single_change_candidate(z, min_segment_breaths)
     end
 
     best_cost = inf;
-    for k = min_segment_breaths:n-min_segment_breaths
+    for k = min_breaths:n-min_breaths
         level_before = median(z(1:k), 'omitnan');
         level_after = median(z(k+1:end), 'omitnan');
         cost = sum(abs(z(1:k) - level_before), 'omitnan') + ...
@@ -264,7 +264,7 @@ function candidate = best_single_change_candidate(z, min_segment_breaths)
     k = candidate.split_idx;
     delta = abs(candidate.level_after - candidate.level_before);
 
-    local_n = min([min_segment_breaths, k, n-k]);
+    local_n = min([min_breaths, k, n-k]);
     local_before = median(z(k-local_n+1:k), 'omitnan');
     local_after = median(z(k+1:k+local_n), 'omitnan');
     candidate.step_sharpness = abs(local_after - local_before) / max(delta, eps);
@@ -282,7 +282,7 @@ function candidate = best_single_change_candidate(z, min_segment_breaths)
     candidate.drift_limit_log = 0.35 * delta + 2 * local_noise;
 
     post = z(k+1:end);
-    tail_n = min(numel(post), max(min_segment_breaths, floor(numel(post) / 3)));
+    tail_n = min(numel(post), max(min_breaths, floor(numel(post) / 3)));
     tail_level = median(post(end-tail_n+1:end), 'omitnan');
     direction = sign(candidate.level_after - candidate.level_before);
     midpoint = 0.5 * (candidate.level_before + candidate.level_after);
@@ -488,7 +488,6 @@ function cfg = respiratory_reference_config(config)
         'min_breaths', 10, ...
         'edge_window_sec', 300, ...
         'change_trigger_frac', 0.25, ...
-        'min_segment_breaths', 12, ...
         'min_cost_improvement', 0.30);
     if isfield(config, 'reference') && isstruct(config.reference)
         if isfield(config.reference, 'resp_min_breaths')
@@ -496,7 +495,7 @@ function cfg = respiratory_reference_config(config)
         end
         if isfield(config.reference, 'resp') && isstruct(config.reference.resp)
             names = {'edge_window_sec', 'change_trigger_frac', ...
-                'min_segment_breaths', 'min_cost_improvement'};
+                'min_cost_improvement'};
             for i = 1:numel(names)
                 if isfield(config.reference.resp, names{i})
                     cfg.(names{i}) = config.reference.resp.(names{i});
@@ -514,10 +513,6 @@ function cfg = respiratory_reference_config(config)
     end
     if ~isscalar(cfg.change_trigger_frac) || ~isfinite(cfg.change_trigger_frac) || cfg.change_trigger_frac <= 0
         error('config.reference.resp.change_trigger_frac must be positive and finite.');
-    end
-    if ~isscalar(cfg.min_segment_breaths) || ~isfinite(cfg.min_segment_breaths) || ...
-            cfg.min_segment_breaths < 3 || cfg.min_segment_breaths ~= round(cfg.min_segment_breaths)
-        error('config.reference.resp.min_segment_breaths must be an integer of at least 3.');
     end
     if ~isscalar(cfg.min_cost_improvement) || ~isfinite(cfg.min_cost_improvement) || ...
             cfg.min_cost_improvement < 0 || cfg.min_cost_improvement > 1

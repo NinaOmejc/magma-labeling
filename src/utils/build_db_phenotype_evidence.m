@@ -15,7 +15,7 @@ function evidence = build_db_phenotype_evidence( ...
 %   evidence - Computed summary or metadata structure.
 
     if nargin < 4 || isempty(source_provenance)
-        source_provenance = 'weak_labels';
+        source_provenance = 'automatic_labels';
     end
     source_provenance = char(string(source_provenance));
 

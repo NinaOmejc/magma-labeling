@@ -12,15 +12,15 @@ function testCanonicalLabelOrderAndConfiguration(testCase)
     verifyEqual(testCase, config.labels(2).short, 'deep');
     verifyEqual(testCase, config.labels(9).short, 'thoracic');
     verifyEqual(testCase, config.label_schema_version, 'independent_labels_v3_11class');
-    verifyEqual(testCase, config.DeB.amp_ratio_thr, 1.20);
-    verifyEqual(testCase, config.DeB.min_dur_sec, 30);
+    verifyEqual(testCase, config.deep.amp_ratio_thr, 1.20);
+    verifyEqual(testCase, config.deep.min_dur_sec, 30);
 
     obsolete = {'classify_depth', 'mark_desat', 'deep_lo_ratio', ...
         'deep_hi_ratio', 'subtype_min_overlap_frac'};
-    verifyFalse(testCase, isfield(config.ShB, 'exclude_desat'));
-    verifyFalse(testCase, any(isfield(config.SlB, obsolete)));
-    verifyFalse(testCase, any(isfield(config.RaB, obsolete)));
-    verifyFalse(testCase, isfield(config.Apn, 'mark_desat'));
+    verifyFalse(testCase, isfield(config.shallow, 'exclude_desat'));
+    verifyFalse(testCase, any(isfield(config.slow, obsolete)));
+    verifyFalse(testCase, any(isfield(config.rapid, obsolete)));
+    verifyFalse(testCase, isfield(config.apnea, 'mark_desat'));
 
     repo_root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
     main_source = fileread(fullfile(repo_root, 'src', 'main_single.m'));
@@ -30,7 +30,7 @@ end
 
 function testDeepThresholdHasNoUpperCutoffAndUsesSessionReference(testCase)
     state_ratios = repmat([1.20; 1.60; 2.00], 9, 1);
-    [data, resp_feat, resp_ref, diagnostics_Des, config] = ...
+    [data, resp_feat, resp_ref, diagnostics_desat, config] = ...
         amplitude_fixture(state_ratios, state_ratios, 2, 10, 4, 20);
     phys_feat = compute_respiratory_features( ...
         data, resp_feat, resp_ref, config);
@@ -56,7 +56,7 @@ end
 
 function testRatioBelowDeepThresholdIsNotDeep(testCase)
     state_ratios = 1.10 * ones(20, 1);
-    [data, resp_feat, resp_ref, diagnostics_Des, config] = ...
+    [data, resp_feat, resp_ref, diagnostics_desat, config] = ...
         amplitude_fixture(state_ratios, state_ratios, 2, 3, 2, 3);
     phys_feat = compute_respiratory_features( ...
         data, resp_feat, resp_ref, config);
@@ -66,7 +66,7 @@ end
 
 function testMissingLungBeltUsesDiaphragmForDeep(testCase)
     state_ratios = 1.60 * ones(20, 1);
-    [data, resp_feat, resp_ref, diagnostics_Des, config] = ...
+    [data, resp_feat, resp_ref, diagnostics_desat, config] = ...
         amplitude_fixture(state_ratios, state_ratios, 2, 7, 2, 7);
     config.subject = 7;
     config.measure = 1;
@@ -109,14 +109,14 @@ function testThoracicBalanceUsesIndependentSessionNormalization(testCase)
 end
 
 function testThoracicDominanceThresholdAndContinuousEvidence(testCase)
-    [data, resp_feat, resp_ref, diagnostics_Des, config] = ...
+    [data, resp_feat, resp_ref, diagnostics_desat, config] = ...
         amplitude_fixture(1.40 * ones(20, 1), ones(20, 1), 2, 9, 2, 9);
     phys_feat = compute_respiratory_features( ...
         data, resp_feat, resp_ref, config);
     verifyFalse(testCase, any(phys_feat.resp.thoracoabdominal_balance.dominance_mask));
     verifyEmpty(testCase, detect_thoracic_dominant_breathing(data, phys_feat, config));
 
-    [data, resp_feat, resp_ref, diagnostics_Des, config] = ...
+    [data, resp_feat, resp_ref, diagnostics_desat, config] = ...
         amplitude_fixture(1.80 * ones(20, 1), ones(20, 1), 2, 9, 2, 9);
     phys_feat = compute_respiratory_features( ...
         data, resp_feat, resp_ref, config);
@@ -133,7 +133,7 @@ function testThoracicDominanceThresholdAndContinuousEvidence(testCase)
 end
 
 function testThoracicDominanceHasNoOneBeltFallback(testCase)
-    [data, resp_feat, resp_ref, diagnostics_Des, config] = ...
+    [data, resp_feat, resp_ref, diagnostics_desat, config] = ...
         amplitude_fixture(1.80 * ones(20, 1), ones(20, 1), 2, 9, 2, 9);
     config.subject = 7;
     config.measure = 1;
@@ -405,14 +405,14 @@ function testRespiratoryAmplitudeDocumentationMatchesAlignment(testCase)
     verifyTrue(testCase, contains(source, 'final entry is'));
 end
 
-function [data, resp_feat, resp_ref, diagnostics_Des, config] = amplitude_fixture( ...
+function [data, resp_feat, resp_ref, diagnostics_desat, config] = amplitude_fixture( ...
     state_ratios_lungs, state_ratios_diaph, session_lungs, session_diaph, global_lungs, global_diaph)
 
     config = make_test_config();
     config.fs = 1;
     config.grid_step_sec = 1;
-    config.DeB.do_plot = false;
-    config.ShB.do_plot = false;
+    config.deep.do_plot = false;
+    config.shallow.do_plot = false;
     N = 181;
     data = zeros(N, 6);
     peak_t = (0:5:180)';
@@ -434,7 +434,7 @@ function [data, resp_feat, resp_ref, diagnostics_Des, config] = amplitude_fixtur
     resp_ref = struct();
     resp_ref.lungs = belt_reference(session_lungs, global_lungs);
     resp_ref.diaph = belt_reference(session_diaph, global_diaph);
-    diagnostics_Des = struct('spo2', 97 * ones(N, 1), 'events', empty_events());
+    diagnostics_desat = struct('spo2', 97 * ones(N, 1), 'events', empty_events());
 end
 
 function values = repeat_to_length(values, n)
@@ -465,7 +465,7 @@ function [data, phys_feat, config] = detector_fixture()
     config = make_test_config();
     config.fs = 1;
     config.grid_step_sec = 1;
-    config.Apn.raw_flat_enabled = false;
+    config.apnea.raw_flat_enabled = false;
     N = 141;
     data = zeros(N, 6);
     t_grid = (0:N-1)';

@@ -16,7 +16,7 @@ function plot_thoracic_dominance_diagnostic(t_grid, evidence, dominance_mask, ev
     tl = tiledlayout(fig, 3, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
     title(tl, ['RELATIVE THORACOABDOMINAL EXCURSION BALANCE' newline ...
         'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure) newline ...
-        'Operational weak label; independently session-normalized uncalibrated belts'])
+        'Operational automatic label; independently session-normalized uncalibrated belts'])
 
     ax1 = nexttile(tl); hold(ax1, 'on');
     plot(ax1, t_grid, evidence.thoracic_ratio_window_median, 'k', 'LineWidth', 1.2);

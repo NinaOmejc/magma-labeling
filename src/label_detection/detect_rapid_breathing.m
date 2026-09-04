@@ -27,10 +27,10 @@ function [events, boundary_info] = detect_rapid_breathing(data, resp_features, c
         return;
     end
 
-    rr_thr_bpm = get_config_value(config, 'RaB', 'rr_thr_bpm', 20);
-    analysis_win_sec = get_config_value(config, 'RaB', 'analysis_win_sec', 60);
-    min_dur_sec = get_config_value(config, 'RaB', 'min_dur_sec', 30);
-    plot_rr_step_sec = get_config_value(config, 'RaB', 'plot_rr_step_sec', 15);
+    rr_thr_bpm = get_config_value(config, 'rapid', 'rr_thr_bpm', 20);
+    analysis_win_sec = get_config_value(config, 'rapid', 'analysis_win_sec', 60);
+    min_dur_sec = get_config_value(config, 'rapid', 'min_dur_sec', 30);
+    plot_rr_step_sec = get_config_value(config, 'rapid', 'plot_rr_step_sec', 15);
 
     rr_lungs = nan(size(t_grid));
     rapid_lungs_state = false(size(t_grid));
@@ -89,7 +89,7 @@ function [events, boundary_info] = detect_rapid_breathing(data, resp_features, c
     boundary_info.events = normalize_records([records_lungs; records_diaph]);
     boundary_info.boundary_uncertainty_sec = record_uncertainty(boundary_info.events);
 
-    if isfield(config, 'RaB') && isfield(config.RaB, 'do_plot') && config.RaB.do_plot
+    if isfield(config, 'rapid') && isfield(config.rapid, 'do_plot') && config.rapid.do_plot
         opts = struct( ...
             'figure_title', ['RAPID BREATHING' newline 'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)], ...
             'event_name', 'Rapid breathing', ...

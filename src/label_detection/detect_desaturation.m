@@ -1,9 +1,9 @@
-function [events_Des, diagnostics_Des] = detect_desaturation( ...
+function [events_desat, diagnostics_desat] = detect_desaturation( ...
     data, spo2_ref, session_reference, config)
 % DETECT_DESATURATION Detect desaturation.
 %
 % Syntax:
-%   [events_Des, diagnostics_Des] = detect_desaturation(data, spo2_ref, session_reference, config)
+%   [events_desat, diagnostics_desat] = detect_desaturation(data, spo2_ref, session_reference, config)
 %
 % Inputs:
 %   data - Input physiological signal data.
@@ -12,15 +12,15 @@ function [events_Des, diagnostics_Des] = detect_desaturation( ...
 %   config - Pipeline configuration structure.
 %
 % Outputs:
-%   events_Des - Event structure array.
-%   diagnostics_Des - Detector diagnostic structure.
+%   events_desat - Event structure array.
+%   diagnostics_desat - Detector diagnostic structure.
 
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
     end
 
-    events_Des = empty_events();
-    diagnostics_Des = struct( ...
+    events_desat = empty_events();
+    diagnostics_desat = struct( ...
         'signal_available', false, ...
         'reference_available', false, ...
         'reference_quality', 'not_evaluated', ...
@@ -29,7 +29,7 @@ function [events_Des, diagnostics_Des] = detect_desaturation( ...
         'time_sec', [], ...
         'valid_sample_mask', [], ...
         'desaturation_sample_mask', [], ...
-        'events', events_Des);
+        'events', events_desat);
 
     idx_spo2 = config.channels.spo2_idx;
     if isempty(idx_spo2)
@@ -37,25 +37,25 @@ function [events_Des, diagnostics_Des] = detect_desaturation( ...
         return;
     end
 
-    diagnostics_Des.spo2 = data(:, idx_spo2);
-    diagnostics_Des.time_sec = ...
-        (0:numel(diagnostics_Des.spo2)-1)' / config.fs;
-    diagnostics_Des.valid_sample_mask = isfinite(diagnostics_Des.spo2);
-    diagnostics_Des.desaturation_sample_mask = ...
-        false(size(diagnostics_Des.spo2));
-    diagnostics_Des.signal_available = ...
-        nnz(diagnostics_Des.valid_sample_mask) >= 2;
-    diagnostics_Des.reference_available = isstruct(spo2_ref) && ...
+    diagnostics_desat.spo2 = data(:, idx_spo2);
+    diagnostics_desat.time_sec = ...
+        (0:numel(diagnostics_desat.spo2)-1)' / config.fs;
+    diagnostics_desat.valid_sample_mask = isfinite(diagnostics_desat.spo2);
+    diagnostics_desat.desaturation_sample_mask = ...
+        false(size(diagnostics_desat.spo2));
+    diagnostics_desat.signal_available = ...
+        nnz(diagnostics_desat.valid_sample_mask) >= 2;
+    diagnostics_desat.reference_available = isstruct(spo2_ref) && ...
         isfield(spo2_ref, 'available') && logical(spo2_ref.available) && ...
         isfield(spo2_ref, 'median_percent') && ...
         isfinite(spo2_ref.median_percent);
     if isstruct(spo2_ref) && isfield(spo2_ref, 'quality')
-        diagnostics_Des.reference_quality = char(string(spo2_ref.quality));
+        diagnostics_desat.reference_quality = char(string(spo2_ref.quality));
     end
-    diagnostics_Des.detection_available = ...
-        diagnostics_Des.signal_available && diagnostics_Des.reference_available;
+    diagnostics_desat.detection_available = ...
+        diagnostics_desat.signal_available && diagnostics_desat.reference_available;
 
-    if ~diagnostics_Des.detection_available
+    if ~diagnostics_desat.detection_available
         fprintf('Skipping desat detection: SpO2 signal or reference is unavailable.\n');
         return;
     end
@@ -63,20 +63,20 @@ function [events_Des, diagnostics_Des] = detect_desaturation( ...
     floor_thr = 90;
     drop_thr = 3;
     min_dur_sec = 10;
-    if isfield(config, 'spo2')
-        if isfield(config.spo2, 'spo2_floor'), floor_thr = config.spo2.spo2_floor; end
-        if isfield(config.spo2, 'drop_thr'), drop_thr = config.spo2.drop_thr; end
-        if isfield(config.spo2, 'min_dur_sec'), min_dur_sec = config.spo2.min_dur_sec; end
+    if isfield(config, 'desat')
+        if isfield(config.desat, 'spo2_floor'), floor_thr = config.desat.spo2_floor; end
+        if isfield(config.desat, 'drop_thr'), drop_thr = config.desat.drop_thr; end
+        if isfield(config.desat, 'min_dur_sec'), min_dur_sec = config.desat.min_dur_sec; end
     end
 
-    events_Des = detect_desaturation_events( ...
-        diagnostics_Des.spo2, spo2_ref.median_percent, config.fs, ...
+    events_desat = detect_desaturation_events( ...
+        diagnostics_desat.spo2, spo2_ref.median_percent, config.fs, ...
         floor_thr, drop_thr, min_dur_sec);
-    diagnostics_Des.desaturation_sample_mask = events_to_sample_mask( ...
-        events_Des, numel(diagnostics_Des.spo2), config.fs);
-    diagnostics_Des.events = events_Des;
+    diagnostics_desat.desaturation_sample_mask = events_to_sample_mask( ...
+        events_desat, numel(diagnostics_desat.spo2), config.fs);
+    diagnostics_desat.events = events_desat;
 
-    do_plot = isfield(config, 'Des') && isfield(config.Des, 'do_plot') && config.Des.do_plot;
+    do_plot = isfield(config, 'desat') && isfield(config.desat, 'do_plot') && config.desat.do_plot;
     if ~do_plot
         return;
     end
@@ -88,11 +88,11 @@ function [events_Des, diagnostics_Des] = detect_desaturation( ...
 
     ax = gca;
     plot_spo2_diagnostic_panel(ax, data, spo2_ref, session_reference, ...
-        diagnostics_Des, config, 'SpO2 desaturation');
+        diagnostics_desat, config, 'SpO2 desaturation');
 
-    for k = 1:numel(events_Des)
-        xline(ax, events_Des(k).start_t, ':', 'HandleVisibility', 'off');
-        xline(ax, events_Des(k).end_t, ':', 'HandleVisibility', 'off');
+    for k = 1:numel(events_desat)
+        xline(ax, events_desat(k).start_t, ':', 'HandleVisibility', 'off');
+        xline(ax, events_desat(k).end_t, ':', 'HandleVisibility', 'off');
     end
 
     set(fig, 'Visible', config.make_figs_visible);

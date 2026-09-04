@@ -4,7 +4,7 @@ function tests = test_respiratory_features
 end
 
 function testReviewedBreathsAndAlignmentArePreserved(testCase)
-    [data, resp_cycles, resp_ref, diagnostics_Des, config] = feature_fixture();
+    [data, resp_cycles, resp_ref, diagnostics_desat, config] = feature_fixture();
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
     lungs = resp_features.resp.lungs;
@@ -25,7 +25,7 @@ function testReviewedBreathsAndAlignmentArePreserved(testCase)
 end
 
 function testSessionAndGlobalRatiosHandleInvalidAmplitudes(testCase)
-    [data, resp_cycles, resp_ref, diagnostics_Des, config] = feature_fixture();
+    [data, resp_cycles, resp_ref, diagnostics_desat, config] = feature_fixture();
     resp_cycles.lungs.amp(8) = 0;
     resp_cycles.lungs.amp(9) = -1;
     resp_cycles.lungs.amp(10) = NaN;
@@ -46,7 +46,7 @@ function testSessionAndGlobalRatiosHandleInvalidAmplitudes(testCase)
 end
 
 function testBeltsRemainIndependentAndSpo2IsExcluded(testCase)
-    [data, resp_cycles, resp_ref, diagnostics_Des, config] = feature_fixture();
+    [data, resp_cycles, resp_ref, diagnostics_desat, config] = feature_fixture();
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
 
@@ -59,7 +59,7 @@ function testBeltsRemainIndependentAndSpo2IsExcluded(testCase)
 end
 
 function testMissingLungBeltLeavesDiaphragmValid(testCase)
-    [data, resp_cycles, resp_ref, diagnostics_Des, config] = feature_fixture();
+    [data, resp_cycles, resp_ref, diagnostics_desat, config] = feature_fixture();
     config.subject = 1;
     config.measure = 1;
     config.problems.missing_lung_belt = [1 1];
@@ -76,15 +76,15 @@ function testMissingLungBeltLeavesDiaphragmValid(testCase)
 end
 
 function testRateAndIrregularityEvidenceMatchesDefinitions(testCase)
-    [data, resp_cycles, resp_ref, diagnostics_Des, config] = feature_fixture();
+    [data, resp_cycles, resp_ref, diagnostics_desat, config] = feature_fixture();
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
     t_grid = resp_features.resp.time_sec;
 
     expected_slow = ibi_rate_trace_reference( ...
-        resp_cycles.lungs.peak_t, t_grid, config.SlB.analysis_win_sec);
+        resp_cycles.lungs.peak_t, t_grid, config.slow.analysis_win_sec);
     expected_rapid = ibi_rate_trace_reference( ...
-        resp_cycles.lungs.peak_t, t_grid, config.RaB.analysis_win_sec);
+        resp_cycles.lungs.peak_t, t_grid, config.rapid.analysis_win_sec);
     verifyTrue(testCase, isequaln( ...
         resp_features.resp.lungs.rate_slow_window_bpm, expected_slow));
     verifyTrue(testCase, isequaln( ...
@@ -92,9 +92,9 @@ function testRateAndIrregularityEvidenceMatchesDefinitions(testCase)
 
     [expected_mask, expected_cov, expected_robust, expected_rmssd, expected_endpoint] = ...
         compute_irregularity_metrics(resp_cycles.lungs, t_grid, ...
-        config.IrB.analysis_win_sec, config.IrB.cov_thr, ...
-        config.IrB.robust_cov_thr, config.IrB.rmssd_thr, ...
-        config.IrB.pause_thr_sec, config.IrB.detection_metric);
+        config.irregular.analysis_win_sec, config.irregular.cov_thr, ...
+        config.irregular.robust_cov_thr, config.irregular.rmssd_thr, ...
+        config.irregular.pause_thr_sec, config.irregular.detection_metric);
     actual = resp_features.resp.lungs.irregularity;
     verifyTrue(testCase, isequaln(actual.window_mask, expected_mask));
     verifyTrue(testCase, isequaln(actual.endpoint_mask, expected_endpoint));
@@ -105,7 +105,7 @@ end
 
 function testWindowRateUsesSixtyOverMeanIbiAndIsShared(testCase)
     peaks = [10; 20; 40; 50];
-    [data, resp_cycles, resp_ref, diagnostics_Des, config] = ...
+    [data, resp_cycles, resp_ref, diagnostics_desat, config] = ...
         rate_only_feature_fixture(peaks, 120);
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
@@ -129,7 +129,7 @@ function testWindowRateUsesSixtyOverMeanIbiAndIsShared(testCase)
 end
 
 function testRateWindowRequiresFullHistoryAndAtLeastTwoValidIbis(testCase)
-    [data, resp_cycles, resp_ref, diagnostics_Des, config] = ...
+    [data, resp_cycles, resp_ref, diagnostics_desat, config] = ...
         rate_only_feature_fixture([10; 30; 50], 120);
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
@@ -139,7 +139,7 @@ function testRateWindowRequiresFullHistoryAndAtLeastTwoValidIbis(testCase)
     verifyTrue(testCase, all(isnan( ...
         resp_features.resp.lungs.rate_rapid_window_bpm(t_grid < 60))));
 
-    [data, resp_cycles, resp_ref, diagnostics_Des, config] = ...
+    [data, resp_cycles, resp_ref, diagnostics_desat, config] = ...
         rate_only_feature_fixture([10; 50], 120);
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
@@ -149,7 +149,7 @@ function testRateWindowRequiresFullHistoryAndAtLeastTwoValidIbis(testCase)
     verifyTrue(testCase, isnan( ...
         resp_features.resp.lungs.rate_rapid_window_bpm(endpoint)));
 
-    [data, resp_cycles, resp_ref, diagnostics_Des, config] = ...
+    [data, resp_cycles, resp_ref, diagnostics_desat, config] = ...
         rate_only_feature_fixture([10; 10; 50], 120);
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
@@ -160,8 +160,8 @@ end
 
 function testRapidWindowDefaultsCannotRevertToThirtySeconds(testCase)
     config = make_test_config();
-    config.RaB = rmfield(config.RaB, 'analysis_win_sec');
-    [data, resp_cycles, resp_ref, diagnostics_Des, config] = ...
+    config.rapid = rmfield(config.rapid, 'analysis_win_sec');
+    [data, resp_cycles, resp_ref, diagnostics_desat, config] = ...
         rate_only_feature_fixture((0:2:80)', 100, config);
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
@@ -175,21 +175,21 @@ function testRapidWindowDefaultsCannotRevertToThirtySeconds(testCase)
     for i = 1:numel(files)
         source = fileread(files{i});
         verifyEmpty(testCase, regexp(source, ...
-            '''RaB'',\s*''analysis_win_sec'',\s*30', 'once'));
+            '''rapid'',\s*''analysis_win_sec'',\s*30', 'once'));
     end
 end
 
 function testAmplitudeEvidenceMatchesPreviousCalculations(testCase)
-    [data, resp_cycles, resp_ref, diagnostics_Des, config] = feature_fixture();
+    [data, resp_cycles, resp_ref, diagnostics_desat, config] = feature_fixture();
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
     t_grid = resp_features.resp.time_sec;
 
     expected_shallow = legacy_amplitude_band_mask( ...
-        resp_cycles.lungs, t_grid, config.ShB.analysis_win_sec, 2, ...
-        config.ShB.amp_ratio_low, config.ShB.amp_ratio_high);
+        resp_cycles.lungs, t_grid, config.shallow.analysis_win_sec, 2, ...
+        config.shallow.amp_ratio_low, config.shallow.amp_ratio_high);
     expected_apnea = legacy_apnea_ratio_trace( ...
-        resp_cycles.lungs, t_grid, config.Apn.amp_analysis_win_sec, 2);
+        resp_cycles.lungs, t_grid, config.apnea.amp_analysis_win_sec, 2);
 
     verifyEqual(testCase, resp_features.resp.lungs.shallow_amplitude_mask, expected_shallow);
     verifyTrue(testCase, isequaln( ...
@@ -199,7 +199,7 @@ function testAmplitudeEvidenceMatchesPreviousCalculations(testCase)
 end
 
 function testUnavailableSessionReferenceDoesNotUseGlobal(testCase)
-    [data, resp_cycles, resp_ref, diagnostics_Des, config] = feature_fixture();
+    [data, resp_cycles, resp_ref, diagnostics_desat, config] = feature_fixture();
     resp_ref.lungs.session.value = NaN;
     resp_ref.lungs.session.available = false;
     resp_ref.lungs.reference_quality = 'insufficient_breaths';
@@ -214,13 +214,13 @@ function testUnavailableSessionReferenceDoesNotUseGlobal(testCase)
 end
 
 function testDiagnosticSignalsReusePhysiologicalEvidence(testCase)
-    [data, resp_cycles, resp_ref, diagnostics_Des, config] = feature_fixture();
+    [data, resp_cycles, resp_ref, diagnostics_desat, config] = feature_fixture();
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
     spo2_ref = struct('median_percent', 96);
     rea = synthetic_rea_metrics(resp_features.resp.time_sec);
     diagnostic = compute_label_diagnostic_signals( ...
-        resp_features, spo2_ref, diagnostics_Des, config, rea);
+        resp_features, spo2_ref, diagnostics_desat, config, rea);
 
     verifyEqual(testCase, diagnostic.breathing_rate_slow_window_bpm_lungs, ...
         resp_features.resp.lungs.rate_slow_window_bpm);
@@ -235,25 +235,25 @@ function testDiagnosticSignalsReusePhysiologicalEvidence(testCase)
 end
 
 function testShallowAndApneaEventsMatchDerivedEvidence(testCase)
-    [data, resp_cycles, resp_ref, diagnostics_Des, config] = feature_fixture();
-    config.Apn.raw_flat_enabled = false;
+    [data, resp_cycles, resp_ref, diagnostics_desat, config] = feature_fixture();
+    config.apnea.raw_flat_enabled = false;
 
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
     [actual_shallow, shallow_boundary] = detect_shallow_breathing(data, resp_features, config);
     t_grid = resp_features.resp.time_sec;
     expected_lungs_mask = legacy_amplitude_band_mask( ...
-        resp_cycles.lungs, t_grid, config.ShB.analysis_win_sec, 2, ...
-        config.ShB.amp_ratio_low, config.ShB.amp_ratio_high);
+        resp_cycles.lungs, t_grid, config.shallow.analysis_win_sec, 2, ...
+        config.shallow.amp_ratio_low, config.shallow.amp_ratio_high);
     expected_diaph_mask = legacy_amplitude_band_mask( ...
-        resp_cycles.diaph, t_grid, config.ShB.analysis_win_sec, 4, ...
-        config.ShB.amp_ratio_low, config.ShB.amp_ratio_high);
+        resp_cycles.diaph, t_grid, config.shallow.analysis_win_sec, 4, ...
+        config.shallow.amp_ratio_low, config.shallow.amp_ratio_high);
     [expected_lungs, ~] = sustained_condition_to_events( ...
         expected_lungs_mask, t_grid, config.fs, size(data,1), ...
-        config.ShB.min_dur_sec, 'shallow_breathing_lungs');
+        config.shallow.min_dur_sec, 'shallow_breathing_lungs');
     [expected_diaph, ~] = sustained_condition_to_events( ...
         expected_diaph_mask, t_grid, config.fs, size(data,1), ...
-        config.ShB.min_dur_sec, 'shallow_breathing_diaph');
+        config.shallow.min_dur_sec, 'shallow_breathing_diaph');
     expected_shallow = merge_events({expected_lungs, expected_diaph});
     verifyLocalizedEventEvidence(testCase, actual_shallow, expected_shallow, shallow_boundary);
 
@@ -270,10 +270,10 @@ function testShallowAndApneaEventsMatchDerivedEvidence(testCase)
     endpoint = resp_features.resp.lungs.apnea_amplitude_endpoint_mask & ...
         resp_features.resp.diaph.apnea_amplitude_endpoint_mask;
     peak_mask = analysis_window_endpoints_to_state_mask( ...
-        endpoint, t_grid, config.Apn.amp_analysis_win_sec);
+        endpoint, t_grid, config.apnea.amp_analysis_win_sec);
     [expected_apnea, ~] = sustained_condition_to_events( ...
         peak_mask, t_grid, config.fs, size(data,1), ...
-        config.Apn.min_dur_sec, 'apnea');
+        config.apnea.min_dur_sec, 'apnea');
     verifyLocalizedEventEvidence(testCase, actual_apnea, expected_apnea, apnea_boundary);
 end
 
@@ -320,14 +320,14 @@ function verifyLocalizedEventEvidence(testCase, actual, expected, boundary)
     verifyLessThanOrEqual(testCase, [actual.end_t]', [expected.end_t]');
 end
 
-function [data, resp_cycles, resp_ref, diagnostics_Des, config] = feature_fixture()
+function [data, resp_cycles, resp_ref, diagnostics_desat, config] = feature_fixture()
     config = make_test_config();
     config.fs = 10;
     config.grid_step_sec = 1;
     config.subject = 999;
     config.measure = 1;
     config.problems.missing_lung_belt = zeros(0, 2);
-    config.IrB.rmssd_thr = 0.2;
+    config.irregular.rmssd_thr = 0.2;
     N = 5001;
     data = zeros(N, 6);
 
@@ -348,14 +348,14 @@ function [data, resp_cycles, resp_ref, diagnostics_Des, config] = feature_fixtur
     resp_ref.lungs = belt_reference(2, 1.5, 'good');
     resp_ref.diaph = belt_reference(4, 2.5, 'edge_disagreement');
 
-    diagnostics_Des = struct();
-    diagnostics_Des.time_sec = (0:N-1)' / config.fs;
-    diagnostics_Des.spo2 = 96 * ones(N, 1);
-    diagnostics_Des.events = empty_events();
-    diagnostics_Des.signal_available = true;
-    diagnostics_Des.reference_available = true;
-    diagnostics_Des.reference_quality = 'good';
-    diagnostics_Des.detection_available = true;
+    diagnostics_desat = struct();
+    diagnostics_desat.time_sec = (0:N-1)' / config.fs;
+    diagnostics_desat.spo2 = 96 * ones(N, 1);
+    diagnostics_desat.events = empty_events();
+    diagnostics_desat.signal_available = true;
+    diagnostics_desat.reference_available = true;
+    diagnostics_desat.reference_quality = 'good';
+    diagnostics_desat.detection_available = true;
 end
 
 function belt = reviewed_belt(peak_idx, peak_t, amp, fs)
@@ -397,7 +397,7 @@ function trace = ibi_rate_trace_reference(peak_t, t_grid, win_sec)
     end
 end
 
-function [data, resp_cycles, resp_ref, diagnostics_Des, config] = ...
+function [data, resp_cycles, resp_ref, diagnostics_desat, config] = ...
     rate_only_feature_fixture(peak_t, duration_sec, config)
 
     if nargin < 3
@@ -417,7 +417,7 @@ function [data, resp_cycles, resp_ref, diagnostics_Des, config] = ...
     resp_ref = struct( ...
         'lungs', belt_reference(1, 1, 'good'), ...
         'diaph', belt_reference(NaN, NaN, 'belt_unavailable'));
-    diagnostics_Des = struct();
+    diagnostics_desat = struct();
 end
 
 function mask = legacy_amplitude_band_mask(breaths, t_grid, win_sec, reference, lo, hi)

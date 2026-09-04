@@ -234,10 +234,7 @@ function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b
             return;
         end
 
-        search_sec = 1.0;
-        if isfield(config.resp, 'manual_peak_search_sec')
-            search_sec = config.resp.manual_peak_search_sec;
-        end
+        search_sec = 1.0;  % add peak at local maximum within this window around the click
 
         idx_click = max(1, min(numel(x), round(t_click * fs) + 1));
         radius = max(1, round(search_sec * fs));

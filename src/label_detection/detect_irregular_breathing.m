@@ -39,15 +39,15 @@ function [irregular_events, boundary_info] = detect_irregular_breathing(data, re
     detection_metric = 'cov';
     do_plot = false;
 
-    if isfield(config, 'IrB')
-        if isfield(config.IrB, 'cov_thr'), cov_thr = config.IrB.cov_thr; end
-        if isfield(config.IrB, 'robust_cov_thr'), robust_cov_thr = config.IrB.robust_cov_thr; end
-        if isfield(config.IrB, 'rmssd_thr'), rmssd_thr = config.IrB.rmssd_thr; end
-        if isfield(config.IrB, 'min_dur_sec'), min_dur_sec = config.IrB.min_dur_sec; end
-        if isfield(config.IrB, 'analysis_win_sec'), analysis_win_sec = config.IrB.analysis_win_sec; end
-        if isfield(config.IrB, 'plot_cov_step_sec'), plot_cov_step_sec = config.IrB.plot_cov_step_sec; end
-        if isfield(config.IrB, 'detection_metric'), detection_metric = config.IrB.detection_metric; end
-        if isfield(config.IrB, 'do_plot'), do_plot = config.IrB.do_plot; end
+    if isfield(config, 'irregular')
+        if isfield(config.irregular, 'cov_thr'), cov_thr = config.irregular.cov_thr; end
+        if isfield(config.irregular, 'robust_cov_thr'), robust_cov_thr = config.irregular.robust_cov_thr; end
+        if isfield(config.irregular, 'rmssd_thr'), rmssd_thr = config.irregular.rmssd_thr; end
+        if isfield(config.irregular, 'min_dur_sec'), min_dur_sec = config.irregular.min_dur_sec; end
+        if isfield(config.irregular, 'analysis_win_sec'), analysis_win_sec = config.irregular.analysis_win_sec; end
+        if isfield(config.irregular, 'plot_cov_step_sec'), plot_cov_step_sec = config.irregular.plot_cov_step_sec; end
+        if isfield(config.irregular, 'detection_metric'), detection_metric = config.irregular.detection_metric; end
+        if isfield(config.irregular, 'do_plot'), do_plot = config.irregular.do_plot; end
     end
     if isstring(detection_metric)
         detection_metric = char(detection_metric);

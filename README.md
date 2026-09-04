@@ -83,15 +83,15 @@ Key settings are defined in `src/get_config.m`:
 - `config.detrend.*` — respiratory-belt detrending settings
 - `config.resp.*` — respiratory peak/trough extraction and breath-review settings
 - `config.reference.*` — common session physiological-reference interval and modality-specific reference/QC settings
-- `config.ShB` / `config.DeB` — shallow/deep settings
-- `config.SlB` / `config.RaB` — slow/rapid settings
-- `config.IrB` — irregularity settings
-- `config.Apn` — apnea-like pause settings
-- `config.Sig` — sigh settings
-- `config.CSR` — periodic-breathing settings
-- `config.TDB` — thoracic-dominance settings
-- `config.ReA` — respiratory-asynchrony settings
-- `config.spo2` / `config.Des` — SpO2/desaturation settings
+- `config.shallow` / `config.deep` — shallow/deep settings
+- `config.slow` / `config.rapid` — slow/rapid settings
+- `config.irregular` — irregularity settings
+- `config.apnea` — apnea-like pause settings
+- `config.sigh` — sigh settings
+- `config.csr` — periodic-breathing settings
+- `config.thoracic` — thoracic-dominance settings
+- `config.async` — respiratory-asynchrony settings
+- `config.desat` — SpO2/desaturation settings
 - `config.LabelEdit.*` — final manual label-review settings
 
 The same reviewed respiratory peaks, troughs, amplitudes, inter-breath intervals, and respiratory rates are reused across detectors; individual labels do not redetect breaths.
@@ -168,7 +168,7 @@ Level 1 is defined as “elementary physiological labels and evidence.” Automa
 Manual review is optional and controlled in `src/get_config.m`:
 
 - `config.resp.manual_control` — opens the respiratory peak editor before label detection. Added/removed breath peaks affect all downstream respiratory features and labels.
-- `config.Sig.manual_control` — opens the sigh-specific breath editor for adding or removing sigh markers.
+- `config.sigh.manual_control` — opens the sigh-specific breath editor for adding or removing sigh markers.
 - `config.LabelEdit.manual_control` — opens the final interval editor for automatic labels other than sigh.
 - `config.LabelEdit.apply_saved_edits` — reapplies previously saved manual label edits on rerun.
 - `config.LabelEdit.save_edits` — saves manual event edits to a separate manual-label file.
@@ -200,7 +200,7 @@ Main outputs:
 
 The most important result fields include:
 
-- automatic annotations: `results.events_weak`, `results.mask_weak` (the `weak` suffix is retained as an internal backward-compatible field name)
+- automatic annotations, frozen before manual review: `results.events_automatic`, `results.mask_automatic`
 - manually reviewed annotations: `results.events_reviewed`, `results.mask_reviewed`
 - review coverage: `results.gold_review_mask`
 - review history and active provenance: `results.review_history`, `results.review_provenance`
@@ -211,13 +211,13 @@ The most important result fields include:
 - respiratory cycles: `results.resp_cycles`
 - respiratory features: `results.resp_features`
 - event-boundary information: `results.event_boundary_info`
-- burden/overlap summaries
+- automatic/reviewed burden, overlap, and evidence summaries: `results.label_burden_automatic`, `results.label_burden_reviewed`, `results.label_overlap_summary_automatic`, `results.label_overlap_summary_reviewed`, `results.label_evidence_summary_automatic`, `results.label_evidence_summary_reviewed`
 - DB phenotype evidence
 - full run configuration and input-channel provenance
 
 Additional detector diagnostics and intermediate evidence can be inspected directly in the saved `results` structure or in the HDF5 hierarchy.
 
-The HDF5 export schema is `magma_ml_hdf5_v3`. Its existing top-level reviewed masks and events remain unchanged for downstream consumers, while `/review/provenance` and `/review/history` expose round metadata, annotations, and exact per-round coverage. It stores the common metadata once under `/session_reference`, the independent respiratory-belt statistics under `/resp_reference`, and the SpO2 statistic under `/spo2_reference`. ReA, desaturation, and raw-apnea diagnostics remain with their detectors. The MAT output preserves the same distinction.
+The HDF5 export schema is `magma_ml_hdf5_v4`. Automatic annotations are stored under `/labels/automatic_mask`, `/events/automatic`, `/burden/automatic`, and `/overlap/automatic`; reviewed annotations retain their corresponding `/reviewed` paths. `/review/provenance` and `/review/history` expose round metadata, annotations, and exact per-round coverage. The export stores the common metadata once under `/session_reference`, independent respiratory-belt statistics under `/resp_reference`, and the SpO2 statistic under `/spo2_reference`.
 
 Group-level summaries are written under the `group_analysis/` output directory. `cohort_localized_boundary_qc.csv` preserves every localized-run duration and duration shortfall; `cohort_label_qc_summary.csv` aggregates rejected-run counts, medians, upper tails, maxima, and the smallest shortfall per label. These outputs are descriptive QC and never change thresholds automatically.
 

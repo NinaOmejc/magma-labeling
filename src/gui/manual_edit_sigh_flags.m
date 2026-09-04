@@ -1,10 +1,10 @@
 function [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags( ...
     data, bL, bD, flags_lungs, flags_diaph, spo2_ref, ...
-    session_reference, diagnostics_Des, config, window_sec)
+    session_reference, diagnostics_desat, config, window_sec)
 % MANUAL_EDIT_SIGH_FLAGS Perform the manual edit sigh flags operation.
 %
 % Syntax:
-%   [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags(data, bL, bD, flags_lungs, flags_diaph, spo2_ref, session_reference, diagnostics_Des, config, window_sec)
+%   [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags(data, bL, bD, flags_lungs, flags_diaph, spo2_ref, session_reference, diagnostics_desat, config, window_sec)
 %
 % Inputs:
 %   data - Input physiological signal data.
@@ -14,7 +14,7 @@ function [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags( ...
 %   flags_diaph - Logical state or selection mask.
 %   spo2_ref - SpO2-reference structure.
 %   session_reference - Session-reference metadata.
-%   diagnostics_Des - Detector diagnostic data.
+%   diagnostics_desat - Detector diagnostic data.
 %   config - Pipeline configuration structure.
 %   window_sec - Duration or window length in seconds.
 %
@@ -55,7 +55,7 @@ function [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags( ...
 
     ax3 = subplot(3,1,3);
     plot_spo2_diagnostic_panel(ax3, data, spo2_ref, session_reference, ...
-        diagnostics_Des, config, 'SpO2 with desaturation thresholds');
+        diagnostics_desat, config, 'SpO2 with desaturation thresholds');
 
     sgtitle(['GUI SIGH MANUAL EDITING' newline ...
         'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)]);

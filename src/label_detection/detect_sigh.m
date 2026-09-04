@@ -1,10 +1,10 @@
 function [events, diagnostics, review_info] = detect_sigh( ...
     data, resp_features, resp_cycles, spo2_ref, session_reference, ...
-    diagnostics_Des, config)
+    diagnostics_desat, config)
 % DETECT_SIGH Detect sigh.
 %
 % Syntax:
-%   [events, diagnostics, review_info] = detect_sigh(data, resp_features, resp_cycles, spo2_ref, session_reference, diagnostics_Des, config)
+%   [events, diagnostics, review_info] = detect_sigh(data, resp_features, resp_cycles, spo2_ref, session_reference, diagnostics_desat, config)
 %
 % Inputs:
 %   data - Input physiological signal data.
@@ -12,7 +12,7 @@ function [events, diagnostics, review_info] = detect_sigh( ...
 %   resp_cycles - Respiratory-cycle structure.
 %   spo2_ref - SpO2-reference structure.
 %   session_reference - Session-reference metadata.
-%   diagnostics_Des - Detector diagnostic data.
+%   diagnostics_desat - Detector diagnostic data.
 %   config - Pipeline configuration structure.
 %
 % Outputs:
@@ -43,10 +43,10 @@ function [events, diagnostics, review_info] = detect_sigh( ...
         'review_scope', 'unreviewed', ...
         'review_mask', false(N,1), ...
         'status', 'unreviewed', ...
-        'weak_events', empty_events(), ...
+        'automatic_events', empty_events(), ...
         'reviewed_events', empty_events(), ...
-        'weak_flags_lungs', false(size(lungs.peak_t(:))), ...
-        'weak_flags_diaph', false(size(diaph.peak_t(:))), ...
+        'automatic_flags_lungs', false(size(lungs.peak_t(:))), ...
+        'automatic_flags_diaph', false(size(diaph.peak_t(:))), ...
         'reviewed_flags_lungs', false(size(lungs.peak_t(:))), ...
         'reviewed_flags_diaph', false(size(diaph.peak_t(:))));
 
@@ -72,19 +72,19 @@ function [events, diagnostics, review_info] = detect_sigh( ...
     legacy_amp_ratio_thr = 1.5;
     legacy_min_prev_breaths = 3;
 
-    if isfield(config,'Sig')
-        if isfield(config.Sig,'method'), method = config.Sig.method; end
-        if isfield(config.Sig,'ratio_prctile'), ratio_prctile = config.Sig.ratio_prctile; end
-        if isfield(config.Sig,'do_plot'), do_plot = config.Sig.do_plot; end
-        if isfield(config.Sig,'manual_control'), manual_control = logical(config.Sig.manual_control); end
-        if isfield(config.Sig,'manual_window_sec'), manual_window_sec = config.Sig.manual_window_sec; end
-        if isfield(config.Sig,'min_abs_ratio'), min_abs_ratio = config.Sig.min_abs_ratio; end
-        if isfield(config.Sig,'iqr_k'), iqr_k = config.Sig.iqr_k; end
-        if isfield(config.Sig,'min_gap_sec'), min_gap_sec = config.Sig.min_gap_sec; end
+    if isfield(config, 'sigh')
+        if isfield(config.sigh,'method'), method = config.sigh.method; end
+        if isfield(config.sigh,'ratio_prctile'), ratio_prctile = config.sigh.ratio_prctile; end
+        if isfield(config.sigh,'do_plot'), do_plot = config.sigh.do_plot; end
+        if isfield(config.sigh,'manual_control'), manual_control = logical(config.sigh.manual_control); end
+        if isfield(config.sigh,'manual_window_sec'), manual_window_sec = config.sigh.manual_window_sec; end
+        if isfield(config.sigh,'min_abs_ratio'), min_abs_ratio = config.sigh.min_abs_ratio; end
+        if isfield(config.sigh,'iqr_k'), iqr_k = config.sigh.iqr_k; end
+        if isfield(config.sigh,'min_gap_sec'), min_gap_sec = config.sigh.min_gap_sec; end
 
-        if isfield(config.Sig,'legacy_prev_win_sec'), legacy_prev_win_sec = config.Sig.legacy_prev_win_sec; end
-        if isfield(config.Sig,'legacy_amp_ratio_thr'), legacy_amp_ratio_thr = config.Sig.legacy_amp_ratio_thr; end
-        if isfield(config.Sig,'legacy_min_prev_breaths'), legacy_min_prev_breaths = config.Sig.legacy_min_prev_breaths; end
+        if isfield(config.sigh,'legacy_prev_win_sec'), legacy_prev_win_sec = config.sigh.legacy_prev_win_sec; end
+        if isfield(config.sigh,'legacy_amp_ratio_thr'), legacy_amp_ratio_thr = config.sigh.legacy_amp_ratio_thr; end
+        if isfield(config.sigh,'legacy_min_prev_breaths'), legacy_min_prev_breaths = config.sigh.legacy_min_prev_breaths; end
     end
 
     switch lower(method)
@@ -121,19 +121,19 @@ function [events, diagnostics, review_info] = detect_sigh( ...
     diagnostics.minimum_absolute_ratio = min_abs_ratio;
     diagnostics.iqr_multiplier = iqr_k;
 
-    weak_sigh_lungs = sigh_lungs;
-    weak_sigh_diaph = sigh_diaph;
-    weak_events_L = sigh_flags_to_events(lungs.peak_t, weak_sigh_lungs, N, fs, 'lungs');
-    weak_events_D = sigh_flags_to_events(diaph.peak_t, weak_sigh_diaph, N, fs, 'diaph');
-    weak_events = merge_events({weak_events_L, weak_events_D});
-    review_info.weak_events = weak_events;
-    review_info.weak_flags_lungs = weak_sigh_lungs;
-    review_info.weak_flags_diaph = weak_sigh_diaph;
+    automatic_sigh_lungs = sigh_lungs;
+    automatic_sigh_diaph = sigh_diaph;
+    automatic_events_L = sigh_flags_to_events(lungs.peak_t, automatic_sigh_lungs, N, fs, 'lungs');
+    automatic_events_D = sigh_flags_to_events(diaph.peak_t, automatic_sigh_diaph, N, fs, 'diaph');
+    automatic_events = merge_events({automatic_events_L, automatic_events_D});
+    review_info.automatic_events = automatic_events;
+    review_info.automatic_flags_lungs = automatic_sigh_lungs;
+    review_info.automatic_flags_diaph = automatic_sigh_diaph;
 
     if manual_control && lungs_valid && diaph_valid
         [sigh_lungs, sigh_diaph, sigh_review_mask] = manual_edit_sigh_flags( ...
             data, resp_cycles.lungs, resp_cycles.diaph, sigh_lungs, sigh_diaph, ...
-            spo2_ref, session_reference, diagnostics_Des, config, manual_window_sec);
+            spo2_ref, session_reference, diagnostics_desat, config, manual_window_sec);
         review_info.reviewed = true;
         review_info.review_scope = 'explicitly_viewed_regions_sigh_breaths_both_belts';
         review_info.review_mask = sigh_review_mask;
@@ -144,8 +144,8 @@ function [events, diagnostics, review_info] = detect_sigh( ...
 
     events_L = sigh_flags_to_events(lungs.peak_t, sigh_lungs, N, fs, 'lungs');
     events_D = sigh_flags_to_events(diaph.peak_t, sigh_diaph, N, fs, 'diaph');
-    diagnostics.lungs.selected_breath_mask = weak_sigh_lungs;
-    diagnostics.diaph.selected_breath_mask = weak_sigh_diaph;
+    diagnostics.lungs.selected_breath_mask = automatic_sigh_lungs;
+    diagnostics.diaph.selected_breath_mask = automatic_sigh_diaph;
     diagnostics.lungs.reviewed_selected_breath_mask = sigh_lungs;
     diagnostics.diaph.reviewed_selected_breath_mask = sigh_diaph;
     events = merge_events({events_L, events_D});
@@ -153,9 +153,9 @@ function [events, diagnostics, review_info] = detect_sigh( ...
     review_info.reviewed_flags_lungs = sigh_lungs;
     review_info.reviewed_flags_diaph = sigh_diaph;
     if review_info.reviewed
-        if event_sets_equal(weak_events, events)
+        if event_sets_equal(automatic_events, events)
             review_info.status = 'reviewed_accepted';
-        elseif ~isempty(weak_events) && isempty(events)
+        elseif ~isempty(automatic_events) && isempty(events)
             review_info.status = 'reviewed_rejected';
         else
             review_info.status = 'reviewed_edited';
@@ -209,7 +209,7 @@ function [events, diagnostics, review_info] = detect_sigh( ...
         % ----------------------
         ax3 = subplot(3,1,3);
         plot_spo2_diagnostic_panel(ax3, data, spo2_ref, session_reference, ...
-            diagnostics_Des, config, 'SpO2 with desaturation thresholds');
+            diagnostics_desat, config, 'SpO2 with desaturation thresholds');
     
         linkaxes([ax1 ax2 ax3], 'x');
         xlim(ax1, [0 t_grid(end)]);

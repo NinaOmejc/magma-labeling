@@ -1,14 +1,14 @@
 function [label_available, reason] = compute_label_availability( ...
-    label_names, resp_features, diagnostics_Des, rea, apnea, sigh, csr)
+    label_names, resp_features, diagnostics_desat, rea, apnea, sigh, csr)
 % COMPUTE_LABEL_AVAILABILITY Compute label availability.
 %
 % Syntax:
-%   [label_available, reason] = compute_label_availability(label_names, resp_features, diagnostics_Des, rea, apnea, sigh, csr)
+%   [label_available, reason] = compute_label_availability(label_names, resp_features, diagnostics_desat, rea, apnea, sigh, csr)
 %
 % Inputs:
 %   label_names - Label identifier or label metadata.
 %   resp_features - Respiratory-feature structure.
-%   diagnostics_Des - Detector diagnostic data.
+%   diagnostics_desat - Detector diagnostic data.
 %   rea - Input value `rea`.
 %   apnea - Input value `apnea`.
 %   sigh - Input value `sigh`.
@@ -62,12 +62,12 @@ function [label_available, reason] = compute_label_availability( ...
                     reason{i} = 'respiratory_asynchrony_analysis_invalid';
                 end
             case 'desat'
-                label_available(i) = isstruct(diagnostics_Des) && ...
-                    isfield(diagnostics_Des, 'detection_available') && ...
-                    logical(diagnostics_Des.detection_available);
+                label_available(i) = isstruct(diagnostics_desat) && ...
+                    isfield(diagnostics_desat, 'detection_available') && ...
+                    logical(diagnostics_desat.detection_available);
                 if label_available(i)
                     reason{i} = 'available';
-                elseif ~has_spo2_signal(diagnostics_Des)
+                elseif ~has_spo2_signal(diagnostics_desat)
                     reason{i} = 'missing_spo2';
                 else
                     reason{i} = 'invalid_spo2';
@@ -180,21 +180,21 @@ function tf = diagnostic_available(value)
         isscalar(value.available) && logical(value.available);
 end
 
-function tf = has_spo2_signal(diagnostics_Des)
+function tf = has_spo2_signal(diagnostics_desat)
 % HAS_SPO2_SIGNAL Determine whether spo2 signal.
 %
 % Syntax:
-%   tf = has_spo2_signal(diagnostics_Des)
+%   tf = has_spo2_signal(diagnostics_desat)
 %
 % Inputs:
-%   diagnostics_Des - Detector diagnostic data.
+%   diagnostics_desat - Detector diagnostic data.
 %
 % Outputs:
 %   tf - Computed output value `tf`.
 
-    tf = isstruct(diagnostics_Des) && ...
-        isfield(diagnostics_Des, 'signal_available') && ...
-        logical(diagnostics_Des.signal_available);
+    tf = isstruct(diagnostics_desat) && ...
+        isfield(diagnostics_desat, 'signal_available') && ...
+        logical(diagnostics_desat.signal_available);
 end
 
 function tf = any_finite(values)

@@ -1,15 +1,15 @@
 function [assessable_mask, info] = compute_label_assessable_mask( ...
-    N, label_names, label_available, diagnostics_Des, rea_diagnostics, config)
+    N, label_names, label_available, diagnostics_desat, rea_diagnostics, config)
 % COMPUTE_LABEL_ASSESSABLE_MASK Compute label assessable mask.
 %
 % Syntax:
-%   [assessable_mask, info] = compute_label_assessable_mask(N, label_names, label_available, diagnostics_Des, rea_diagnostics, config)
+%   [assessable_mask, info] = compute_label_assessable_mask(N, label_names, label_available, diagnostics_desat, rea_diagnostics, config)
 %
 % Inputs:
 %   N - Number of samples.
 %   label_names - Label identifier or label metadata.
 %   label_available - Label identifier or label metadata.
-%   diagnostics_Des - Detector diagnostic data.
+%   diagnostics_desat - Detector diagnostic data.
 %   rea_diagnostics - Detector diagnostic data.
 %   config - Pipeline configuration structure.
 %
@@ -31,11 +31,11 @@ function [assessable_mask, info] = compute_label_assessable_mask( ...
 
     desat_idx = find(strcmp(label_names, 'desat'), 1);
     if ~isempty(desat_idx) && label_available(desat_idx) && ...
-            isstruct(diagnostics_Des) && ...
-            isfield(diagnostics_Des, 'valid_sample_mask') && ...
-            numel(diagnostics_Des.valid_sample_mask) == N
+            isstruct(diagnostics_desat) && ...
+            isfield(diagnostics_desat, 'valid_sample_mask') && ...
+            numel(diagnostics_desat.valid_sample_mask) == N
         assessable_mask(:, desat_idx) = ...
-            logical(diagnostics_Des.valid_sample_mask(:));
+            logical(diagnostics_desat.valid_sample_mask(:));
     end
 
     async_idx = find(strcmp(label_names, 'async'), 1);

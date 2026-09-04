@@ -41,20 +41,20 @@ function [events, diagnostics, boundary_info] = detect_apnea( ...
     % ----------------------------
     % Config defaults
     % ----------------------------
-    amp_ratio_thr = get_config_value(config, 'Apn', 'amp_ratio_thr', 0.10);
-    min_dur_sec = get_config_value(config, 'Apn', 'min_dur_sec', 10);
-    raw_flat_enabled = get_config_value(config, 'Apn', 'raw_flat_enabled', true);
+    amp_ratio_thr = get_config_value(config, 'apnea', 'amp_ratio_thr', 0.10);
+    min_dur_sec = get_config_value(config, 'apnea', 'min_dur_sec', 10);
+    raw_flat_enabled = get_config_value(config, 'apnea', 'raw_flat_enabled', true);
 
     raw_cfg = struct();
-    raw_cfg.win_sec = get_config_value(config, 'Apn', 'raw_flat_win_sec', min_dur_sec);
-    raw_cfg.ref_win_sec = get_config_value(config, 'Apn', 'raw_flat_ref_win_sec', 60);
-    raw_cfg.ref_lag_sec = get_config_value(config, 'Apn', 'raw_flat_ref_lag_sec', 10);
-    raw_cfg.ref_floor_ratio = get_config_value(config, 'Apn', 'raw_flat_ref_floor_ratio', 0.25);
-    raw_cfg.motion_ratio_thr = get_config_value(config, 'Apn', 'raw_flat_motion_ratio_thr', 0.10);
-    raw_cfg.slope_ratio_thr = get_config_value(config, 'Apn', 'raw_flat_slope_ratio_thr', 0.15);
-    raw_cfg.hist_peak_frac_thr = get_config_value(config, 'Apn', 'raw_flat_hist_peak_frac_thr', 0.35);
-    raw_cfg.min_plateau_sec = get_config_value(config, 'Apn', 'raw_flat_min_plateau_sec', min(5, min_dur_sec));
-    raw_cfg.hist_bins = get_config_value(config, 'Apn', 'raw_flat_hist_bins', 40);
+    raw_cfg.win_sec = get_config_value(config, 'apnea', 'raw_flat_win_sec', min_dur_sec);
+    raw_cfg.ref_win_sec = get_config_value(config, 'apnea', 'raw_flat_ref_win_sec', 60);
+    raw_cfg.ref_lag_sec = get_config_value(config, 'apnea', 'raw_flat_ref_lag_sec', 10);
+    raw_cfg.ref_floor_ratio = get_config_value(config, 'apnea', 'raw_flat_ref_floor_ratio', 0.25);
+    raw_cfg.motion_ratio_thr = get_config_value(config, 'apnea', 'raw_flat_motion_ratio_thr', 0.10);
+    raw_cfg.slope_ratio_thr = get_config_value(config, 'apnea', 'raw_flat_slope_ratio_thr', 0.15);
+    raw_cfg.hist_peak_frac_thr = get_config_value(config, 'apnea', 'raw_flat_hist_peak_frac_thr', 0.35);
+    raw_cfg.min_plateau_sec = get_config_value(config, 'apnea', 'raw_flat_min_plateau_sec', min(5, min_dur_sec));
+    raw_cfg.hist_bins = get_config_value(config, 'apnea', 'raw_flat_hist_bins', 40);
     raw_cfg.prctile_low = 5;
     raw_cfg.prctile_high = 95;
     raw_cfg.hist_band_pad_frac = 0.05;
@@ -74,7 +74,7 @@ function [events, diagnostics, boundary_info] = detect_apnea( ...
         'peak_support_belts', support_belts(lungs_breath_valid, diaph_breath_valid), ...
         'raw_flat_support_belts', '', ...
         'amp_ratio_threshold', amp_ratio_thr, ...
-        'amp_analysis_window_sec', get_config_value(config, 'Apn', 'amp_analysis_win_sec', min_dur_sec), ...
+        'amp_analysis_window_sec', get_config_value(config, 'apnea', 'amp_analysis_win_sec', min_dur_sec), ...
         'raw_flat_analysis_window_sec', raw_cfg.win_sec, ...
         'min_state_duration_sec', min_dur_sec, ...
         'raw_flat', init_raw_flat_diag(t_grid, N));
@@ -172,7 +172,7 @@ function [events, diagnostics, boundary_info] = detect_apnea( ...
     % ----------------------------
     % Optional plot
     % ----------------------------
-    if isfield(config, 'Apn') && isfield(config.Apn, 'do_plot') && config.Apn.do_plot
+    if isfield(config, 'apnea') && isfield(config.apnea, 'do_plot') && config.apnea.do_plot
         t_raw = (0:N-1) / config.fs;
 
         figure('Units', 'pixels', 'Position', near_fullscreen_figure_position(), ...

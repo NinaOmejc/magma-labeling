@@ -1,16 +1,16 @@
 function h = plot_spo2_diagnostic_panel( ...
-    ax, data, spo2_ref, session_reference, diagnostics_Des, config, title_text)
+    ax, data, spo2_ref, session_reference, diagnostics_desat, config, title_text)
 % PLOT_SPO2_DIAGNOSTIC_PANEL Plot spo2 diagnostic panel.
 %
 % Syntax:
-%   h = plot_spo2_diagnostic_panel(ax, data, spo2_ref, session_reference, diagnostics_Des, config, title_text)
+%   h = plot_spo2_diagnostic_panel(ax, data, spo2_ref, session_reference, diagnostics_desat, config, title_text)
 %
 % Inputs:
 %   ax - Target axes handle.
 %   data - Input physiological signal data.
 %   spo2_ref - SpO2-reference structure.
 %   session_reference - Session-reference metadata.
-%   diagnostics_Des - Detector diagnostic data.
+%   diagnostics_desat - Detector diagnostic data.
 %   config - Pipeline configuration structure.
 %   title_text - Input value `title_text`.
 %
@@ -31,7 +31,7 @@ function h = plot_spo2_diagnostic_panel( ...
     ylabel(ax, 'SpO2 (%)');
     title(ax, title_text);
 
-    [t_spo2, spo2] = get_spo2_trace(data, diagnostics_Des, config);
+    [t_spo2, spo2] = get_spo2_trace(data, diagnostics_desat, config);
     if isempty(spo2)
         plot(ax, 0, 0, 'w', 'HandleVisibility', 'off');
         ylim(ax, [-1 1]);
@@ -41,8 +41,8 @@ function h = plot_spo2_diagnostic_panel( ...
         return;
     end
 
-    floor_thr = get_config_value(config, 'spo2', 'spo2_floor', 90);
-    drop_thr = get_config_value(config, 'spo2', 'drop_thr', 3);
+    floor_thr = get_config_value(config, 'desat', 'spo2_floor', 90);
+    drop_thr = get_config_value(config, 'desat', 'drop_thr', 3);
 
     set_spo2_limits(ax, spo2, spo2_ref, floor_thr, drop_thr);
     h.reference_window = shade_session_reference_on_axis( ...
@@ -64,10 +64,10 @@ function h = plot_spo2_diagnostic_panel( ...
         'DisplayName', sprintf('%g%% floor', floor_thr));
 
     h.desat_events = gobjects(0);
-    if isstruct(diagnostics_Des) && isfield(diagnostics_Des, 'events') && ...
-            ~isempty(diagnostics_Des.events)
+    if isstruct(diagnostics_desat) && isfield(diagnostics_desat, 'events') && ...
+            ~isempty(diagnostics_desat.events)
         h.desat_events = shade_events_on_axis( ...
-            ax, diagnostics_Des.events, 'desaturation');
+            ax, diagnostics_desat.events, 'desaturation');
     end
 
     plot(ax, t_spo2, spo2, 'k', 'HandleVisibility', 'off');
@@ -75,29 +75,29 @@ function h = plot_spo2_diagnostic_panel( ...
     hold(ax, 'off');
 end
 
-function [t_spo2, spo2] = get_spo2_trace(data, diagnostics_Des, config)
+function [t_spo2, spo2] = get_spo2_trace(data, diagnostics_desat, config)
 % GET_SPO2_TRACE Return spo2 trace.
 %
 % Syntax:
-%   [t_spo2, spo2] = get_spo2_trace(data, diagnostics_Des, config)
+%   [t_spo2, spo2] = get_spo2_trace(data, diagnostics_desat, config)
 %
 % Inputs:
 %   data - Input physiological signal data.
-%   diagnostics_Des - Detector diagnostic data.
+%   diagnostics_desat - Detector diagnostic data.
 %   config - Pipeline configuration structure.
 %
 % Outputs:
 %   t_spo2 - Computed output value `t_spo2`.
 %   spo2 - Computed output value `spo2`.
 
-    if nargin >= 2 && ~isempty(diagnostics_Des) && ...
-            isstruct(diagnostics_Des) && ...
-            isfield(diagnostics_Des, 'spo2') && ...
-            isfield(diagnostics_Des, 'time_sec') && ...
-            ~isempty(diagnostics_Des.spo2) && ...
-            ~isempty(diagnostics_Des.time_sec)
-        spo2 = diagnostics_Des.spo2(:);
-        t_spo2 = diagnostics_Des.time_sec(:);
+    if nargin >= 2 && ~isempty(diagnostics_desat) && ...
+            isstruct(diagnostics_desat) && ...
+            isfield(diagnostics_desat, 'spo2') && ...
+            isfield(diagnostics_desat, 'time_sec') && ...
+            ~isempty(diagnostics_desat.spo2) && ...
+            ~isempty(diagnostics_desat.time_sec)
+        spo2 = diagnostics_desat.spo2(:);
+        t_spo2 = diagnostics_desat.time_sec(:);
         n = min(numel(spo2), numel(t_spo2));
         spo2 = spo2(1:n);
         t_spo2 = t_spo2(1:n);

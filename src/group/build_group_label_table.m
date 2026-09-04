@@ -100,10 +100,8 @@ function row = label_file_to_summary_row(label_file, config, canonical_labels)
     row = add_label_summaries(row, loaded, config, canonical_labels);
 
     saved_events = empty_events();
-    if isfield(loaded, 'events_weak')
-        saved_events = loaded.events_weak;
-    elseif isfield(loaded, 'events')
-        saved_events = loaded.events;
+    if isfield(loaded, 'events_automatic')
+        saved_events = loaded.events_automatic;
     end
     row = add_event_counts(row, saved_events, canonical_labels);
     row = add_annotation_provenance_summaries(row, loaded, config, canonical_labels);
@@ -139,10 +137,10 @@ function row = add_label_summaries(row, loaded, config, canonical_labels)
     labels = canonical_labels;
     available = saved_label_availability(loaded, saved_labels);
 
-    weak_mask = get_saved_mask(loaded, 'mask_weak', 'mask');
-    if ~isempty(weak_mask)
+    automatic_mask = get_saved_mask(loaded, 'mask_automatic');
+    if ~isempty(automatic_mask)
         fs = get_results_fs(loaded, config);
-        row.duration_sec = size(weak_mask, 1) / fs;
+        row.duration_sec = size(automatic_mask, 1) / fs;
     end
 
     for i = 1:numel(labels)
@@ -151,32 +149,32 @@ function row = add_label_summaries(row, loaded, config, canonical_labels)
         available_field = ['label_' field_label '_available'];
         duration_field = ['label_' field_label '_duration_sec'];
         fraction_field = ['label_' field_label '_fraction'];
-        weak_duration_field = ['label_' field_label '_weak_duration_sec'];
-        weak_fraction_field = ['label_' field_label '_weak_fraction'];
+        automatic_duration_field = ['label_' field_label '_automatic_duration_sec'];
+        automatic_fraction_field = ['label_' field_label '_automatic_fraction'];
         row.(available_field) = 0;
         row.(duration_field) = nan;
         row.(fraction_field) = nan;
-        row.(weak_duration_field) = nan;
-        row.(weak_fraction_field) = nan;
+        row.(automatic_duration_field) = nan;
+        row.(automatic_fraction_field) = nan;
 
         saved_index = find(strcmp(saved_labels, label), 1);
         if isempty(saved_index) || saved_index > numel(available) || ...
-                ~available(saved_index) || isempty(weak_mask) || ...
-                saved_index > size(weak_mask, 2)
+                ~available(saved_index) || isempty(automatic_mask) || ...
+                saved_index > size(automatic_mask, 2)
             continue;
         end
 
         row.(available_field) = 1;
         fs = get_results_fs(loaded, config);
-        assessable = saved_assessable_column(loaded, size(weak_mask, 1), ...
+        assessable = saved_assessable_column(loaded, size(automatic_mask, 1), ...
             numel(saved_labels), saved_index, available(saved_index));
-        label_samples = nnz(weak_mask(:, saved_index) ~= 0 & assessable);
+        label_samples = nnz(automatic_mask(:, saved_index) ~= 0 & assessable);
         row.(duration_field) = label_samples / fs;
         if any(assessable)
             row.(fraction_field) = label_samples / nnz(assessable);
         end
-        row.(weak_duration_field) = row.(duration_field);
-        row.(weak_fraction_field) = row.(fraction_field);
+        row.(automatic_duration_field) = row.(duration_field);
+        row.(automatic_fraction_field) = row.(fraction_field);
     end
 end
 
@@ -200,12 +198,12 @@ function row = add_annotation_provenance_summaries(row, loaded, config, canonica
         saved_labels = canonicalize_label_names(loaded.label_names);
     end
     available = saved_label_availability(loaded, saved_labels);
-    weak_mask = get_saved_mask(loaded, 'mask_weak', 'mask');
-    reviewed_mask = get_saved_mask(loaded, 'mask_reviewed', '');
-    review_mask = get_saved_mask(loaded, 'gold_review_mask', '');
+    automatic_mask = get_saved_mask(loaded, 'mask_automatic');
+    reviewed_mask = get_saved_mask(loaded, 'mask_reviewed');
+    review_mask = get_saved_mask(loaded, 'gold_review_mask');
     fs = get_results_fs(loaded, config);
-    weak_events = get_saved_events(loaded, 'events_weak', 'events');
-    reviewed_events = get_saved_events(loaded, 'events_reviewed', '');
+    automatic_events = get_saved_events(loaded, 'events_automatic');
+    reviewed_events = get_saved_events(loaded, 'events_reviewed');
 
     for i = 1:numel(canonical_labels)
         label = canonical_labels{i};
@@ -213,25 +211,25 @@ function row = add_annotation_provenance_summaries(row, loaded, config, canonica
         row.(['label_' field_label '_reviewed_duration_sec']) = nan;
         row.(['label_' field_label '_reviewed_fraction']) = nan;
         row.(['label_' field_label '_reviewed_coverage_fraction']) = 0;
-        row.(['label_' field_label '_weak_reviewed_disagreement_fraction']) = nan;
-        row.(['events_' field_label '_weak_count']) = nan;
+        row.(['label_' field_label '_automatic_reviewed_disagreement_fraction']) = nan;
+        row.(['events_' field_label '_automatic_count']) = nan;
         row.(['events_' field_label '_reviewed_count']) = nan;
-        row.(['events_' field_label '_weak_duration_median_sec']) = nan;
-        row.(['events_' field_label '_weak_duration_p90_sec']) = nan;
+        row.(['events_' field_label '_automatic_duration_median_sec']) = nan;
+        row.(['events_' field_label '_automatic_duration_p90_sec']) = nan;
 
         idx = find(strcmp(saved_labels, label), 1);
         if isempty(idx) || idx > numel(available) || ~available(idx) || ...
-                isempty(weak_mask) || idx > size(weak_mask, 2)
+                isempty(automatic_mask) || idx > size(automatic_mask, 2)
             continue;
         end
-        assessable = saved_assessable_column(loaded, size(weak_mask, 1), ...
+        assessable = saved_assessable_column(loaded, size(automatic_mask, 1), ...
             numel(saved_labels), idx, true);
-        weak_values = logical(weak_mask(:, idx));
-        row.(['events_' field_label '_weak_count']) = count_events(weak_events, label);
-        durations = event_durations(weak_events, label, fs);
+        automatic_values = logical(automatic_mask(:, idx));
+        row.(['events_' field_label '_automatic_count']) = count_events(automatic_events, label);
+        durations = event_durations(automatic_events, label, fs);
         if ~isempty(durations)
-            row.(['events_' field_label '_weak_duration_median_sec']) = median(durations, 'omitnan');
-            row.(['events_' field_label '_weak_duration_p90_sec']) = prctile(durations, 90);
+            row.(['events_' field_label '_automatic_duration_median_sec']) = median(durations, 'omitnan');
+            row.(['events_' field_label '_automatic_duration_p90_sec']) = prctile(durations, 90);
         end
         if isempty(reviewed_mask) || isempty(review_mask) || ...
                 idx > size(reviewed_mask, 2) || idx > size(review_mask, 2)
@@ -250,8 +248,8 @@ function row = add_annotation_provenance_summaries(row, loaded, config, canonica
             nnz(reviewed_values & reviewed_scope) / fs;
         row.(['label_' field_label '_reviewed_fraction']) = ...
             nnz(reviewed_values & reviewed_scope) / nnz(reviewed_scope);
-        row.(['label_' field_label '_weak_reviewed_disagreement_fraction']) = ...
-            nnz(xor(weak_values, reviewed_values) & reviewed_scope) / nnz(reviewed_scope);
+        row.(['label_' field_label '_automatic_reviewed_disagreement_fraction']) = ...
+            nnz(xor(automatic_values, reviewed_values) & reviewed_scope) / nnz(reviewed_scope);
         row.(['events_' field_label '_reviewed_count']) = ...
             count_events(reviewed_events, label);
     end
@@ -282,27 +280,23 @@ function available = saved_label_availability(loaded, saved_labels)
     end
 end
 
-function mask = get_saved_mask(loaded, preferred, fallback)
+function mask = get_saved_mask(loaded, field)
 % GET_SAVED_MASK Return saved mask.
 %
 % Syntax:
-%   mask = get_saved_mask(loaded, preferred, fallback)
+%   mask = get_saved_mask(loaded, field)
 %
 % Inputs:
 %   loaded - Input value `loaded`.
-%   preferred - Input value `preferred`.
-%   fallback - Input value `fallback`.
+%   field - Saved result field name.
 %
 % Outputs:
 %   mask - Logical output mask.
 
     mask = [];
-    if ~isempty(preferred) && isfield(loaded, preferred) && ...
-            (isnumeric(loaded.(preferred)) || islogical(loaded.(preferred)))
-        mask = loaded.(preferred);
-    elseif ~isempty(fallback) && isfield(loaded, fallback) && ...
-            (isnumeric(loaded.(fallback)) || islogical(loaded.(fallback)))
-        mask = loaded.(fallback);
+    if isfield(loaded, field) && ...
+            (isnumeric(loaded.(field)) || islogical(loaded.(field)))
+        mask = loaded.(field);
     end
 end
 
@@ -331,25 +325,22 @@ function assessable = saved_assessable_column(loaded, N, L, idx, available)
     end
 end
 
-function events = get_saved_events(loaded, preferred, fallback)
+function events = get_saved_events(loaded, field)
 % GET_SAVED_EVENTS Return saved events.
 %
 % Syntax:
-%   events = get_saved_events(loaded, preferred, fallback)
+%   events = get_saved_events(loaded, field)
 %
 % Inputs:
 %   loaded - Input value `loaded`.
-%   preferred - Input value `preferred`.
-%   fallback - Input value `fallback`.
+%   field - Saved result field name.
 %
 % Outputs:
 %   events - Event structure array.
 
     events = empty_events();
-    if ~isempty(preferred) && isfield(loaded, preferred) && isstruct(loaded.(preferred))
-        events = loaded.(preferred);
-    elseif ~isempty(fallback) && isfield(loaded, fallback) && isstruct(loaded.(fallback))
-        events = loaded.(fallback);
+    if isfield(loaded, field) && isstruct(loaded.(field))
+        events = loaded.(field);
     end
 end
 
@@ -455,8 +446,8 @@ function row = add_overlap_summaries(row, loaded)
 % Outputs:
 %   row - Computed output value `row`.
 
-    layers = {'weak', 'reviewed'};
-    fields = {'label_overlap_summary_weak', 'label_overlap_summary_reviewed'};
+    layers = {'automatic', 'reviewed'};
+    fields = {'label_overlap_summary_automatic', 'label_overlap_summary_reviewed'};
     for i = 1:numel(layers)
         if ~isfield(loaded, fields{i}) || ~isstruct(loaded.(fields{i}))
             continue;
@@ -1013,11 +1004,10 @@ function event_table = build_group_event_duration_table(files)
         loaded = load(filename);
         fs = get_results_fs(loaded, struct());
         [file_subject, file_measure] = parse_subject_measure(filename);
-        layers = {'weak','reviewed'};
-        event_fields = {'events_weak','events_reviewed'};
-        fallbacks = {'events',''};
+        layers = {'automatic','reviewed'};
+        event_fields = {'events_automatic','events_reviewed'};
         for j = 1:numel(layers)
-            events = get_saved_events(loaded,event_fields{j},fallbacks{j});
+            events = get_saved_events(loaded,event_fields{j});
             for k = 1:numel(events)
                 if ~isfield(events,'type')
                     continue;

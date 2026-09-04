@@ -99,7 +99,7 @@ function testActiveLayerUsesNewestValuesButOnlyNewestCoverage(testCase)
 
     rapid = strcmp(annotations.label_names, 'rapid');
     deep = strcmp(annotations.label_names, 'deep');
-    verifyEqual(testCase, annotations.mask_weak, ...
+    verifyEqual(testCase, annotations.mask_automatic, ...
         events_to_time_mask(normalize_event_types_and_meta(empty_events()), N, config));
     verifyTrue(testCase, all(annotations.mask_reviewed(10:20, rapid)));
     verifyTrue(testCase, all(annotations.mask_reviewed(51:60, deep)));
@@ -155,7 +155,7 @@ function testSavedLatestReviewedStateLoadsWithoutChangingAutomatic(testCase)
         'reviewer_role', 'researcher', 'start_from', 'automatic', ...
         'source_review_round', NaN));
 
-    manual_label_weak_event_sets = automatic;
+    manual_label_automatic_event_sets = automatic;
     manual_label_event_sets = active_sets;
     manual_label_review_mask = scope;
     manual_label_review_history = round1;
@@ -167,7 +167,7 @@ function testSavedLatestReviewedStateLoadsWithoutChangingAutomatic(testCase)
         'label_names', {{defs.type}}, 'active_round_id', 1);
     edit_file = fullfile(output_dir, sprintf('Sub%d_M%d%s', ...
         config.subject, config.measure, config.LabelEdit.filename_suffix));
-    save(edit_file, 'manual_label_weak_event_sets', ...
+    save(edit_file, 'manual_label_automatic_event_sets', ...
         'manual_label_event_sets', 'manual_label_review_mask', ...
         'manual_label_review_history', 'manual_label_active_round_id', ...
         'manual_label_review_provenance', 'manual_label_edit_meta');
@@ -225,5 +225,5 @@ end
 
 function review = empty_sigh_review()
     review = struct('reviewed', false, 'status', 'unreviewed', ...
-        'weak_events', empty_events(), 'reviewed_events', empty_events());
+        'automatic_events', empty_events(), 'reviewed_events', empty_events());
 end
