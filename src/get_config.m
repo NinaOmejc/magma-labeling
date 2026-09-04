@@ -112,10 +112,6 @@ function config = get_config()
     config.irregular.analysis_win_sec = 60;   % trailing IBI-variability analysis window
     config.irregular.min_dur_sec = 60;        % minimum inferred irregular-state duration
     config.irregular.cov_thr   = 0.3;         % CoV threshold for irregularity
-    config.irregular.robust_cov_thr = 0.25;   % robust CoV threshold: 1.4826*MAD(IBI)/median(IBI)
-    config.irregular.detection_metric = 'cov'; % options: 'cov', 'robust_cov', 'either', 'both'
-    config.irregular.rmssd_thr = 0.0;         % if zero, do not include this measure
-    config.irregular.pause_thr_sec = 10;      % exclude irregular windows with pauses at or above this length
     config.irregular.plot_cov_step_sec = 1;   % display CoV as held values over "step_sec" windows (just for display)
     config.irregular.do_plot       = true;    % save irregular breathing diagnostic plot
 
@@ -134,7 +130,7 @@ function config = get_config()
     config.apnea.raw_flat_hist_peak_frac_thr = 0.35;  % histogram peak must contain at least this fraction of window samples
     config.apnea.raw_flat_min_plateau_sec = 5;        % minimum continuous time spent inside the dominant histogram amplitude band
     config.apnea.raw_flat_hist_bins = 40;             % histogram bins used to find held-amplitude plateaus
-    config.apnea.do_plot = true;              % save apnea diagnostic plot
+    config.apnea.do_plot = true;                      % save apnea diagnostic plot
 
     %---- LABEL 7 - sigh - DETECTION SETTINGS
     config.sigh = struct();                      % sigh detection settings

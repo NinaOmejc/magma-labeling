@@ -25,10 +25,6 @@ function diagnostic_signals = compute_label_diagnostic_signals( ...
     irregularity_win_sec = get_config_value(config, 'irregular', 'analysis_win_sec', 60);
     amplitude_win_sec = resp_features.resp.amplitude_windows_sec.shallow;
     cov_thr = get_config_value(config, 'irregular', 'cov_thr', 0.3);
-    robust_cov_thr = get_config_value(config, 'irregular', 'robust_cov_thr', 0.25);
-    rmssd_thr = get_config_value(config, 'irregular', 'rmssd_thr', 0.0);
-    pause_thr_sec = get_config_value(config, 'irregular', 'pause_thr_sec', 10);
-    detection_metric = get_config_value(config, 'irregular', 'detection_metric', 'cov');
 
     diagnostic_signals = struct();
     diagnostic_signals.time_sec = t_grid;
@@ -39,11 +35,7 @@ function diagnostic_signals = compute_label_diagnostic_signals( ...
     diagnostic_signals.slow_bpm_threshold = config.slow.rr_thr_bpm;
     diagnostic_signals.irregularity_window_sec = irregularity_win_sec;
     diagnostic_signals.amplitude_window_sec = amplitude_win_sec;
-    diagnostic_signals.irregularity_detection_metric = detection_metric;
     diagnostic_signals.irregularity_cov_thr = cov_thr;
-    diagnostic_signals.irregularity_robust_cov_thr = robust_cov_thr;
-    diagnostic_signals.irregularity_rmssd_thr_sec = rmssd_thr;
-    diagnostic_signals.irregularity_pause_thr_sec = pause_thr_sec;
 
     diagnostic_signals.breathing_rate_rapid_window_bpm_lungs = resp_features.resp.lungs.rate_rapid_window_bpm;
     diagnostic_signals.breathing_rate_rapid_window_bpm_diaph = resp_features.resp.diaph.rate_rapid_window_bpm;
@@ -68,22 +60,16 @@ function diagnostic_signals = compute_label_diagnostic_signals( ...
 
     diagnostic_signals.irregularity_cov_lungs = resp_features.resp.lungs.irregularity.cov;
     diagnostic_signals.irregularity_robust_cov_lungs = resp_features.resp.lungs.irregularity.robust_cov;
-    diagnostic_signals.irregularity_rmssd_sec_lungs = resp_features.resp.lungs.irregularity.rmssd_sec;
     diagnostic_signals.irregularity_cov_diaph = resp_features.resp.diaph.irregularity.cov;
     diagnostic_signals.irregularity_robust_cov_diaph = resp_features.resp.diaph.irregularity.robust_cov;
-    diagnostic_signals.irregularity_rmssd_sec_diaph = resp_features.resp.diaph.irregularity.rmssd_sec;
     diagnostic_signals.irregularity_evidence_endpoint_lungs = double(resp_features.resp.lungs.irregularity.endpoint_mask);
     diagnostic_signals.irregularity_evidence_endpoint_diaph = double(resp_features.resp.diaph.irregularity.endpoint_mask);
     diagnostic_signals.irregularity_inferred_state_lungs = double(resp_features.resp.lungs.irregularity.window_mask);
     diagnostic_signals.irregularity_inferred_state_diaph = double(resp_features.resp.diaph.irregularity.window_mask);
-    diagnostic_signals.irregularity_pause_exclusion_lungs = double(resp_features.resp.lungs.irregularity.pause_exclusion_mask);
-    diagnostic_signals.irregularity_pause_exclusion_diaph = double(resp_features.resp.diaph.irregularity.pause_exclusion_mask);
-    [diagnostic_signals.irregularity_selected_metric_lungs, ...
-        diagnostic_signals.irregularity_selected_metric_diaph, ...
-        diagnostic_signals.irregularity_selected_margin_lungs, ...
-        diagnostic_signals.irregularity_selected_margin_diaph] = ...
-        selected_irregularity_evidence(resp_features, detection_metric, ...
-            cov_thr, robust_cov_thr, rmssd_thr);
+    diagnostic_signals.irregularity_cov_margin_lungs = ...
+        resp_features.resp.lungs.irregularity.cov - cov_thr;
+    diagnostic_signals.irregularity_cov_margin_diaph = ...
+        resp_features.resp.diaph.irregularity.cov - cov_thr;
 
     diagnostic_signals.breath_amplitude_median_raw_units_lungs = resp_features.resp.lungs.amp_window_median_raw_units;
     diagnostic_signals.breath_amplitude_median_raw_units_diaph = resp_features.resp.diaph.amp_window_median_raw_units;
@@ -194,71 +180,6 @@ function values = cycle_field(cycles, name)
         values = [];
     else
         values = [cycles.(name)]';
-    end
-end
-
-function [metric_lungs, metric_diaph, margin_lungs, margin_diaph] = ...
-    selected_irregularity_evidence(resp_features, metric_name, cov_thr, robust_thr, rmssd_thr)
-% SELECTED_IRREGULARITY_EVIDENCE Perform the selected irregularity evidence operation.
-%
-% Syntax:
-%   [metric_lungs, metric_diaph, margin_lungs, margin_diaph] = selected_irregularity_evidence(resp_features, metric_name, cov_thr, robust_thr, rmssd_thr)
-%
-% Inputs:
-%   resp_features - Respiratory-feature structure.
-%   metric_name - Input value `metric_name`.
-%   cov_thr - Selection threshold value.
-%   robust_thr - Selection threshold value.
-%   rmssd_thr - Selection threshold value.
-%
-% Outputs:
-%   metric_lungs - Computed output value `metric_lungs`.
-%   metric_diaph - Computed output value `metric_diaph`.
-%   margin_lungs - Computed output value `margin_lungs`.
-%   margin_diaph - Computed output value `margin_diaph`.
-
-    [metric_lungs, margin_lungs] = selected_for_belt( ...
-        resp_features.resp.lungs.irregularity, metric_name, cov_thr, robust_thr, rmssd_thr);
-    [metric_diaph, margin_diaph] = selected_for_belt( ...
-        resp_features.resp.diaph.irregularity, metric_name, cov_thr, robust_thr, rmssd_thr);
-end
-
-function [metric, margin] = selected_for_belt(irregularity, metric_name, cov_thr, robust_thr, rmssd_thr)
-% SELECTED_FOR_BELT Perform the selected for belt operation.
-%
-% Syntax:
-%   [metric, margin] = selected_for_belt(irregularity, metric_name, cov_thr, robust_thr, rmssd_thr)
-%
-% Inputs:
-%   irregularity - Input value `irregularity`.
-%   metric_name - Input value `metric_name`.
-%   cov_thr - Selection threshold value.
-%   robust_thr - Selection threshold value.
-%   rmssd_thr - Selection threshold value.
-%
-% Outputs:
-%   metric - Computed output value `metric`.
-%   margin - Computed output value `margin`.
-
-    cov_margin = irregularity.cov - cov_thr;
-    robust_margin = irregularity.robust_cov - robust_thr;
-    switch lower(strtrim(char(string(metric_name))))
-        case {'robust_cov', 'robust'}
-            metric = irregularity.robust_cov;
-            margin = robust_margin;
-        case 'either'
-            metric = max([irregularity.cov(:), irregularity.robust_cov(:)], [], 2, 'omitnan');
-            margin = max([cov_margin(:), robust_margin(:)], [], 2, 'omitnan');
-        case 'both'
-            metric = min([irregularity.cov(:), irregularity.robust_cov(:)], [], 2, 'omitnan');
-            margin = min([cov_margin(:), robust_margin(:)], [], 2, 'omitnan');
-        otherwise
-            metric = irregularity.cov;
-            margin = cov_margin;
-    end
-    if isfinite(rmssd_thr) && rmssd_thr > 0
-        rmssd_margin = irregularity.rmssd_sec - rmssd_thr;
-        margin = max([margin(:), rmssd_margin(:)], [], 2, 'omitnan');
     end
 end
 

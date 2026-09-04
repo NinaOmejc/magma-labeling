@@ -119,7 +119,7 @@ function belt = build_belt_evidence(source, reference, ignored, t_grid, cfg, con
         % apnea
         [belt.apnea_amplitude_endpoint_mask, belt.apnea_amplitude_state_mask] = amplitude_threshold_mask( ...
             belt.peak_t, belt.amp_ratio_session, t_grid, cfg.apnea_win_sec, cfg.apnea_ratio_threshold, 2, 'le');
-        
+
         % Window-summary criterion  (more soft but more robust to normal breath-to-breath variability)
         % shallow breathing 
         [belt.amp_window_median_raw_units, belt.amp_ratio_session_window_median] = amplitude_window_medians( ...
@@ -131,28 +131,24 @@ function belt = build_belt_evidence(source, reference, ignored, t_grid, cfg, con
         [~, belt.apnea_amp_ratio_session_window_median] = amplitude_window_medians( ...
             belt.peak_t, belt.amp, belt.amp_ratio_session, t_grid, cfg.apnea_win_sec, 2);
 
-    elseif belt.amplitude_available
+    elseif belt.amplitude_available % (for when we have valid breath amplitudes, BUT no usable session reference.)
         [belt.amp_window_median_raw_units, ~] = amplitude_window_medians( ...
-            belt.peak_t, belt.amp, belt.amp_ratio_session, t_grid, cfg.shallow_win_sec, 1);
+            belt.peak_t, belt.amp, belt.amp_ratio_session, t_grid, cfg.shallow_win_sec, 3);
     end
 
     if belt.available
+        % irregular breathing features
         irregular_input = struct('ok', true, 'peak_t', belt.peak_t, 'ibi', belt.ibi);
         [belt.irregularity.window_mask, belt.irregularity.cov, ...
-            belt.irregularity.robust_cov, belt.irregularity.rmssd_sec, ...
-            belt.irregularity.endpoint_mask, ...
-            belt.irregularity.pause_exclusion_mask] = compute_irregularity_metrics( ...
-            irregular_input, t_grid, cfg.irregularity_win_sec, cfg.cov_thr, ...
-            cfg.robust_cov_thr, cfg.rmssd_thr, cfg.pause_thr_sec, ...
-            cfg.detection_metric);
-        belt.rate_slow_endpoint_mask = isfinite(belt.rate_slow_window_bpm) & ...
-            belt.rate_slow_window_bpm <= cfg.slow_rr_threshold;
-        belt.rate_slow_state_mask = analysis_window_endpoints_to_state_mask( ...
-            belt.rate_slow_endpoint_mask, t_grid, cfg.slow_win_sec);
-        belt.rate_rapid_endpoint_mask = isfinite(belt.rate_rapid_window_bpm) & ...
-            belt.rate_rapid_window_bpm >= cfg.rapid_rr_threshold;
-        belt.rate_rapid_state_mask = analysis_window_endpoints_to_state_mask( ...
-            belt.rate_rapid_endpoint_mask, t_grid, cfg.rapid_win_sec);
+            belt.irregularity.robust_cov, belt.irregularity.endpoint_mask] = ...
+            compute_irregularity_metrics( ...
+                irregular_input, t_grid, cfg.irregularity_win_sec, cfg.cov_thr);
+
+        % slow and rapid breathing features
+        belt.rate_slow_endpoint_mask = isfinite(belt.rate_slow_window_bpm) & belt.rate_slow_window_bpm <= cfg.slow_rr_threshold;
+        belt.rate_slow_state_mask = analysis_window_endpoints_to_state_mask(belt.rate_slow_endpoint_mask, t_grid, cfg.slow_win_sec);
+        belt.rate_rapid_endpoint_mask = isfinite(belt.rate_rapid_window_bpm) & belt.rate_rapid_window_bpm >= cfg.rapid_rr_threshold;
+        belt.rate_rapid_state_mask = analysis_window_endpoints_to_state_mask(belt.rate_rapid_endpoint_mask, t_grid, cfg.rapid_win_sec);
     end
 end
 
@@ -310,9 +306,7 @@ function belt = empty_belt_evidence(t_grid)
             'window_mask', false(size(t_grid)), ...
             'endpoint_mask', false(size(t_grid)), ...
             'cov', nan(size(t_grid)), ...
-            'robust_cov', nan(size(t_grid)), ...
-            'rmssd_sec', nan(size(t_grid)), ...
-            'pause_exclusion_mask', false(size(t_grid))));
+            'robust_cov', nan(size(t_grid))));
 end
 
 function ratio = amplitude_ratio(amp, reference, reference_available)
@@ -695,10 +689,6 @@ function cfg = evidence_config(config)
     cfg.deep_ratio_threshold = get_config_value(config, 'deep', 'amp_ratio_thr', 1.20);
     cfg.irregularity_win_sec = get_config_value(config, 'irregular', 'analysis_win_sec', 60);
     cfg.cov_thr = get_config_value(config, 'irregular', 'cov_thr', 0.3);
-    cfg.robust_cov_thr = get_config_value(config, 'irregular', 'robust_cov_thr', 0.25);
-    cfg.rmssd_thr = get_config_value(config, 'irregular', 'rmssd_thr', 0.0);
-    cfg.pause_thr_sec = get_config_value(config, 'irregular', 'pause_thr_sec', 10);
-    cfg.detection_metric = get_config_value(config, 'irregular', 'detection_metric', 'cov');
     cfg.thoracic_balance_win_sec = get_config_value(config, 'thoracic', 'analysis_win_sec', 30);
     cfg.thoracic_balance_min_breaths = get_config_value(config, 'thoracic', 'min_breaths', 3);
     cfg.thoracic_dominance_ratio_thr = get_config_value(config, 'thoracic', 'dominance_ratio_thr', 1.5);

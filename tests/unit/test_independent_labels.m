@@ -394,6 +394,7 @@ end
 
 function testIrregularityMoveAndFallbacks(testCase)
     repo_root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
+    config = get_config();
     verifyTrue(testCase, isfile(fullfile(repo_root, 'src', 'feature_extraction', ...
         'compute_irregularity_metrics.m')));
     verifyFalse(testCase, isfile(fullfile(repo_root, 'src', 'label_detection', ...
@@ -404,11 +405,21 @@ function testIrregularityMoveAndFallbacks(testCase)
         fullfile(repo_root, 'src', 'feature_extraction', 'compute_irregularity_metrics.m'), ...
         fullfile(repo_root, 'src', 'label_detection', 'detect_irregular_breathing.m'), ...
         fullfile(repo_root, 'src', 'utils', 'compute_label_diagnostic_signals.m')};
+    removed = {'robust_cov_thr', 'rmssd', 'pause_exclusion', ...
+        'detection_metric', 'select_irregularity_metric'};
     for i = 1:numel(files)
-        source = fileread(files{i});
-        verifyFalse(testCase, contains(source, "detection_metric = 'robust_cov'"));
-        verifyFalse(testCase, contains(source, "'detection_metric', 'robust_cov'"));
+        source = lower(fileread(files{i}));
+        for j = 1:numel(removed)
+            verifyFalse(testCase, contains(source, removed{j}));
+        end
     end
+    verifyEqual(testCase, config.irregular.analysis_win_sec, 60);
+    verifyEqual(testCase, config.irregular.min_dur_sec, 60);
+    verifyEqual(testCase, config.irregular.cov_thr, 0.3);
+    verifyEqual(testCase, config.irregular.plot_cov_step_sec, 1);
+    verifyTrue(testCase, config.irregular.do_plot);
+    verifyFalse(testCase, any(isfield(config.irregular, ...
+        {'robust_cov_thr', 'detection_metric', 'rmssd_thr', 'pause_thr_sec'})));
 end
 
 function testRespiratoryAmplitudeDocumentationMatchesAlignment(testCase)

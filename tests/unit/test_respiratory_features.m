@@ -94,17 +94,59 @@ function testRateAndIrregularityEvidenceMatchesDefinitions(testCase)
     verifyTrue(testCase, isequaln( ...
         resp_features.resp.lungs.rate_rapid_window_bpm, expected_rapid));
 
-    [expected_mask, expected_cov, expected_robust, expected_rmssd, expected_endpoint] = ...
+    [expected_mask, expected_cov, expected_robust, expected_endpoint] = ...
         compute_irregularity_metrics(resp_cycles.lungs, t_grid, ...
-        config.irregular.analysis_win_sec, config.irregular.cov_thr, ...
-        config.irregular.robust_cov_thr, config.irregular.rmssd_thr, ...
-        config.irregular.pause_thr_sec, config.irregular.detection_metric);
+            config.irregular.analysis_win_sec, config.irregular.cov_thr);
     actual = resp_features.resp.lungs.irregularity;
     verifyTrue(testCase, isequaln(actual.window_mask, expected_mask));
     verifyTrue(testCase, isequaln(actual.endpoint_mask, expected_endpoint));
     verifyTrue(testCase, isequaln(actual.cov, expected_cov));
     verifyTrue(testCase, isequaln(actual.robust_cov, expected_robust));
-    verifyTrue(testCase, isequaln(actual.rmssd_sec, expected_rmssd));
+    verifyEqual(testCase, sort(fieldnames(actual)), ...
+        sort({'window_mask'; 'endpoint_mask'; 'cov'; 'robust_cov'}));
+end
+
+function testIrregularityRequiresCompleteIbiContainment(testCase)
+    breaths = struct('ok', true, 'peak_t', (35:10:85)', ...
+        'ibi', 10 * ones(5, 1));
+    t_grid = (0:100)';
+
+    [state_mask, cov_trace, robust_cov_trace, endpoint_mask] = ...
+        compute_irregularity_metrics(breaths, t_grid, 60, 0.3);
+
+    verifyTrue(testCase, isnan(cov_trace(end)));
+    verifyTrue(testCase, isnan(robust_cov_trace(end)));
+    verifyFalse(testCase, endpoint_mask(end));
+    verifyFalse(testCase, state_mask(end));
+end
+
+function testIrregularityKeepsIbiTimesAlignedWhenInvalidValuesAreRemoved(testCase)
+    breaths = struct('ok', true, 'peak_t', [0; 1; 3; 6; 10; 15; 21], ...
+        'ibi', [1; NaN; 3; 4; 5; 6]);
+    expected_ibi = [1; 3; 4; 5; 6];
+
+    [~, cov_trace, robust_cov_trace] = ...
+        compute_irregularity_metrics(breaths, (0:21)', 21, 0.3);
+
+    verifyEqual(testCase, cov_trace(end), ...
+        std(expected_ibi) / mean(expected_ibi), 'AbsTol', 1e-12);
+    expected_robust_cov = 1.4826 * ...
+        median(abs(expected_ibi - median(expected_ibi))) / median(expected_ibi);
+    verifyEqual(testCase, robust_cov_trace(end), expected_robust_cov, ...
+        'AbsTol', 1e-12);
+end
+
+function testRobustCovDoesNotDriveIrregularClassification(testCase)
+    ibi = [0.8; 0.8; 1.0; 1.2; 1.2];
+    breaths = struct('ok', true, 'peak_t', [0; cumsum(ibi)], 'ibi', ibi);
+
+    [state_mask, cov_trace, robust_cov_trace, endpoint_mask] = ...
+        compute_irregularity_metrics(breaths, (0:0.5:5)', 5, 0.3);
+
+    verifyLessThan(testCase, cov_trace(end), 0.3);
+    verifyGreaterThan(testCase, robust_cov_trace(end), 0.25);
+    verifyFalse(testCase, endpoint_mask(end));
+    verifyFalse(testCase, any(state_mask));
 end
 
 function testWindowRateUsesSixtyOverMeanIbiAndIsShared(testCase)
@@ -329,7 +371,6 @@ function [data, resp_cycles, resp_ref, diagnostics_desat, config] = feature_fixt
     config.subject = 999;
     config.measure = 1;
     config.problems.missing_lung_belt = zeros(0, 2);
-    config.irregular.rmssd_thr = 0.2;
     N = 5001;
     data = zeros(N, 6);
 

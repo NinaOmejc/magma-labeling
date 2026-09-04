@@ -109,7 +109,7 @@ The thresholds below are operational research criteria and should not be interpr
 
 - **`rapid`** — a full trailing 60-s window estimates respiratory rate as `RR = 60 / mean(IBI)` and confirms a candidate when `RR >= 20 bpm`. Final boundaries are localized from consecutive respiratory-cycle intervals with breathwise `RR_i >= 20 bpm`; only localized runs lasting at least 30 s become final events.
 
-- **`irregular`** — respiratory-rhythm variability is assessed over 60-s IBI windows. The default criterion is `CV_IBI >= 0.30`, with long pauses excluded from irregularity estimation. Because irregularity is intrinsically window-based, event boundaries retain window-scale uncertainty.
+- **`irregular`** — respiratory-rhythm variability is assessed over 60-s windows using complete IBIs contained within each window. The detection criterion is `CV_IBI >= 0.30`; robust CoV is retained only as a descriptive trace. Because irregularity is intrinsically window-based, event boundaries retain window-scale uncertainty.
 
 - **`apnea`** — apnea-like low-motion evidence is detected either from very low normalized respiratory excursion (`<= 10%` of the session reference) or from sustained raw-belt flatness/low motion. Events must last at least 10 s. This label represents respiratory pause/low-motion evidence, not confirmed airflow cessation or central/obstructive apnea.
 
