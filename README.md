@@ -163,7 +163,6 @@ Manual review is optional and controlled in `src/get_config.m`:
 - `config.LabelEdit.start_from` — uses either immutable `automatic` annotations or the `latest_reviewed` annotations as the GUI starting state.
 - `config.LabelEdit.replace_reviewed` — makes the completed round the active latest reviewed layer while retaining all earlier rounds.
 - `config.LabelEdit.reviewer_role` — stores a flexible, non-identifying role such as `researcher`, `clinician`, or `expert` with the round.
-- `config.LabelEdit.rewrite_changed_figures` — regenerates only diagnostic figures for labels whose reviewed intervals changed.
 
 Automatic annotations are always preserved separately from manually reviewed annotations. For a later expert review, set `start_from = 'latest_reviewed'`; the editor then opens the previous reviewed values instead of requiring relabeling from scratch. Edits replace values only inside the newly viewed regions, while prior reviewed values remain outside that scope. Each completed round has its own coverage mask, reviewer role, source, annotations, and status in `results.review_history`. The active round is summarized by `results.review_provenance`.
 
@@ -190,7 +189,7 @@ The most important result fields include:
 
 - automatic annotations, frozen before manual review: `results.events_automatic`, `results.mask_automatic`
 - manually reviewed annotations: `results.events_reviewed`, `results.mask_reviewed`
-- review coverage: `results.gold_review_mask`
+- review coverage: `results.review_coverage_mask`
 - review history and active provenance: `results.review_history`, `results.review_provenance`
 - label names and availability: `results.label_names`, `results.label_available`, `results.label_assessable_mask`
 - reviewed availability: `results.label_reviewed_available`, `results.label_reviewed_assessable_mask`
@@ -205,7 +204,7 @@ The most important result fields include:
 
 Additional detector diagnostics and intermediate evidence can be inspected directly in the saved `results` structure or in the HDF5 hierarchy.
 
-The HDF5 export schema is `magma_ml_hdf5_v4`. Automatic annotations are stored under `/labels/automatic_mask`, `/events/automatic`, `/burden/automatic`, and `/overlap/automatic`; reviewed annotations retain their corresponding `/reviewed` paths. `/review/provenance` and `/review/history` expose round metadata, annotations, and exact per-round coverage. The export stores the common metadata once under `/session_reference`, independent respiratory-belt statistics under `/resp_reference`, and the SpO2 statistic under `/spo2_reference`.
+The HDF5 export schema is `magma_ml_hdf5_v4`. Automatic annotations are stored under `/labels/automatic_mask`, `/events/automatic`, `/burden/automatic`, and `/overlap/automatic`; reviewed annotations retain their corresponding `/reviewed` paths, with coverage under `/labels/review_coverage_mask`. `/review/provenance` and `/review/history` expose round metadata, annotations, and exact per-round coverage. The export stores the common metadata once under `/session_reference`, independent respiratory-belt statistics under `/resp_reference`, and the SpO2 statistic under `/spo2_reference`.
 
 Group-level summaries are written under the `group_analysis/` output directory. `cohort_localized_boundary_qc.csv` preserves every localized-run duration and duration shortfall; `cohort_label_qc_summary.csv` aggregates rejected-run counts, medians, upper tails, maxima, and the smallest shortfall per label. These outputs are descriptive QC and never change thresholds automatically.
 

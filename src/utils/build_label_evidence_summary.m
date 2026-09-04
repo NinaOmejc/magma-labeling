@@ -99,7 +99,7 @@ function summary = build_label_evidence_summary( ...
         balance.thoracic_to_abdominal_ratio - balance.dominance_ratio_threshold);
     summary.thoracic.supporting_belts = 'both';
 
-    rea = detector_diagnostics.respiratory_asynchrony;
+    rea = detector_diagnostics.async;
     summary.async.analysis_valid = logical(rea.valid_analysis);
     summary.async.reference_coherence = rea.references;
     summary.async.thresholds = rea.thresholds;
@@ -136,7 +136,7 @@ function summary = build_label_evidence_summary( ...
     summary.sigh.supporting_belts = belt_support( ...
         sigh.lungs.available, sigh.diaph.available);
 
-    csr = detector_diagnostics.periodic_breathing;
+    csr = detector_diagnostics.csr;
     summary.csr.minimum_cycles = csr.minimum_cycles;
     summary.csr.minimum_modulation_ratio = csr.minimum_modulation_ratio;
     summary.csr.detected_cycle_count_lungs = numel(csr.lungs.cycles);

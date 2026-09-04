@@ -221,7 +221,6 @@ function config = get_config()
     config.LabelEdit.window_sec = 400;           % *** visible time span for manual label GUI scrolling
     config.LabelEdit.min_interval_sec = 1;       % minimum drag interval accepted as a manual event
     config.LabelEdit.filename_suffix = '_manual_label_events.mat';
-    config.LabelEdit.rewrite_changed_figures = true; % overwrite only label diagnostic images whose intervals changed manually
 
     %---- PER-RECORDING ML-READY EXPORT
     % MAT remains authoritative and is not replaced. HDF5 contains simple

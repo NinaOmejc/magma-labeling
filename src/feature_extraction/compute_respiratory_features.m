@@ -30,11 +30,14 @@ function resp_features = compute_respiratory_features(data, resp_cycles, resp_re
     resp_features.resp.shallow_band_ratio = [cfg.shallow_lo_ratio cfg.shallow_hi_ratio];
     resp_features.resp.deep_ratio_threshold = cfg.deep_ratio_threshold;
 
+    % compute on individual belts 
     lungs_ignored = is_lung_belt_ignored(config);
     resp_features.resp.lungs = build_belt_evidence( ...
         get_belt(resp_cycles, 'lungs'), get_belt(resp_ref, 'lungs'), lungs_ignored, t_grid, cfg, config);
     resp_features.resp.diaph = build_belt_evidence( ...
         get_belt(resp_cycles, 'diaph'), get_belt(resp_ref, 'diaph'), false, t_grid, cfg, config);
+
+    % compute on both belts 
     resp_features.resp.belt_availability = struct( ...
         'lungs', resp_features.resp.lungs.available, 'diaph', resp_features.resp.diaph.available);
     resp_features.resp.both_belts_available = resp_features.resp.lungs.available && resp_features.resp.diaph.available;
@@ -77,15 +80,12 @@ function belt = build_belt_evidence(source, reference, ignored, t_grid, cfg, con
     belt.available = is_valid_breath_signal(source, false) && ~belt.ignored;
     belt.amplitude_available = is_valid_breath_signal(source, true) && belt.available;
 
-    [belt.ibi, belt.ibi_source] = interval_values( ...
-        source, 'ibi', belt.peak_idx, belt.peak_t, config.fs);
+    [belt.ibi, belt.ibi_source] = interval_values(source, 'ibi', belt.peak_idx, belt.peak_t, config.fs);
     [belt.rr_bpm, belt.rr_source] = rate_values(source, belt.ibi);
     validate_available_alignment(belt);
 
-    [belt.session_reference_value, belt.session_reference_available, ...
-        belt.reference_quality] = reference_value(reference, 'session');
-    [belt.global_reference_value, belt.global_reference_available] = ...
-        reference_value(reference, 'global');
+    [belt.session_reference_value, belt.session_reference_available, belt.reference_quality] = reference_value(reference, 'session');
+    [belt.global_reference_value, belt.global_reference_available] = reference_value(reference, 'global');
     if belt.ignored
         belt.session_reference_value = NaN;
         belt.session_reference_available = false;
@@ -98,42 +98,30 @@ function belt = build_belt_evidence(source, reference, ignored, t_grid, cfg, con
         belt.amp, belt.session_reference_value, belt.session_reference_available);
     belt.amp_ratio_global = amplitude_ratio( ...
         belt.amp, belt.global_reference_value, belt.global_reference_available);
-    belt.session_amplitude_available = belt.amplitude_available && ...
-        belt.session_reference_available;
-    belt.global_amplitude_available = belt.amplitude_available && ...
-        belt.global_reference_available;
+    belt.session_amplitude_available = belt.amplitude_available && belt.session_reference_available;
+    belt.global_amplitude_available = belt.amplitude_available && belt.global_reference_available;
 
     if belt.available
-        belt.rate_slow_window_bpm = breath_rate_trace( ...
-            belt.peak_t, t_grid, cfg.slow_win_sec);
-        belt.rate_rapid_window_bpm = breath_rate_trace( ...
-            belt.peak_t, t_grid, cfg.rapid_win_sec);
+        belt.rate_slow_window_bpm = respiratory_rate_trace(belt.peak_t, t_grid, cfg.slow_win_sec);
+        belt.rate_rapid_window_bpm = respiratory_rate_trace(belt.peak_t, t_grid, cfg.rapid_win_sec);
     end
 
     if belt.session_amplitude_available
         [belt.shallow_amplitude_endpoint_mask, belt.shallow_amplitude_mask] = amplitude_band_mask( ...
-            belt.peak_t, belt.amp_ratio_session, t_grid, cfg.shallow_win_sec, ...
-            cfg.shallow_lo_ratio, cfg.shallow_hi_ratio);
+            belt.peak_t, belt.amp_ratio_session, t_grid, cfg.shallow_win_sec, cfg.shallow_lo_ratio, cfg.shallow_hi_ratio);
         [belt.deep_amplitude_endpoint_mask, belt.deep_amplitude_mask] = amplitude_threshold_mask( ...
-            belt.peak_t, belt.amp_ratio_session, t_grid, cfg.deep_win_sec, ...
-            cfg.deep_ratio_threshold);
-        [belt.amp_window_median_raw_units, belt.amp_ratio_session_window_median] = ...
-            amplitude_window_medians(belt.peak_t, belt.amp, ...
-            belt.amp_ratio_session, t_grid, cfg.shallow_win_sec, 1);
-        [~, belt.deep_amp_ratio_session_window_median] = ...
-            amplitude_window_medians(belt.peak_t, belt.amp, ...
-            belt.amp_ratio_session, t_grid, cfg.deep_win_sec, 1);
-        [~, belt.apnea_amp_ratio_session_window_median] = ...
-            amplitude_window_medians(belt.peak_t, belt.amp, ...
-            belt.amp_ratio_session, t_grid, cfg.apnea_win_sec, 2);
-        [belt.apnea_amplitude_endpoint_mask, ...
-            belt.apnea_amplitude_state_mask] = amplitude_all_le_mask( ...
-            belt.peak_t, belt.amp_ratio_session, t_grid, ...
-            cfg.apnea_win_sec, cfg.apnea_ratio_threshold, 2);
+            belt.peak_t, belt.amp_ratio_session, t_grid, cfg.deep_win_sec, cfg.deep_ratio_threshold);
+        [belt.amp_window_median_raw_units, belt.amp_ratio_session_window_median] = amplitude_window_medians( ...
+            belt.peak_t, belt.amp, belt.amp_ratio_session, t_grid, cfg.shallow_win_sec, 1);
+        [~, belt.deep_amp_ratio_session_window_median] = amplitude_window_medians( ...
+            belt.peak_t, belt.amp, belt.amp_ratio_session, t_grid, cfg.deep_win_sec, 1);
+        [~, belt.apnea_amp_ratio_session_window_median] = amplitude_window_medians( ...
+            belt.peak_t, belt.amp, belt.amp_ratio_session, t_grid, cfg.apnea_win_sec, 2);
+        [belt.apnea_amplitude_endpoint_mask, belt.apnea_amplitude_state_mask] = amplitude_all_le_mask( ...
+            belt.peak_t, belt.amp_ratio_session, t_grid, cfg.apnea_win_sec, cfg.apnea_ratio_threshold, 2);
     elseif belt.amplitude_available
         [belt.amp_window_median_raw_units, ~] = amplitude_window_medians( ...
-            belt.peak_t, belt.amp, belt.amp_ratio_session, ...
-            t_grid, cfg.shallow_win_sec, 1);
+            belt.peak_t, belt.amp, belt.amp_ratio_session, t_grid, cfg.shallow_win_sec, 1);
     end
 
     if belt.available
@@ -247,7 +235,12 @@ function values = values_in_window(peak_t, values, start_t, end_t)
 % Outputs:
 %   values - Computed numeric value.
 
-    [peak_t, values] = paired_peak_values(peak_t, values);
+    peak_t = peak_t(:);
+    values = values(:);
+    if numel(peak_t) ~= numel(values)
+        error('MAGMA:RespFeatures:SizeMismatch', ...
+            'peak_t and values must have equal lengths.');
+    end
     in_window = peak_t >= start_t & peak_t <= end_t & ...
         isfinite(values) & values > 0;
     values = values(in_window);
@@ -333,11 +326,12 @@ function ratio = amplitude_ratio(amp, reference, reference_available)
     ratio(valid) = amp(valid) ./ reference;
 end
 
-function trace = breath_rate_trace(peak_t, t_grid, win_sec)
-% BREATH_RATE_TRACE Perform the breath rate trace operation.
+function trace = respiratory_rate_trace(peak_t, t_grid, win_sec)
+% RESPIRATORY_RATE_TRACE - Perform the respiratory rate trace operation:
+% RR = 60 / mean(IBI)
 %
 % Syntax:
-%   trace = breath_rate_trace(peak_t, t_grid, win_sec)
+%   trace = respiratory_rate_trace(peak_t, t_grid, win_sec)
 %
 % Inputs:
 %   peak_t - Input value `peak_t`.
@@ -391,7 +385,12 @@ function [endpoint_mask, state_mask] = amplitude_all_le_mask( ...
 %   state_mask - Logical output mask.
 
     endpoint_mask = false(size(t_grid));
-    [peak_t, ratio] = paired_peak_values(peak_t, ratio);
+    peak_t = peak_t(:);
+    ratio = ratio(:);
+    if numel(peak_t) ~= numel(ratio)
+        error('MAGMA:RespFeatures:SizeMismatch', ...
+            'peak_t and ratio must have equal lengths.');
+    end
     for i = 1:numel(t_grid)
         t = t_grid(i);
         lb = t - win_sec;
@@ -426,7 +425,12 @@ function [endpoint_mask, state_mask] = amplitude_band_mask(peak_t, ratio, t_grid
 %   state_mask - Logical output mask.
 
     endpoint_mask = false(size(t_grid));
-    [peak_t, ratio] = paired_peak_values(peak_t, ratio);
+    peak_t = peak_t(:);
+    ratio = ratio(:);
+    if numel(peak_t) ~= numel(ratio)
+        error('MAGMA:RespFeatures:SizeMismatch', ...
+            'peak_t and ratio must have equal lengths.');
+    end
     for i = 1:numel(t_grid)
         t = t_grid(i);
         lb = t - win_sec;
@@ -462,7 +466,12 @@ function [endpoint_mask, state_mask] = amplitude_threshold_mask(peak_t, ratio, t
 %   state_mask - Logical output mask.
 
     endpoint_mask = false(size(t_grid));
-    [peak_t, ratio] = paired_peak_values(peak_t, ratio);
+    peak_t = peak_t(:);
+    ratio = ratio(:);
+    if numel(peak_t) ~= numel(ratio)
+        error('MAGMA:RespFeatures:SizeMismatch', ...
+            'peak_t and ratio must have equal lengths.');
+    end
     for i = 1:numel(t_grid)
         t = t_grid(i);
         lb = t - win_sec;
@@ -501,7 +510,13 @@ function [raw_trace, ratio_trace] = amplitude_window_medians( ...
 
     raw_trace = nan(size(t_grid));
     ratio_trace = nan(size(t_grid));
-    [peak_t, amp, ratio] = paired_peak_values(peak_t, amp, ratio);
+    peak_t = peak_t(:);
+    amp = amp(:);
+    ratio = ratio(:);
+    if numel(peak_t) ~= numel(amp) || numel(peak_t) ~= numel(ratio)
+        error('MAGMA:RespFeatures:SizeMismatch', ...
+            'peak_t, amp, and ratio must have equal lengths.');
+    end
     for i = 1:numel(t_grid)
         t = t_grid(i);
         lb = t - win_sec;
@@ -519,31 +534,6 @@ function [raw_trace, ratio_trace] = amplitude_window_medians( ...
         if nnz(valid_ratio) >= min_breaths
             ratio_trace(i) = median(ratio_values(valid_ratio), 'omitnan');
         end
-    end
-end
-
-function [varargout] = paired_peak_values(peak_t, varargin)
-% PAIRED_PEAK_VALUES Perform the paired peak values operation.
-%
-% Syntax:
-%   varargout = paired_peak_values(peak_t, varargin)
-%
-% Inputs:
-%   peak_t - Input value `peak_t`.
-%   varargin - Optional positional or name-value inputs.
-%
-% Outputs:
-%   varargout - Optional function outputs.
-
-    n = numel(peak_t);
-    for i = 1:numel(varargin)
-        n = min(n, numel(varargin{i}));
-    end
-    varargout = cell(1, numel(varargin) + 1);
-    varargout{1} = peak_t(1:n);
-    for i = 1:numel(varargin)
-        values = varargin{i};
-        varargout{i+1} = values(1:n);
     end
 end
 

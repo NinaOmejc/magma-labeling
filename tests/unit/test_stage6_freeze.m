@@ -322,8 +322,8 @@ function testAutomaticAndReviewedLayersRemainSeparate(testCase)
     shallow = strcmp(annotations.label_names, 'shallow');
     verifyTrue(testCase, any(annotations.mask_automatic(:, rapid)));
     verifyFalse(testCase, any(annotations.mask_reviewed(:, rapid)));
-    verifyTrue(testCase, all(annotations.gold_review_mask(:, rapid)));
-    verifyFalse(testCase, any(annotations.gold_review_mask(:, shallow)));
+    verifyTrue(testCase, all(annotations.review_coverage_mask(:, rapid)));
+    verifyFalse(testCase, any(annotations.review_coverage_mask(:, shallow)));
     verifyEqual(testCase, annotations.review_status{rapid}, 'reviewed_rejected');
 end
 
@@ -342,10 +342,10 @@ function testUnreviewedDiffersFromReviewedNegative(testCase)
     desat = strcmp(annotations.label_names, 'desat');
     apnea = strcmp(annotations.label_names, 'apnea');
     verifyFalse(testCase, any(annotations.mask_reviewed(:, desat)));
-    verifyTrue(testCase, all(annotations.gold_review_mask(:, desat)));
+    verifyTrue(testCase, all(annotations.review_coverage_mask(:, desat)));
     verifyFalse(testCase, any(annotations.mask_reviewed(:, apnea)));
-    verifyFalse(testCase, any(annotations.gold_review_mask(:, apnea)));
-    verifySize(testCase, annotations.gold_review_mask, [20 11]);
+    verifyFalse(testCase, any(annotations.review_coverage_mask(:, apnea)));
+    verifySize(testCase, annotations.review_coverage_mask, [20 11]);
 end
 
 function testManualV3CoverageMigratesByLabelIdentity(testCase)
@@ -431,7 +431,7 @@ function testReviewedSighDoesNotDestroyAutomaticCandidates(testCase)
     sigh_idx = strcmp(annotations.label_names,'sigh');
     verifyTrue(testCase,any(annotations.mask_automatic(:,sigh_idx)));
     verifyFalse(testCase,any(annotations.mask_reviewed(:,sigh_idx)));
-    verifyTrue(testCase,all(annotations.gold_review_mask(:,sigh_idx)));
+    verifyTrue(testCase,all(annotations.review_coverage_mask(:,sigh_idx)));
 end
 
 function testCompleteAndPartialAssessability(testCase)
@@ -585,8 +585,8 @@ function testHdf5RoundTripPreservesOrderMasksNaNsAndRespiration(testCase)
         results.mask_automatic);
     verifyEqual(testCase, logical(h5read(filename, '/labels/reviewed_mask')), ...
         results.mask_reviewed);
-    verifyEqual(testCase, logical(h5read(filename, '/labels/review_mask')), ...
-        results.gold_review_mask);
+    verifyEqual(testCase, logical(h5read(filename, ...
+        '/labels/review_coverage_mask')), results.review_coverage_mask);
     verifyTrue(testCase, isnan(h5read(filename, ...
         '/burden/automatic/by_label/desat/fraction')));
     verifyEqual(testCase, logical(h5read(filename, ...
@@ -779,8 +779,8 @@ function results = export_fixture(config, N)
     results.mask_automatic = false(N,11);
     results.mask_automatic(1:3,strcmp(names,'rapid')) = true;
     results.mask_reviewed = false(N,11);
-    results.gold_review_mask = false(N,11);
-    results.gold_review_mask(:,strcmp(names,'rapid')) = true;
+    results.review_coverage_mask = false(N,11);
+    results.review_coverage_mask(:,strcmp(names,'rapid')) = true;
     results.review_status = repmat({'unreviewed'},1,11);
     results.review_status{strcmp(names,'rapid')} = 'reviewed_rejected';
     raw_event = make_event_fixture('rapid_breathing_lungs',0,1/config.fs,config.fs);
@@ -804,7 +804,7 @@ function results = export_fixture(config, N)
         results.mask_automatic,names,results.label_available,results.events_automatic, ...
         config.fs,results.label_assessable_mask);
     reviewed_available = false(1,11); reviewed_available(strcmp(names,'rapid')) = true;
-    reviewed_assessable = results.label_assessable_mask & results.gold_review_mask;
+    reviewed_assessable = results.label_assessable_mask & results.review_coverage_mask;
     results.label_reviewed_available = reviewed_available;
     results.label_reviewed_availability_reason = repmat({'unreviewed'},1,11);
     results.label_reviewed_availability_reason{strcmp(names,'rapid')} = 'available';
@@ -820,7 +820,6 @@ function results = export_fixture(config, N)
         reviewed_assessable);
     results.db_phenotype_evidence = struct('version','test', ...
         'external_clinical_data',struct('status','not_integrated','value',[]));
-    results.annotation_schema_version = 'automatic_reviewed_annotations_v2';
     results.upstream_input_preprocessing = 'external / not fully documented';
 end
 

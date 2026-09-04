@@ -103,8 +103,8 @@ function testActiveLayerUsesNewestValuesButOnlyNewestCoverage(testCase)
         events_to_time_mask(normalize_event_types_and_meta(empty_events()), N, config));
     verifyTrue(testCase, all(annotations.mask_reviewed(10:20, rapid)));
     verifyTrue(testCase, all(annotations.mask_reviewed(51:60, deep)));
-    verifyEqual(testCase, find(annotations.gold_review_mask(:, rapid)), (10:20)');
-    verifyFalse(testCase, any(annotations.gold_review_mask(:, deep)));
+    verifyEqual(testCase, find(annotations.review_coverage_mask(:, rapid)), (10:20)');
+    verifyFalse(testCase, any(annotations.review_coverage_mask(:, deep)));
     verifyEqual(testCase, annotations.review_history(1).mask, round1.mask);
     verifyEqual(testCase, annotations.review_provenance.latest_round_id, 2);
 end

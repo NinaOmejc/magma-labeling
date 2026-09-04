@@ -40,6 +40,15 @@ function testSessionAndGlobalRatiosHandleInvalidAmplitudes(testCase)
     verifyTrue(testCase, isnan(lungs.amp_ratio_session(end)));
 end
 
+function testMismatchedPeakAndAmplitudeLengthsRaiseError(testCase)
+    [data, resp_cycles, resp_ref, ~, config] = feature_fixture();
+    resp_cycles.lungs.amp(end) = [];
+
+    verifyError(testCase, ...
+        @() compute_respiratory_features(data, resp_cycles, resp_ref, config), ...
+        'MAGMA:RespFeatures:SizeMismatch');
+end
+
 function testBeltsRemainIndependentAndSpo2IsExcluded(testCase)
     [data, resp_cycles, resp_ref, diagnostics_desat, config] = feature_fixture();
     resp_features = compute_respiratory_features( ...
