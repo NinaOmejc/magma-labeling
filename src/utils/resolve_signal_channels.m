@@ -1,15 +1,10 @@
 function [config, input_config] = resolve_signal_channels(config)
-% RESOLVE_SIGNAL_CHANNELS Resolve signal channels.
-%
-% Syntax:
-%   [config, input_config] = resolve_signal_channels(config)
-%
-% Inputs:
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   config - Pipeline configuration structure.
-%   input_config - Computed output value `input_config`.
+% RESOLVE_SIGNAL_CHANNELS Map configured column names to SpO2 and respiratory belts.
+% config.data_columns is an ordered text list. Returned config.channels stores
+% that list; index/name for SpO2, lungs, and diaphragm; belt source
+% (specific/generic); has_* flags; and physical respiratory count. input_config,
+% also attached to config, describes effective availability after known belt
+% exclusions and lists running/skipped canonical labels.
 
     if ~isfield(config, 'data_columns') || isempty(config.data_columns)
         error('config.data_columns must list the input data columns.');
@@ -80,17 +75,10 @@ function [config, input_config] = resolve_signal_channels(config)
 end
 
 function input_config = build_input_config(channels, config)
-% BUILD_INPUT_CONFIG Build input config.
-%
-% Syntax:
-%   input_config = build_input_config(channels, config)
-%
-% Inputs:
-%   channels - Input value `channels`.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   input_config - Computed output value `input_config`.
+% BUILD_INPUT_CONFIG Derive detector coverage from resolved physical channels.
+% input_config fields are description; running_labels/skipped_labels;
+% effective/physical respiratory counts and belt flags; SpO2 flag; lung-belt
+% exclusion flag; and resolved lungs/diaph/SpO2 names.
 
     if ~isfield(config, 'labels') || ~isfield(config.labels, 'short')
         current_config = get_config();
@@ -153,77 +141,32 @@ function input_config = build_input_config(channels, config)
 end
 
 function key = normalized_channel_key(name)
-% NORMALIZED_CHANNEL_KEY Perform the normalized channel key operation.
-%
-% Syntax:
-%   key = normalized_channel_key(name)
-%
-% Inputs:
-%   name - Input value `name`.
-%
-% Outputs:
-%   key - Computed output value `key`.
+% NORMALIZED_CHANNEL_KEY Lowercase a channel name and remove non-alphanumerics.
 
     key = lower(char(string(name)));
     key = regexprep(key, '[^a-z0-9]', '');
 end
 
 function tf = is_spo2_name(key)
-% IS_SPO2_NAME Determine whether spo2 name.
-%
-% Syntax:
-%   tf = is_spo2_name(key)
-%
-% Inputs:
-%   key - Input value `key`.
-%
-% Outputs:
-%   tf - Computed output value `tf`.
+% IS_SPO2_NAME Match normalized oxygen-saturation channel aliases.
 
     tf = contains(key, 'spo') || contains(key, 'sao') || contains(key, 'oxygensaturation');
 end
 
 function tf = is_lungs_name(key)
-% IS_LUNGS_NAME Determine whether lungs name.
-%
-% Syntax:
-%   tf = is_lungs_name(key)
-%
-% Inputs:
-%   key - Input value `key`.
-%
-% Outputs:
-%   tf - Computed output value `tf`.
+% IS_LUNGS_NAME Match normalized thoracic/lung respiratory channel aliases.
 
     tf = any(strcmp(key, {'resplungs', 'lungs', 'lung', 'thorax', 'chest', 'respchest', 'respthorax'}));
 end
 
 function tf = is_diaph_name(key)
-% IS_DIAPH_NAME Determine whether diaph name.
-%
-% Syntax:
-%   tf = is_diaph_name(key)
-%
-% Inputs:
-%   key - Input value `key`.
-%
-% Outputs:
-%   tf - Computed output value `tf`.
+% IS_DIAPH_NAME Match normalized abdominal/diaphragm channel aliases.
 
     tf = any(strcmp(key, {'respdiaphragm', 'diaphragm', 'diaph', 'abdomen', 'abdominal', 'respabdomen', 'respabdominal'}));
 end
 
 function tf = is_generic_resp_name(key)
-% IS_GENERIC_RESP_NAME Determine whether generic resp name.
-%
-% Syntax:
-%   tf = is_generic_resp_name(key)
-%
-% Inputs:
-%   key - Input value `key`.
-%
-% Outputs:
-%   tf - Computed output value `tf`.
+% IS_GENERIC_RESP_NAME Match respiratory aliases without a specific belt site.
 
     tf = any(strcmp(key, {'resp', 'respiration', 'respiratorybelt', 'belt'})) || ...
         (contains(key, 'resp') && ~is_spo2_name(key) && ~is_lungs_name(key) && ~is_diaph_name(key));

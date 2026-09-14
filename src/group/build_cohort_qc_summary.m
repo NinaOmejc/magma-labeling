@@ -1,18 +1,19 @@
 function qc = build_cohort_qc_summary( ...
     group_table, label_names, event_duration_table, localized_boundary_qc)
-% BUILD_COHORT_QC_SUMMARY Build cohort qc summary.
-%
-% Syntax:
-%   qc = build_cohort_qc_summary(group_table, label_names, event_duration_table, localized_boundary_qc)
+% BUILD_COHORT_QC_SUMMARY Aggregate per-recording label and boundary quality metrics.
 %
 % Inputs:
-%   group_table - Input value `group_table`.
-%   label_names - Label identifier or label metadata.
-%   event_duration_table - Duration or window length in seconds.
-%   localized_boundary_qc - Input value `localized_boundary_qc`.
+%   group_table          - One row per recording with generated label/QC columns.
+%   label_names          - Canonical label names in output order.
+%   event_duration_table - Optional one-row-per-event duration table (seconds).
+%   localized_boundary_qc - Optional one-row-per-localized-run boundary QC table.
 %
 % Outputs:
-%   qc - Computed summary or metadata structure.
+%   qc - Scalar cohort_label_qc_v1 struct. Fields: version; n_recordings;
+%        by_label table of assessability, event counts/fractions, review coverage,
+%        disagreement, event-duration and rejected-localization statistics;
+%        original event_durations and localized_boundary_qc tables;
+%        belt_availability counts; and reference_quality_warning_recordings.
 
     label_names = cellstr(string(label_names));
     if nargin < 3
@@ -119,18 +120,9 @@ function qc = build_cohort_qc_summary( ...
 end
 
 function [durations, shortfalls] = rejected_localized_values(T, label_name)
-% REJECTED_LOCALIZED_VALUES Perform the rejected localized values operation.
-%
-% Syntax:
-%   [durations, shortfalls] = rejected_localized_values(T, label_name)
-%
-% Inputs:
-%   T - Time coordinates in seconds.
-%   label_name - Label identifier or label metadata.
-%
-% Outputs:
-%   durations - Computed numeric value.
-%   shortfalls - Computed output value `shortfalls`.
+% REJECTED_LOCALIZED_VALUES Select failed localized durations for one label.
+% T supplies localized_duration_sec, passes_final_min_duration, and
+% duration_shortfall_sec; both output vectors contain finite seconds.
 
     durations = [];
     shortfalls = [];
@@ -149,16 +141,8 @@ end
 
 function values = pooled_automatic_duration(T, label_name)
 % POOLED_AUTOMATIC_DURATION Return pooled automatic-event durations.
-%
-% Syntax:
-%   values = pooled_automatic_duration(T, label_name)
-%
-% Inputs:
-%   T - Time coordinates in seconds.
-%   label_name - Label identifier or label metadata.
-%
-% Outputs:
-%   values - Computed numeric value.
+% Selects finite duration_sec values where provenance is automatic and the
+% canonical label matches label_name.
 
     values = [];
     required = {'provenance','label','duration_sec'};
@@ -171,17 +155,7 @@ function values = pooled_automatic_duration(T, label_name)
 end
 
 function values = numeric_column(T, name)
-% NUMERIC_COLUMN Perform the numeric column operation.
-%
-% Syntax:
-%   values = numeric_column(T, name)
-%
-% Inputs:
-%   T - Time coordinates in seconds.
-%   name - Input value `name`.
-%
-% Outputs:
-%   values - Computed numeric value.
+% NUMERIC_COLUMN Read a table variable as doubles or return one NaN per row.
 
     values = nan(height(T), 1);
     if ismember(name, T.Properties.VariableNames) && isnumeric(T.(name))
@@ -190,32 +164,14 @@ function values = numeric_column(T, name)
 end
 
 function value = finite_mean(values)
-% FINITE_MEAN Perform the finite mean operation.
-%
-% Syntax:
-%   value = finite_mean(values)
-%
-% Inputs:
-%   values - Input value `values`.
-%
-% Outputs:
-%   value - Computed numeric value.
+% FINITE_MEAN Average finite values, returning NaN for an empty selection.
 
     values = values(isfinite(values));
     if isempty(values), value = NaN; else, value = mean(values); end
 end
 
 function value = finite_median(values)
-% FINITE_MEDIAN Perform the finite median operation.
-%
-% Syntax:
-%   value = finite_median(values)
-%
-% Inputs:
-%   values - Input value `values`.
-%
-% Outputs:
-%   value - Computed numeric value.
+% FINITE_MEDIAN Take the median of finite values, or NaN when none exist.
 
     values = values(isfinite(values));
     if isempty(values), value = NaN; else, value = median(values); end

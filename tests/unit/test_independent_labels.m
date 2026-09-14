@@ -198,9 +198,12 @@ function testIndependentDetectorsAndOverlappingMask(testCase)
     apnea = detect_apnea(data, phys_feat, session_reference, config);
     data(:, config.channels.spo2_idx) = 97;
     data(31:101, config.channels.spo2_idx) = 85;
-    spo2_ref = struct('available', true, 'median_percent', 97, ...
-        'quality', 'good');
-    desat = detect_desaturation(data, spo2_ref, session_reference, config);
+    spo2_session_reference = session_reference;
+    spo2_session_reference.available = true;
+    spo2_session_reference.complete = true;
+    spo2_session_reference.reference_start_idx = 1;
+    spo2_session_reference.reference_end_idx = 30;
+    desat = detect_desaturation(data, spo2_session_reference, config);
 
     verifyNotEmpty(testCase, shallow);
     verifyNotEmpty(testCase, deep);

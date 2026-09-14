@@ -1,15 +1,8 @@
 function resp_cycles = load_or_extract_respiratory_cycles(data, config)
-% LOAD_OR_EXTRACT_RESPIRATORY_CYCLES Load cached respiratory cycles or extract them from input data.
-%
-% Syntax:
-%   resp_cycles = load_or_extract_respiratory_cycles(data, config)
-%
-% Inputs:
-%   data - Input physiological signal data.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   resp_cycles - Respiratory-cycle structure.
+% LOAD_OR_EXTRACT_RESPIRATORY_CYCLES Reuse a compatible cycle cache or extract anew.
+% data is Nsample-by-Nchannel input data. config identifies the recording,
+% sampling, channel layout, cache location, and overwrite policy. The
+% returned lungs/diaph cycle structs include provenance.loaded_from_cache.
 
     cache_file = feature_cache_file(config);
     cache_version = current_feature_cache_version();
@@ -52,16 +45,9 @@ function resp_cycles = load_or_extract_respiratory_cycles(data, config)
 end
 
 function cache_file = feature_cache_file(config)
-% FEATURE_CACHE_FILE Perform the feature cache file operation.
-%
-% Syntax:
-%   cache_file = feature_cache_file(config)
-%
-% Inputs:
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   cache_file - Computed output value `cache_file`.
+% FEATURE_CACHE_FILE Resolve the MAT-file path for one recording's cycle cache.
+% Explicit sub_features_filename/sub_results_path values take precedence
+% over the subject/measurement-derived name and general results directory.
 
     if isfield(config, 'sub_features_filename') && ~isempty(config.sub_features_filename)
         filename = config.sub_features_filename;
@@ -77,19 +63,9 @@ function cache_file = feature_cache_file(config)
 end
 
 function ok = is_valid_feature_cache(cached, n_samples, cache_version, config)
-% IS_VALID_FEATURE_CACHE Determine whether valid feature cache.
-%
-% Syntax:
-%   ok = is_valid_feature_cache(cached, n_samples, cache_version, config)
-%
-% Inputs:
-%   cached - Input value `cached`.
-%   n_samples - Number of samples.
-%   cache_version - Input value `cache_version`.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   ok - Computed output value `ok`.
+% IS_VALID_FEATURE_CACHE Check cache metadata, cycle schema, and signal length.
+% cached is the struct returned by load; n_samples and cache_version must
+% match the current recording, while config supplies identity, fs, and columns.
 
     required_meta = {'cache_version', 'subject', 'measurement', 'fs', 'n_samples', 'data_columns'};
     ok = isfield(cached, 'feature_cache_meta') && isstruct(cached.feature_cache_meta) && ...
@@ -119,32 +95,14 @@ function ok = is_valid_feature_cache(cached, n_samples, cache_version, config)
 end
 
 function resp_cycles = cached_resp_cycles(cached)
-% CACHED_RESP_CYCLES Perform the cached resp cycles operation.
-%
-% Syntax:
-%   resp_cycles = cached_resp_cycles(cached)
-%
-% Inputs:
-%   cached - Input value `cached`.
-%
-% Outputs:
-%   resp_cycles - Respiratory-cycle structure.
+% CACHED_RESP_CYCLES Extract the validated resp_cycles payload from loaded MAT data.
 
     resp_cycles = cached.resp_cycles;
 end
 
 function ok = is_valid_resp_cycles(resp_cycles, n_samples)
-% IS_VALID_RESP_CYCLES Determine whether valid resp cycles.
-%
-% Syntax:
-%   ok = is_valid_resp_cycles(resp_cycles, n_samples)
-%
-% Inputs:
-%   resp_cycles - Respiratory-cycle structure.
-%   n_samples - Number of samples.
-%
-% Outputs:
-%   ok - Computed output value `ok`.
+% IS_VALID_RESP_CYCLES Check required belt/provenance fields and signal lengths.
+% n_samples is the expected number of recording samples; ok is scalar logical.
 
     ok = isstruct(resp_cycles) && isfield(resp_cycles, 'lungs') && ...
          isfield(resp_cycles, 'diaph') && isfield(resp_cycles, 'provenance') && ...
@@ -170,16 +128,9 @@ function ok = is_valid_resp_cycles(resp_cycles, n_samples)
 end
 
 function ok = is_valid_cycle_provenance(provenance)
-% IS_VALID_CYCLE_PROVENANCE Determine whether valid cycle provenance.
-%
-% Syntax:
-%   ok = is_valid_cycle_provenance(provenance)
-%
-% Inputs:
-%   provenance - Input value `provenance`.
-%
-% Outputs:
-%   ok - Computed output value `ok`.
+% IS_VALID_CYCLE_PROVENANCE Validate review state and its associated logical flags.
+% provenance must encode an automatic, reviewed-unchanged, or reviewed-edited
+% state consistently with manual_review_performed and manual_edits_made.
 
     required = {'review_status', 'manual_review_performed', ...
         'manual_edits_made', 'loaded_from_cache'};
@@ -201,13 +152,7 @@ function ok = is_valid_cycle_provenance(provenance)
 end
 
 function v = current_feature_cache_version()
-% CURRENT_FEATURE_CACHE_VERSION Perform the current feature cache version operation.
-%
-% Syntax:
-%   v = current_feature_cache_version()
-%
-% Outputs:
-%   v - Computed output value `v`.
+% CURRENT_FEATURE_CACHE_VERSION Return the schema version required for cycle caches.
 
     v = 7;
 end

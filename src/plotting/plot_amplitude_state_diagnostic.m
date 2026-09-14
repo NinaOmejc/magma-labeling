@@ -1,15 +1,14 @@
 function plot_amplitude_state_diagnostic(resp_features, events_lungs, events_diaph, config, opts)
-% PLOT_AMPLITUDE_STATE_DIAGNOSTIC Plot amplitude state diagnostic.
-%
-% Syntax:
-%   plot_amplitude_state_diagnostic(resp_features, events_lungs, events_diaph, config, opts)
+% PLOT_AMPLITUDE_STATE_DIAGNOSTIC Compare raw and session-normalized breath excursion.
 %
 % Inputs:
-%   resp_features - Respiratory-feature structure.
-%   events_lungs - Event structure data.
-%   events_diaph - Event structure data.
-%   config - Pipeline configuration structure.
-%   opts - Input value `opts`.
+%   resp_features - Respiratory evidence; uses resp.time_sec and each belt's
+%                   breath-level amp, amp_ratio_session, and reference status.
+%   events_lungs  - Final lung-belt events with boundaries in seconds.
+%   events_diaph  - Final diaphragm-belt events with boundaries in seconds.
+%   config        - Pipeline settings for recording identity and figure output.
+%   opts          - Plot text, output name, ratio thresholds, and optional
+%                   candidate/localized masks on the analysis grid.
 
     lungs = resp_features.resp.lungs;
     diaph = resp_features.resp.diaph;
@@ -53,21 +52,9 @@ end
 
 function plot_belt_amplitude(ax, belt, opts, normalized, belt_name, t_grid, ...
     candidate_mask, localized_mask, final_mask)
-% PLOT_BELT_AMPLITUDE Plot belt amplitude.
-%
-% Syntax:
-%   plot_belt_amplitude(ax, belt, opts, normalized, belt_name, t_grid, candidate_mask, localized_mask, final_mask)
-%
-% Inputs:
-%   ax - Target axes handle.
-%   belt - Respiratory-cycle or belt-evidence structure.
-%   opts - Input value `opts`.
-%   normalized - Input value `normalized`.
-%   belt_name - Input value `belt_name`.
-%   t_grid - Time coordinates in seconds.
-%   candidate_mask - Logical state or selection mask.
-%   localized_mask - Logical state or selection mask.
-%   final_mask - Logical state or selection mask.
+% PLOT_BELT_AMPLITUDE Plot breath-level excursion and time-grid support layers.
+% normalized selects raw amp or unitless amp_ratio_session. Candidate,
+% localized, and final masks must align with t_grid; belt_name labels the panel.
 
     hold(ax, 'on');
     if normalized
@@ -107,15 +94,7 @@ function plot_belt_amplitude(ax, belt, opts, normalized, belt_name, t_grid, ...
 end
 
 function add_threshold_line(ax, value, label_text)
-% ADD_THRESHOLD_LINE Add threshold line.
-%
-% Syntax:
-%   add_threshold_line(ax, value, label_text)
-%
-% Inputs:
-%   ax - Target axes handle.
-%   value - Input value `value`.
-%   label_text - Label identifier or label metadata.
+% ADD_THRESHOLD_LINE Draw a finite scalar amplitude threshold on an axes.
 
     if isscalar(value) && isfinite(value)
         yline(ax, value, 'r--', label_text, ...
@@ -124,18 +103,7 @@ function add_threshold_line(ax, value, label_text)
 end
 
 function value = get_option(opts, name, default_value)
-% GET_OPTION Return option.
-%
-% Syntax:
-%   value = get_option(opts, name, default_value)
-%
-% Inputs:
-%   opts - Input value `opts`.
-%   name - Input value `name`.
-%   default_value - Input value `default_value`.
-%
-% Outputs:
-%   value - Computed numeric value.
+% GET_OPTION Return a nonempty struct option or its default value.
 
     value = default_value;
     if isfield(opts, name) && ~isempty(opts.(name))

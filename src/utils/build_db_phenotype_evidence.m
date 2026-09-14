@@ -1,18 +1,12 @@
 function evidence = build_db_phenotype_evidence( ...
     label_burden, overlaps, label_evidence, source_provenance)
-% BUILD_DB_PHENOTYPE_EVIDENCE Build db phenotype evidence.
-%
-% Syntax:
-%   evidence = build_db_phenotype_evidence(label_burden, overlaps, label_evidence, source_provenance)
-%
-% Inputs:
-%   label_burden - Label identifier or label metadata.
-%   overlaps - Input value `overlaps`.
-%   label_evidence - Label identifier or label metadata.
-%   source_provenance - Input value `source_provenance`.
-%
-% Outputs:
-%   evidence - Computed summary or metadata structure.
+% BUILD_DB_PHENOTYPE_EVIDENCE Organize label metrics as descriptive phenotype evidence.
+% label_burden, prespecified overlaps, and detector-specific label_evidence
+% describe one annotation layer; source_provenance names that layer. evidence
+% contains schema version/source, placeholder external_clinical_data, three
+% interpretation levels, and five phenotype entries. Each entry stores name,
+% signal assessability/evidence availability, signal-derived measures, required
+% external data, limitations, source provenance, and integration status.
 
     if nargin < 4 || isempty(source_provenance)
         source_provenance = 'automatic_labels';
@@ -104,21 +98,9 @@ function evidence = build_db_phenotype_evidence( ...
 end
 
 function out = phenotype(name, assessable, available, measures, required, limitations)
-% PHENOTYPE Perform the phenotype operation.
-%
-% Syntax:
-%   out = phenotype(name, assessable, available, measures, required, limitations)
-%
-% Inputs:
-%   name - Input value `name`.
-%   assessable - Input value `assessable`.
-%   available - Input value `available`.
-%   measures - Measurement identifier.
-%   required - Input value `required`.
-%   limitations - Input value `limitations`.
-%
-% Outputs:
-%   out - Computed output value `out`.
+% PHENOTYPE Package one descriptive phenotype's evidence and limitations.
+% measures is a signal-derived struct; required and limitations are cell arrays
+% of external-data needs and interpretation constraints.
 
     out = struct( ...
         'name', name, ...
@@ -130,13 +112,9 @@ function out = phenotype(name, assessable, available, measures, required, limita
 end
 
 function external = empty_external_clinical_data()
-% EMPTY_EXTERNAL_CLINICAL_DATA Create an empty external clinical data value.
-%
-% Syntax:
-%   external = empty_external_clinical_data()
-%
-% Outputs:
-%   external - Computed output value `external`.
+% EMPTY_EXTERNAL_CLINICAL_DATA Declare supported but not integrated clinical inputs.
+% Each questionnaire/capnography/CPET/observation entry has available=false,
+% empty value, and source='not_integrated'; status summarizes the whole struct.
 
     missing_entry = struct('available', false, 'value', [], 'source', 'not_integrated');
     external = struct( ...

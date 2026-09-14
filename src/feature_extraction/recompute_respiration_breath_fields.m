@@ -1,17 +1,9 @@
 function b = recompute_respiration_breath_fields(b, x, peak_idx, config)
-% RECOMPUTE_RESPIRATION_BREATH_FIELDS Derive respiratory-cycle fields from supplied peaks.
-%
-% Syntax:
-%   b = recompute_respiration_breath_fields(b, x, peak_idx, config)
-%
-% Inputs:
-%   b - Respiratory-belt structure to update.
-%   x - Respiratory-belt signal.
-%   peak_idx - Respiratory peak sample indices.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   b - Respiratory-belt structure with cycle timing and amplitude fields.
+% RECOMPUTE_RESPIRATION_BREATH_FIELDS Rebuild aligned breath fields after peak edits.
+% b is the belt struct to update, x is the sample-level belt signal, and
+% peak_idx contains proposed one-based sample indices. Invalid/duplicate
+% indices are removed. The function writes peak/trough indices and times,
+% peak-to-trough amp, IBI in seconds, RR in breaths/min, summary RR, and ok.
 
     x = x(:);
     fs = config.fs;

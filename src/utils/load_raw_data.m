@@ -1,16 +1,11 @@
 function [data, config, do_analysis] = load_raw_data(config)
-% LOAD_RAW_DATA Perform the load raw data operation.
-%
-% Syntax:
-%   [data, config, do_analysis] = load_raw_data(config)
-%
-% Inputs:
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   data - Computed output value `data`.
-%   config - Pipeline configuration structure.
-%   do_analysis - Computed output value `do_analysis`.
+% LOAD_RAW_DATA Load one recording and determine whether it should be analysed.
+% config identifies channels, subject/measurement, input/results paths, naming,
+% overwrite policy, and fs. data is Nsample-by-Nconfigured-channel. Returned
+% config adds resolved channels/input_config, per-recording result/cache paths,
+% filenames, and native sample times in seconds. do_analysis is false and data
+% empty when an existing result should be kept; configured broken lung belts
+% are zeroed before analysis.
 
     [config, input_config] = resolve_signal_channels(config);
 
@@ -69,16 +64,7 @@ function [data, config, do_analysis] = load_raw_data(config)
 end
 
 function filename = resolve_input_filename(config)
-% RESOLVE_INPUT_FILENAME Resolve input filename.
-%
-% Syntax:
-%   filename = resolve_input_filename(config)
-%
-% Inputs:
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   filename - Output text or identifier.
+% RESOLVE_INPUT_FILENAME Expand subject/measurement tokens in the input pattern.
 
     pattern = 'ECG1_ECG2_SpO2_RespL_BP_RespD_fs200_Sub{subject}_Pom{measure}_DeTr_Norm.dat';
     if isfield(config, 'input') && isfield(config.input, 'filename_pattern') && ...
@@ -94,18 +80,9 @@ function filename = resolve_input_filename(config)
 end
 
 function data = reshape_loaded_data(raw_data, n_cols, filename)
-% RESHAPE_LOADED_DATA Perform the reshape loaded data operation.
-%
-% Syntax:
-%   data = reshape_loaded_data(raw_data, n_cols, filename)
-%
-% Inputs:
-%   raw_data - Input value `raw_data`.
-%   n_cols - Input value `n_cols`.
-%   filename - File or dataset path.
-%
-% Outputs:
-%   data - Computed output value `data`.
+% RESHAPE_LOADED_DATA Enforce the configured channel width after loading.
+% Matrices already N-by-n_cols pass through; vectors are reshaped when their
+% length is divisible by n_cols. filename identifies malformed input in errors.
 
     if isempty(raw_data)
         error('Loaded data is empty: %s', filename);
@@ -133,13 +110,7 @@ function data = reshape_loaded_data(raw_data, n_cols, filename)
 end
 
 function print_input_configuration(input_config)
-% PRINT_INPUT_CONFIGURATION Perform the print input configuration operation.
-%
-% Syntax:
-%   print_input_configuration(input_config)
-%
-% Inputs:
-%   input_config - Input value `input_config`.
+% PRINT_INPUT_CONFIGURATION Report the resolved signal-availability description.
 
     fprintf('Detected input configuration: %s\n', input_config.description);
 end

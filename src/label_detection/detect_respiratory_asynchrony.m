@@ -1,19 +1,10 @@
 function [events, rea_metrics] = detect_respiratory_asynchrony( ...
     data, session_reference, resp_cycles, config)
-% DETECT_RESPIRATORY_ASYNCHRONY Detect respiratory asynchrony.
-%
-% Syntax:
-%   [events, rea_metrics] = detect_respiratory_asynchrony(data, session_reference, resp_cycles, config)
-%
-% Inputs:
-%   data - Input physiological signal data.
-%   session_reference - Session-reference metadata.
-%   resp_cycles - Respiratory-cycle structure.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   events - Event structure array.
-%   rea_metrics - Computed output value `rea_metrics`.
+% DETECT_RESPIRATORY_ASYNCHRONY Convert sustained low phase coherence to events.
+% data/resp_cycles provide both respiratory belts; session_reference supplies
+% baseline coherence; config controls sampling, bands, thresholds, duration,
+% and plotting. rea_metrics is produced by compute_respiratory_asynchrony_metrics;
+% events are sustained runs of its grid-level low_coherence_mask.
 
     events = empty_events();
     rea_metrics = compute_respiratory_asynchrony_metrics( ...
@@ -37,17 +28,7 @@ function [events, rea_metrics] = detect_respiratory_asynchrony( ...
 end
 
 function msg = rea_skip_reason(skip_code, error_message)
-% REA_SKIP_REASON Perform the rea skip reason operation.
-%
-% Syntax:
-%   msg = rea_skip_reason(skip_code, error_message)
-%
-% Inputs:
-%   skip_code - Input value `skip_code`.
-%   error_message - Input value `error_message`.
-%
-% Outputs:
-%   msg - Computed output value `msg`.
+% REA_SKIP_REASON Translate metric-computation status codes into user messages.
 
     switch skip_code
         case 1
@@ -79,17 +60,9 @@ end
 
 
 function plot_respiratory_asynchrony(data, config, t_grid, rea_mask, rea_metrics)
-% PLOT_RESPIRATORY_ASYNCHRONY Plot respiratory asynchrony.
-%
-% Syntax:
-%   plot_respiratory_asynchrony(data, config, t_grid, rea_mask, rea_metrics)
-%
-% Inputs:
-%   data - Input physiological signal data.
-%   config - Pipeline configuration structure.
-%   t_grid - Time coordinates in seconds.
-%   rea_mask - Logical state or selection mask.
-%   rea_metrics - Input value `rea_metrics`.
+% PLOT_RESPIRATORY_ASYNCHRONY Show raw belts and three coherence-band diagnostics.
+% rea_mask is final event support on t_grid; rea_metrics supplies coherence,
+% reference masks/levels, thresholds, and held-display spacing.
 
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
@@ -138,20 +111,8 @@ function plot_respiratory_asynchrony(data, config, t_grid, rea_mask, rea_metrics
 end
 
 function plot_raw_panel(ax, t_raw, data, idx, t_grid, rea_mask, title_text, y_text)
-% PLOT_RAW_PANEL Plot raw panel.
-%
-% Syntax:
-%   plot_raw_panel(ax, t_raw, data, idx, t_grid, rea_mask, title_text, y_text)
-%
-% Inputs:
-%   ax - Target axes handle.
-%   t_raw - Time coordinates in seconds.
-%   data - Input physiological signal data.
-%   idx - Input value `idx`.
-%   t_grid - Time coordinates in seconds.
-%   rea_mask - Logical state or selection mask.
-%   title_text - Input value `title_text`.
-%   y_text - Input value `y_text`.
+% PLOT_RAW_PANEL Plot one sample-level belt with grid-level event shading.
+% idx selects the data column; an empty idx produces a channel-missing note.
 
     if isempty(idx)
         text(ax, 0.5, 0.5, [y_text ' channel not found'], ...
@@ -176,21 +137,9 @@ function plot_raw_panel(ax, t_raw, data, idx, t_grid, rea_mask, title_text, y_te
 end
 
 function plot_coherence_panel(ax, t_grid, coherence, threshold, reference_value, reference_mask, rea_mask, title_text, plot_step_sec)
-% PLOT_COHERENCE_PANEL Plot coherence panel.
-%
-% Syntax:
-%   plot_coherence_panel(ax, t_grid, coherence, threshold, reference_value, reference_mask, rea_mask, title_text, plot_step_sec)
-%
-% Inputs:
-%   ax - Target axes handle.
-%   t_grid - Time coordinates in seconds.
-%   coherence - Input value `coherence`.
-%   threshold - Selection threshold value.
-%   reference_value - Session-reference metadata.
-%   reference_mask - Logical state or selection mask.
-%   rea_mask - Logical state or selection mask.
-%   title_text - Input value `title_text`.
-%   plot_step_sec - Duration or window length in seconds.
+% PLOT_COHERENCE_PANEL Plot raw/held coherence with reference and event context.
+% All vectors align to t_grid; coherence/reference/threshold are unitless and
+% plot_step_sec controls display aggregation only.
 
     held = held_median_trace(t_grid, coherence, plot_step_sec);
 
@@ -231,18 +180,8 @@ function plot_coherence_panel(ax, t_grid, coherence, threshold, reference_value,
 end
 
 function held = held_median_trace(t_grid, values, step_sec)
-% HELD_MEDIAN_TRACE Perform the held median trace operation.
-%
-% Syntax:
-%   held = held_median_trace(t_grid, values, step_sec)
-%
-% Inputs:
-%   t_grid - Time coordinates in seconds.
-%   values - Input value `values`.
-%   step_sec - Duration or window length in seconds.
-%
-% Outputs:
-%   held - Computed output value `held`.
+% HELD_MEDIAN_TRACE Replace finite values with blockwise medians for display.
+% t_grid is seconds and step_sec defines nonoverlapping held-value blocks.
 
     held = nan(size(values));
     if isempty(t_grid) || isempty(values) || step_sec <= 0
@@ -262,15 +201,7 @@ function held = held_median_trace(t_grid, values, step_sec)
 end
 
 function shade_reference_on_axis(ax, t_grid, reference_mask)
-% SHADE_REFERENCE_ON_AXIS Perform the shade reference on axis operation.
-%
-% Syntax:
-%   shade_reference_on_axis(ax, t_grid, reference_mask)
-%
-% Inputs:
-%   ax - Target axes handle.
-%   t_grid - Time coordinates in seconds.
-%   reference_mask - Logical state or selection mask.
+% SHADE_REFERENCE_ON_AXIS Shade contiguous session-reference runs on one axes.
 
     if ~any(reference_mask)
         return;

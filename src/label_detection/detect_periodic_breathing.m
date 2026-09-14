@@ -1,17 +1,10 @@
 function [events, diagnostics] = detect_periodic_breathing(data, resp_cycles, config)
-% DETECT_PERIODIC_BREATHING Detect periodic breathing.
-%
-% Syntax:
-%   [events, diagnostics] = detect_periodic_breathing(data, resp_cycles, config)
-%
-% Inputs:
-%   data - Input physiological signal data.
-%   resp_cycles - Respiratory-cycle structure.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   events - Event structure array.
-%   diagnostics - Detector diagnostic structure.
+% DETECT_PERIODIC_BREATHING Find repeated waxing-and-waning breath-amplitude cycles.
+% data supplies recording length; resp_cycles supplies breath times and raw
+% amplitudes for both belts; config defines cycle duration, modulation, shape,
+% grouping, and plot settings. events merge qualifying cycle groups across
+% belts. diagnostics contains availability, minimum criteria, and lungs/diaph
+% entries documented by init_periodic_diag.
 
     events = empty_events();
 
@@ -61,16 +54,8 @@ function [events, diagnostics] = detect_periodic_breathing(data, resp_cycles, co
 end
 
 function cfg = periodic_breathing_config(config)
-% PERIODIC_BREATHING_CONFIG Perform the periodic breathing config operation.
-%
-% Syntax:
-%   cfg = periodic_breathing_config(config)
-%
-% Inputs:
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   cfg - Computed output value `cfg`.
+% PERIODIC_BREATHING_CONFIG Resolve cycle, envelope, shape, and grouping settings.
+% Durations are seconds; breath-window counts are converted to odd integers.
 
     cfg = struct();
     cfg.min_cycle_sec = get_config_value(config, 'csr', 'min_cycle_sec', 35);
@@ -92,16 +77,7 @@ function cfg = periodic_breathing_config(config)
 end
 
 function win = odd_window(value)
-% ODD_WINDOW Perform the odd window operation.
-%
-% Syntax:
-%   win = odd_window(value)
-%
-% Inputs:
-%   value - Input value `value`.
-%
-% Outputs:
-%   win - Computed output value `win`.
+% ODD_WINDOW Round a requested window to a positive odd sample/breath count.
 
     win = max(1, round(value));
     if mod(win, 2) == 0
@@ -110,21 +86,10 @@ function win = odd_window(value)
 end
 
 function [events, diag] = periodic_breathing_events_for_belt(breaths, N, fs, cfg, belt)
-% PERIODIC_BREATHING_EVENTS_FOR_BELT Perform the periodic breathing events for belt operation.
-%
-% Syntax:
-%   [events, diag] = periodic_breathing_events_for_belt(breaths, N, fs, cfg, belt)
-%
-% Inputs:
-%   breaths - Respiratory-cycle or belt-evidence structure.
-%   N - Number of samples.
-%   fs - Sampling frequency in hertz.
-%   cfg - Pipeline configuration structure.
-%   belt - Respiratory-cycle or belt-evidence structure.
-%
-% Outputs:
-%   events - Event structure array.
-%   diag - Computed output value `diag`.
+% PERIODIC_BREATHING_EVENTS_FOR_BELT Analyze one belt's breath-amplitude envelope.
+% breaths is a respiratory-cycle struct; N/fs define event bounds; cfg holds
+% scientific criteria; belt is the output provenance name. diag stores aligned
+% breath times/amplitudes, normalized/smoothed envelope, and accepted cycles.
 
     events = empty_events();
     diag = init_periodic_diag();
@@ -148,17 +113,10 @@ function [events, diag] = periodic_breathing_events_for_belt(breaths, N, fs, cfg
 end
 
 function [breath_t, amp] = breath_amp_vectors(breaths)
-% BREATH_AMP_VECTORS Perform the breath amp vectors operation.
-%
-% Syntax:
-%   [breath_t, amp] = breath_amp_vectors(breaths)
-%
-% Inputs:
-%   breaths - Respiratory-cycle or belt-evidence structure.
-%
-% Outputs:
-%   breath_t - Computed output value `breath_t`.
-%   amp - Computed output value `amp`.
+% BREATH_AMP_VECTORS Build sorted positive breath amplitudes and times.
+% When peaks/troughs exist, amplitude is peak i minus the preceding trough
+% and is assigned to peak i; otherwise stored peak_t/amp pairs are used.
+% breath_t is seconds and amp remains in belt units.
 
     breath_t = [];
     amp = [];
@@ -195,18 +153,9 @@ function [breath_t, amp] = breath_amp_vectors(breaths)
 end
 
 function [amp_env, amp_norm] = normalized_amplitude_envelope(amp, cfg)
-% NORMALIZED_AMPLITUDE_ENVELOPE Perform the normalized amplitude envelope operation.
-%
-% Syntax:
-%   [amp_env, amp_norm] = normalized_amplitude_envelope(amp, cfg)
-%
-% Inputs:
-%   amp - Input value `amp`.
-%   cfg - Pipeline configuration structure.
-%
-% Outputs:
-%   amp_env - Computed output value `amp_env`.
-%   amp_norm - Computed output value `amp_norm`.
+% NORMALIZED_AMPLITUDE_ENVELOPE Normalize and median-smooth breath amplitudes.
+% amp is breath-level belt amplitude. amp_norm divides by either a moving or
+% global median; amp_env is a moving-median envelope, both dimensionless.
 
     amp = amp(:);
 
@@ -228,18 +177,10 @@ function [amp_env, amp_norm] = normalized_amplitude_envelope(amp, cfg)
 end
 
 function cycles = find_periodic_cycles(breath_t, amp_env, cfg)
-% FIND_PERIODIC_CYCLES Find periodic cycles.
-%
-% Syntax:
-%   cycles = find_periodic_cycles(breath_t, amp_env, cfg)
-%
-% Inputs:
-%   breath_t - Input value `breath_t`.
-%   amp_env - Input value `amp_env`.
-%   cfg - Pipeline configuration structure.
-%
-% Outputs:
-%   cycles - Computed output value `cycles`.
+% FIND_PERIODIC_CYCLES Accept trough-to-trough envelope cycles meeting all criteria.
+% breath_t (s) and amp_env are aligned breath vectors. Each returned cycle
+% contains start_t/end_t/duration, peak_t, peak_amp, trough_amp,
+% modulation_ratio, n_breaths, and rise/fall shape_score.
 
     cycles = empty_cycles();
 
@@ -332,23 +273,9 @@ end
 
 function [peak_amp, peak_t] = cycle_peak_between_troughs( ...
     breath_t, amp_env, pks, pk_locs, t1, t2, cycle_idx)
-% CYCLE_PEAK_BETWEEN_TROUGHS Perform the cycle peak between troughs operation.
-%
-% Syntax:
-%   [peak_amp, peak_t] = cycle_peak_between_troughs(breath_t, amp_env, pks, pk_locs, t1, t2, cycle_idx)
-%
-% Inputs:
-%   breath_t - Input value `breath_t`.
-%   amp_env - Input value `amp_env`.
-%   pks - Input value `pks`.
-%   pk_locs - Input value `pk_locs`.
-%   t1 - Input value `t1`.
-%   t2 - Input value `t2`.
-%   cycle_idx - Input value `cycle_idx`.
-%
-% Outputs:
-%   peak_amp - Computed output value `peak_amp`.
-%   peak_t - Computed output value `peak_t`.
+% CYCLE_PEAK_BETWEEN_TROUGHS Select an interior envelope maximum for one cycle.
+% Detected peaks inside (t1,t2) are preferred; otherwise the largest interior
+% breath value is used. peak_t is seconds and invalid boundary maxima yield NaN.
 
     peak_amp = NaN;
     peak_t = NaN;
@@ -376,20 +303,8 @@ function [peak_amp, peak_t] = cycle_peak_between_troughs( ...
 end
 
 function score = rise_fall_shape_score(breath_t, amp_env, t1, peak_t, t2)
-% RISE_FALL_SHAPE_SCORE Perform the rise fall shape score operation.
-%
-% Syntax:
-%   score = rise_fall_shape_score(breath_t, amp_env, t1, peak_t, t2)
-%
-% Inputs:
-%   breath_t - Input value `breath_t`.
-%   amp_env - Input value `amp_env`.
-%   t1 - Input value `t1`.
-%   peak_t - Input value `peak_t`.
-%   t2 - Input value `t2`.
-%
-% Outputs:
-%   score - Computed output value `score`.
+% RISE_FALL_SHAPE_SCORE Score the weaker of monotonic rise and fall fractions.
+% Times are seconds and select aligned samples from the breath-level envelope.
 
     rise = amp_env(breath_t >= t1 & breath_t <= peak_t);
     fall = amp_env(breath_t >= peak_t & breath_t <= t2);
@@ -400,17 +315,9 @@ function score = rise_fall_shape_score(breath_t, amp_env, t1, peak_t, t2)
 end
 
 function frac = monotonic_fraction(values, direction)
-% MONOTONIC_FRACTION Perform the monotonic fraction operation.
-%
-% Syntax:
-%   frac = monotonic_fraction(values, direction)
-%
-% Inputs:
-%   values - Input value `values`.
-%   direction - Input value `direction`.
-%
-% Outputs:
-%   frac - Computed output value `frac`.
+% MONOTONIC_FRACTION Fraction of finite steps following a signed trend.
+% Positive direction scores nondecreasing steps and negative direction scores
+% nonincreasing steps, each with the encoded 0.03 tolerance.
 
     values = values(:);
     values = values(isfinite(values));
@@ -430,20 +337,9 @@ function frac = monotonic_fraction(values, direction)
 end
 
 function events = cycles_to_periodic_events(cycles, N, fs, cfg, belt)
-% CYCLES_TO_PERIODIC_EVENTS Perform the cycles to periodic events operation.
-%
-% Syntax:
-%   events = cycles_to_periodic_events(cycles, N, fs, cfg, belt)
-%
-% Inputs:
-%   cycles - Input value `cycles`.
-%   N - Number of samples.
-%   fs - Sampling frequency in hertz.
-%   cfg - Pipeline configuration structure.
-%   belt - Respiratory-cycle or belt-evidence structure.
-%
-% Outputs:
-%   events - Event structure array.
+% CYCLES_TO_PERIODIC_EVENTS Group nearby accepted cycles into sample/time events.
+% A group needs cfg.min_cycles and adjacent cycles may be separated by at most
+% cfg.max_cycle_gap_sec. N/fs clamp output bounds; belt names the source.
 
     events = empty_events();
     if isempty(cycles)
@@ -472,20 +368,8 @@ function events = cycles_to_periodic_events(cycles, N, fs, cfg, belt)
 end
 
 function event = make_periodic_event(start_t, end_t, N, fs, belt)
-% MAKE_PERIODIC_EVENT Create periodic event.
-%
-% Syntax:
-%   event = make_periodic_event(start_t, end_t, N, fs, belt)
-%
-% Inputs:
-%   start_t - Input value `start_t`.
-%   end_t - Input value `end_t`.
-%   N - Number of samples.
-%   fs - Sampling frequency in hertz.
-%   belt - Respiratory-cycle or belt-evidence structure.
-%
-% Outputs:
-%   event - Computed output value `event`.
+% MAKE_PERIODIC_EVENT Convert second-based bounds to one canonical belt event.
+% event has type, one-based start_idx/end_idx, start_t/end_t (s), and duration (s).
 
     start_idx = max(1, min(N, round(start_t * fs) + 1));
     end_idx = max(start_idx, min(N, round(end_t * fs)));
@@ -500,26 +384,17 @@ function event = make_periodic_event(start_t, end_t, N, fs, belt)
 end
 
 function cycles = empty_cycles()
-% EMPTY_CYCLES Create an empty cycles value.
-%
-% Syntax:
-%   cycles = empty_cycles()
-%
-% Outputs:
-%   cycles - Computed output value `cycles`.
+% EMPTY_CYCLES Return a zero-length periodic-cycle struct array with stable fields.
 
     template = cycle_template();
     cycles = template([]);
 end
 
 function cycle = cycle_template()
-% CYCLE_TEMPLATE Perform the cycle template operation.
-%
-% Syntax:
-%   cycle = cycle_template()
-%
-% Outputs:
-%   cycle - Computed output value `cycle`.
+% CYCLE_TEMPLATE Define one trough-to-trough periodic-amplitude cycle.
+% Times/duration are seconds; peak/trough amplitudes are normalized envelope
+% values; modulation_ratio is dimensionless; n_breaths and shape_score record
+% cycle support and monotonicity.
 
     cycle = struct( ...
         'start_t', NaN, ...
@@ -534,13 +409,9 @@ function cycle = cycle_template()
 end
 
 function diag = init_periodic_diag()
-% INIT_PERIODIC_DIAG Perform the init periodic diag operation.
-%
-% Syntax:
-%   diag = init_periodic_diag()
-%
-% Outputs:
-%   diag - Computed output value `diag`.
+% INIT_PERIODIC_DIAG Initialize one belt's periodic-breathing diagnostics.
+% Fields are analysis_available, breath_t (s), raw amp, normalized amp_norm,
+% smoothed amp_env, and the accepted periodic cycles struct array.
 
     diag = struct( ...
         'analysis_available', false, ...
@@ -554,19 +425,8 @@ end
 function plot_periodic_breathing_diagnostics( ...
     data, config, events, events_lungs, events_diaph, diag_lungs, diag_diaph, cfg)
 % PLOT_PERIODIC_BREATHING_DIAGNOSTICS Plot periodic breathing diagnostics.
-%
-% Syntax:
-%   plot_periodic_breathing_diagnostics(data, config, events, events_lungs, events_diaph, diag_lungs, diag_diaph, cfg)
-%
-% Inputs:
-%   data - Input physiological signal data.
-%   config - Pipeline configuration structure.
-%   events - Event structure data.
-%   events_lungs - Event structure data.
-%   events_diaph - Event structure data.
-%   diag_lungs - Input value `diag_lungs`.
-%   diag_diaph - Input value `diag_diaph`.
-%   cfg - Pipeline configuration structure.
+% Shows both raw belts and breath-level normalized amplitude envelopes with
+% belt-specific and merged events. config supplies channels/fs/output settings.
 
     N = size(data, 1);
     t_raw = (0:N-1) / config.fs;
@@ -616,15 +476,7 @@ function plot_periodic_breathing_diagnostics( ...
 end
 
 function plot_envelope_trace(diag, color, display_name)
-% PLOT_ENVELOPE_TRACE Plot envelope trace.
-%
-% Syntax:
-%   plot_envelope_trace(diag, color, display_name)
-%
-% Inputs:
-%   diag - Input value `diag`.
-%   color - Input value `color`.
-%   display_name - Input value `display_name`.
+% PLOT_ENVELOPE_TRACE Plot one belt's breath envelope and accepted cycle landmarks.
 
     if isempty(diag.breath_t) || isempty(diag.amp_env)
         return;
@@ -645,16 +497,8 @@ function plot_envelope_trace(diag, color, display_name)
 end
 
 function plot_resp_trace_or_message(t_raw, data, idx, label_text)
-% PLOT_RESP_TRACE_OR_MESSAGE Plot resp trace or message.
-%
-% Syntax:
-%   plot_resp_trace_or_message(t_raw, data, idx, label_text)
-%
-% Inputs:
-%   t_raw - Time coordinates in seconds.
-%   data - Input physiological signal data.
-%   idx - Input value `idx`.
-%   label_text - Label identifier or label metadata.
+% PLOT_RESP_TRACE_OR_MESSAGE Plot one raw belt channel or an absent-channel note.
+% t_raw is sample time in seconds; idx selects a column of data.
 
     if isempty(idx)
         text(0.5, 0.5, [label_text ' channel not found'], ...

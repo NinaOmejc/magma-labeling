@@ -1,16 +1,7 @@
 function mask = events_to_sample_mask(events, N, fs)
-% EVENTS_TO_SAMPLE_MASK Perform the events to sample mask operation.
-%
-% Syntax:
-%   mask = events_to_sample_mask(events, N, fs)
-%
-% Inputs:
-%   events - Event structure data.
-%   N - Number of samples.
-%   fs - Sampling frequency in hertz.
-%
-% Outputs:
-%   mask - Logical output mask.
+% EVENTS_TO_SAMPLE_MASK Rasterize events onto N recording samples.
+% Canonical start_idx/end_idx are preferred; start_t/end_t (s) are converted
+% using fs when indices are absent. Bounds are clamped and treated inclusively.
 
     mask = false(N,1);
     for k = 1:numel(events)

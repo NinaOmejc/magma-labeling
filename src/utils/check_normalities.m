@@ -1,16 +1,9 @@
 function [signals_normality, normality_stats] = check_normalities(sigs, config)
-% CHECK_NORMALITIES Perform the check normalities operation.
-%
-% Syntax:
-%   [signals_normality, normality_stats] = check_normalities(sigs, config)
-%
-% Inputs:
-%   sigs - Input value `sigs`.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   signals_normality - Computed output value `signals_normality`.
-%   normality_stats - Computed summary or metadata structure.
+% CHECK_NORMALITIES Apply one normality test to standard respiratory fields.
+% sigs is a usable respiratory-cycle struct. x0, peak_val, trough_val, amp,
+% ibi, and rr_bpm are tested in that order using config.normality settings.
+% signals_normality is a 1-by-6 logical vector; normality_stats has one field
+% per signal with test statistics or a missing/too-few-values explanation.
 
     if ~sigs.ok 
         return

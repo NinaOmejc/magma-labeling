@@ -1,14 +1,7 @@
 function canonical = canonicalize_label_names(names)
 % CANONICALIZE_LABEL_NAMES Convert label names to canonical form.
-%
-% Syntax:
-%   canonical = canonicalize_label_names(names)
-%
-% Inputs:
-%   names - Input value `names`.
-%
-% Outputs:
-%   canonical - Computed output value `canonical`.
+% names may be text, string, or cellstr and retains its order as a cell array.
+% Known legacy short names map to the frozen labels; unknown names pass through.
 
     canonical = cellstr(string(names));
     for i = 1:numel(canonical)

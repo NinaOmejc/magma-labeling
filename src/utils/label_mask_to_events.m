@@ -1,16 +1,8 @@
 function events = label_mask_to_events(mask, label_names, fs)
-% LABEL_MASK_TO_EVENTS Perform the label mask to events operation.
-%
-% Syntax:
-%   events = label_mask_to_events(mask, label_names, fs)
-%
-% Inputs:
-%   mask - Logical state or selection mask.
-%   label_names - Label identifier or label metadata.
-%   fs - Sampling frequency in hertz.
-%
-% Outputs:
-%   events - Event structure array.
+% LABEL_MASK_TO_EVENTS Convert annotation-matrix runs back to canonical events.
+% mask is Nsample-by-Nlabel and columns align with label_names; fs is hertz.
+% Events have canonical type, inclusive indices, times/duration in seconds,
+% and an empty belt field.
 
     label_names = cellstr(string(label_names));
     if size(mask,2) ~= numel(label_names)

@@ -1,17 +1,9 @@
 function [events, boundary_info] = detect_thoracic_dominant_breathing(data, resp_features, config)
-% DETECT_THORACIC_DOMINANT_BREATHING Detect thoracic dominant breathing.
-%
-% Syntax:
-%   [events, boundary_info] = detect_thoracic_dominant_breathing(data, resp_features, config)
-%
-% Inputs:
-%   data - Input physiological signal data.
-%   resp_features - Respiratory-feature structure.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   events - Event structure array.
-%   boundary_info - Event-boundary provenance structure.
+% DETECT_THORACIC_DOMINANT_BREATHING Convert sustained cross-belt dominance to events.
+% resp_features supplies trailing-window medians of independently session-
+% normalized thoracic and abdominal amplitudes. data/config provide recording
+% length, sampling, minimum duration, and plotting. boundary_info preserves
+% endpoint evidence and back-projected candidate-state support.
 
     events = empty_events();
     evidence = resp_features.resp.thoracoabdominal_balance;

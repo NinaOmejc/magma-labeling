@@ -261,10 +261,9 @@ function testDiagnosticSignalsReusePhysiologicalEvidence(testCase)
     [data, resp_cycles, resp_ref, diagnostics_desat, config] = feature_fixture();
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
-    spo2_ref = struct('median_percent', 96);
     rea = synthetic_rea_metrics(resp_features.resp.time_sec);
     diagnostic = compute_label_diagnostic_signals( ...
-        resp_features, spo2_ref, diagnostics_desat, config, rea);
+        resp_features, diagnostics_desat, config, rea);
 
     verifyEqual(testCase, diagnostic.breathing_rate_slow_window_bpm_lungs, ...
         resp_features.resp.lungs.rate_slow_window_bpm);
@@ -399,6 +398,8 @@ function [data, resp_cycles, resp_ref, diagnostics_desat, config] = feature_fixt
     diagnostics_desat.reference_available = true;
     diagnostics_desat.reference_quality = 'good';
     diagnostics_desat.detection_available = true;
+    diagnostics_desat.spo2_ref = struct( ...
+        'available', true, 'median_percent', 96, 'quality', 'good');
 end
 
 function belt = reviewed_belt(peak_idx, peak_t, amp, fs)

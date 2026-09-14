@@ -1,18 +1,8 @@
 function state_mask = analysis_window_endpoints_to_state_mask(endpoint_mask, t_grid, analysis_win_sec)
-% ANALYSIS_WINDOW_ENDPOINTS_TO_STATE_MASK Perform the analysis window endpoints to state mask operation.
-% It takes a mask that marks qualifying analysis-window endpoints and 
-% converts it into a mask covering the entire analysis windows that led to those endpoints.
-%
-% Syntax:
-%   state_mask = analysis_window_endpoints_to_state_mask(endpoint_mask, t_grid, analysis_win_sec)
-%
-% Inputs:
-%   endpoint_mask - Logical state or selection mask.
-%   t_grid - Time coordinates in seconds.
-%   analysis_win_sec - Duration or window length in seconds.
-%
-% Outputs:
-%   state_mask - Logical output mask.
+% ANALYSIS_WINDOW_ENDPOINTS_TO_STATE_MASK Back-project qualifying trailing windows.
+% endpoint_mask and t_grid are aligned grid vectors; analysis_win_sec is the
+% full trailing duration. state_mask is a column vector marking every grid
+% point in [endpoint time - window, endpoint time] for any true endpoint.
 
     endpoint_mask = endpoint_mask(:) ~= 0;
     t_grid = t_grid(:);

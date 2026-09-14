@@ -1,14 +1,11 @@
 function save_figure(config, base_name, save_matfig, output_path)
-% SAVE_FIGURE Save figure.
-%
-% Syntax:
-%   save_figure(config, base_name, save_matfig, output_path)
+% SAVE_FIGURE Standardize, export, and close the current pipeline figure.
 %
 % Inputs:
-%   config - Pipeline configuration structure.
-%   base_name - Input value `base_name`.
-%   save_matfig - Input value `save_matfig`.
-%   output_path - Input value `output_path`.
+%   config      - Figure size, visibility, format, resolution, and result path.
+%   base_name   - Filename stem appended to subject and measurement identifiers.
+%   save_matfig - Whether to write an editable .fig sidecar.
+%   output_path - Optional complete destination path overriding generated naming.
 
     if nargin < 3 || isempty(save_matfig)
         save_matfig = false;
@@ -112,14 +109,7 @@ function save_figure(config, base_name, save_matfig, output_path)
 end
 
 function save_fig_for_direct_open(fig, fig_path)
-% SAVE_FIG_FOR_DIRECT_OPEN Save fig for direct open.
-%
-% Syntax:
-%   save_fig_for_direct_open(fig, fig_path)
-%
-% Inputs:
-%   fig - Figure handle.
-%   fig_path - Input value `fig_path`.
+% SAVE_FIG_FOR_DIRECT_OPEN Save an editable figure that reopens visibly.
 
     original_create_fcn = fig.CreateFcn;
     cleanup = onCleanup(@() set(fig, 'CreateFcn', original_create_fcn));
@@ -128,14 +118,8 @@ function save_fig_for_direct_open(fig, fig_path)
 end
 
 function strengthen_dashed_lines(fig, target_width)
-% STRENGTHEN_DASHED_LINES Perform the strengthen dashed lines operation.
-%
-% Syntax:
-%   strengthen_dashed_lines(fig, target_width)
-%
-% Inputs:
-%   fig - Figure handle.
-%   target_width - Input value `target_width`.
+% STRENGTHEN_DASHED_LINES Enforce a minimum width for dashed figure objects.
+% target_width is in points and applies to "--" and "-." line styles.
 
     if nargin < 2 || isempty(target_width) || ~isfinite(target_width) || target_width <= 0
         target_width = 1.6;
@@ -164,16 +148,7 @@ function strengthen_dashed_lines(fig, target_width)
 end
 
 function visibility = resolve_target_visibility(config)
-% RESOLVE_TARGET_VISIBILITY Resolve target visibility.
-%
-% Syntax:
-%   visibility = resolve_target_visibility(config)
-%
-% Inputs:
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   visibility - Computed output value `visibility`.
+% RESOLVE_TARGET_VISIBILITY Return configured MATLAB figure visibility.
 
     visibility = 'on';
     if isfield(config, 'make_figs_visible') && ~isempty(config.make_figs_visible)
@@ -182,16 +157,7 @@ function visibility = resolve_target_visibility(config)
 end
 
 function plot_format = resolve_plot_format(config)
-% RESOLVE_PLOT_FORMAT Resolve plot format.
-%
-% Syntax:
-%   plot_format = resolve_plot_format(config)
-%
-% Inputs:
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   plot_format - Computed output value `plot_format`.
+% RESOLVE_PLOT_FORMAT Validate the requested extension, defaulting to PNG.
 
     plot_format = 'png';
     if isfield(config, 'plot_format') && ~isempty(config.plot_format)
@@ -206,16 +172,7 @@ function plot_format = resolve_plot_format(config)
 end
 
 function dpi = resolve_plot_dpi(config)
-% RESOLVE_PLOT_DPI Resolve plot dpi.
-%
-% Syntax:
-%   dpi = resolve_plot_dpi(config)
-%
-% Inputs:
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   dpi - Computed output value `dpi`.
+% RESOLVE_PLOT_DPI Return a positive export resolution in dots per inch.
 
     dpi = 150;
     if isfield(config, 'plot_dpi') && ~isempty(config.plot_dpi) && isfinite(config.plot_dpi) && config.plot_dpi > 0

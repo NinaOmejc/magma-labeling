@@ -1,11 +1,37 @@
 function out = finalize_label_results( ...
-    data, resp_cycles, resp_features, spo2_ref, ...
-    session_reference, detections, sigh_review, config) %#ok<INUSD>
+    data, resp_cycles, resp_features, session_reference, ...
+    detections, sigh_review, config) %#ok<INUSD>
 % FINALIZE_LABEL_RESULTS Finalize automatic and reviewed label annotations.
 %
 % Detector outputs enter through detections and are frozen before manual
 % interval review. This function owns annotation assembly, availability,
 % summaries, phenotype evidence, and event-boundary provenance.
+%
+% Inputs:
+%   data              - Nsample x Nchannel preprocessed signal matrix.
+%   resp_cycles       - Extracted belt cycles used by downstream review/evidence.
+%   resp_features     - Breath-level and analysis-grid respiratory evidence.
+%   session_reference - Common physiological reference interval metadata.
+%   detections        - Struct with per-label automatic event sets, detector
+%                       diagnostics, and localized boundary records.
+%   sigh_review       - Automatic/reviewed sigh events and review coverage.
+%   config            - Sampling, labels, review, and detector settings.
+%
+% Output:
+%   out - Scalar finalized-label struct. label_names fixes column order;
+%         events_automatic/events_reviewed and mask_automatic/mask_reviewed
+%         hold canonical events and Nsample x Nlabel states; review_coverage_mask,
+%         review_status, review_scope, review_history, and review_provenance
+%         preserve manual review. available/availability_reason and
+%         assessable_mask/assessability_info describe automatic assessability;
+%         reviewed_available/reviewed_availability_reason and
+%         reviewed_assessable_mask restrict it to reviewed samples.
+%         diagnostic_signals and detector_diagnostics retain evidence;
+%         burden_automatic/burden_reviewed, overlap_automatic/overlap_reviewed,
+%         and evidence_automatic/evidence_reviewed summarize each provenance.
+%         db_phenotype_evidence bundles phenotype summaries; event_boundary_info
+%         records timing provenance; manual_label_edit and sigh_review retain
+%         the two manual-review outcomes.
 
     automatic_event_sets = detections.events;
     N = size(data, 1);
@@ -25,7 +51,7 @@ function out = finalize_label_results( ...
         N, label_names, available, detections.diagnostics.desat, ...
         detections.diagnostics.async, config);
     diagnostic_signals = compute_label_diagnostic_signals( ...
-        resp_features, spo2_ref, detections.diagnostics.desat, config, ...
+        resp_features, detections.diagnostics.desat, config, ...
         detections.diagnostics.async, detections.diagnostics.apnea, ...
         detections.diagnostics.sigh, detections.diagnostics.csr);
     detector_diagnostics = detections.diagnostics;

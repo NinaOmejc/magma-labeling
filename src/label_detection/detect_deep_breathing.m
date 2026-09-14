@@ -1,17 +1,9 @@
 function [events, boundary_info] = detect_deep_breathing(data, resp_features, config)
-% DETECT_DEEP_BREATHING Detect deep breathing.
-%
-% Syntax:
-%   [events, boundary_info] = detect_deep_breathing(data, resp_features, config)
-%
-% Inputs:
-%   data - Input physiological signal data.
-%   resp_features - Respiratory-feature structure.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   events - Event structure array.
-%   boundary_info - Event-boundary provenance structure.
+% DETECT_DEEP_BREATHING Convert sustained high-amplitude breath evidence to events.
+% data supplies recording length; resp_features supplies per-belt normalized
+% amplitude window/state masks; config supplies sampling, ratio, duration, and
+% plot settings. events use sample/time boundaries. boundary_info records
+% window endpoints, candidate support, breath-localized support, and uncertainty.
 
     events = empty_events();
     N = size(data, 1);
@@ -83,34 +75,14 @@ function [events, boundary_info] = detect_deep_breathing(data, resp_features, co
 end
 
 function mask = get_endpoint_mask(belt, field, t_grid)
-% GET_ENDPOINT_MASK Return endpoint mask.
-%
-% Syntax:
-%   mask = get_endpoint_mask(belt, field, t_grid)
-%
-% Inputs:
-%   belt - Respiratory-cycle or belt-evidence structure.
-%   field - Input value `field`.
-%   t_grid - Time coordinates in seconds.
-%
-% Outputs:
-%   mask - Logical output mask.
+% GET_ENDPOINT_MASK Read a named grid-level endpoint mask with a false fallback.
 
     mask = false(size(t_grid));
     if isfield(belt, field), mask = logical(belt.(field)); end
 end
 
 function records = normalize_records(records)
-% NORMALIZE_RECORDS Normalize records.
-%
-% Syntax:
-%   records = normalize_records(records)
-%
-% Inputs:
-%   records - Input value `records`.
-%
-% Outputs:
-%   records - Computed output value `records`.
+% NORMALIZE_RECORDS Stamp localized boundary records with deep-label provenance.
 
     for i = 1:numel(records)
         records(i).label = 'deep';
@@ -119,16 +91,7 @@ function records = normalize_records(records)
 end
 
 function value = record_uncertainty(records)
-% RECORD_UNCERTAINTY Perform the record uncertainty operation.
-%
-% Syntax:
-%   value = record_uncertainty(records)
-%
-% Inputs:
-%   records - Input value `records`.
-%
-% Outputs:
-%   value - Computed numeric value.
+% RECORD_UNCERTAINTY Collect per-event uncertainty in seconds, or NaN if empty.
 
     if isempty(records), value = NaN; else, value = [records.uncertainty_sec]'; end
 end

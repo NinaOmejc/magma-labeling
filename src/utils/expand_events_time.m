@@ -2,11 +2,8 @@
 function ev = expand_events_time(ev, pad_sec, t_max)
 % EXPAND_EVENTS_TIME Pad event boundaries within a recording duration.
 %
-% Syntax:
-%   ev = expand_events_time(ev, pad_sec, t_max)
-%
 % Inputs:
-%   ev - Event structure data.
+%   ev - Event struct array with start_t and end_t boundaries in seconds.
 %   pad_sec - Padding applied to each boundary in seconds.
 %   t_max - Maximum recording time in seconds.
 %

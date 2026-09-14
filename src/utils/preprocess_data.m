@@ -1,17 +1,9 @@
 function [output, config, trend] = preprocess_data(t_series, config)
-% PREPROCESS_DATA Perform the preprocess data operation.
-%
-% Syntax:
-%   [output, config, trend] = preprocess_data(t_series, config)
-%
-% Inputs:
-%   t_series - Input value `t_series`.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   output - Computed output value `output`.
-%   config - Pipeline configuration structure.
-%   trend - Computed output value `trend`.
+% PREPROCESS_DATA Detrend configured respiratory channels on the native timeline.
+% t_series is a signal vector or Nsample-by-Nchannel matrix. config selects
+% channels, fs, and high-pass, moving-detrend, or no-op settings. output preserves
+% input size/orientation and untouched channels; trend is shape-matched, with NaN
+% outside processed columns for matrix input. config.times is updated in seconds.
 
     method = 'hpfilter';
     sampl_freq = 200;
@@ -205,17 +197,9 @@ function [output, config, trend] = preprocess_data(t_series, config)
 end
 
 function signal_cols = resolved_resp_signal_cols(config, fallback_signals)
-% RESOLVED_RESP_SIGNAL_COLS Perform the resolved resp signal cols operation.
-%
-% Syntax:
-%   signal_cols = resolved_resp_signal_cols(config, fallback_signals)
-%
-% Inputs:
-%   config - Pipeline configuration structure.
-%   fallback_signals - Input value `fallback_signals`.
-%
-% Outputs:
-%   signal_cols - Computed output value `signal_cols`.
+% RESOLVED_RESP_SIGNAL_COLS Map requested respiratory names to configured columns.
+% fallback_signals expresses desired belt roles; output indices are unique and
+% ordered by lung then diaphragm.
 
     requested = struct('data_columns', {cellstr(string(fallback_signals))});
     requested = resolve_signal_channels(requested);
@@ -235,21 +219,10 @@ end
 
 
 function y = highpass_with_reflect_padding(x, sos, g, fs, cutoff_hz, pad_sec_cfg)
-% HIGHPASS_WITH_REFLECT_PADDING Perform the highpass with reflect padding operation.
-%
-% Syntax:
-%   y = highpass_with_reflect_padding(x, sos, g, fs, cutoff_hz, pad_sec_cfg)
-%
-% Inputs:
-%   x - Input value `x`.
-%   sos - Input value `sos`.
-%   g - Input value `g`.
-%   fs - Sampling frequency in hertz.
-%   cutoff_hz - Input value `cutoff_hz`.
-%   pad_sec_cfg - Duration or window length in seconds.
-%
-% Outputs:
-%   y - Computed output value `y`.
+% HIGHPASS_WITH_REFLECT_PADDING Apply zero-phase SOS filtering with edge padding.
+% x is one sample vector; sos/g define the filter; fs and cutoff_hz are hertz;
+% pad_sec_cfg optionally fixes reflection duration. NaNs are interpolated only
+% for filtering and restored in the shape-matched output.
 
     x = x(:);
     n = numel(x);

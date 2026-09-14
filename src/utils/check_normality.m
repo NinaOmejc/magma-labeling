@@ -1,17 +1,9 @@
 function [is_normal, p_value, stats] = check_normality(x, varargin)
-% CHECK_NORMALITY Perform the check normality operation.
-%
-% Syntax:
-%   [is_normal, p_value, stats] = check_normality(x, varargin)
-%
-% Inputs:
-%   x - Input value `x`.
-%   varargin - Optional positional or name-value inputs.
-%
-% Outputs:
-%   is_normal - Computed output value `is_normal`.
-%   p_value - Computed numeric value.
-%   stats - Computed summary or metadata structure.
+% CHECK_NORMALITY Test finite observations with Lilliefors, Jarque-Bera, or AD.
+% x is flattened and requires at least eight finite values. Name-value options
+% are Alpha, DoPlot, and Method. is_normal means the test did not reject at
+% alpha; p_value is the test p-value. stats stores test name/statistic/critical
+% value plus n, mean, std, skewness, kurtosis, alpha, p_value, and is_normal.
 
     alpha = 0.05;
     do_plot = false;

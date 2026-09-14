@@ -1,11 +1,7 @@
 function shade_mask_on_axis(varargin)
-% SHADE_MASK_ON_AXIS Perform the shade mask on axis operation.
-%
-% Syntax:
-%   shade_mask_on_axis(varargin)
-%
-% Inputs:
-%   varargin - Optional positional or name-value inputs.
+% SHADE_MASK_ON_AXIS Shade contiguous true runs of a time-grid state mask.
+% Accepts (t_grid, mask) for the current axes or (ax, t_grid, mask). t_grid
+% is in seconds and must align one-to-one with the logical mask.
 
     h = gobjects(0);
     if nargin >= 3 && isgraphics(varargin{1}, 'axes')

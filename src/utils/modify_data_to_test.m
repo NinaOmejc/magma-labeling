@@ -1,19 +1,17 @@
 function data_modified = modify_data_to_test(data, fs, columns, trange_min, modification_type, to_plot)
-% MODIFY_DATA_TO_TEST Perform the modify data to test operation.
-%
-% Syntax:
-%   data_modified = modify_data_to_test(data, fs, columns, trange_min, modification_type, to_plot)
+% MODIFY_DATA_TO_TEST Inject a synthetic respiratory or SpO2 pattern for detector testing.
 %
 % Inputs:
-%   data - Input physiological signal data.
-%   fs - Sampling frequency in hertz.
-%   columns - Input value `columns`.
-%   trange_min - Input value `trange_min`.
-%   modification_type - Input value `modification_type`.
-%   to_plot - Input value `to_plot`.
+%   data              - Nsample x Nchannel physiological signal matrix.
+%   fs                - Sampling frequency in hertz.
+%   columns           - Data columns to modify; two belt columns are
+%                       required for thoracoabdominal patterns.
+%   trange_min        - Two-element inclusive modification interval in minutes.
+%   modification_type - Name of the synthetic breathing or desaturation pattern.
+%   to_plot           - Whether to compare original and modified signals.
 %
 % Outputs:
-%   data_modified - Computed output value `data_modified`.
+%   data_modified - Copy of data with the selected interval replaced or scaled.
 
     if nargin < 6
         to_plot = false;
@@ -140,20 +138,9 @@ function data_modified = modify_data_to_test(data, fs, columns, trange_min, modi
 end
 
 function data_out = redistribute_thoracoabdominal_excursion(data_in, time_sec, mask, columns, fs)
-% REDISTRIBUTE_THORACOABDOMINAL_EXCURSION Perform the redistribute thoracoabdominal excursion operation.
-%
-% Syntax:
-%   data_out = redistribute_thoracoabdominal_excursion(data_in, time_sec, mask, columns, fs)
-%
-% Inputs:
-%   data_in - Input value `data_in`.
-%   time_sec - Time coordinates in seconds.
-%   mask - Logical state or selection mask.
-%   columns - Input value `columns`.
-%   fs - Sampling frequency in hertz.
-%
-% Outputs:
-%   data_out - Computed output value `data_out`.
+% REDISTRIBUTE_THORACOABDOMINAL_EXCURSION Emphasize the first belt relative to the second.
+% The selected interval is blended into 1.5x excursion in columns(1) and
+% 0.7x excursion in columns(2); time_sec is the sample-time vector in seconds.
 
     if numel(columns) < 2
         error('thoracic_dominant_breathing requires thoracic and abdominal belt columns.');
@@ -163,21 +150,9 @@ function data_out = redistribute_thoracoabdominal_excursion(data_in, time_sec, m
 end
 
 function data_out = scale_selected_columns(data_in, time_sec, mask, columns, fs, scale)
-% SCALE_SELECTED_COLUMNS Perform the scale selected columns operation.
-%
-% Syntax:
-%   data_out = scale_selected_columns(data_in, time_sec, mask, columns, fs, scale)
-%
-% Inputs:
-%   data_in - Input value `data_in`.
-%   time_sec - Time coordinates in seconds.
-%   mask - Logical state or selection mask.
-%   columns - Input value `columns`.
-%   fs - Sampling frequency in hertz.
-%   scale - Input value `scale`.
-%
-% Outputs:
-%   data_out - Computed output value `data_out`.
+% SCALE_SELECTED_COLUMNS Scale belt excursion about its local median.
+% mask is sample-level, columns selects channels, and scale is a unitless
+% amplitude multiplier; two-second fades join the modified segment.
 
     data_out = data_in;
     for i = 1:numel(columns)
@@ -191,22 +166,9 @@ function data_out = scale_selected_columns(data_in, time_sec, mask, columns, fs,
 end
 
 function data_out = replace_respiration_with_fixed_rate(data_in, time_sec, mask, columns, fs, bpm, amp_scale)
-% REPLACE_RESPIRATION_WITH_FIXED_RATE Perform the replace respiration with fixed rate operation.
-%
-% Syntax:
-%   data_out = replace_respiration_with_fixed_rate(data_in, time_sec, mask, columns, fs, bpm, amp_scale)
-%
-% Inputs:
-%   data_in - Input value `data_in`.
-%   time_sec - Time coordinates in seconds.
-%   mask - Logical state or selection mask.
-%   columns - Input value `columns`.
-%   fs - Sampling frequency in hertz.
-%   bpm - Input value `bpm`.
-%   amp_scale - Input value `amp_scale`.
-%
-% Outputs:
-%   data_out - Computed output value `data_out`.
+% REPLACE_RESPIRATION_WITH_FIXED_RATE Synthesize sinusoidal breathing at a fixed rate.
+% bpm is breaths/min and amp_scale multiplies each channel's robust local
+% excursion; mask and time_sec are aligned to the rows of data_in.
 
     data_out = data_in;
     phase_offsets = linspace(0, 0.12, max(1, numel(columns)));
@@ -224,20 +186,9 @@ function data_out = replace_respiration_with_fixed_rate(data_in, time_sec, mask,
 end
 
 function data_out = replace_respiration_with_variable_rate(data_in, time_sec, mask, columns, fs)
-% REPLACE_RESPIRATION_WITH_VARIABLE_RATE Perform the replace respiration with variable rate operation.
-%
-% Syntax:
-%   data_out = replace_respiration_with_variable_rate(data_in, time_sec, mask, columns, fs)
-%
-% Inputs:
-%   data_in - Input value `data_in`.
-%   time_sec - Time coordinates in seconds.
-%   mask - Logical state or selection mask.
-%   columns - Input value `columns`.
-%   fs - Sampling frequency in hertz.
-%
-% Outputs:
-%   data_out - Computed output value `data_out`.
+% REPLACE_RESPIRATION_WITH_VARIABLE_RATE Synthesize smoothly varying respiratory timing.
+% Instantaneous rate combines two sinusoidal modulations and is clipped to
+% 6.5--28 breaths/min before phase integration and segment blending.
 
     data_out = data_in;
     t0 = time_sec(find(mask, 1, 'first'));
@@ -257,20 +208,9 @@ function data_out = replace_respiration_with_variable_rate(data_in, time_sec, ma
 end
 
 function data_out = replace_respiration_with_asynchrony(data_in, time_sec, mask, columns, fs)
-% REPLACE_RESPIRATION_WITH_ASYNCHRONY Perform the replace respiration with asynchrony operation.
-%
-% Syntax:
-%   data_out = replace_respiration_with_asynchrony(data_in, time_sec, mask, columns, fs)
-%
-% Inputs:
-%   data_in - Input value `data_in`.
-%   time_sec - Time coordinates in seconds.
-%   mask - Logical state or selection mask.
-%   columns - Input value `columns`.
-%   fs - Sampling frequency in hertz.
-%
-% Outputs:
-%   data_out - Computed output value `data_out`.
+% REPLACE_RESPIRATION_WITH_ASYNCHRONY Add a drifting phase offset between two belts.
+% columns(1:2) are treated as lung and diaphragm belts and replaced by
+% 12-breath/min sinusoids whose relative phase varies over 120 seconds.
 
     data_out = data_in;
     if numel(columns) < 2
@@ -302,18 +242,9 @@ function data_out = replace_respiration_with_asynchrony(data_in, time_sec, mask,
 end
 
 function data_out = apply_desaturation(data_in, mask, columns)
-% APPLY_DESATURATION Apply desaturation.
-%
-% Syntax:
-%   data_out = apply_desaturation(data_in, mask, columns)
-%
-% Inputs:
-%   data_in - Input value `data_in`.
-%   mask - Logical state or selection mask.
-%   columns - Input value `columns`.
-%
-% Outputs:
-%   data_out - Computed output value `data_out`.
+% APPLY_DESATURATION Lower selected sample-level SpO2 segments by at least five points.
+% Each selected column is set to the lower of 88 or five below its median
+% outside mask; finite fallbacks preserve test generation for sparse data.
 
     data_out = data_in;
     for i = 1:numel(columns)
@@ -332,20 +263,9 @@ function data_out = apply_desaturation(data_in, mask, columns)
 end
 
 function data_out = flatten_selected_columns(data_in, time_sec, mask, columns, fs)
-% FLATTEN_SELECTED_COLUMNS Perform the flatten selected columns operation.
-%
-% Syntax:
-%   data_out = flatten_selected_columns(data_in, time_sec, mask, columns, fs)
-%
-% Inputs:
-%   data_in - Input value `data_in`.
-%   time_sec - Time coordinates in seconds.
-%   mask - Logical state or selection mask.
-%   columns - Input value `columns`.
-%   fs - Sampling frequency in hertz.
-%
-% Outputs:
-%   data_out - Computed output value `data_out`.
+% FLATTEN_SELECTED_COLUMNS Replace respiration with near-flat residual oscillation.
+% Within the sample mask, excursion is reduced to 1% of the local scale at
+% 0.2 Hz and joined to the original signal with one-second fades.
 
     data_out = data_in;
     for i = 1:numel(columns)
@@ -359,20 +279,9 @@ function data_out = flatten_selected_columns(data_in, time_sec, mask, columns, f
 end
 
 function data_out = inject_sigh_breath(data_in, time_sec, mask, columns, fs)
-% INJECT_SIGH_BREATH Perform the inject sigh breath operation.
-%
-% Syntax:
-%   data_out = inject_sigh_breath(data_in, time_sec, mask, columns, fs)
-%
-% Inputs:
-%   data_in - Input value `data_in`.
-%   time_sec - Time coordinates in seconds.
-%   mask - Logical state or selection mask.
-%   columns - Input value `columns`.
-%   fs - Sampling frequency in hertz.
-%
-% Outputs:
-%   data_out - Computed output value `data_out`.
+% INJECT_SIGH_BREATH Add one large Gaussian-shaped excursion to selected belts.
+% The excursion is centred in the masked interval, has 0.9-second spread,
+% and is scaled to 3.5 times each channel's local amplitude.
 
     data_out = data_in;
     event_t = mean(time_sec(mask), 'omitnan');
@@ -389,20 +298,9 @@ function data_out = inject_sigh_breath(data_in, time_sec, mask, columns, fs)
 end
 
 function data_out = replace_respiration_with_periodic_breathing(data_in, time_sec, mask, columns, fs)
-% REPLACE_RESPIRATION_WITH_PERIODIC_BREATHING Perform the replace respiration with periodic breathing operation.
-%
-% Syntax:
-%   data_out = replace_respiration_with_periodic_breathing(data_in, time_sec, mask, columns, fs)
-%
-% Inputs:
-%   data_in - Input value `data_in`.
-%   time_sec - Time coordinates in seconds.
-%   mask - Logical state or selection mask.
-%   columns - Input value `columns`.
-%   fs - Sampling frequency in hertz.
-%
-% Outputs:
-%   data_out - Computed output value `data_out`.
+% REPLACE_RESPIRATION_WITH_PERIODIC_BREATHING Modulate 12-breath/min respiration in 50-second cycles.
+% A raised-cosine amplitude envelope is applied to each selected belt and
+% the replacement is joined to the original samples with two-second fades.
 
     data_out = data_in;
     t0 = time_sec(find(mask, 1, 'first'));
@@ -425,18 +323,9 @@ function data_out = replace_respiration_with_periodic_breathing(data_in, time_se
 end
 
 function [center, amp] = local_center_and_amp(sig, mask)
-% LOCAL_CENTER_AND_AMP Perform the local center and amp operation.
-%
-% Syntax:
-%   [center, amp] = local_center_and_amp(sig, mask)
-%
-% Inputs:
-%   sig - Input value `sig`.
-%   mask - Logical state or selection mask.
-%
-% Outputs:
-%   center - Computed output value `center`.
-%   amp - Computed output value `amp`.
+% LOCAL_CENTER_AND_AMP Estimate location and half-range for a masked signal segment.
+% center is its finite median; amp is half the 5th--95th percentile range,
+% with whole-signal and unit fallbacks for insufficient data.
 
     segment = sig(mask);
     center = median(segment, 'omitnan');
@@ -459,21 +348,9 @@ function [center, amp] = local_center_and_amp(sig, mask)
 end
 
 function sig_out = blend_masked_segment(sig, replacement, time_sec, mask, fs, fade_sec)
-% BLEND_MASKED_SEGMENT Perform the blend masked segment operation.
-%
-% Syntax:
-%   sig_out = blend_masked_segment(sig, replacement, time_sec, mask, fs, fade_sec)
-%
-% Inputs:
-%   sig - Input value `sig`.
-%   replacement - Input value `replacement`.
-%   time_sec - Time coordinates in seconds.
-%   mask - Logical state or selection mask.
-%   fs - Sampling frequency in hertz.
-%   fade_sec - Duration or window length in seconds.
-%
-% Outputs:
-%   sig_out - Computed output value `sig_out`.
+% BLEND_MASKED_SEGMENT Cross-fade replacement samples at both mask boundaries.
+% sig, replacement, time_sec, and mask are sample-aligned vectors; fade_sec
+% controls the linear transition duration at sampling frequency fs.
 
     sig_out = sig;
     idx = find(mask);

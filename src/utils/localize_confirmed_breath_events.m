@@ -2,27 +2,12 @@ function [events, records, localized_support_events] = localize_confirmed_breath
     candidate_events, belt, N, fs, event_type, criterion, lower, upper, ...
     analysis_window_sec, min_duration_sec, belt_name)
 % LOCALIZE_CONFIRMED_BREATH_EVENTS Localize confirmed events from respiratory-cycle evidence.
-%
-% Syntax:
-%   [events, records, localized_support_events] = localize_confirmed_breath_events(candidate_events, belt, N, fs, event_type, criterion, lower, upper, analysis_window_sec, min_duration_sec, belt_name)
-%
-% Inputs:
-%   candidate_events - Event structure data.
-%   belt - Respiratory-cycle or belt-evidence structure.
-%   N - Number of samples.
-%   fs - Sampling frequency in hertz.
-%   event_type - Canonical event type assigned to localized events.
-%   criterion - Respiratory-cycle selection criterion.
-%   lower - Selection threshold value.
-%   upper - Selection threshold value.
-%   analysis_window_sec - Duration or window length in seconds.
-%   min_duration_sec - Duration or window length in seconds.
-%   belt_name - Respiratory-belt identifier.
-%
-% Outputs:
-%   events - Event structure array.
-%   records - Boundary-localization diagnostic records.
-%   localized_support_events - Respiratory support events used for localization.
+% Candidate grid-window events are intersected with qualifying breathwise RR
+% intervals or midpoint amplitude cells from belt. N/fs define recording bounds;
+% lower/upper encode the selected criterion; analysis_window_sec supplies
+% fallback uncertainty; and min_duration_sec filters final events. events pass
+% the duration rule, localized_support_events include rejected short runs, and
+% records document belt, method, bounds, duration decision, and uncertainty.
 
     events = empty_events();
     records = empty_boundary_records();
@@ -91,23 +76,10 @@ end
 
 function [starts, ends, uncertainty, source, method] = ...
     breath_support_intervals(belt, criterion, lower, upper)
-% BREATH_SUPPORT_INTERVALS Perform the breath support intervals operation.
-%
-% Syntax:
-%   [starts, ends, uncertainty, source, method] = breath_support_intervals(belt, criterion, lower, upper)
-%
-% Inputs:
-%   belt - Respiratory-cycle or belt-evidence structure.
-%   criterion - Input value `criterion`.
-%   lower - Selection threshold value.
-%   upper - Selection threshold value.
-%
-% Outputs:
-%   starts - Computed output value `starts`.
-%   ends - Computed output value `ends`.
-%   uncertainty - Computed output value `uncertainty`.
-%   source - Computed output value `source`.
-%   method - Computed output value `method`.
+% BREATH_SUPPORT_INTERVALS Convert qualifying breath evidence to time intervals.
+% Rate criteria use peak-to-peak intervals and rr_bpm; amplitude criteria use
+% session-normalized ratios and midpoint cells. starts/ends/uncertainty are
+% seconds; source and method describe the chosen breath-level evidence.
 
     starts = [];
     ends = [];
@@ -174,17 +146,9 @@ function [starts, ends, uncertainty, source, method] = ...
 end
 
 function [starts, ends] = breath_midpoint_cells(peak_t)
-% BREATH_MIDPOINT_CELLS Perform the breath midpoint cells operation.
-%
-% Syntax:
-%   [starts, ends] = breath_midpoint_cells(peak_t)
-%
-% Inputs:
-%   peak_t - Input value `peak_t`.
-%
-% Outputs:
-%   starts - Computed output value `starts`.
-%   ends - Computed output value `ends`.
+% BREATH_MIDPOINT_CELLS Assign each breath a midpoint-bounded time cell.
+% peak_t, starts, and ends are seconds; edge cells extend by half the adjacent
+% interval and a lone peak receives a one-second cell.
 
     peak_t = peak_t(:);
     starts = peak_t;
@@ -203,22 +167,9 @@ end
 
 function [run_starts, run_ends, run_uncertainties] = ...
     support_runs_inside_candidate(starts, ends, uncertainty, c0, c1)
-% SUPPORT_RUNS_INSIDE_CANDIDATE Perform the support runs inside candidate operation.
-%
-% Syntax:
-%   [run_starts, run_ends, run_uncertainties] = support_runs_inside_candidate(starts, ends, uncertainty, c0, c1)
-%
-% Inputs:
-%   starts - Input value `starts`.
-%   ends - Input value `ends`.
-%   uncertainty - Input value `uncertainty`.
-%   c0 - Input value `c0`.
-%   c1 - Input value `c1`.
-%
-% Outputs:
-%   run_starts - Computed output value `run_starts`.
-%   run_ends - Computed output value `run_ends`.
-%   run_uncertainties - Computed output value `run_uncertainties`.
+% SUPPORT_RUNS_INSIDE_CANDIDATE Clip, merge, and summarize support intervals.
+% All bounds and uncertainties are seconds. Only intervals intersecting
+% [c0,c1] remain; touching intervals merge and keep maximum uncertainty.
 
     run_starts = [];
     run_ends = [];
@@ -265,21 +216,8 @@ function [run_starts, run_ends, run_uncertainties] = ...
 end
 
 function event = event_from_times(template, start_t, end_t, N, fs, event_type)
-% EVENT_FROM_TIMES Perform the event from times operation.
-%
-% Syntax:
-%   event = event_from_times(template, start_t, end_t, N, fs, event_type)
-%
-% Inputs:
-%   template - Input value `template`.
-%   start_t - Input value `start_t`.
-%   end_t - Input value `end_t`.
-%   N - Number of samples.
-%   fs - Sampling frequency in hertz.
-%   event_type - Input value `event_type`.
-%
-% Outputs:
-%   event - Computed output value `event`.
+% EVENT_FROM_TIMES Clamp time bounds and populate canonical event fields.
+% N/fs define the recording; template preserves any additional fields.
 
     recording_end_t = N / fs;
     start_t = max(0, min(recording_end_t, start_t));
@@ -294,26 +232,16 @@ function event = event_from_times(template, start_t, end_t, N, fs, event_type)
 end
 
 function records = empty_boundary_records()
-% EMPTY_BOUNDARY_RECORDS Create an empty boundary records value.
-%
-% Syntax:
-%   records = empty_boundary_records()
-%
-% Outputs:
-%   records - Computed output value `records`.
+% EMPTY_BOUNDARY_RECORDS Return a zero-length localized-boundary record array.
 
     records = boundary_record_template();
     records = records([]);
 end
 
 function record = boundary_record_template()
-% BOUNDARY_RECORD_TEMPLATE Perform the boundary record template operation.
-%
-% Syntax:
-%   record = boundary_record_template()
-%
-% Outputs:
-%   record - Computed output value `record`.
+% BOUNDARY_RECORD_TEMPLATE Define localized respiratory-event provenance fields.
+% Stores label/detector/belt/method/source, candidate and localized times (s),
+% localized and required durations (s), pass/rejection status, and uncertainty (s).
 
     record = struct( ...
         'label', '', ...

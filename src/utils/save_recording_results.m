@@ -1,5 +1,13 @@
 function save_recording_results(results, data_raw, data, config)
 % SAVE_RECORDING_RESULTS Save one recording to MAT and optional HDF5 files.
+%
+% Inputs:
+%   results  - Scalar authoritative result struct from build_recording_results.
+%   data_raw - Nsample x Nchannel raw physiological signal matrix for HDF5.
+%   data     - Nsample x Nchannel preprocessed signal matrix for HDF5.
+%   config   - Result directory/filename, recording identity, and HDF5 settings.
+% The MAT file stores each results field as a top-level variable; optional
+% HDF5 export uses the validated ML exchange schema.
 
     save(fullfile(config.sub_results_path, config.sub_results_filename), ...
         '-struct', 'results');

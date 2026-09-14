@@ -1,14 +1,13 @@
 function pos = near_fullscreen_figure_position(margin_px)
-% NEAR_FULLSCREEN_FIGURE_POSITION Perform the near fullscreen figure position operation.
-%
-% Syntax:
-%   pos = near_fullscreen_figure_position(margin_px)
+% NEAR_FULLSCREEN_FIGURE_POSITION Fit a large figure inside the current screen.
 %
 % Inputs:
-%   margin_px - Input value `margin_px`.
+%   margin_px - Optional [horizontal vertical] margins in pixels; a scalar
+%               applies to both dimensions.
 %
 % Outputs:
-%   pos - Computed output value `pos`.
+%   pos - Four-element pixel position [left bottom width height], with a
+%         fixed fallback when screen geometry is unavailable.
 
     if nargin < 1 || isempty(margin_px)
         margin_px = [60 110];

@@ -1,15 +1,8 @@
 function tf = is_valid_breath_signal(breaths, require_amp)
-% IS_VALID_BREATH_SIGNAL Determine whether valid breath signal.
-%
-% Syntax:
-%   tf = is_valid_breath_signal(breaths, require_amp)
-%
-% Inputs:
-%   breaths - Respiratory-cycle or belt-evidence structure.
-%   require_amp - Input value `require_amp`.
-%
-% Outputs:
-%   tf - Computed output value `tf`.
+% IS_VALID_BREATH_SIGNAL Check whether a belt supports timing or amplitude analysis.
+% breaths must not be marked ok=false and needs at least two finite peak_t values
+% in seconds. With require_amp=true, at least two positive finite amplitudes are
+% also required. tf is a scalar logical.
 
     if nargin < 2
         require_amp = false;

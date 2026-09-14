@@ -1,16 +1,17 @@
 function b = extract_respiration_feature(x, config, basename)
-% EXTRACT_RESPIRATION_FEATURE Extract respiratory-cycle features.
-%
-% Syntax:
-%   b = extract_respiration_feature(x, config, basename)
-%
-% Inputs:
-%   x - Respiratory-belt signal.
-%   config - Pipeline configuration structure.
-%   basename - Name used for diagnostic plot output.
-%
-% Outputs:
-%   b - Respiratory-cycle feature structure.
+% EXTRACT_RESPIRATION_FEATURE Detect breath peaks and derive cycle timing and amplitude.
+% x is one sample-level respiratory-belt signal; config.fs is in hertz and
+% basename identifies optional diagnostic plots. The returned belt struct has:
+%   ok                 - True when at least three retained peaks define cycles.
+%   x0                 - Smoothed sample-level belt signal used for detection.
+%   peak_idx/peak_t    - Breath-peak sample indices and times in seconds.
+%   peak_val           - Signal value at each retained peak.
+%   trough_idx/trough_t/trough_val - Inter-peak trough locations and values.
+%   amp                - Peak-to-following-trough amplitude per peak; final value is NaN.
+%   ibi/rr_bpm         - Inter-breath intervals (s) and rates (breaths/min), Npeak-1 long.
+%   rr_mean_bpm/rr_std_bpm - Recording-level rate summaries.
+%   auto_peak_*        - Pre-QC peak locations, values, widths, and prominences.
+%   peak_qc            - Removed-peak indices, times, and QC reasons.
 
     if nargin < 3 || isempty(basename)
         basename = '';
@@ -93,18 +94,10 @@ end
 
 function [peak_idx, qc] = apply_respiration_peak_qc(peak_idx, peak_prom, config)
 % APPLY_RESPIRATION_PEAK_QC Conservatively remove likely duplicate or split peaks.
-%
-% Syntax:
-%   [peak_idx, qc] = apply_respiration_peak_qc(peak_idx, peak_prom, config)
-%
-% Inputs:
-%   peak_idx - Automatically detected respiratory peak sample indices.
-%   peak_prom - Prominence of each automatically detected peak.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   peak_idx - Respiratory peak indices retained after conservative QC.
-%   qc - Summary of removed peaks and removal reasons.
+% peak_idx and peak_prom are aligned automatic-peak vectors. QC compares
+% local IBI rhythm and prominence, returning retained sample indices plus a
+% struct with enabled, removed_peak_idx, removed_peak_t (s), removed_reason,
+% and a human-readable reason for the QC policy.
 
     peak_idx = peak_idx(:);
     peak_prom = peak_prom(:);

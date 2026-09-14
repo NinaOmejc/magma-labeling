@@ -1,27 +1,30 @@
 function h = plot_spo2_diagnostic_panel( ...
-    ax, data, spo2_ref, session_reference, diagnostics_desat, config, title_text)
-% PLOT_SPO2_DIAGNOSTIC_PANEL Plot spo2 diagnostic panel.
-%
-% Syntax:
-%   h = plot_spo2_diagnostic_panel(ax, data, spo2_ref, session_reference, diagnostics_desat, config, title_text)
+    ax, data, session_reference, diagnostics_desat, config, title_text)
+% PLOT_SPO2_DIAGNOSTIC_PANEL Plot SpO2, reference thresholds, and desaturation events.
 %
 % Inputs:
-%   ax - Target axes handle.
-%   data - Input physiological signal data.
-%   spo2_ref - SpO2-reference structure.
-%   session_reference - Session-reference metadata.
-%   diagnostics_desat - Detector diagnostic data.
-%   config - Pipeline configuration structure.
-%   title_text - Input value `title_text`.
+%   ax                - Target axes handle, or empty for the current axes.
+%   data              - Nsample x Nchannel physiological signal matrix.
+%   session_reference - Common reference interval with boundaries in seconds.
+%   diagnostics_desat - Desaturation diagnostics with spo2_ref and optional
+%                       time_sec, spo2, and events.
+%   config            - Channel, sampling, and desaturation threshold settings.
+%   title_text        - Optional panel title.
 %
 % Outputs:
-%   h - Graphics handle or array.
+%   h - Scalar struct of available plot handles: reference_window, spo2,
+%       reference, reference_drop, floor, and desat_events.
 
     if nargin < 1 || isempty(ax)
         ax = gca;
     end
-    if nargin < 7 || isempty(title_text)
+    if nargin < 6 || isempty(title_text)
         title_text = 'SpO2';
+    end
+
+    spo2_ref = struct();
+    if isstruct(diagnostics_desat) && isfield(diagnostics_desat, 'spo2_ref')
+        spo2_ref = diagnostics_desat.spo2_ref;
     end
 
     h = struct();
@@ -76,19 +79,9 @@ function h = plot_spo2_diagnostic_panel( ...
 end
 
 function [t_spo2, spo2] = get_spo2_trace(data, diagnostics_desat, config)
-% GET_SPO2_TRACE Return spo2 trace.
-%
-% Syntax:
-%   [t_spo2, spo2] = get_spo2_trace(data, diagnostics_desat, config)
-%
-% Inputs:
-%   data - Input physiological signal data.
-%   diagnostics_desat - Detector diagnostic data.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   t_spo2 - Computed output value `t_spo2`.
-%   spo2 - Computed output value `spo2`.
+% GET_SPO2_TRACE Resolve aligned sample times and SpO2 percentages for plotting.
+% A diagnostic trace takes precedence; otherwise the configured data column
+% is sampled at config.fs. Empty vectors indicate unavailable SpO2.
 
     if nargin >= 2 && ~isempty(diagnostics_desat) && ...
             isstruct(diagnostics_desat) && ...
@@ -132,17 +125,9 @@ function [t_spo2, spo2] = get_spo2_trace(data, diagnostics_desat, config)
 end
 
 function set_spo2_limits(ax, spo2, spo2_ref, floor_thr, drop_thr)
-% SET_SPO2_LIMITS Perform the set spo2 limits operation.
-%
-% Syntax:
-%   set_spo2_limits(ax, spo2, spo2_ref, floor_thr, drop_thr)
-%
-% Inputs:
-%   ax - Target axes handle.
-%   spo2 - Input value `spo2`.
-%   spo2_ref - SpO2-reference structure.
-%   floor_thr - Selection threshold value.
-%   drop_thr - Selection threshold value.
+% SET_SPO2_LIMITS Include observed percentages and all detection thresholds.
+% floor_thr is an absolute percent; drop_thr is subtracted from the optional
+% session reference median before padded y-limits are assigned to ax.
 
     values = spo2(isfinite(spo2));
     values = [values; floor_thr; 89; 100];
@@ -164,14 +149,7 @@ function set_spo2_limits(ax, spo2, spo2_ref, floor_thr, drop_thr)
 end
 
 function add_spo2_legend(ax, h)
-% ADD_SPO2_LEGEND Add spo2 legend.
-%
-% Syntax:
-%   add_spo2_legend(ax, h)
-%
-% Inputs:
-%   ax - Target axes handle.
-%   h - Input value `h`.
+% ADD_SPO2_LEGEND Build a legend from valid named handles in the panel struct.
 
     handles = gobjects(0);
     if isfield(h, 'spo2'), handles(end+1,1) = h.spo2; end
@@ -194,17 +172,7 @@ function add_spo2_legend(ax, h)
 end
 
 function handles = append_graphics_handle(handles, h)
-% APPEND_GRAPHICS_HANDLE Perform the append graphics handle operation.
-%
-% Syntax:
-%   handles = append_graphics_handle(handles, h)
-%
-% Inputs:
-%   handles - Input value `handles`.
-%   h - Input value `h`.
-%
-% Outputs:
-%   handles - Graphics handle or array.
+% APPEND_GRAPHICS_HANDLE Append the first valid handle from h to a handle vector.
 
     if isempty(h)
         return;

@@ -1,15 +1,9 @@
 function events = normalize_event_types_and_meta(raw_events, fs)
-% NORMALIZE_EVENT_TYPES_AND_META Normalize event types and meta.
-%
-% Syntax:
-%   events = normalize_event_types_and_meta(raw_events, fs)
-%
-% Inputs:
-%   raw_events - Event structure data.
-%   fs - Sampling frequency in hertz.
-%
-% Outputs:
-%   events - Event structure array.
+% NORMALIZE_EVENT_TYPES_AND_META Canonicalize event labels, belt source, and timing.
+% raw_events must provide type and sample bounds plus time bounds when fs is
+% omitted. With fs, times/duration are recomputed from inclusive indices.
+% Output fields are type, start_idx/end_idx, start_t/end_t (s), duration (s),
+% and belt; overlapping same-type events are merged across belt sources.
 
     if nargin < 2
         fs = [];
@@ -53,13 +47,7 @@ function events = normalize_event_types_and_meta(raw_events, fs)
 end
 
 function template = normalized_template()
-% NORMALIZED_TEMPLATE Perform the normalized template operation.
-%
-% Syntax:
-%   template = normalized_template()
-%
-% Outputs:
-%   template - Computed output value `template`.
+% NORMALIZED_TEMPLATE Define the canonical event schema including belt provenance.
 
     template = struct( ...
         'type', '', ...
@@ -72,29 +60,14 @@ function template = normalized_template()
 end
 
 function events = empty_normalized_events()
-% EMPTY_NORMALIZED_EVENTS Create an empty normalized events value.
-%
-% Syntax:
-%   events = empty_normalized_events()
-%
-% Outputs:
-%   events - Event structure array.
+% EMPTY_NORMALIZED_EVENTS Return a zero-length canonical event array with belt field.
 
     template = normalized_template();
     events = template([]);
 end
 
 function key = normalize_key(value)
-% NORMALIZE_KEY Normalize key.
-%
-% Syntax:
-%   key = normalize_key(value)
-%
-% Inputs:
-%   value - Input value `value`.
-%
-% Outputs:
-%   key - Computed output value `key`.
+% NORMALIZE_KEY Lowercase and underscore-separate an incoming event label.
 
     key = lower(strtrim(char(string(value))));
     key = strrep(key, ' ', '_');
@@ -102,16 +75,8 @@ function key = normalize_key(value)
 end
 
 function type = canonical_type(key)
-% CANONICAL_TYPE Perform the canonical type operation.
-%
-% Syntax:
-%   type = canonical_type(key)
-%
-% Inputs:
-%   key - Input value `key`.
-%
-% Outputs:
-%   type - Computed output value `type`.
+% CANONICAL_TYPE Map accepted detector aliases to one configured short label.
+% Unknown normalized keys raise MAGMA:Events:UnknownType.
 
     if matches_label(key, {'shallow', 'shallow_breathing', 'shallowb', 'shb', 'shallowbreathing'})
         type = 'shallow';
@@ -145,13 +110,7 @@ function type = canonical_type(key)
 end
 
 function validate_fs(fs)
-% VALIDATE_FS Validate fs.
-%
-% Syntax:
-%   validate_fs(fs)
-%
-% Inputs:
-%   fs - Sampling frequency in hertz.
+% VALIDATE_FS Require a finite positive scalar sampling rate in hertz.
 
     if ~isnumeric(fs) || ~isscalar(fs) || ~isfinite(fs) || fs <= 0
         error('MAGMA:Events:InvalidSamplingRate', ...
@@ -160,17 +119,7 @@ function validate_fs(fs)
 end
 
 function tf = matches_label(key, bases)
-% MATCHES_LABEL Perform the matches label operation.
-%
-% Syntax:
-%   tf = matches_label(key, bases)
-%
-% Inputs:
-%   key - Input value `key`.
-%   bases - Input value `bases`.
-%
-% Outputs:
-%   tf - Computed output value `tf`.
+% MATCHES_LABEL Test a normalized key against aliases and belt suffixes.
 
     tf = false;
     suffixes = {'', '_lungs', '_diaph', '_both'};
@@ -185,17 +134,7 @@ function tf = matches_label(key, bases)
 end
 
 function belt = belt_from_event(key, event)
-% BELT_FROM_EVENT Perform the belt from event operation.
-%
-% Syntax:
-%   belt = belt_from_event(key, event)
-%
-% Inputs:
-%   key - Input value `key`.
-%   event - Event structure data.
-%
-% Outputs:
-%   belt - Updated respiratory-cycle or belt structure.
+% BELT_FROM_EVENT Infer lungs/diaph/both from label suffix or event.belt.
 
     belt = '';
     if endsWith(key, '_lungs')
@@ -213,17 +152,7 @@ function belt = belt_from_event(key, event)
 end
 
 function value = required_text_field(event, field)
-% REQUIRED_TEXT_FIELD Perform the required text field operation.
-%
-% Syntax:
-%   value = required_text_field(event, field)
-%
-% Inputs:
-%   event - Event structure data.
-%   field - Input value `field`.
-%
-% Outputs:
-%   value - Computed numeric value.
+% REQUIRED_TEXT_FIELD Read a nonempty event field as character text.
 
     if ~isfield(event, field) || isempty(event.(field))
         error('MAGMA:Events:MissingField', 'Event is missing required field "%s".', field);
@@ -232,17 +161,7 @@ function value = required_text_field(event, field)
 end
 
 function value = required_numeric_field(event, field)
-% REQUIRED_NUMERIC_FIELD Perform the required numeric field operation.
-%
-% Syntax:
-%   value = required_numeric_field(event, field)
-%
-% Inputs:
-%   event - Event structure data.
-%   field - Input value `field`.
-%
-% Outputs:
-%   value - Computed numeric value.
+% REQUIRED_NUMERIC_FIELD Read a finite scalar numeric event field.
 
     if ~isfield(event, field) || ~isnumeric(event.(field)) || ...
             ~isscalar(event.(field)) || ~isfinite(event.(field))
@@ -253,17 +172,9 @@ function value = required_numeric_field(event, field)
 end
 
 function events = merge_normalized_belt_events(events, fs)
-% MERGE_NORMALIZED_BELT_EVENTS Merge normalized belt events.
-%
-% Syntax:
-%   events = merge_normalized_belt_events(events, fs)
-%
-% Inputs:
-%   events - Event structure data.
-%   fs - Sampling frequency in hertz.
-%
-% Outputs:
-%   events - Event structure array.
+% MERGE_NORMALIZED_BELT_EVENTS Union overlapping same-type canonical events.
+% Belt provenance becomes 'both' when sources differ; optional fs recomputes
+% timing from merged inclusive sample bounds.
 
     if numel(events) <= 1
         return;
@@ -302,17 +213,7 @@ function events = merge_normalized_belt_events(events, fs)
 end
 
 function belt = merge_belt_labels(a, b)
-% MERGE_BELT_LABELS Merge belt labels.
-%
-% Syntax:
-%   belt = merge_belt_labels(a, b)
-%
-% Inputs:
-%   a - Input value `a`.
-%   b - Respiratory-cycle or belt-evidence structure.
-%
-% Outputs:
-%   belt - Updated respiratory-cycle or belt structure.
+% MERGE_BELT_LABELS Combine two belt provenance strings without losing agreement.
 
     if strcmp(a, b) || isempty(b)
         belt = a;

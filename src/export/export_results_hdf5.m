@@ -1,14 +1,21 @@
 function export_results_hdf5(filename, results, signals_raw, signals_preprocessed)
-% EXPORT_RESULTS_HDF5 Perform the export results hdf5 operation.
-%
-% Syntax:
-%   export_results_hdf5(filename, results, signals_raw, signals_preprocessed)
+% EXPORT_RESULTS_HDF5 Write one validated recording in the ML exchange schema.
 %
 % Inputs:
-%   filename - File or dataset path.
-%   results - Input value `results`.
-%   signals_raw - Input physiological signal data.
-%   signals_preprocessed - Preprocessed physiological signal data.
+%   filename             - Destination .h5 path; an existing file is replaced.
+%   results              - Final recording-results struct with respiratory
+%                          evidence, references, labels, events, review state,
+%                          summaries, subject/measurement, and config.fs.
+%   signals_raw          - Nsample x Nchannel raw physiological signal matrix.
+%   signals_preprocessed - Nsample x Nchannel processed signal matrix.
+%
+% The v4 file stores sample signals/time under /signals and /time;
+% breath-level belt arrays and detector evidence under /resp and
+% /resp_features; reference metadata under /session_reference,
+% /resp_reference, and /spo2_reference; sample x label masks and per-label
+% metadata under /labels; canonical automatic/reviewed events under /events;
+% review rounds under /review; and burden, overlap, phenotype, and recording
+% identifiers under /burden, /overlap, /phenotype_evidence, and /meta.
 
     filename = char(string(filename));
     validate_export_inputs(filename, results, signals_raw, signals_preprocessed);
@@ -97,16 +104,10 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
 end
 
 function validate_export_inputs(filename, results, raw, preprocessed)
-% VALIDATE_EXPORT_INPUTS Validate export inputs.
-%
-% Syntax:
-%   validate_export_inputs(filename, results, raw, preprocessed)
-%
-% Inputs:
-%   filename - File or dataset path.
-%   results - Input value `results`.
-%   raw - Input physiological signal data.
-%   preprocessed - Preprocessed physiological signal data.
+% VALIDATE_EXPORT_INPUTS Enforce recording, label-order, and sample alignment.
+% raw and preprocessed must be numeric matrices with equal row counts.
+% results must contain the frozen 11-label vectors, Nsample x 11 masks,
+% canonical events, positive config.fs, and session-reference metadata.
 
     if isempty(filename)
         error('MAGMA:HDF5:InvalidFilename', 'A nonempty output filename is required.');
@@ -168,16 +169,9 @@ function validate_export_inputs(filename, results, raw, preprocessed)
 end
 
 function validate_session_reference(reference, N, fs, measurement)
-% VALIDATE_SESSION_REFERENCE Validate session reference.
-%
-% Syntax:
-%   validate_session_reference(reference, N, fs, measurement)
-%
-% Inputs:
-%   reference - Session-reference metadata.
-%   N - Number of samples.
-%   fs - Sampling frequency in hertz.
-%   measurement - Measurement identifier.
+% VALIDATE_SESSION_REFERENCE Check schema identity and index-derived timing.
+% For an available interval, reference indices must fall within N samples;
+% start_t, end_t, and duration use half-open boundaries derived using fs.
 
     required = {'reference_start_idx', 'reference_end_idx', ...
         'reference_start_t', 'reference_end_t', 'reference_duration_sec', ...
@@ -213,15 +207,9 @@ function validate_session_reference(reference, N, fs, measurement)
 end
 
 function validate_canonical_events(events, fs, labels)
-% VALIDATE_CANONICAL_EVENTS Validate canonical events.
-%
-% Syntax:
-%   validate_canonical_events(events, fs, labels)
-%
-% Inputs:
-%   events - Event structure data.
-%   fs - Sampling frequency in hertz.
-%   labels - Label identifier or label metadata.
+% VALIDATE_CANONICAL_EVENTS Enforce event fields, label names, and sample timing.
+% events must have type, start_idx, end_idx, start_t, end_t, duration, and
+% belt; times in seconds follow the half-open convention implied by fs.
 
     required = {'type', 'start_idx', 'end_idx', 'start_t', 'end_t', ...
         'duration', 'belt'};
@@ -251,15 +239,9 @@ function validate_canonical_events(events, fs, labels)
 end
 
 function write_resp_belt(filename, path, belt)
-% WRITE_RESP_BELT Write resp belt.
-%
-% Syntax:
-%   write_resp_belt(filename, path, belt)
-%
-% Inputs:
-%   filename - File or dataset path.
-%   path - File or dataset path.
-%   belt - Respiratory-cycle or belt-evidence structure.
+% WRITE_RESP_BELT Export one belt's breath-level timing, rate, and amplitude arrays.
+% peak_idx is sample-based; peak_t and ibi are seconds; rr_bpm is
+% breaths/min; amp is raw excursion; amp_ratio_* are unitless references.
 
     fields = {'peak_idx', 'peak_t', 'amp', 'ibi', 'rr_bpm', ...
         'amp_ratio_session', 'amp_ratio_global'};
@@ -274,15 +256,9 @@ function write_resp_belt(filename, path, belt)
 end
 
 function write_events(filename, path, events)
-% WRITE_EVENTS Write events.
-%
-% Syntax:
-%   write_events(filename, path, events)
-%
-% Inputs:
-%   filename - File or dataset path.
-%   path - File or dataset path.
-%   events - Event structure data.
+% WRITE_EVENTS Export a canonical event array as parallel HDF5 datasets.
+% Index fields are samples, time/duration fields are seconds, and type/belt
+% are UTF-8 text columns below path.
 
     write_text(filename, [path '/type'], event_field(events, 'type', 'text'));
     write_numeric(filename, [path '/start_idx'], event_field(events, 'start_idx', 'numeric'));
@@ -294,15 +270,10 @@ function write_events(filename, path, events)
 end
 
 function write_review_history(filename, path, history)
-% WRITE_REVIEW_HISTORY Write review history.
-%
-% Syntax:
-%   write_review_history(filename, path, history)
-%
-% Inputs:
-%   filename - File or dataset path.
-%   path - File or dataset path.
-%   history - Input value `history`.
+% WRITE_REVIEW_HISTORY Export each immutable manual-review round.
+% history is a struct array whose round_<id> groups contain provenance,
+% canonical events, sample x label masks, coverage/status, and optional
+% reviewer identity, notes, schema version, and active-round flag.
 
     write_numeric(filename, [path '/number_of_rounds'], numel(history));
     for i = 1:numel(history)
@@ -339,18 +310,8 @@ function write_review_history(filename, path, history)
 end
 
 function values = event_field(events, name, kind)
-% EVENT_FIELD Perform the event field operation.
-%
-% Syntax:
-%   values = event_field(events, name, kind)
-%
-% Inputs:
-%   events - Event structure data.
-%   name - Input value `name`.
-%   kind - Input value `kind`.
-%
-% Outputs:
-%   values - Computed numeric value.
+% EVENT_FIELD Collect one canonical event field in export orientation.
+% kind is "text" for a cell row; all other kinds produce a numeric column.
 
     if isempty(events) || ~isfield(events, name)
         if strcmp(kind, 'text'), values = {}; else, values = []; end
@@ -362,15 +323,9 @@ function values = event_field(events, name, kind)
 end
 
 function write_value(filename, path, value)
-% WRITE_VALUE Write value.
-%
-% Syntax:
-%   write_value(filename, path, value)
-%
-% Inputs:
-%   filename - File or dataset path.
-%   path - File or dataset path.
-%   value - Input value `value`.
+% WRITE_VALUE Recursively serialize a supported MATLAB value below an HDF5 path.
+% Structs, cells, text, numeric/logical values, and empty values are encoded
+% by type-specific writers; unsupported classes raise an export error.
 
     if isstruct(value)
         if isempty(value)
@@ -396,15 +351,7 @@ function write_value(filename, path, value)
 end
 
 function write_struct_array(filename, path, values)
-% WRITE_STRUCT_ARRAY Write struct array.
-%
-% Syntax:
-%   write_struct_array(filename, path, values)
-%
-% Inputs:
-%   filename - File or dataset path.
-%   path - File or dataset path.
-%   values - Input value `values`.
+% WRITE_STRUCT_ARRAY Recursively write scalar fields or indexed struct groups.
 
     names = fieldnames(values);
     for i = 1:numel(names)
@@ -423,15 +370,9 @@ function write_struct_array(filename, path, values)
 end
 
 function write_cell(filename, path, values)
-% WRITE_CELL Write cell.
-%
-% Syntax:
-%   write_cell(filename, path, values)
-%
-% Inputs:
-%   filename - File or dataset path.
-%   path - File or dataset path.
-%   values - Input value `values`.
+% WRITE_CELL Encode a homogeneous cell array or recursively index mixed cells.
+% All-text cells share one byte matrix; scalar numeric/logical cells share a
+% numeric array; other contents are written below item_<index> groups.
 
     if isempty(values)
         write_empty(filename, path);
@@ -447,15 +388,8 @@ function write_cell(filename, path, values)
 end
 
 function write_numeric(filename, path, value)
-% WRITE_NUMERIC Write numeric.
-%
-% Syntax:
-%   write_numeric(filename, path, value)
-%
-% Inputs:
-%   filename - File or dataset path.
-%   path - File or dataset path.
-%   value - Input value `value`.
+% WRITE_NUMERIC Create one numeric HDF5 dataset, preserving MATLAB dimensions.
+% Logical values are converted to uint8; empty values use the shared empty marker.
 
     if islogical(value)
         value = uint8(value);
@@ -479,15 +413,8 @@ function write_numeric(filename, path, value)
 end
 
 function write_text(filename, path, value)
-% WRITE_TEXT Write text.
-%
-% Syntax:
-%   write_text(filename, path, value)
-%
-% Inputs:
-%   filename - File or dataset path.
-%   path - File or dataset path.
-%   value - Input value `value`.
+% WRITE_TEXT Store text values as zero-padded UTF-8 byte columns.
+% Scalar strings, character arrays, and string/cell arrays are accepted.
 
     values = cellstr(string(value));
     if isempty(values)
@@ -508,14 +435,7 @@ function write_text(filename, path, value)
 end
 
 function write_empty(filename, path)
-% WRITE_EMPTY Write empty.
-%
-% Syntax:
-%   write_empty(filename, path)
-%
-% Inputs:
-%   filename - File or dataset path.
-%   path - File or dataset path.
+% WRITE_EMPTY Mark an absent value with a placeholder dataset and attribute.
 
     h5create(filename, path, [1 1], 'Datatype', 'uint8');
     h5write(filename, path, uint8(0));
@@ -523,16 +443,7 @@ function write_empty(filename, path)
 end
 
 function name = safe_name(name)
-% SAFE_NAME Perform the safe name operation.
-%
-% Syntax:
-%   name = safe_name(name)
-%
-% Inputs:
-%   name - Input value `name`.
-%
-% Outputs:
-%   name - Output text or identifier.
+% SAFE_NAME Convert an arbitrary struct field to a nonempty HDF5 path component.
 
     name = regexprep(char(string(name)), '[^A-Za-z0-9_]', '_');
     if isempty(name), name = 'unnamed'; end

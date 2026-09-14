@@ -1,22 +1,16 @@
 function diagnostic_signals = compute_label_diagnostic_signals( ...
-    resp_features, spo2_ref, diagnostics_desat, config, rea_metrics, apnea_metrics, sigh_metrics, csr_metrics)
-% COMPUTE_LABEL_DIAGNOSTIC_SIGNALS Compute label diagnostic signals.
-%
-% Syntax:
-%   diagnostic_signals = compute_label_diagnostic_signals(resp_features, spo2_ref, diagnostics_desat, config, rea_metrics, apnea_metrics, sigh_metrics, csr_metrics)
-%
-% Inputs:
-%   resp_features - Respiratory-feature structure.
-%   spo2_ref - SpO2-reference structure.
-%   diagnostics_desat - Detector diagnostic data.
-%   config - Pipeline configuration structure.
-%   rea_metrics - Input value `rea_metrics`.
-%   apnea_metrics - Input value `apnea_metrics`.
-%   sigh_metrics - Input value `sigh_metrics`.
-%   csr_metrics - Input value `csr_metrics`.
-%
-% Outputs:
-%   diagnostic_signals - Detector diagnostic structure.
+    resp_features, diagnostics_desat, config, rea_metrics, apnea_metrics, sigh_metrics, csr_metrics)
+% COMPUTE_LABEL_DIAGNOSTIC_SIGNALS Collect detector evidence for export and QC.
+% resp_features supplies the common analysis grid and respiratory evidence;
+% desaturation (including spo2_ref), ReA, apnea, sigh, and CSR diagnostics add specialized data.
+% All trace/mask fields are grid-level unless their names explicitly say count,
+% threshold, window, analysis_fs, or analysis_n_samples. Field groups include:
+%   time/grid metadata; rapid/slow RR (breaths/min), endpoints, states, margins;
+%   irregular CoV/robust CoV, endpoints, states, and CoV margins;
+%   raw/session-normalized amplitude traces, availability, states, and margins;
+%   thoracoabdominal ratios/fractions and dominance evidence;
+%   SpO2 and drop-from-reference percentages; ReA coherence/reference evidence;
+%   optional apnea references, sigh thresholds/counts, and CSR cycle diagnostics.
 
     t_grid = resp_features.resp.time_sec;
 
@@ -115,15 +109,15 @@ function diagnostic_signals = compute_label_diagnostic_signals( ...
         balance.thoracic_to_abdominal_ratio - balance.dominance_ratio_threshold;
 
     [diagnostic_signals.spo2_percent, diagnostic_signals.spo2_drop_from_reference_percent] = ...
-        spo2_on_grid(diagnostics_desat, spo2_ref, t_grid);
+        spo2_on_grid(diagnostics_desat, t_grid);
 
-    if nargin < 5 || isempty(rea_metrics)
+    if nargin < 4 || isempty(rea_metrics)
         error('MAGMA:Diagnostics:MissingReAMetrics', ...
             'Respiratory-asynchrony diagnostics must be supplied by the specialized ReA computation.');
     end
     diagnostic_signals = add_respiratory_asynchrony_diagnostics(diagnostic_signals, rea_metrics);
 
-    if nargin >= 6 && isstruct(apnea_metrics) && isfield(apnea_metrics, 'available')
+    if nargin >= 5 && isstruct(apnea_metrics) && isfield(apnea_metrics, 'available')
         diagnostic_signals.apnea_analysis_available = double(apnea_metrics.available);
         diagnostic_signals.apnea_peak_evidence_endpoint = double(apnea_metrics.peak_endpoint_mask);
         diagnostic_signals.apnea_peak_inferred_state = double(apnea_metrics.peak_state_mask);
@@ -145,14 +139,14 @@ function diagnostic_signals = compute_label_diagnostic_signals( ...
                 apnea_metrics.raw_flat.diaph.session_slope_reference;
         end
     end
-    if nargin >= 7 && isstruct(sigh_metrics) && isfield(sigh_metrics, 'available')
+    if nargin >= 6 && isstruct(sigh_metrics) && isfield(sigh_metrics, 'available')
         diagnostic_signals.sigh_analysis_available = double(sigh_metrics.available);
         diagnostic_signals.sigh_ratio_threshold_lungs = sigh_metrics.lungs.decision_threshold;
         diagnostic_signals.sigh_ratio_threshold_diaph = sigh_metrics.diaph.decision_threshold;
         diagnostic_signals.sigh_selected_count_lungs = nnz(sigh_metrics.lungs.selected_breath_mask);
         diagnostic_signals.sigh_selected_count_diaph = nnz(sigh_metrics.diaph.selected_breath_mask);
     end
-    if nargin >= 8 && isstruct(csr_metrics) && isfield(csr_metrics, 'available')
+    if nargin >= 7 && isstruct(csr_metrics) && isfield(csr_metrics, 'available')
         diagnostic_signals.periodic_analysis_available = double(csr_metrics.available);
         diagnostic_signals.periodic_cycle_count_lungs = numel(csr_metrics.lungs.cycles);
         diagnostic_signals.periodic_cycle_count_diaph = numel(csr_metrics.diaph.cycles);
@@ -164,17 +158,7 @@ function diagnostic_signals = compute_label_diagnostic_signals( ...
 end
 
 function values = cycle_field(cycles, name)
-% CYCLE_FIELD Perform the cycle field operation.
-%
-% Syntax:
-%   values = cycle_field(cycles, name)
-%
-% Inputs:
-%   cycles - Input value `cycles`.
-%   name - Input value `name`.
-%
-% Outputs:
-%   values - Computed numeric value.
+% CYCLE_FIELD Collect one numeric field from a periodic-cycle struct array.
 
     if isempty(cycles)
         values = [];
@@ -183,20 +167,10 @@ function values = cycle_field(cycles, name)
     end
 end
 
-function [spo2_grid, spo2_drop_grid] = spo2_on_grid(diagnostics_desat, spo2_ref, t_grid)
-% SPO2_ON_GRID Perform the spo2 on grid operation.
-%
-% Syntax:
-%   [spo2_grid, spo2_drop_grid] = spo2_on_grid(diagnostics_desat, spo2_ref, t_grid)
-%
-% Inputs:
-%   diagnostics_desat - Detector diagnostic data.
-%   spo2_ref - SpO2-reference structure.
-%   t_grid - Time coordinates in seconds.
-%
-% Outputs:
-%   spo2_grid - Computed output value `spo2_grid`.
-%   spo2_drop_grid - Computed output value `spo2_drop_grid`.
+function [spo2_grid, spo2_drop_grid] = spo2_on_grid(diagnostics_desat, t_grid)
+% SPO2_ON_GRID Interpolate finite native SpO2 onto analysis-grid times.
+% spo2_grid and spo2_drop_grid are percentages; drop is reference median minus
+% observed SpO2 and remains NaN without a finite diagnostics_desat.spo2_ref.
 
     spo2_grid = nan(size(t_grid));
     spo2_drop_grid = nan(size(t_grid));
@@ -215,23 +189,20 @@ function [spo2_grid, spo2_drop_grid] = spo2_on_grid(diagnostics_desat, spo2_ref,
     end
 
     spo2_grid = interp1(t_spo2(valid), spo2(valid), t_grid, 'linear', nan);
+    if ~isfield(diagnostics_desat, 'spo2_ref') || ...
+            ~isstruct(diagnostics_desat.spo2_ref)
+        return;
+    end
+    spo2_ref = diagnostics_desat.spo2_ref;
     if isfield(spo2_ref, 'median_percent') && isfinite(spo2_ref.median_percent)
         spo2_drop_grid = spo2_ref.median_percent - spo2_grid;
     end
 end
 
 function diagnostic_signals = add_respiratory_asynchrony_diagnostics(diagnostic_signals, rea)
-% ADD_RESPIRATORY_ASYNCHRONY_DIAGNOSTICS Add respiratory asynchrony diagnostics.
-%
-% Syntax:
-%   diagnostic_signals = add_respiratory_asynchrony_diagnostics(diagnostic_signals, rea)
-%
-% Inputs:
-%   diagnostic_signals - Detector diagnostic data.
-%   rea - Input value `rea`.
-%
-% Outputs:
-%   diagnostic_signals - Detector diagnostic structure.
+% ADD_RESPIRATORY_ASYNCHRONY_DIAGNOSTICS Flatten the ReA struct into export fields.
+% Copies analysis metadata, high/mid/low grid coherence, deviation/valid/reference
+% masks, and scalar band reference/threshold values.
 
     diagnostic_signals.resp_asynchrony_analysis_fs = rea.analysis_fs;
     diagnostic_signals.resp_asynchrony_analysis_n_samples = rea.analysis_n_samples;

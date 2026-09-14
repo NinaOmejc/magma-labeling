@@ -1,10 +1,6 @@
 function labels = get_labels(format)
 % GET_LABELS Return canonical label metadata.
 %
-% Syntax:
-%   labels = get_labels()
-%   labels = get_labels(format)
-%
 % Inputs:
 %   format - Optional output format:
 %            'short' returns canonical short names,
@@ -13,8 +9,9 @@ function labels = get_labels(format)
 %            If omitted, the full label metadata structure is returned.
 %
 % Outputs:
-%   labels - Full label metadata structure or the requested label
-%            representation.
+%   labels - With no format, 1 x Nlabel struct array with fields idx (numeric
+%            mask-column index), short (pipeline identifier), and long
+%            (descriptive label name). Otherwise returns the selected values.
 
     labels_long = { ...
         'ShallowBreathing', ...

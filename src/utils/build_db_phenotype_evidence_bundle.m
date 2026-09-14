@@ -1,21 +1,11 @@
 function bundle = build_db_phenotype_evidence_bundle( ...
     automatic_burden, automatic_overlap, automatic_evidence, ...
     reviewed_burden, reviewed_overlap, reviewed_evidence)
-% BUILD_DB_PHENOTYPE_EVIDENCE_BUNDLE Build db phenotype evidence bundle.
-%
-% Syntax:
-%   bundle = build_db_phenotype_evidence_bundle(automatic_burden, automatic_overlap, automatic_evidence, reviewed_burden, reviewed_overlap, reviewed_evidence)
-%
-% Inputs:
-%   automatic_burden - Input value `automatic_burden`.
-%   automatic_overlap - Input value `automatic_overlap`.
-%   automatic_evidence - Input value `automatic_evidence`.
-%   reviewed_burden - Input value `reviewed_burden`.
-%   reviewed_overlap - Input value `reviewed_overlap`.
-%   reviewed_evidence - Input value `reviewed_evidence`.
-%
-% Outputs:
-%   bundle - Computed output value `bundle`.
+% BUILD_DB_PHENOTYPE_EVIDENCE_BUNDLE Build parallel automatic/reviewed profiles.
+% Each input triplet is label burden, overlap, and detector-evidence summary for
+% one annotation layer. bundle fields are version; automatic and reviewed
+% phenotype evidence with explicit annotation/detector scopes; shared placeholder
+% external_clinical_data; and a provenance/interpretation note.
 
     bundle = struct();
     bundle.version = 'magma_db_phenotype_evidence_bundle_v1';

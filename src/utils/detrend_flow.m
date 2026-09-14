@@ -1,11 +1,8 @@
 function [output, trend, trend1] = detrend_flow(t_series, sampl_freq, window_l)
 % DETREND_FLOW Subtract a moving trend and global mean offset from a time series.
 %
-% Syntax:
-%   [output, trend, trend1] = detrend_flow(t_series, sampl_freq, window_l)
-%
 % Inputs:
-%   t_series - Input time series.
+%   t_series - Numeric sample vector; row/column orientation is preserved.
 %   sampl_freq - Sampling frequency in hertz.
 %   window_l - Moving-mean window length in seconds.
 %

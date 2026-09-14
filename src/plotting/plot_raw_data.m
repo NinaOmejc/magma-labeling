@@ -1,17 +1,14 @@
 function [fig, ax, ph] = plot_raw_data(data, config)
-% PLOT_RAW_DATA Plot raw data.
-%
-% Syntax:
-%   [fig, ax, ph] = plot_raw_data(data, config)
+% PLOT_RAW_DATA Plot every physiological channel on the native sample timeline.
 %
 % Inputs:
-%   data - Input physiological signal data.
-%   config - Pipeline configuration structure.
+%   data   - Nsample x Nchannel signal matrix aligned with config.times.
+%   config - Pipeline settings with channel names, visibility, and x-range options.
 %
 % Outputs:
 %   fig - Figure handle.
 %   ax - Axes handle or array.
-%   ph - Computed output value `ph`.
+%   ph - Nchannel x 1 line-handle array; all outputs are empty when disabled.
 
     if ~config.plot_raw_data
         fig = [];

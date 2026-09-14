@@ -1,15 +1,13 @@
 function plot_thoracic_dominance_diagnostic(t_grid, evidence, dominance_mask, events, config)
-% PLOT_THORACIC_DOMINANCE_DIAGNOSTIC Plot thoracic dominance diagnostic.
-%
-% Syntax:
-%   plot_thoracic_dominance_diagnostic(t_grid, evidence, dominance_mask, events, config)
+% PLOT_THORACIC_DOMINANCE_DIAGNOSTIC Show normalized belt balance and retained events.
 %
 % Inputs:
-%   t_grid - Time coordinates in seconds.
-%   evidence - Input value `evidence`.
-%   dominance_mask - Logical state or selection mask.
-%   events - Event structure data.
-%   config - Pipeline configuration structure.
+%   t_grid        - Ngrid analysis times in seconds.
+%   evidence      - Thoracic-balance traces and endpoint mask on t_grid,
+%                   plus the unitless dominance ratio threshold.
+%   dominance_mask - Ngrid logical back-projected state support.
+%   events        - Retained thoracic-dominance event intervals in seconds.
+%   config        - Recording identity and plot-output settings.
 
     fig = figure('Units', 'pixels', 'Position', near_fullscreen_figure_position(), ...
         'Visible', config.make_figs_visible, 'Color', 'w');

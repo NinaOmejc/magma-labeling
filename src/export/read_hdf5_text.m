@@ -1,15 +1,13 @@
 function values = read_hdf5_text(filename, dataset)
-% READ_HDF5_TEXT Read hdf5 text.
-%
-% Syntax:
-%   values = read_hdf5_text(filename, dataset)
+% READ_HDF5_TEXT Decode a UTF-8 string array written by the MAGMA HDF5 exporter.
 %
 % Inputs:
-%   filename - File or dataset path.
-%   dataset - File or dataset path.
+%   filename - HDF5 file path.
+%   dataset  - Dataset path containing zero-padded UTF-8 byte columns.
 %
 % Outputs:
-%   values - Computed numeric value.
+%   values - 1 x N cell array of character vectors, or an empty cell column
+%            when the dataset carries the is_empty attribute.
 
     encoded = h5read(filename, dataset);
     info = h5info(filename, dataset);

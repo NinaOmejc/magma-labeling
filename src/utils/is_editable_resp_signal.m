@@ -1,14 +1,5 @@
 function tf = is_editable_resp_signal(breaths)
-% IS_EDITABLE_RESP_SIGNAL Determine whether editable resp signal.
-%
-% Syntax:
-%   tf = is_editable_resp_signal(breaths)
-%
-% Inputs:
-%   breaths - Respiratory-cycle or belt-evidence structure.
-%
-% Outputs:
-%   tf - Computed output value `tf`.
+% IS_EDITABLE_RESP_SIGNAL Check for any finite nonzero sample in belt.x0.
 
     tf = false;
     if isempty(breaths) || ~isstruct(breaths) || ~isfield(breaths, 'x0')

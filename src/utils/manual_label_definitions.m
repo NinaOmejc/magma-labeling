@@ -1,11 +1,7 @@
 function label_defs = manual_label_definitions()
-% MANUAL_LABEL_DEFINITIONS Perform the manual label definitions operation.
-%
-% Syntax:
-%   label_defs = manual_label_definitions()
-%
-% Outputs:
-%   label_defs - Output text or identifier.
+% MANUAL_LABEL_DEFINITIONS Define editable labels and their UI/config mappings.
+% The struct array excludes separately reviewed sighs. Each entry contains field,
+% canonical type, display name, plot_name, and config_field.
 
     label_defs = struct( ...
         'field',        {'shallow', 'deep', 'slow', 'rapid', 'irregular', 'apnea', 'csr', 'thoracic', 'async', 'desat'}, ...

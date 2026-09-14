@@ -1,22 +1,10 @@
 function [label_available, reason] = compute_label_availability( ...
     label_names, resp_features, diagnostics_desat, rea, apnea, sigh, csr)
-% COMPUTE_LABEL_AVAILABILITY Compute label availability.
-%
-% Syntax:
-%   [label_available, reason] = compute_label_availability(label_names, resp_features, diagnostics_desat, rea, apnea, sigh, csr)
-%
-% Inputs:
-%   label_names - Label identifier or label metadata.
-%   resp_features - Respiratory-feature structure.
-%   diagnostics_desat - Detector diagnostic data.
-%   rea - Input value `rea`.
-%   apnea - Input value `apnea`.
-%   sigh - Input value `sigh`.
-%   csr - Input value `csr`.
-%
-% Outputs:
-%   label_available - Logical availability result.
-%   reason - Output text or identifier.
+% COMPUTE_LABEL_AVAILABILITY Explain whether each detector could assess a recording.
+% label_names sets output order. Respiratory feature/reference availability and
+% detector diagnostics for SpO2, asynchrony, apnea, sigh, and periodic breathing
+% determine the 1-by-Nlabel logical result and aligned reason strings. Availability
+% means analysable evidence existed, not that an event was detected.
 
     label_names = cellstr(string(label_names));
     label_available = false(1, numel(label_names));
@@ -117,18 +105,7 @@ function [label_available, reason] = compute_label_availability( ...
 end
 
 function [available, reason] = amplitude_availability(session_amp, any_resp)
-% AMPLITUDE_AVAILABILITY Perform the amplitude availability operation.
-%
-% Syntax:
-%   [available, reason] = amplitude_availability(session_amp, any_resp)
-%
-% Inputs:
-%   session_amp - Input value `session_amp`.
-%   any_resp - Input value `any_resp`.
-%
-% Outputs:
-%   available - Logical availability result.
-%   reason - Output text or identifier.
+% AMPLITUDE_AVAILABILITY Distinguish usable normalized amplitude from missing belt/reference.
 
     available = logical(session_amp);
     if available
@@ -141,18 +118,7 @@ function [available, reason] = amplitude_availability(session_amp, any_resp)
 end
 
 function [available, reason] = respiratory_feature_availability(evidence, any_resp)
-% RESPIRATORY_FEATURE_AVAILABILITY Perform the respiratory feature availability operation.
-%
-% Syntax:
-%   [available, reason] = respiratory_feature_availability(evidence, any_resp)
-%
-% Inputs:
-%   evidence - Input value `evidence`.
-%   any_resp - Input value `any_resp`.
-%
-% Outputs:
-%   available - Logical availability result.
-%   reason - Output text or identifier.
+% RESPIRATORY_FEATURE_AVAILABILITY Distinguish finite derived evidence from missing belts.
 
     available = logical(evidence);
     if available
@@ -165,32 +131,14 @@ function [available, reason] = respiratory_feature_availability(evidence, any_re
 end
 
 function tf = diagnostic_available(value)
-% DIAGNOSTIC_AVAILABLE Perform the diagnostic available operation.
-%
-% Syntax:
-%   tf = diagnostic_available(value)
-%
-% Inputs:
-%   value - Input value `value`.
-%
-% Outputs:
-%   tf - Computed output value `tf`.
+% DIAGNOSTIC_AVAILABLE Read a scalar diagnostic struct's available flag safely.
 
     tf = isstruct(value) && isfield(value, 'available') && ...
         isscalar(value.available) && logical(value.available);
 end
 
 function tf = has_spo2_signal(diagnostics_desat)
-% HAS_SPO2_SIGNAL Determine whether spo2 signal.
-%
-% Syntax:
-%   tf = has_spo2_signal(diagnostics_desat)
-%
-% Inputs:
-%   diagnostics_desat - Detector diagnostic data.
-%
-% Outputs:
-%   tf - Computed output value `tf`.
+% HAS_SPO2_SIGNAL Read whether desaturation diagnostics found usable SpO2 samples.
 
     tf = isstruct(diagnostics_desat) && ...
         isfield(diagnostics_desat, 'signal_available') && ...
@@ -198,16 +146,7 @@ function tf = has_spo2_signal(diagnostics_desat)
 end
 
 function tf = any_finite(values)
-% ANY_FINITE Perform the any finite operation.
-%
-% Syntax:
-%   tf = any_finite(values)
-%
-% Inputs:
-%   values - Input value `values`.
-%
-% Outputs:
-%   tf - Computed output value `tf`.
+% ANY_FINITE Test whether an array contains at least one finite value.
 
     tf = any(isfinite(values(:)));
 end

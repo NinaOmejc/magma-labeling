@@ -1,14 +1,7 @@
 function b = empty_respiration_feature(basename)
-% EMPTY_RESPIRATION_FEATURE Create an empty respiration feature value.
-%
-% Syntax:
-%   b = empty_respiration_feature(basename)
-%
-% Inputs:
-%   basename - Input value `basename`.
-%
-% Outputs:
-%   b - Updated respiratory-cycle or belt structure.
+% EMPTY_RESPIRATION_FEATURE Return the canonical unavailable belt-cycle struct.
+% basename identifies the belt. b has ok=false; empty signal, peak, trough,
+% amplitude, IBI, and RR vectors; and NaN recording-level RR summaries.
 
     if nargin < 1
         basename = '';

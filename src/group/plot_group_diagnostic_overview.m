@@ -1,15 +1,15 @@
 function overview = plot_group_diagnostic_overview(config_or_results_path, group_table)
-% PLOT_GROUP_DIAGNOSTIC_OVERVIEW Plot group diagnostic overview.
-%
-% Syntax:
-%   overview = plot_group_diagnostic_overview(config_or_results_path, group_table)
+% PLOT_GROUP_DIAGNOSTIC_OVERVIEW Summarize detector traces and labels across recordings.
 %
 % Inputs:
 %   config_or_results_path - Configuration structure or results-directory path.
-%   group_table - Input value `group_table`.
+%   group_table            - Optional one-row-per-recording table from
+%                            build_group_label_table; generated when omitted.
 %
 % Outputs:
-%   overview - Computed output value `overview`.
+%   overview - Scalar output-manifest struct with out_dir, measure-comparability
+%              CSV, time-series plot paths, median/spread boxplot paths, label
+%              fraction/event-count plots and summary CSV, and diagnostic CSV.
 
     if nargin < 1 || isempty(config_or_results_path)
         config = get_config();
@@ -53,13 +53,9 @@ function overview = plot_group_diagnostic_overview(config_or_results_path, group
 end
 
 function specs = default_diagnostic_signal_specs()
-% DEFAULT_DIAGNOSTIC_SIGNAL_SPECS Perform the default diagnostic signal specs operation.
-%
-% Syntax:
-%   specs = default_diagnostic_signal_specs()
-%
-% Outputs:
-%   specs - Computed output value `specs`.
+% DEFAULT_DIAGNOSTIC_SIGNAL_SPECS Define cohort-level detector traces to visualize.
+% Each struct-array element has source, saved field, group-summary prefix,
+% human title/ylabel, and output file_stub.
 
     specs = struct( ...
         'source', {}, ...
@@ -116,20 +112,8 @@ end
 
 function spec = make_signal_spec(source, field, summary_prefix, title_text, ylabel_text, file_stub)
 % MAKE_SIGNAL_SPEC Create signal spec.
-%
-% Syntax:
-%   spec = make_signal_spec(source, field, summary_prefix, title_text, ylabel_text, file_stub)
-%
-% Inputs:
-%   source - Input value `source`.
-%   field - Input value `field`.
-%   summary_prefix - Input value `summary_prefix`.
-%   title_text - Input value `title_text`.
-%   ylabel_text - Label identifier or label metadata.
-%   file_stub - Input value `file_stub`.
-%
-% Outputs:
-%   spec - Computed output value `spec`.
+% Returns a scalar struct mapping a saved trace (source/field) to its summary
+% column prefix, display title/ylabel, and output filename stem.
 
     spec = struct( ...
         'source', source, ...
@@ -141,16 +125,9 @@ function spec = make_signal_spec(source, field, summary_prefix, title_text, ylab
 end
 
 function records = result_records_from_table(group_table)
-% RESULT_RECORDS_FROM_TABLE Perform the result records from table operation.
-%
-% Syntax:
-%   records = result_records_from_table(group_table)
-%
-% Inputs:
-%   group_table - Input value `group_table`.
-%
-% Outputs:
-%   records - Computed output value `records`.
+% RESULT_RECORDS_FROM_TABLE Build a manifest of readable recording result files.
+% Each record has label_file, numeric subject/measure, and subject_group text;
+% table rows whose saved file no longer exists are omitted.
 
     records = struct('label_file', {}, 'subject', {}, 'measure', {}, 'subject_group', {});
     if isempty(group_table) || height(group_table) == 0 || ...
@@ -178,18 +155,9 @@ end
 
 function saved_files = plot_time_series_overlays(records, specs, config, out_dir)
 % PLOT_TIME_SERIES_OVERLAYS Plot time series overlays.
-%
-% Syntax:
-%   saved_files = plot_time_series_overlays(records, specs, config, out_dir)
-%
-% Inputs:
-%   records - Input value `records`.
-%   specs - Input value `specs`.
-%   config - Pipeline configuration structure.
-%   out_dir - File or dataset path.
-%
-% Outputs:
-%   saved_files - Computed output value `saved_files`.
+% For each diagnostic spec, overlays thinned recording traces by measurement,
+% colors them by subject group, adds a cross-recording median, and returns a
+% cell array of paths for figures containing usable signals.
 
     saved_files = {};
     if isempty(records)
@@ -233,18 +201,8 @@ end
 
 function has_signal = plot_measure_time_series(ax, records, spec, config)
 % PLOT_MEASURE_TIME_SERIES Plot measure time series.
-%
-% Syntax:
-%   has_signal = plot_measure_time_series(ax, records, spec, config)
-%
-% Inputs:
-%   ax - Target axes handle.
-%   records - Input value `records`.
-%   spec - Input value `spec`.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   has_signal - Computed output value `has_signal`.
+% Draws individual diagnostic traces and their pointwise median for one
+% measurement; has_signal is false when no referenced result contains the field.
 
     has_signal = false;
     hold(ax, 'on');
@@ -284,18 +242,9 @@ function has_signal = plot_measure_time_series(ax, records, spec, config)
 end
 
 function [t, y] = load_record_signal(label_file, spec)
-% LOAD_RECORD_SIGNAL Perform the load record signal operation.
-%
-% Syntax:
-%   [t, y] = load_record_signal(label_file, spec)
-%
-% Inputs:
-%   label_file - File or dataset path.
-%   spec - Input value `spec`.
-%
-% Outputs:
-%   t - Output table.
-%   y - Computed output value `y`.
+% LOAD_RECORD_SIGNAL Read one finite, time-aligned diagnostic trace.
+% t contains unique stable analysis times in seconds and y the specified
+% detector values; unmatched trailing entries are ignored for visualization.
 
     t = [];
     y = [];
@@ -326,19 +275,8 @@ function [t, y] = load_record_signal(label_file, spec)
 end
 
 function [t_plot, y_plot] = thin_trace(t, y, step_sec)
-% THIN_TRACE Perform the thin trace operation.
-%
-% Syntax:
-%   [t_plot, y_plot] = thin_trace(t, y, step_sec)
-%
-% Inputs:
-%   t - Time coordinates in seconds.
-%   y - Input value `y`.
-%   step_sec - Duration or window length in seconds.
-%
-% Outputs:
-%   t_plot - Computed output value `t_plot`.
-%   y_plot - Computed output value `y_plot`.
+% THIN_TRACE Subsample aligned trace points near a requested time spacing.
+% t and step_sec are seconds; the final point is always retained.
 
     if numel(t) <= 2 || ~isfinite(step_sec) || step_sec <= 0
         t_plot = t;
@@ -360,18 +298,9 @@ function [t_plot, y_plot] = thin_trace(t, y, step_sec)
 end
 
 function [common_t, median_y] = median_trace(traces, step_sec)
-% MEDIAN_TRACE Perform the median trace operation.
-%
-% Syntax:
-%   [common_t, median_y] = median_trace(traces, step_sec)
-%
-% Inputs:
-%   traces - Input value `traces`.
-%   step_sec - Duration or window length in seconds.
-%
-% Outputs:
-%   common_t - Computed output value `common_t`.
-%   median_y - Computed output value `median_y`.
+% MEDIAN_TRACE Interpolate recordings onto a common grid and take finite medians.
+% traces contains t/y vectors, step_sec sets grid spacing in seconds, and
+% output points with no finite cross-recording median are removed.
 
     common_t = [];
     median_y = [];
@@ -407,19 +336,9 @@ end
 
 function saved_file = plot_diagnostic_boxplots(group_table, specs, config, out_dir, mode)
 % PLOT_DIAGNOSTIC_BOXPLOTS Plot diagnostic boxplots.
-%
-% Syntax:
-%   saved_file = plot_diagnostic_boxplots(group_table, specs, config, out_dir, mode)
-%
-% Inputs:
-%   group_table - Input value `group_table`.
-%   specs - Input value `specs`.
-%   config - Pipeline configuration structure.
-%   out_dir - File or dataset path.
-%   mode - Input value `mode`.
-%
-% Outputs:
-%   saved_file - Computed output value `saved_file`.
+% mode="median" compares within-record medians by measurement; other modes
+% compare within-record p90-p10 spread. Returns the saved path or empty when
+% no compatible summary columns exist.
 
     saved_file = '';
     if isempty(group_table) || height(group_table) == 0 || ...
@@ -454,18 +373,8 @@ function saved_file = plot_diagnostic_boxplots(group_table, specs, config, out_d
 end
 
 function plot_specs = specs_with_available_summary(group_table, specs, mode)
-% SPECS_WITH_AVAILABLE_SUMMARY Perform the specs with available summary operation.
-%
-% Syntax:
-%   plot_specs = specs_with_available_summary(group_table, specs, mode)
-%
-% Inputs:
-%   group_table - Input value `group_table`.
-%   specs - Input value `specs`.
-%   mode - Input value `mode`.
-%
-% Outputs:
-%   plot_specs - Computed output value `plot_specs`.
+% SPECS_WITH_AVAILABLE_SUMMARY Retain specs backed by required table columns.
+% Median mode requires a _median column; spread mode requires _p10 and _p90.
 
     keep = false(size(specs));
     vars = group_table.Properties.VariableNames;
@@ -481,18 +390,7 @@ function plot_specs = specs_with_available_summary(group_table, specs, mode)
 end
 
 function y = summary_values(group_table, spec, mode)
-% SUMMARY_VALUES Perform the summary values operation.
-%
-% Syntax:
-%   y = summary_values(group_table, spec, mode)
-%
-% Inputs:
-%   group_table - Input value `group_table`.
-%   spec - Input value `spec`.
-%   mode - Input value `mode`.
-%
-% Outputs:
-%   y - Computed output value `y`.
+% SUMMARY_VALUES Read within-record medians or calculate p90-p10 spread.
 
     if strcmp(mode, 'median')
         y = group_table.([spec.summary_prefix '_median']);
@@ -504,15 +402,8 @@ end
 
 function plot_measure_boxplot(ax, group_table, y, ylabel_text)
 % PLOT_MEASURE_BOXPLOT Plot measure boxplot.
-%
-% Syntax:
-%   plot_measure_boxplot(ax, group_table, y, ylabel_text)
-%
-% Inputs:
-%   ax - Target axes handle.
-%   group_table - Input value `group_table`.
-%   y - Input value `y`.
-%   ylabel_text - Label identifier or label metadata.
+% y is one finite-or-NaN value per recording. Boxes group by measurement;
+% jittered subject points are colored by configured subject group.
 
     measure = table_numeric_column(group_table, 'measure', nan(height(group_table), 1));
     subject = table_numeric_column(group_table, 'subject', (1:height(group_table))');
@@ -544,19 +435,8 @@ end
 
 function [label_fraction_file, event_count_file, summary_csv] = plot_label_event_overviews(group_table, config, out_dir)
 % PLOT_LABEL_EVENT_OVERVIEWS Plot label event overviews.
-%
-% Syntax:
-%   [label_fraction_file, event_count_file, summary_csv] = plot_label_event_overviews(group_table, config, out_dir)
-%
-% Inputs:
-%   group_table - Input value `group_table`.
-%   config - Pipeline configuration structure.
-%   out_dir - File or dataset path.
-%
-% Outputs:
-%   label_fraction_file - Output text or identifier.
-%   event_count_file - Computed index or count value.
-%   summary_csv - Computed summary or metadata structure.
+% Finds label-fraction and event-count columns, writes measurement-median
+% heatmaps and a descriptive CSV, and returns each generated path or empty.
 
     label_fraction_file = '';
     event_count_file = '';
@@ -593,17 +473,8 @@ end
 
 function plot_measure_metric_heatmap(group_table, metric_cols, title_text, colorbar_text, file_path, config)
 % PLOT_MEASURE_METRIC_HEATMAP Plot measure metric heatmap.
-%
-% Syntax:
-%   plot_measure_metric_heatmap(group_table, metric_cols, title_text, colorbar_text, file_path, config)
-%
-% Inputs:
-%   group_table - Input value `group_table`.
-%   metric_cols - Input value `metric_cols`.
-%   title_text - Input value `title_text`.
-%   colorbar_text - Input value `colorbar_text`.
-%   file_path - File or dataset path.
-%   config - Pipeline configuration structure.
+% Rows are requested numeric metrics, columns are measurements, and cells
+% show the finite across-recording median before saving to file_path.
 
     measure = table_numeric_column(group_table, 'measure', nan(height(group_table), 1));
     measures = unique(measure(isfinite(measure)));
@@ -640,18 +511,7 @@ function plot_measure_metric_heatmap(group_table, metric_cols, title_text, color
 end
 
 function selected_cols = top_metric_columns(group_table, metric_cols, max_cols)
-% TOP_METRIC_COLUMNS Perform the top metric columns operation.
-%
-% Syntax:
-%   selected_cols = top_metric_columns(group_table, metric_cols, max_cols)
-%
-% Inputs:
-%   group_table - Input value `group_table`.
-%   metric_cols - Input value `metric_cols`.
-%   max_cols - Input value `max_cols`.
-%
-% Outputs:
-%   selected_cols - Computed output value `selected_cols`.
+% TOP_METRIC_COLUMNS Limit heatmap metrics by descending finite column total.
 
     if numel(metric_cols) <= max_cols
         selected_cols = metric_cols;
@@ -669,17 +529,8 @@ end
 
 function csv_path = write_metric_summary_by_measure(group_table, metric_cols, csv_path)
 % WRITE_METRIC_SUMMARY_BY_MEASURE Write metric summary by measure.
-%
-% Syntax:
-%   csv_path = write_metric_summary_by_measure(group_table, metric_cols, csv_path)
-%
-% Inputs:
-%   group_table - Input value `group_table`.
-%   metric_cols - Input value `metric_cols`.
-%   csv_path - Input value `csv_path`.
-%
-% Outputs:
-%   csv_path - Computed output value `csv_path`.
+% Writes one row per measurement/metric with n, mean, median, p10, p90,
+% minimum, and maximum across finite recording values; returns empty if skipped.
 
     if isempty(group_table) || height(group_table) == 0 || isempty(metric_cols) || ...
             ~ismember('measure', group_table.Properties.VariableNames)
@@ -729,17 +580,7 @@ function csv_path = write_metric_summary_by_measure(group_table, metric_cols, cs
 end
 
 function cols = diagnostic_summary_columns(group_table, specs)
-% DIAGNOSTIC_SUMMARY_COLUMNS Perform the diagnostic summary columns operation.
-%
-% Syntax:
-%   cols = diagnostic_summary_columns(group_table, specs)
-%
-% Inputs:
-%   group_table - Input value `group_table`.
-%   specs - Input value `specs`.
-%
-% Outputs:
-%   cols - Computed output value `cols`.
+% DIAGNOSTIC_SUMMARY_COLUMNS List available median, p10, and p90 spec columns.
 
     cols = {};
     if isempty(group_table)
@@ -764,18 +605,7 @@ function cols = diagnostic_summary_columns(group_table, specs)
 end
 
 function values = table_numeric_column(T, name, default_values)
-% TABLE_NUMERIC_COLUMN Perform the table numeric column operation.
-%
-% Syntax:
-%   values = table_numeric_column(T, name, default_values)
-%
-% Inputs:
-%   T - Time coordinates in seconds.
-%   name - Input value `name`.
-%   default_values - Input value `default_values`.
-%
-% Outputs:
-%   values - Computed numeric value.
+% TABLE_NUMERIC_COLUMN Return a table variable as a numeric column or defaults.
 
     if ismember(name, T.Properties.VariableNames)
         values = T.(name);
@@ -789,18 +619,8 @@ function values = table_numeric_column(T, name, default_values)
 end
 
 function values = table_text_column(T, name, default_value)
-% TABLE_TEXT_COLUMN Perform the table text column operation.
-%
-% Syntax:
-%   values = table_text_column(T, name, default_value)
-%
-% Inputs:
-%   T - Time coordinates in seconds.
-%   name - Input value `name`.
-%   default_value - Input value `default_value`.
-%
-% Outputs:
-%   values - Computed numeric value.
+% TABLE_TEXT_COLUMN Return one normalized string per table row.
+% Missing/empty entries and an absent variable are replaced by default_value.
 
     if ismember(name, T.Properties.VariableNames)
         raw = T.(name);
@@ -824,17 +644,8 @@ function values = table_text_column(T, name, default_value)
 end
 
 function c = group_color(group_name, faint)
-% GROUP_COLOR Perform the group color operation.
-%
-% Syntax:
-%   c = group_color(group_name, faint)
-%
-% Inputs:
-%   group_name - Input value `group_name`.
-%   faint - Input value `faint`.
-%
-% Outputs:
-%   c - Computed output value `c`.
+% GROUP_COLOR Map Control, Patient, or unknown group text to an RGB row.
+% faint blends the base color toward white for individual trace overlays.
 
     group_name = lower(char(string(group_name)));
     switch group_name
@@ -852,17 +663,7 @@ function c = group_color(group_name, faint)
 end
 
 function colors = group_colors(group_names, faint)
-% GROUP_COLORS Perform the group colors operation.
-%
-% Syntax:
-%   colors = group_colors(group_names, faint)
-%
-% Inputs:
-%   group_names - Input value `group_names`.
-%   faint - Input value `faint`.
-%
-% Outputs:
-%   colors - Computed output value `colors`.
+% GROUP_COLORS Return an Nrecord x 3 RGB matrix for subject-group names.
 
     group_names = string(group_names);
     colors = nan(numel(group_names), 3);
@@ -873,13 +674,8 @@ end
 
 function add_group_legend(ax, groups)
 % ADD_GROUP_LEGEND Add group legend.
-%
-% Syntax:
-%   add_group_legend(ax, groups)
-%
-% Inputs:
-%   ax - Target axes handle.
-%   groups - Input value `groups`.
+% groups may be text values or trace structs with subject_group; one color
+% entry per unique group plus a black cross-recording median is shown.
 
     if isstruct(groups) && isfield(groups, 'subject_group')
         groups = string({groups.subject_group});
@@ -905,32 +701,13 @@ function add_group_legend(ax, groups)
 end
 
 function jitter = deterministic_jitter(subject, width)
-% DETERMINISTIC_JITTER Perform the deterministic jitter operation.
-%
-% Syntax:
-%   jitter = deterministic_jitter(subject, width)
-%
-% Inputs:
-%   subject - Subject identifier.
-%   width - Input value `width`.
-%
-% Outputs:
-%   jitter - Computed output value `jitter`.
+% DETERMINISTIC_JITTER Offset subject points reproducibly within a plot width.
 
     jitter = width .* sin(double(subject(:)) .* 12.9898);
 end
 
 function labels = friendly_metric_names(metric_cols)
-% FRIENDLY_METRIC_NAMES Perform the friendly metric names operation.
-%
-% Syntax:
-%   labels = friendly_metric_names(metric_cols)
-%
-% Inputs:
-%   metric_cols - Input value `metric_cols`.
-%
-% Outputs:
-%   labels - Output text or identifier.
+% FRIENDLY_METRIC_NAMES Remove generated prefixes/suffixes from table headings.
 
     labels = string(metric_cols);
     labels = erase(labels, "label_");
@@ -941,18 +718,7 @@ function labels = friendly_metric_names(metric_cols)
 end
 
 function value = group_option(config, name, default_value)
-% GROUP_OPTION Perform the group option operation.
-%
-% Syntax:
-%   value = group_option(config, name, default_value)
-%
-% Inputs:
-%   config - Pipeline configuration structure.
-%   name - Input value `name`.
-%   default_value - Input value `default_value`.
-%
-% Outputs:
-%   value - Computed numeric value.
+% GROUP_OPTION Resolve a nonempty group or legacy top-level plot setting.
 
     value = default_value;
     if isfield(config, 'group') && isfield(config.group, name)
@@ -967,16 +733,7 @@ end
 
 function fig = make_group_figure(config, figure_name)
 % MAKE_GROUP_FIGURE Create group figure.
-%
-% Syntax:
-%   fig = make_group_figure(config, figure_name)
-%
-% Inputs:
-%   config - Pipeline configuration structure.
-%   figure_name - Input value `figure_name`.
-%
-% Outputs:
-%   fig - Figure handle.
+% Creates a fixed-size white figure using configured batch visibility.
 
     fig = figure( ...
         'Units', 'pixels', ...
@@ -988,47 +745,20 @@ end
 
 function save_group_figure(fig, file_path, config)
 % SAVE_GROUP_FIGURE Save group figure.
-%
-% Syntax:
-%   save_group_figure(fig, file_path, config)
-%
-% Inputs:
-%   fig - Figure handle.
-%   file_path - File or dataset path.
-%   config - Pipeline configuration structure.
+% Delegates formatting/export/closure to save_figure at the explicit path.
 
     save_figure(config, 'group_diagnostic_overview', false, file_path);
 end
 
 function file_path = group_plot_filename(out_dir, file_stem, config)
-% GROUP_PLOT_FILENAME Perform the group plot filename operation.
-%
-% Syntax:
-%   file_path = group_plot_filename(out_dir, file_stem, config)
-%
-% Inputs:
-%   out_dir - File or dataset path.
-%   file_stem - Input value `file_stem`.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   file_path - Computed output value `file_path`.
+% GROUP_PLOT_FILENAME Combine a directory/stem with the validated plot extension.
 
     fmt = group_plot_format(config);
     file_path = fullfile(out_dir, [file_stem '.' fmt]);
 end
 
 function fmt = group_plot_format(config)
-% GROUP_PLOT_FORMAT Perform the group plot format operation.
-%
-% Syntax:
-%   fmt = group_plot_format(config)
-%
-% Inputs:
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   fmt - Computed output value `fmt`.
+% GROUP_PLOT_FORMAT Validate the configured figure format, defaulting to PNG.
 
     fmt = 'png';
     if isfield(config, 'plot_format') && ~isempty(config.plot_format)
@@ -1044,15 +774,7 @@ end
 
 function visibility = resolve_visibility(config)
 % RESOLVE_VISIBILITY Resolve visibility.
-%
-% Syntax:
-%   visibility = resolve_visibility(config)
-%
-% Inputs:
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   visibility - Computed output value `visibility`.
+% Returns configured MATLAB figure visibility, defaulting to hidden.
 
     visibility = 'off';
     if isfield(config, 'make_figs_visible') && ~isempty(config.make_figs_visible)

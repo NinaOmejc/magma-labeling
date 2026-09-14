@@ -1,22 +1,13 @@
 function summary = build_label_evidence_summary( ...
     label_names, label_available, reasons, resp_features, diagnostic_signals, ...
     detector_diagnostics, label_burden)
-% BUILD_LABEL_EVIDENCE_SUMMARY Build label evidence summary.
-%
-% Syntax:
-%   summary = build_label_evidence_summary(label_names, label_available, reasons, resp_features, diagnostic_signals, detector_diagnostics, label_burden)
-%
-% Inputs:
-%   label_names - Label identifier or label metadata.
-%   label_available - Label identifier or label metadata.
-%   reasons - Input value `reasons`.
-%   resp_features - Respiratory-feature structure.
-%   diagnostic_signals - Detector diagnostic data.
-%   detector_diagnostics - Detector diagnostic data.
-%   label_burden - Label identifier or label metadata.
-%
-% Outputs:
-%   summary - Computed summary or metadata structure.
+% BUILD_LABEL_EVIDENCE_SUMMARY Reduce detector traces to descriptive recording metrics.
+% Availability/reasons align with label_names; respiratory and specialized
+% diagnostics supply trace summaries; label_burden supplies event burden.
+% summary has version/kind plus one struct per canonical label. Entries retain
+% relevant windows/thresholds, finite medians or extrema, threshold margins,
+% reference quality, supporting belts/signals, event burden, and detector-
+% specific counts; unavailable statistics remain NaN.
 
     label_names = cellstr(string(label_names));
     summary = struct('version', 'detector_specific_evidence_summary_v1', ...
@@ -142,106 +133,42 @@ function summary = build_label_evidence_summary( ...
 end
 
 function values = cycle_values(cycles)
-% CYCLE_VALUES Perform the cycle values operation.
-%
-% Syntax:
-%   values = cycle_values(cycles)
-%
-% Inputs:
-%   cycles - Input value `cycles`.
-%
-% Outputs:
-%   values - Computed numeric value.
+% CYCLE_VALUES Collect modulation ratios from periodic-breathing cycles.
 
     if isempty(cycles), values = []; else, values = [cycles.modulation_ratio]; end
 end
 
 function value = finite_median(x)
-% FINITE_MEDIAN Perform the finite median operation.
-%
-% Syntax:
-%   value = finite_median(x)
-%
-% Inputs:
-%   x - Input value `x`.
-%
-% Outputs:
-%   value - Computed numeric value.
+% FINITE_MEDIAN Return the median of finite values, or NaN when none exist.
 
     x = x(isfinite(x));
     if isempty(x), value = NaN; else, value = median(x, 'omitnan'); end
 end
 function value = finite_mean(x)
-% FINITE_MEAN Perform the finite mean operation.
-%
-% Syntax:
-%   value = finite_mean(x)
-%
-% Inputs:
-%   x - Input value `x`.
-%
-% Outputs:
-%   value - Computed numeric value.
+% FINITE_MEAN Return the mean of finite values, or NaN when none exist.
 
     x = double(x(:)); x = x(isfinite(x));
     if isempty(x), value = NaN; else, value = mean(x, 'omitnan'); end
 end
 function value = finite_min(x)
-% FINITE_MIN Perform the finite min operation.
-%
-% Syntax:
-%   value = finite_min(x)
-%
-% Inputs:
-%   x - Input value `x`.
-%
-% Outputs:
-%   value - Computed numeric value.
+% FINITE_MIN Return the minimum finite value, or NaN when none exist.
 
     x = x(isfinite(x));
     if isempty(x), value = NaN; else, value = min(x); end
 end
 function value = finite_max(x)
-% FINITE_MAX Perform the finite max operation.
-%
-% Syntax:
-%   value = finite_max(x)
-%
-% Inputs:
-%   x - Input value `x`.
-%
-% Outputs:
-%   value - Computed numeric value.
+% FINITE_MAX Return the maximum finite value, or NaN when none exist.
 
     x = x(isfinite(x));
     if isempty(x), value = NaN; else, value = max(x); end
 end
 function tf = any_finite(x)
-% ANY_FINITE Perform the any finite operation.
-%
-% Syntax:
-%   tf = any_finite(x)
-%
-% Inputs:
-%   x - Input value `x`.
-%
-% Outputs:
-%   tf - Computed output value `tf`.
+% ANY_FINITE Test whether an array contains at least one finite value.
 
     tf = any(isfinite(x(:)));
 end
 function belt = belt_support(lungs, diaph)
-% BELT_SUPPORT Perform the belt support operation.
-%
-% Syntax:
-%   belt = belt_support(lungs, diaph)
-%
-% Inputs:
-%   lungs - Respiratory-cycle or belt-evidence structure.
-%   diaph - Respiratory-cycle or belt-evidence structure.
-%
-% Outputs:
-%   belt - Updated respiratory-cycle or belt structure.
+% BELT_SUPPORT Encode two evidence flags as 'both', one belt name, or ''.
 
     if lungs && diaph
         belt = 'both';

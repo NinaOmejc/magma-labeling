@@ -2,21 +2,11 @@ function [reviewed_assessable_mask, reviewed_available, reviewed_reasons] = ...
     compute_reviewed_label_availability( ...
         label_available, label_availability_reason, ...
         label_assessable_mask, review_coverage_mask)
-% COMPUTE_REVIEWED_LABEL_AVAILABILITY Compute reviewed label availability.
-%
-% Syntax:
-%   [reviewed_assessable_mask, reviewed_available, reviewed_reasons] = compute_reviewed_label_availability(label_available, label_availability_reason, label_assessable_mask, review_coverage_mask)
-%
-% Inputs:
-%   label_available - Label identifier or label metadata.
-%   label_availability_reason - Label identifier or label metadata.
-%   label_assessable_mask - Logical state or selection mask.
-%   review_coverage_mask - Logical mask of manually reviewed samples.
-%
-% Outputs:
-%   reviewed_assessable_mask - Logical output mask.
-%   reviewed_available - Logical availability result.
-%   reviewed_reasons - Output text or identifier.
+% COMPUTE_REVIEWED_LABEL_AVAILABILITY Intersect assessability with explicit review.
+% label_available/reasons contain one value per label; label_assessable_mask and
+% review_coverage_mask are aligned Nsample-by-Nlabel matrices. The returned mask
+% marks assessable reviewed samples, reviewed_available is 1-by-Nlabel, and
+% reviewed_reasons distinguishes unreviewed from reviewed-but-unassessable labels.
 
     if ~isequal(size(label_assessable_mask), size(review_coverage_mask))
         error('MAGMA:ReviewedAvailability:MaskAlignment', ...

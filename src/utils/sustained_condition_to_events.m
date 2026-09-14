@@ -1,21 +1,9 @@
 function [events, sustained_mask, grid_events] = sustained_condition_to_events(cond, t_grid, fs, N, min_dur_sec, label)
-% SUSTAINED_CONDITION_TO_EVENTS Perform the sustained condition to events operation.
-%
-% Syntax:
-%   [events, sustained_mask, grid_events] = sustained_condition_to_events(cond, t_grid, fs, N, min_dur_sec, label)
-%
-% Inputs:
-%   cond - Input value `cond`.
-%   t_grid - Time coordinates in seconds.
-%   fs - Sampling frequency in hertz.
-%   N - Number of samples.
-%   min_dur_sec - Duration or window length in seconds.
-%   label - Label identifier or label metadata.
-%
-% Outputs:
-%   events - Event structure array.
-%   sustained_mask - Logical output mask.
-%   grid_events - Event structure array.
+% SUSTAINED_CONDITION_TO_EVENTS Convert long true grid runs to recording events.
+% cond is a logical vector aligned with increasing t_grid (s). Runs shorter
+% than min_dur_sec are removed. grid_events retain grid indices/times;
+% sustained_mask marks only retained grid runs; events are converted to the
+% Nsample recording at fs hertz and assigned type label.
 
     cond = cond(:) ~= 0;
     t_grid = t_grid(:);

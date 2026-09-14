@@ -1,15 +1,11 @@
 function resp_cycles = extract_respiration_features(data, config)
-% EXTRACT_RESPIRATION_FEATURES Extract respiration features.
-%
-% Syntax:
-%   resp_cycles = extract_respiration_features(data, config)
-%
-% Inputs:
-%   data - Input physiological signal data.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   resp_cycles - Respiratory-cycle structure.
+% EXTRACT_RESPIRATION_FEATURES Extract and optionally review cycles for both belts.
+% data is Nsample-by-Nchannel physiological data; config supplies channel
+% mappings, sampling rate, peak settings, and manual-review controls.
+% resp_cycles fields:
+%   lungs/diaph - Per-belt cycle structs from extract_respiration_feature.
+%   provenance  - review_status plus logical manual_review_performed,
+%                 manual_edits_made, and loaded_from_cache flags.
 
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
@@ -78,31 +74,16 @@ function resp_cycles = extract_respiration_features(data, config)
 end
 
 function tf = peak_indices_changed(before, after)
-% PEAK_INDICES_CHANGED Perform the peak indices changed operation.
-%
-% Syntax:
-%   tf = peak_indices_changed(before, after)
-%
-% Inputs:
-%   before - Input value `before`.
-%   after - Input value `after`.
-%
-% Outputs:
-%   tf - Computed output value `tf`.
+% PEAK_INDICES_CHANGED Test whether manual review changed the ordered peak indices.
+% before and after may have any vector orientation; tf is a logical scalar.
 
     tf = ~isequal(before(:), after(:));
 end
 
 function save_final_respiration_feature_figure(b, config, basename)
-% SAVE_FINAL_RESPIRATION_FEATURE_FIGURE Save final respiration feature figure.
-%
-% Syntax:
-%   save_final_respiration_feature_figure(b, config, basename)
-%
-% Inputs:
-%   b - Respiratory-cycle or belt-evidence structure.
-%   config - Pipeline configuration structure.
-%   basename - Input value `basename`.
+% SAVE_FINAL_RESPIRATION_FEATURE_FIGURE Plot the reviewed signal, peaks, and troughs.
+% b is one respiratory-cycle struct; config supplies fs and figure/output
+% settings, and basename identifies the belt in the saved plot name.
 
     if ~isfield(b, 'x0') || isempty(b.x0)
         return;
@@ -132,21 +113,10 @@ function save_final_respiration_feature_figure(b, config, basename)
 end
 
 function h = plot_breath_markers(b, marker_name, fs, marker_style, marker_color, display_name)
-% PLOT_BREATH_MARKERS Plot breath markers.
-%
-% Syntax:
-%   h = plot_breath_markers(b, marker_name, fs, marker_style, marker_color, display_name)
-%
-% Inputs:
-%   b - Respiratory-cycle or belt-evidence structure.
-%   marker_name - Input value `marker_name`.
-%   fs - Sampling frequency in hertz.
-%   marker_style - Input value `marker_style`.
-%   marker_color - Input value `marker_color`.
-%   display_name - Input value `display_name`.
-%
-% Outputs:
-%   h - Graphics handle or array.
+% PLOT_BREATH_MARKERS Add peak or trough markers from a respiratory-cycle struct.
+% marker_name selects the corresponding *_idx, *_t, and *_val fields; fs
+% converts sample indices to seconds when stored times are unavailable.
+% h is empty when no aligned marker data exist, otherwise a line handle.
 
     idx_field = [marker_name '_idx'];
     time_field = [marker_name '_t'];

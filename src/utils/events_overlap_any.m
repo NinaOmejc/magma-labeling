@@ -2,12 +2,9 @@
 function tf = events_overlap_any(e, ev_list)
 % EVENTS_OVERLAP_ANY Test whether an event overlaps any event in a list.
 %
-% Syntax:
-%   tf = events_overlap_any(e, ev_list)
-%
 % Inputs:
-%   e - Event to test.
-%   ev_list - Event structure array to compare against.
+%   e       - Scalar event with start_t and end_t boundaries in seconds.
+%   ev_list - Event struct array using the same half-open time convention.
 %
 % Outputs:
 %   tf - True when any overlap is present.

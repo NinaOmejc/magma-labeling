@@ -1,19 +1,11 @@
 function summary = compute_label_overlap_summary( ...
     mask, label_names, label_available, fs, assessable_mask)
-% COMPUTE_LABEL_OVERLAP_SUMMARY Compute label overlap summary.
-%
-% Syntax:
-%   summary = compute_label_overlap_summary(mask, label_names, label_available, fs, assessable_mask)
-%
-% Inputs:
-%   mask - Logical state or selection mask.
-%   label_names - Label identifier or label metadata.
-%   label_available - Label identifier or label metadata.
-%   fs - Sampling frequency in hertz.
-%   assessable_mask - Logical state or selection mask.
-%
-% Outputs:
-%   summary - Computed summary or metadata structure.
+% COMPUTE_LABEL_OVERLAP_SUMMARY Quantify four prespecified label-pair overlaps.
+% mask and optional assessable_mask are aligned Nsample-by-Nlabel matrices;
+% label_available aligns with label_names and fs is hertz. summary contains a
+% version plus rapid_deep, sigh_irregular, apnea_desaturation, and
+% thoracic_dominance_asynchrony entries. Each entry stores label names,
+% availability, overlap duration (s), and both directional overlap fractions.
 
     if ~(isnumeric(mask) || islogical(mask)) || ~ismatrix(mask) || ~isreal(mask)
         error('MAGMA:Overlap:InvalidMaskType', ...
@@ -88,17 +80,7 @@ function summary = compute_label_overlap_summary( ...
     summary.thoracic_dominance_asynchrony = pair_summary('thoracic', 'async');
 
     function out = pair_summary(a_name, b_name)
-    % PAIR_SUMMARY Perform the pair summary operation.
-    %
-    % Syntax:
-    %   out = pair_summary(a_name, b_name)
-    %
-    % Inputs:
-    %   a_name - Input value `a_name`.
-    %   b_name - Input value `b_name`.
-    %
-    % Outputs:
-    %   out - Computed output value `out`.
+    % PAIR_SUMMARY Compute overlap only where both labels are assessable.
 
         ia = find(strcmp(label_names, a_name), 1);
         ib = find(strcmp(label_names, b_name), 1);
@@ -125,17 +107,8 @@ function summary = compute_label_overlap_summary( ...
 end
 
 function value = directional_fraction(overlap, reference)
-% DIRECTIONAL_FRACTION Perform the directional fraction operation.
-%
-% Syntax:
-%   value = directional_fraction(overlap, reference)
-%
-% Inputs:
-%   overlap - Input value `overlap`.
-%   reference - Session-reference metadata.
-%
-% Outputs:
-%   value - Computed numeric value.
+% DIRECTIONAL_FRACTION Divide overlap samples by samples in a reference mask.
+% Returns zero when the reference contains no true samples.
 
     denominator = nnz(reference);
     if denominator == 0

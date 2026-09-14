@@ -1,11 +1,20 @@
 function config = get_config()
-% GET_CONFIG Create the pipeline configuration.
-%
-% Syntax:
-%   config = get_config()
+% GET_CONFIG Define default inputs, thresholds, plotting, and export settings.
 %
 % Outputs:
-%   config - Pipeline configuration structure.
+%   config - Scalar pipeline configuration struct. Core fields path_data_in,
+%            path_results_out, input_filename_pattern, subjects/remove_subjects,
+%            measurements, fs (Hz), data_columns, and labels define input identity.
+%            overwrite_results/overwrite_features and make_figs_visible control
+%            execution; plot_raw_data/plot_raw_data_xrange and LabelMask control
+%            overview plots. Nested problems records known data exclusions;
+%            detrend controls preprocessing; resp controls breath extraction/review;
+%            reference controls session/global baseline estimation. shallow, deep,
+%            slow, rapid, irregular, apnea, sigh, csr, thoracic, async, and desat
+%            contain detector thresholds/windows; grid_step_sec defines their common
+%            analysis grid. LabelEdit controls manual interval review and HDF5
+%            controls export. Durations are seconds and respiratory rates are
+%            breaths/min unless a field or inline comment states otherwise.
 
     config = struct;                                                                                   % main configuration container
     config.path_data_in = 'D:\Projects\MAGMA\raw_data';                                                % *** folder with raw input .dat files

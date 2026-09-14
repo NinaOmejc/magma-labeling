@@ -1,20 +1,10 @@
 function test_specs = create_artificial_test_data(config, output_dir, source_subject, source_measure, test_subject, trange_min, force_overwrite)
-% CREATE_ARTIFICIAL_TEST_DATA Create artificial test data.
-%
-% Syntax:
-%   test_specs = create_artificial_test_data(config, output_dir, source_subject, source_measure, test_subject, trange_min, force_overwrite)
-%
-% Inputs:
-%   config - Pipeline configuration structure.
-%   output_dir - File or dataset path.
-%   source_subject - Subject identifier.
-%   source_measure - Measurement identifier.
-%   test_subject - Subject identifier.
-%   trange_min - Input value `trange_min`.
-%   force_overwrite - Input value `force_overwrite`.
-%
-% Outputs:
-%   test_specs - Computed output value `test_specs`.
+% CREATE_ARTIFICIAL_TEST_DATA Generate one synthetic recording per canonical label.
+% A source subject/measurement supplies shape and untouched channels; respiratory
+% and SpO2 channels are reset to a clean template before injecting one condition
+% over trange_min=[start end] minutes. output_dir/test_subject control filenames
+% and force_overwrite controls replacement. Each test_specs entry stores measure,
+% short/long label, modification_type, affected columns, and output file.
 
     if nargin < 2 || isempty(output_dir)
         repo_root = fileparts(fileparts(mfilename('fullpath')));
@@ -80,17 +70,9 @@ function test_specs = create_artificial_test_data(config, output_dir, source_sub
 end
 
 function data_out = clean_template_from_source(source_data, config)
-% CLEAN_TEMPLATE_FROM_SOURCE Perform the clean template from source operation.
-%
-% Syntax:
-%   data_out = clean_template_from_source(source_data, config)
-%
-% Inputs:
-%   source_data - Input physiological signal data.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   data_out - Computed output value `data_out`.
+% CLEAN_TEMPLATE_FROM_SOURCE Replace target channels with stable nominal signals.
+% Preserves matrix shape/other channels; generates near-97% SpO2 and aligned
+% 12-breath/min lung/diaphragm sinusoids on config.fs.
 
     data_out = source_data;
     fs = config.fs;
@@ -116,18 +98,7 @@ function data_out = clean_template_from_source(source_data, config)
 end
 
 function test_specs = build_test_specs(idx_spo2, idx_lungs, idx_diaph)
-% BUILD_TEST_SPECS Build test specs.
-%
-% Syntax:
-%   test_specs = build_test_specs(idx_spo2, idx_lungs, idx_diaph)
-%
-% Inputs:
-%   idx_spo2 - Input value `idx_spo2`.
-%   idx_lungs - Input value `idx_lungs`.
-%   idx_diaph - Input value `idx_diaph`.
-%
-% Outputs:
-%   test_specs - Computed output value `test_specs`.
+% BUILD_TEST_SPECS Map 11 labels to synthetic modification types and channels.
 
     resp_columns = [idx_lungs idx_diaph];
     resp_columns = resp_columns(isfinite(resp_columns) & resp_columns > 0);
@@ -155,20 +126,7 @@ function test_specs = build_test_specs(idx_spo2, idx_lungs, idx_diaph)
 end
 
 function spec = make_spec(measure, label_short, label_long, modification_type, columns)
-% MAKE_SPEC Create spec.
-%
-% Syntax:
-%   spec = make_spec(measure, label_short, label_long, modification_type, columns)
-%
-% Inputs:
-%   measure - Measurement identifier.
-%   label_short - Label identifier or label metadata.
-%   label_long - Label identifier or label metadata.
-%   modification_type - Input value `modification_type`.
-%   columns - Input value `columns`.
-%
-% Outputs:
-%   spec - Computed output value `spec`.
+% MAKE_SPEC Package one synthetic case's identity, operation, columns, and file.
 
     spec = struct( ...
         'measure', measure, ...
@@ -180,36 +138,13 @@ function spec = make_spec(measure, label_short, label_long, modification_type, c
 end
 
 function trange_out = test_trange_for_spec(~, default_trange_min, ~, ~)
-% TEST_TRANGE_FOR_SPEC Perform the test trange for spec operation.
-%
-% Syntax:
-%   trange_out = test_trange_for_spec(~, default_trange_min, ~, ~)
-%
-% Inputs:
-%   ~ - Unused positional input.
-%   default_trange_min - Input value `default_trange_min`.
-%   ~ - Unused positional input.
-%   ~ - Unused positional input.
-%
-% Outputs:
-%   trange_out - Computed output value `trange_out`.
+% TEST_TRANGE_FOR_SPEC Return the shared injection interval in minutes.
 
     trange_out = default_trange_min;
 end
 
 function write_expected_labels(output_dir, test_specs, test_subject, trange_min, n_samples, fs)
-% WRITE_EXPECTED_LABELS Write expected labels.
-%
-% Syntax:
-%   write_expected_labels(output_dir, test_specs, test_subject, trange_min, n_samples, fs)
-%
-% Inputs:
-%   output_dir - File or dataset path.
-%   test_specs - Input value `test_specs`.
-%   test_subject - Subject identifier.
-%   trange_min - Input value `trange_min`.
-%   n_samples - Number of samples.
-%   fs - Sampling frequency in hertz.
+% WRITE_EXPECTED_LABELS Save case identity and expected event minutes as CSV.
 
     measure = [test_specs.measure]';
     label_short = {test_specs.label_short}';
@@ -231,17 +166,7 @@ function write_expected_labels(output_dir, test_specs, test_subject, trange_min,
 end
 
 function idx = find_column(config, pattern)
-% FIND_COLUMN Find column.
-%
-% Syntax:
-%   idx = find_column(config, pattern)
-%
-% Inputs:
-%   config - Pipeline configuration structure.
-%   pattern - Input value `pattern`.
-%
-% Outputs:
-%   idx - Computed index or count value.
+% FIND_COLUMN Return the first configured column containing pattern, else NaN.
 
     idx = find(contains(config.data_columns, pattern), 1);
     if isempty(idx)
@@ -250,18 +175,7 @@ function idx = find_column(config, pattern)
 end
 
 function filename = raw_filename(folder, subject, measure)
-% RAW_FILENAME Perform the raw filename operation.
-%
-% Syntax:
-%   filename = raw_filename(folder, subject, measure)
-%
-% Inputs:
-%   folder - Input value `folder`.
-%   subject - Subject identifier.
-%   measure - Measurement identifier.
-%
-% Outputs:
-%   filename - Output text or identifier.
+% RAW_FILENAME Build the legacy raw-data path for a subject and measurement.
 
     filename = fullfile(folder, sprintf( ...
         'ECG1_ECG2_SpO2_RespL_BP_RespD_fs200_Sub%d_Pom%d_DeTr_Norm.dat', ...

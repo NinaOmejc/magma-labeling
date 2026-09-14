@@ -1,17 +1,9 @@
 function [irregular_events, boundary_info] = detect_irregular_breathing(data, resp_features, config)
-% DETECT_IRREGULAR_BREATHING Detect timing (not shape) irregularity breathing.
-%
-% Syntax:
-%   [irregular_events, boundary_info] = detect_irregular_breathing(data, resp_features, config)
-%
-% Inputs:
-%   data - Input physiological signal data.
-%   resp_features - Respiratory-feature structure.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   irregular_events - Event structure array.
-%   boundary_info - Event-boundary provenance structure.
+% DETECT_IRREGULAR_BREATHING Convert sustained high IBI CoV evidence to events.
+% data supplies recording length; resp_features supplies grid-level CoV
+% endpoint/state masks for each belt; config supplies the CoV threshold,
+% trailing-window and minimum-state durations, sampling, and plot settings.
+% Robust CoV is plotted only as a diagnostic and never drives classification.
 
     irregular_events = empty_events();
 

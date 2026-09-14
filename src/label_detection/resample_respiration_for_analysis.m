@@ -1,20 +1,9 @@
 function [lungs_analysis, diaph_analysis, fs_analysis] = resample_respiration_for_analysis( ...
     lungs_master, diaph_master, master_fs, analysis_fs)
-% RESAMPLE_RESPIRATION_FOR_ANALYSIS Perform the resample respiration for analysis operation.
-%
-% Syntax:
-%   [lungs_analysis, diaph_analysis, fs_analysis] = resample_respiration_for_analysis(lungs_master, diaph_master, master_fs, analysis_fs)
-%
-% Inputs:
-%   lungs_master - Input value `lungs_master`.
-%   diaph_master - Input value `diaph_master`.
-%   master_fs - Input value `master_fs`.
-%   analysis_fs - Input value `analysis_fs`.
-%
-% Outputs:
-%   lungs_analysis - Computed output value `lungs_analysis`.
-%   diaph_analysis - Computed output value `diaph_analysis`.
-%   fs_analysis - Computed output value `fs_analysis`.
+% RESAMPLE_RESPIRATION_FOR_ANALYSIS Downsample aligned belts to a local analysis rate.
+% lungs_master and diaph_master are equal-length sample vectors at master_fs
+% hertz. analysis_fs is the requested ceiling; the function never upsamples.
+% Outputs are aligned column vectors and the rationally realized fs_analysis.
 
     if ~isscalar(master_fs) || ~isfinite(master_fs) || master_fs <= 0
         error('master_fs must be a positive finite scalar.');

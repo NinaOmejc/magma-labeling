@@ -1,17 +1,11 @@
 function rea = compute_respiratory_asynchrony_metrics(data, resp_cycles, session_reference, config)
-% COMPUTE_RESPIRATORY_ASYNCHRONY_METRICS Compute respiratory asynchrony metrics.
-%
-% Syntax:
-%   rea = compute_respiratory_asynchrony_metrics(data, resp_cycles, session_reference, config)
-%
-% Inputs:
-%   data - Input physiological signal data.
-%   resp_cycles - Respiratory-cycle structure.
-%   session_reference - Session-reference metadata.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   rea - Computed output value `rea`.
+% COMPUTE_RESPIRATORY_ASYNCHRONY_METRICS Measure cross-belt wavelet phase coherence.
+% data supplies aligned sample-level lung/diaphragm signals; resp_cycles gates
+% unusable breath timing; session_reference defines the baseline interval; and
+% config supplies channels, sampling, frequency bands, robust thresholds, and
+% minimum deviating bands. Signals are robustly scaled, optionally downsampled,
+% transformed, and summarized on the pipeline time grid. rea follows the schema
+% documented by empty_rea_metrics and adds master_n_samples.
 
     N = size(data, 1);
     t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';
@@ -149,16 +143,7 @@ function rea = compute_respiratory_asynchrony_metrics(data, resp_cycles, session
 end
 
 function visibility = target_figure_visibility(config)
-% TARGET_FIGURE_VISIBILITY Perform the target figure visibility operation.
-%
-% Syntax:
-%   visibility = target_figure_visibility(config)
-%
-% Inputs:
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   visibility - Computed output value `visibility`.
+% TARGET_FIGURE_VISIBILITY Resolve temporary visibility for wavelet-library figures.
 
     visibility = 'on';
     if isfield(config, 'make_figs_visible') && ~isempty(config.make_figs_visible)
@@ -167,15 +152,9 @@ function visibility = target_figure_visibility(config)
 end
 
 function restore_figure_visibility(old_visibility, existing_figures, target_visibility)
-% RESTORE_FIGURE_VISIBILITY Perform the restore figure visibility operation.
-%
-% Syntax:
-%   restore_figure_visibility(old_visibility, existing_figures, target_visibility)
-%
-% Inputs:
-%   old_visibility - Input value `old_visibility`.
-%   existing_figures - Input value `existing_figures`.
-%   target_visibility - Input value `target_visibility`.
+% RESTORE_FIGURE_VISIBILITY Restore the root default and close new hidden figures.
+% existing_figures is the pre-analysis handle set; target_visibility records
+% whether library-created figures were intentionally hidden.
 
     set(groot, 'defaultFigureVisible', old_visibility);
     if strcmpi(target_visibility, 'off')
@@ -188,18 +167,15 @@ function restore_figure_visibility(old_visibility, existing_figures, target_visi
 end
 
 function rea = empty_rea_metrics(t_grid, session_reference, config)
-% EMPTY_REA_METRICS Create an empty rea metrics value.
-%
-% Syntax:
-%   rea = empty_rea_metrics(t_grid, session_reference, config)
-%
-% Inputs:
-%   t_grid - Time coordinates in seconds.
-%   session_reference - Session-reference metadata.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   rea - Computed output value `rea`.
+% EMPTY_REA_METRICS Initialize respiratory-asynchrony outputs and settings.
+% Grid-level fields: time_sec; high/mid/low phase-coherence traces; reference,
+% valid-evidence, low-coherence masks; and deviation_bin_count.
+% Status fields: valid_analysis, skip_code, error_message, reference_available,
+% and reference_quality. Analysis metadata includes analysis/master fs, analysis
+% sample count/duration, wavelet frequency bounds and f0, band cutoffs,
+% tlphcoh_cycles, minimum event duration, threshold parameters, minimum
+% deviating bins, and plot step. references, thresholds, and
+% reference_valid_counts are high/mid/low scalar structs.
 
     rea = struct();
     rea.time_sec = t_grid;
@@ -242,17 +218,9 @@ function rea = empty_rea_metrics(t_grid, session_reference, config)
 end
 
 function [x, ok] = prepare_resp_signal_local(x)
-% PREPARE_RESP_SIGNAL_LOCAL Perform the prepare resp signal local operation.
-%
-% Syntax:
-%   [x, ok] = prepare_resp_signal_local(x)
-%
-% Inputs:
-%   x - Input value `x`.
-%
-% Outputs:
-%   x - Computed output value `x`.
-%   ok - Computed output value `ok`.
+% PREPARE_RESP_SIGNAL_LOCAL Interpolate, center, and robustly scale one belt signal.
+% x is returned as a sample column vector; ok requires at least two finite
+% inputs and nonzero MAD- or standard-deviation scale.
 
     x = x(:);
     finite = isfinite(x);
@@ -277,21 +245,8 @@ function [x, ok] = prepare_resp_signal_local(x)
 end
 
 function [WT1, WT2, freq] = align_wavelet_outputs_local(WT1, WT2, freq1, freq2)
-% ALIGN_WAVELET_OUTPUTS_LOCAL Perform the align wavelet outputs local operation.
-%
-% Syntax:
-%   [WT1, WT2, freq] = align_wavelet_outputs_local(WT1, WT2, freq1, freq2)
-%
-% Inputs:
-%   WT1 - Input value `WT1`.
-%   WT2 - Input value `WT2`.
-%   freq1 - Input value `freq1`.
-%   freq2 - Input value `freq2`.
-%
-% Outputs:
-%   WT1 - Computed output value `WT1`.
-%   WT2 - Computed output value `WT2`.
-%   freq - Computed numeric value.
+% ALIGN_WAVELET_OUTPUTS_LOCAL Crop two transforms to common frequency/time sizes.
+% WT rows are frequencies and columns are time samples; freq follows freq1.
 
     nf = min([size(WT1, 1), size(WT2, 1), numel(freq1), numel(freq2)]);
     nt = min(size(WT1, 2), size(WT2, 2));
@@ -308,17 +263,8 @@ function [WT1, WT2, freq] = align_wavelet_outputs_local(WT1, WT2, freq1, freq2)
 end
 
 function trace = mean_phase_coherence_in_band_local(TPC, band_mask)
-% MEAN_PHASE_COHERENCE_IN_BAND_LOCAL Perform the mean phase coherence in band local operation.
-%
-% Syntax:
-%   trace = mean_phase_coherence_in_band_local(TPC, band_mask)
-%
-% Inputs:
-%   TPC - Input value `TPC`.
-%   band_mask - Logical state or selection mask.
-%
-% Outputs:
-%   trace - Computed output value `trace`.
+% MEAN_PHASE_COHERENCE_IN_BAND_LOCAL Average coherence rows into a time trace.
+% TPC is Nfrequency-by-Ntime and band_mask selects frequency rows.
 
     trace = nan(size(TPC, 2), 1);
     if ~any(band_mask)
@@ -330,19 +276,10 @@ end
 
 function [thresholds, references, valid_counts] = ...
     phase_coherence_thresholds_local(rea, reference_mask)
-% PHASE_COHERENCE_THRESHOLDS_LOCAL Perform the phase coherence thresholds local operation.
-%
-% Syntax:
-%   [thresholds, references, valid_counts] = phase_coherence_thresholds_local(rea, reference_mask)
-%
-% Inputs:
-%   rea - Input value `rea`.
-%   reference_mask - Logical state or selection mask.
-%
-% Outputs:
-%   thresholds - Computed output value `thresholds`.
-%   references - Computed output value `references`.
-%   valid_counts - Computed index or count value.
+% PHASE_COHERENCE_THRESHOLDS_LOCAL Fit robust lower thresholds in each band.
+% reference_mask selects grid points from rea's high/mid/low coherence traces.
+% references are medians; thresholds subtract the larger of the absolute-drop
+% floor and reference_mad_k scaled MAD. All outputs are high/mid/low structs.
 
     names = {'high', 'mid', 'low'};
     thresholds = struct();
@@ -373,17 +310,7 @@ function [thresholds, references, valid_counts] = ...
 end
 
 function reference_mask = get_reference_mask_local(t_grid, session_reference)
-% GET_REFERENCE_MASK_LOCAL Return reference mask local.
-%
-% Syntax:
-%   reference_mask = get_reference_mask_local(t_grid, session_reference)
-%
-% Inputs:
-%   t_grid - Time coordinates in seconds.
-%   session_reference - Session-reference metadata.
-%
-% Outputs:
-%   reference_mask - Logical output mask.
+% GET_REFERENCE_MASK_LOCAL Mark the half-open session reference interval on t_grid.
 
     reference_mask = false(size(t_grid));
     if ~isstruct(session_reference) || ~isfield(session_reference, 'available') || ...

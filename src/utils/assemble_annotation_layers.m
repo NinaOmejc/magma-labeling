@@ -1,20 +1,12 @@
 function annotations = assemble_annotation_layers( ...
     automatic_event_sets, reviewed_event_sets, manual_edit_info, sigh_review, N, config)
-% ASSEMBLE_ANNOTATION_LAYERS Perform the assemble annotation layers operation.
-%
-% Syntax:
-%   annotations = assemble_annotation_layers(automatic_event_sets, reviewed_event_sets, manual_edit_info, sigh_review, N, config)
-%
-% Inputs:
-%   automatic_event_sets - Input value `automatic_event_sets`.
-%   reviewed_event_sets - Input value `reviewed_event_sets`.
-%   manual_edit_info - Input value `manual_edit_info`.
-%   sigh_review - Input value `sigh_review`.
-%   N - Number of samples.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   annotations - Computed output value `annotations`.
+% ASSEMBLE_ANNOTATION_LAYERS Keep automatic and explicitly reviewed labels separate.
+% *_event_sets contain detector events by manual-label field; manual_edit_info
+% and sigh_review provide reviewed events and sample coverage; N/config define
+% the canonical Nsample-by-11-label masks. annotations fields are label_names;
+% automatic/reviewed canonical event arrays and masks; review_coverage_mask;
+% per-label review_status; review_scope; review_history; and review_provenance
+% (version, latest round/role, starting layer, source round, and round counts).
 
     defs = manual_label_definitions();
     label_names = {config.labels.short};
@@ -116,19 +108,9 @@ function annotations = assemble_annotation_layers( ...
 end
 
 function coverage = generic_review_coverage(info, index, N, n_labels)
-% GENERIC_REVIEW_COVERAGE Perform the generic review coverage operation.
-%
-% Syntax:
-%   coverage = generic_review_coverage(info, index, N, n_labels)
-%
-% Inputs:
-%   info - Input value `info`.
-%   index - Input value `index`.
-%   N - Number of samples.
-%   n_labels - Label identifier or label metadata.
-%
-% Outputs:
-%   coverage - Computed output value `coverage`.
+% GENERIC_REVIEW_COVERAGE Read one label's Nsample review coverage.
+% A correctly sized review_coverage_mask is preferred; legacy full-record
+% review scope expands to all samples.
 
     coverage = false(N,1);
     if isfield(info, 'review_coverage_mask') && ...
@@ -142,17 +124,7 @@ function coverage = generic_review_coverage(info, index, N, n_labels)
 end
 
 function coverage = sigh_review_coverage(info, N)
-% SIGH_REVIEW_COVERAGE Perform the sigh review coverage operation.
-%
-% Syntax:
-%   coverage = sigh_review_coverage(info, N)
-%
-% Inputs:
-%   info - Input value `info`.
-%   N - Number of samples.
-%
-% Outputs:
-%   coverage - Computed output value `coverage`.
+% SIGH_REVIEW_COVERAGE Resolve the Nsample region explicitly reviewed for sighs.
 
     coverage = false(N,1);
     if isfield(info, 'review_mask') && numel(info.review_mask) == N
@@ -164,17 +136,7 @@ function coverage = sigh_review_coverage(info, N)
 end
 
 function events = field_events(source, field)
-% FIELD_EVENTS Perform the field events operation.
-%
-% Syntax:
-%   events = field_events(source, field)
-%
-% Inputs:
-%   source - Input value `source`.
-%   field - Input value `field`.
-%
-% Outputs:
-%   events - Event structure array.
+% FIELD_EVENTS Read an event-array field, returning canonical empty events if absent.
 
     events = empty_events();
     if isstruct(source) && isfield(source, field) && ~isempty(source.(field))
@@ -183,13 +145,7 @@ function events = field_events(source, field)
 end
 
 function validate_label_order(label_names)
-% VALIDATE_LABEL_ORDER Validate label order.
-%
-% Syntax:
-%   validate_label_order(label_names)
-%
-% Inputs:
-%   label_names - Label identifier or label metadata.
+% VALIDATE_LABEL_ORDER Require the frozen canonical 11-label ordering.
 
     expected = get_labels('short');
     if ~isequal(label_names, expected)

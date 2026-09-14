@@ -1,17 +1,9 @@
 function [events, boundary_info] = detect_rapid_breathing(data, resp_features, config)
-% DETECT_RAPID_BREATHING Detect rapid breathing.
-%
-% Syntax:
-%   [events, boundary_info] = detect_rapid_breathing(data, resp_features, config)
-%
-% Inputs:
-%   data - Input physiological signal data.
-%   resp_features - Respiratory-feature structure.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   events - Event structure array.
-%   boundary_info - Event-boundary provenance structure.
+% DETECT_RAPID_BREATHING Convert sustained high trailing-window RR to events.
+% data supplies recording length; resp_features supplies per-belt RR traces,
+% endpoint masks, state masks, and breath intervals; config supplies the
+% breaths/min threshold, minimum duration, sampling, and plot settings.
+% boundary_info retains window evidence and breath-localized boundaries.
 
     events = empty_events();
     N = size(data, 1);
@@ -113,16 +105,7 @@ function [events, boundary_info] = detect_rapid_breathing(data, resp_features, c
 end
 
 function records = normalize_records(records)
-% NORMALIZE_RECORDS Normalize records.
-%
-% Syntax:
-%   records = normalize_records(records)
-%
-% Inputs:
-%   records - Input value `records`.
-%
-% Outputs:
-%   records - Computed output value `records`.
+% NORMALIZE_RECORDS Stamp localized boundary records with rapid-label provenance.
 
     for i = 1:numel(records)
         records(i).label = 'rapid';
@@ -131,16 +114,7 @@ function records = normalize_records(records)
 end
 
 function value = record_uncertainty(records)
-% RECORD_UNCERTAINTY Perform the record uncertainty operation.
-%
-% Syntax:
-%   value = record_uncertainty(records)
-%
-% Inputs:
-%   records - Input value `records`.
-%
-% Outputs:
-%   value - Computed numeric value.
+% RECORD_UNCERTAINTY Collect per-event uncertainty in seconds, or NaN if empty.
 
     if isempty(records), value = NaN; else, value = [records.uncertainty_sec]'; end
 end

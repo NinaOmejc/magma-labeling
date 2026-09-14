@@ -1,19 +1,16 @@
 function handles = shade_state_support_on_axis( ...
     ax, t_grid, candidate_mask, localized_mask, final_mask)
-% SHADE_STATE_SUPPORT_ON_AXIS Perform the shade state support on axis operation.
-%
-% Syntax:
-%   handles = shade_state_support_on_axis(ax, t_grid, candidate_mask, localized_mask, final_mask)
+% SHADE_STATE_SUPPORT_ON_AXIS Overlay candidate, localized, and retained state support.
 %
 % Inputs:
-%   ax - Target axes handle.
-%   t_grid - Time coordinates in seconds.
-%   candidate_mask - Logical state or selection mask.
-%   localized_mask - Logical state or selection mask.
-%   final_mask - Logical state or selection mask.
+%   ax             - Target axes handle.
+%   t_grid         - Ngrid analysis times in seconds.
+%   candidate_mask - Ngrid logical rolling-window/candidate support.
+%   localized_mask - Ngrid logical support after breath-boundary localization.
+%   final_mask     - Ngrid logical support retained as final events.
 %
 % Outputs:
-%   handles - Graphics handle or array.
+%   handles - Column vector of patch handles, including legend placeholders.
 
     three_layer_mode = ~isempty(candidate_mask) || ~isempty(localized_mask);
     layers = { ...

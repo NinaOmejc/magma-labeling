@@ -2,20 +2,11 @@
 % Related publications: arXiv:1310.7215 and arXiv:1310.7274.
 function [WT,freq,mx,varargout] = wtI(signal,fs,varargin)
 % WTI Compute a wavelet transform for a sampled signal.
-%
-% Syntax:
-%   [WT, freq, mx, varargout] = wtI(signal, fs, varargin)
-%
-% Inputs:
-%   signal - Input value `signal`.
-%   fs - Sampling frequency in hertz.
-%   varargin - Optional positional or name-value inputs.
-%
-% Outputs:
-%   WT - Computed output value `WT`.
-%   freq - Computed numeric value.
-%   mx - Computed output value `mx`.
-%   varargout - Optional function outputs.
+% signal is a sample vector at fs hertz. Options select wavelet family,
+% frequency range/resolution, padding, preprocessing, edge cutting, display,
+% and plotting. WT is Nfrequency-by-Ntime complex coefficients, freq is in
+% hertz, mx is mean wavelet power per frequency, and the optional output is
+% the resolved wavelet/options structure.
 
 L=length(signal); signal=signal(:);
 p=1; %WT normalization
@@ -534,13 +525,8 @@ end
     % and number of voices [nv] (if 'auto') for specified relative accuracy [racc] (=epsilon);
     % assigns all these values into the wavelet parameters structure [wp].
     function parcalc(racc)
-    % PARCALC Perform the parcalc operation.
-    %
-    % Syntax:
-    %   parcalc(racc)
-    %
-    % Inputs:
-    %   racc - Input value `racc`.
+    % PARCALC Derive wavelet supports, resolution, normalization, and voices.
+    % racc is the requested relative numerical accuracy; results update wp/nv.
 
         racc=min(racc,1-10^(-6)); %current \epsilon
         ctol=max([racc/1000,10^(-12)]); %parameter of numerical accuracy
@@ -955,24 +941,11 @@ end
 %     [s1e,s2e] - epsilon-support
 %     [s1h,s2h] - 0.5-support
 function [QQ,wflag,xx,ss]=sqeps(vfun,xp,lims,racc,MIC,nlims)
-% SQEPS Perform the sqeps operation.
-%
-% Syntax:
-%   [QQ, wflag, xx, ss] = sqeps(vfun, xp, lims, racc, MIC, nlims)
-%
-% Inputs:
-%   vfun - Input value `vfun`.
-%   xp - Input value `xp`.
-%   lims - Input value `lims`.
-%   racc - Input value `racc`.
-%   MIC - Input value `MIC`.
-%   nlims - Input value `nlims`.
-%
-% Outputs:
-%   QQ - Computed output value `QQ`.
-%   wflag - Computed output value `wflag`.
-%   xx - Computed output value `xx`.
-%   ss - Computed output value `ss`.
+% SQEPS Integrate a peaked function and estimate finite/support limits.
+% vfun is evaluated around peak xp within analytic lims and numeric nlims;
+% racc controls relative accuracy and MIC limits quadrature intervals. QQ is
+% the integral, wflag reports numerical issues, xx gives effective bounds,
+% and optional ss contains epsilon and half-maximum supports.
 
 wflag=0; %indicates are there any problems with integration
 ctol=max([racc/1000,10^(-12)]); %numerical accuracy
@@ -1136,16 +1109,7 @@ warning(wstate); %restore the warning settings
 
     %function for finding the epsilon-supports
     function x0=fz(zv)
-    % FZ Perform the fz operation.
-    %
-    % Syntax:
-    %   x0 = fz(zv)
-    %
-    % Inputs:
-    %   zv - Input value `zv`.
-    %
-    % Outputs:
-    %   x0 - Computed output value `x0`.
+    % FZ Locate the coordinate containing cumulative fraction zv of the integral.
 
         if zv<abs(Q1/Q), cx1=x1m; cq1=Q1+q1m; ra=exp(-1/2); rb=exp(1/2);
         else cx1=x2m; cq1=Q1+q2m; ra=exp(1/2); rb=exp(-1/2); end
@@ -1191,20 +1155,10 @@ end
 % (Schwarz) information criterion, but it cannot exceed [MaxOrder].
 
 function fsig = fcast(sig,fs,NP,fint,varargin)
-% FCAST Perform the fcast operation.
-%
-% Syntax:
-%   fsig = fcast(sig, fs, NP, fint, varargin)
-%
-% Inputs:
-%   sig - Input value `sig`.
-%   fs - Sampling frequency in hertz.
-%   NP - Input value `NP`.
-%   fint - Input value `fint`.
-%   varargin - Optional positional or name-value inputs.
-%
-% Outputs:
-%   fsig - Computed output value `fsig`.
+% FCAST Forecast NP samples using a sinusoidal model selected by BIC.
+% sig is sampled at fs hertz and fint=[fmin fmax] limits forecast tones.
+% Optional inputs set maximum model order, sample weights, and display mode;
+% fsig is the predicted continuation.
 
 MaxOrder=length(sig); if nargin>3 && ~isempty(varargin{1}), MaxOrder=varargin{1}; end
 w=[]; if nargin>4 && ~isempty(varargin{2}), w=varargin{2}(:); end, rw=sqrt(w);
@@ -1366,21 +1320,9 @@ end
 % always. 
 
 function ZI = aminterp(X,Y,Z,XI,YI,method)
-% AMINTERP Perform the aminterp operation.
-%
-% Syntax:
-%   ZI = aminterp(X, Y, Z, XI, YI, method)
-%
-% Inputs:
-%   X - Input value `X`.
-%   Y - Input value `Y`.
-%   Z - Input value `Z`.
-%   XI - Input value `XI`.
-%   YI - Input value `YI`.
-%   method - Input value `method`.
-%
-% Outputs:
-%   ZI - Computed output value `ZI`.
+% AMINTERP Aggregate a regular 2-D grid onto coarser XI/YI coordinates.
+% X maps Z columns and Y maps rows; method='max' uses quadrant maxima and
+% other values use means. ZI has numel(YI)-by-numel(XI) grid semantics.
 
 ZI=zeros(size(Z,1),length(XI))*NaN;
 xstep=mean(diff(XI));

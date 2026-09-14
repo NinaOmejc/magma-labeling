@@ -1,18 +1,16 @@
 function plot_belt_diagnostic_figure(data, config, t_grid, mask_lungs, mask_diaph, metric_lungs, metric_diaph, opts)
-% PLOT_BELT_DIAGNOSTIC_FIGURE Plot belt diagnostic figure.
-%
-% Syntax:
-%   plot_belt_diagnostic_figure(data, config, t_grid, mask_lungs, mask_diaph, metric_lungs, metric_diaph, opts)
+% PLOT_BELT_DIAGNOSTIC_FIGURE Pair raw belt signals with time-grid detector evidence.
 %
 % Inputs:
-%   data - Input physiological signal data.
-%   config - Pipeline configuration structure.
-%   t_grid - Time coordinates in seconds.
-%   mask_lungs - Logical state or selection mask.
-%   mask_diaph - Logical state or selection mask.
-%   metric_lungs - Input value `metric_lungs`.
-%   metric_diaph - Input value `metric_diaph`.
-%   opts - Input value `opts`.
+%   data          - Nsample x Nchannel physiological signal matrix.
+%   config        - Channel, sampling, visibility, and output settings.
+%   t_grid        - Ngrid analysis times in seconds.
+%   mask_lungs    - Ngrid final lung-belt state mask.
+%   mask_diaph    - Ngrid final diaphragm-belt state mask.
+%   metric_lungs  - Ngrid primary diagnostic metric for the lung belt.
+%   metric_diaph  - Ngrid primary diagnostic metric for the diaphragm belt.
+%   opts          - Plot labels, thresholds, optional secondary traces, and
+%                   candidate/localized/trigger masks on t_grid.
 
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
@@ -77,16 +75,9 @@ function plot_belt_diagnostic_figure(data, config, t_grid, mask_lungs, mask_diap
 end
 
 function plot_resp_trace_or_message(t_raw, data, idx, label_text)
-% PLOT_RESP_TRACE_OR_MESSAGE Plot resp trace or message.
-%
-% Syntax:
-%   plot_resp_trace_or_message(t_raw, data, idx, label_text)
-%
-% Inputs:
-%   t_raw - Time coordinates in seconds.
-%   data - Input physiological signal data.
-%   idx - Input value `idx`.
-%   label_text - Label identifier or label metadata.
+% PLOT_RESP_TRACE_OR_MESSAGE Plot one sample-level channel or an unavailable notice.
+% t_raw is in seconds, idx is the resolved data-column index, and label_text
+% identifies the physiological signal.
 
     if isempty(idx)
         text(0.5, 0.5, [label_text ' channel not found'], ...
@@ -99,23 +90,9 @@ end
 function plot_diagnostic_metric(t_grid, metric_raw, metric_plot, secondary_raw, ...
     secondary_plot, opts, belt_name, candidate_mask, localized_mask, ...
     final_mask, trigger_mask)
-% PLOT_DIAGNOSTIC_METRIC Plot diagnostic metric.
-%
-% Syntax:
-%   plot_diagnostic_metric(t_grid, metric_raw, metric_plot, secondary_raw, secondary_plot, opts, belt_name, candidate_mask, localized_mask, final_mask, trigger_mask)
-%
-% Inputs:
-%   t_grid - Time coordinates in seconds.
-%   metric_raw - Input value `metric_raw`.
-%   metric_plot - Input value `metric_plot`.
-%   secondary_raw - Duration or window length in seconds.
-%   secondary_plot - Duration or window length in seconds.
-%   opts - Input value `opts`.
-%   belt_name - Input value `belt_name`.
-%   candidate_mask - Logical state or selection mask.
-%   localized_mask - Logical state or selection mask.
-%   final_mask - Logical state or selection mask.
-%   trigger_mask - Logical state or selection mask.
+% PLOT_DIAGNOSTIC_METRIC Show raw/held metrics and temporal support layers.
+% All trace and mask inputs are aligned with t_grid. opts supplies labels,
+% thresholds, and y-axis limits; belt_name identifies the displayed belt.
 
     primary_label = get_opt(opts, 'primary_label', 'Metric');
     plot(t_grid, metric_raw, 'Color', [0.70 0.70 0.70], 'LineWidth', 0.8, ...
@@ -162,21 +139,14 @@ function plot_diagnostic_metric(t_grid, metric_raw, metric_plot, secondary_raw, 
     ylabel(opts.metric_ylabel)
     grid on
     if has_secondary || ~isempty(candidate_mask) || ...
-            ~isempty(localized_mask) || ~isempty(final_mask)
+            ~isempty(localized_mask) || ~isempty(final_mask) || ...
+            ~isempty(trigger_mask)
         legend('show', 'Location', 'eastoutside')
     end
 end
 
 function mark_trigger_mask_on_axis(ax, t_grid, trigger_mask)
-% MARK_TRIGGER_MASK_ON_AXIS Mark trigger mask on axis.
-%
-% Syntax:
-%   mark_trigger_mask_on_axis(ax, t_grid, trigger_mask)
-%
-% Inputs:
-%   ax - Target axes handle.
-%   t_grid - Time coordinates in seconds.
-%   trigger_mask - Logical state or selection mask.
+% MARK_TRIGGER_MASK_ON_AXIS Mark qualifying endpoints and expose one legend entry.
 
     trigger_mask = trigger_mask(:) ~= 0;
     t_grid = t_grid(:);
@@ -198,24 +168,22 @@ function mark_trigger_mask_on_axis(ax, t_grid, trigger_mask)
     for i = 1:numel(starts)
         x0 = t_grid(starts(i));
         x1 = t_grid(ends(i)) + grid_step_sec;
+        handle_visibility = 'off';
+        display_name = '';
+        if i == 1
+            handle_visibility = 'on';
+            display_name = 'CoV-positive window endpoint';
+        end
         patch(ax, [x0 x1 x1 x0], [y0 y0 y1 y1], [0.75 0.00 0.00], ...
-            'EdgeColor', 'none', 'FaceAlpha', 0.65, 'HandleVisibility', 'off');
+            'EdgeColor', 'none', 'FaceAlpha', 0.65, ...
+            'DisplayName', display_name, 'HandleVisibility', handle_visibility);
     end
 end
 
 function held = held_median_trace_local(t_grid, values, step_sec)
-% HELD_MEDIAN_TRACE_LOCAL Perform the held median trace local operation.
-%
-% Syntax:
-%   held = held_median_trace_local(t_grid, values, step_sec)
-%
-% Inputs:
-%   t_grid - Time coordinates in seconds.
-%   values - Input value `values`.
-%   step_sec - Duration or window length in seconds.
-%
-% Outputs:
-%   held - Computed output value `held`.
+% HELD_MEDIAN_TRACE_LOCAL Replace each plot-time block by its finite median.
+% t_grid and values are aligned vectors; step_sec is the display aggregation
+% interval in seconds and held preserves the shape of values.
 
     held = nan(size(values));
     if isempty(t_grid) || isempty(values) || step_sec <= 0
@@ -235,20 +203,9 @@ function held = held_median_trace_local(t_grid, values, step_sec)
 end
 
 function [metric_raw, metric_plot] = secondary_metric_local(opts, belt_name, t_grid, plot_step_sec)
-% SECONDARY_METRIC_LOCAL Perform the secondary metric local operation.
-%
-% Syntax:
-%   [metric_raw, metric_plot] = secondary_metric_local(opts, belt_name, t_grid, plot_step_sec)
-%
-% Inputs:
-%   opts - Input value `opts`.
-%   belt_name - Input value `belt_name`.
-%   t_grid - Time coordinates in seconds.
-%   plot_step_sec - Duration or window length in seconds.
-%
-% Outputs:
-%   metric_raw - Computed output value `metric_raw`.
-%   metric_plot - Computed output value `metric_plot`.
+% SECONDARY_METRIC_LOCAL Resolve and aggregate an optional per-belt trace.
+% Reads opts.secondary_metric_<belt_name>; both outputs are empty if absent,
+% otherwise raw and block-median vectors align with t_grid.
 
     metric_raw = [];
     metric_plot = [];
@@ -263,14 +220,7 @@ function [metric_raw, metric_plot] = secondary_metric_local(opts, belt_name, t_g
 end
 
 function set_metric_limits(values, opts)
-% SET_METRIC_LIMITS Perform the set metric limits operation.
-%
-% Syntax:
-%   set_metric_limits(values, opts)
-%
-% Inputs:
-%   values - Input value `values`.
-%   opts - Input value `opts`.
+% SET_METRIC_LIMITS Set padded limits that include finite traces and thresholds.
 
     lower_limit = get_opt(opts, 'axis_lower', 0);
     ymax_padding = get_opt(opts, 'ymax_padding', 0.1);
@@ -293,18 +243,7 @@ function set_metric_limits(values, opts)
 end
 
 function value = get_opt(opts, name, default_value)
-% GET_OPT Return opt.
-%
-% Syntax:
-%   value = get_opt(opts, name, default_value)
-%
-% Inputs:
-%   opts - Input value `opts`.
-%   name - Input value `name`.
-%   default_value - Input value `default_value`.
-%
-% Outputs:
-%   value - Computed numeric value.
+% GET_OPT Return a nonempty plot option or its default value.
 
     value = default_value;
     if isfield(opts, name) && ~isempty(opts.(name))

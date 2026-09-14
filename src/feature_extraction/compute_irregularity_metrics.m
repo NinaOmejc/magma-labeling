@@ -4,6 +4,13 @@ function [state_mask, cov_trace, robust_cov_trace, endpoint_mask] = ...
 %
 % CoV is the sole detection metric. Robust CoV is retained as a
 % descriptive trace and does not affect endpoint or state classification.
+% breaths requires ok plus Nbreath peak_t values and Nbreath-1 IBIs in
+% seconds. t_grid is the analysis timeline in seconds; win_sec is the full
+% trailing-window duration and cov_thr is unitless. An IBI is included only
+% when both bounding peaks lie inside a full window, with at least five valid
+% IBIs required. cov_trace and robust_cov_trace are numeric values on t_grid;
+% endpoint_mask marks CoV threshold crossings and state_mask back-projects
+% those qualifying windows as logical time-grid support.
 
     state_mask = false(size(t_grid));
     cov_trace = nan(size(t_grid));

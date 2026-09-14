@@ -1,16 +1,13 @@
 function h = shade_events_on_axis(ax, events, display_name)
-% SHADE_EVENTS_ON_AXIS Perform the shade events on axis operation.
-%
-% Syntax:
-%   h = shade_events_on_axis(ax, events, display_name)
+% SHADE_EVENTS_ON_AXIS Shade event intervals using their boundaries in seconds.
 %
 % Inputs:
-%   ax - Target axes handle.
-%   events - Event structure data.
-%   display_name - Input value `display_name`.
+%   ax           - Target axes handle, or empty for the current axes.
+%   events       - Event struct array with start_t and end_t fields.
+%   display_name - Optional legend text assigned to the first patch only.
 %
 % Outputs:
-%   h - Graphics handle or array.
+%   h - One patch handle per event.
 
     h = gobjects(0);
     if nargin < 1 || isempty(ax)

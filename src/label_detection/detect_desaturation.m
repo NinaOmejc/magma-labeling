@@ -1,26 +1,20 @@
 function [events_desat, diagnostics_desat] = detect_desaturation( ...
-    data, spo2_ref, session_reference, config)
-% DETECT_DESATURATION Detect desaturation.
-%
-% Syntax:
-%   [events_desat, diagnostics_desat] = detect_desaturation(data, spo2_ref, session_reference, config)
-%
-% Inputs:
-%   data - Input physiological signal data.
-%   spo2_ref - SpO2-reference structure.
-%   session_reference - Session-reference metadata.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   events_desat - Event structure array.
-%   diagnostics_desat - Detector diagnostic structure.
+    data, session_reference, config)
+% DETECT_DESATURATION Find sustained low SpO2 relative to absolute and baseline criteria.
+% data is Nsample-by-Nchannel; session_reference defines the interval used to
+% compute the SpO2 baseline; config supplies channel, fs, thresholds, duration,
+% and plot settings. events_desat are sample/time events. diagnostics_desat
+% stores spo2_ref, signal/reference/detection availability, reference quality,
+% sample-level spo2/time_sec/valid_sample_mask/desaturation_sample_mask, and events.
 
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
     end
 
+    spo2_ref = compute_spo2_reference(data, session_reference, config);
     events_desat = empty_events();
     diagnostics_desat = struct( ...
+        'spo2_ref', spo2_ref, ...
         'signal_available', false, ...
         'reference_available', false, ...
         'reference_quality', 'not_evaluated', ...
@@ -87,7 +81,7 @@ function [events_desat, diagnostics_desat] = detect_desaturation( ...
         num2str(config.measure) ' | Label 11 - Desaturation (Hypoxia)'])
 
     ax = gca;
-    plot_spo2_diagnostic_panel(ax, data, spo2_ref, session_reference, ...
+    plot_spo2_diagnostic_panel(ax, data, session_reference, ...
         diagnostics_desat, config, 'SpO2 desaturation');
 
     for k = 1:numel(events_desat)
@@ -101,21 +95,10 @@ end
 
 function desat_events = detect_desaturation_events( ...
     spo2, spo2_base, fs, spo2_floor, drop_thr, min_dur_sec)
-% DETECT_DESATURATION_EVENTS Detect desaturation events.
-%
-% Syntax:
-%   desat_events = detect_desaturation_events(spo2, spo2_base, fs, spo2_floor, drop_thr, min_dur_sec)
-%
-% Inputs:
-%   spo2 - Input value `spo2`.
-%   spo2_base - Input value `spo2_base`.
-%   fs - Sampling frequency in hertz.
-%   spo2_floor - Input value `spo2_floor`.
-%   drop_thr - Selection threshold value.
-%   min_dur_sec - Duration or window length in seconds.
-%
-% Outputs:
-%   desat_events - Event structure array.
+% DETECT_DESATURATION_EVENTS Convert sustained sample-level SpO2 criteria to events.
+% spo2 and spo2_base are percentages; fs is hertz. A finite sample qualifies
+% below spo2_floor or at least drop_thr percentage points below baseline.
+% Runs shorter than min_dur_sec are discarded.
 
     desat_events = empty_events();
 

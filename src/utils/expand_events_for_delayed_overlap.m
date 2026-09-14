@@ -1,12 +1,9 @@
 function ev = expand_events_for_delayed_overlap(ev, delay_sec)
-% EXPAND_EVENTS_FOR_DELAYED_OVERLAP Expand events for delayed overlap.
-%
-% Syntax:
-%   ev = expand_events_for_delayed_overlap(ev, delay_sec)
+% EXPAND_EVENTS_FOR_DELAYED_OVERLAP Extend event starts to capture delayed responses.
 %
 % Inputs:
-%   ev - Event structure data.
-%   delay_sec - Duration or window length in seconds.
+%   ev        - Event struct array with start_t boundaries in seconds.
+%   delay_sec - Seconds to subtract from each start, clipped at recording time zero.
 %
 % Outputs:
 %   ev - Event structure array.

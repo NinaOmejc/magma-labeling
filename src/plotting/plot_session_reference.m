@@ -1,20 +1,16 @@
 function fig = plot_session_reference( ...
-    data, resp_cycles, resp_ref, spo2_ref, session_reference, config)
-% PLOT_SESSION_REFERENCE Plot session reference.
-%
-% Syntax:
-%   fig = plot_session_reference(data, resp_cycles, resp_ref, spo2_ref, session_reference, config)
+    data, resp_cycles, resp_ref, session_reference, config)
+% PLOT_SESSION_REFERENCE Visualize belt values used for session baselines.
 %
 % Inputs:
-%   data - Input physiological signal data.
-%   resp_cycles - Respiratory-cycle structure.
-%   resp_ref - Respiratory-reference structure.
-%   spo2_ref - SpO2-reference structure.
-%   session_reference - Session-reference metadata.
-%   config - Pipeline configuration structure.
+%   data              - Nsample x Nchannel physiological signal matrix.
+%   resp_cycles       - Extracted lung and diaphragm breath structures.
+%   resp_ref          - Per-belt session/global amplitude references and QC.
+%   session_reference - Common reference interval with boundaries in seconds.
+%   config            - Channel, recording identity, and plot-output settings.
 %
 % Outputs:
-%   fig - Figure handle.
+%   fig - Figure handle, or empty when plotting is disabled.
 
     fig = [];
     if ~isfield(config, 'reference') || ...
@@ -24,7 +20,7 @@ function fig = plot_session_reference( ...
 
     fig = figure('Units', 'pixels', 'Position', near_fullscreen_figure_position(), ...
         'Visible', config.make_figs_visible, 'Color', 'w');
-    tl = tiledlayout(fig, 3, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
+    tl = tiledlayout(fig, 2, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
     title(tl, sprintf('SESSION PHYSIOLOGICAL REFERENCE | Subject %d | Measurement %d', ...
         config.subject, config.measure));
 
@@ -34,26 +30,16 @@ function fig = plot_session_reference( ...
     ax2 = nexttile(tl);
     plot_belt_reference(ax2, get_belt(resp_cycles, 'diaph'), ...
         resp_ref.diaph, session_reference, 'Resp-Diaphragm');
-    ax3 = nexttile(tl);
-    plot_spo2_reference(ax3, data, spo2_ref, session_reference, config);
 
-    linkaxes([ax1 ax2 ax3], 'x');
-    align_axes_x_widths([ax1 ax2 ax3]);
+    linkaxes([ax1 ax2], 'x');
+    align_axes_x_widths([ax1 ax2]);
     save_figure(config, 'session_reference');
 end
 
 function plot_belt_reference(ax, breaths, belt, session_reference, belt_name)
-% PLOT_BELT_REFERENCE Plot belt reference.
-%
-% Syntax:
-%   plot_belt_reference(ax, breaths, belt, session_reference, belt_name)
-%
-% Inputs:
-%   ax - Target axes handle.
-%   breaths - Respiratory-cycle or belt-evidence structure.
-%   belt - Respiratory-cycle or belt-evidence structure.
-%   session_reference - Session-reference metadata.
-%   belt_name - Input value `belt_name`.
+% PLOT_BELT_REFERENCE Compare breath excursion with session and global references.
+% breaths supplies breath-level peak_t (seconds) and amp (raw belt units);
+% belt supplies reference values, edge QC, and optional change-point evidence.
 
     hold(ax, 'on');
     grid(ax, 'on');
@@ -72,12 +58,22 @@ function plot_belt_reference(ax, breaths, belt, session_reference, belt_name)
 
     h_amp = plot(ax, peak_t, amp, '.-', 'Color', [0.20 0.35 0.70], ...
         'DisplayName', 'breath amplitude');
-    shade_session_reference_on_axis( ...
+    h_reference_window = shade_session_reference_on_axis( ...
         ax, session_reference, 'common session-reference interval');
-    shade_edge_regions(ax, peak_t, belt.edge_window_sec_used);
+    [h_early_window, h_late_window] = shade_edge_regions( ...
+        ax, peak_t, belt.edge_window_sec_used);
 
     handles = gobjects(0);
     handles(end+1) = h_amp;
+    if ~isempty(h_reference_window) && isgraphics(h_reference_window)
+        handles(end+1) = h_reference_window;
+    end
+    if ~isempty(h_early_window) && isgraphics(h_early_window)
+        handles(end+1) = h_early_window;
+    end
+    if ~isempty(h_late_window) && isgraphics(h_late_window)
+        handles(end+1) = h_late_window;
+    end
     if belt.session.available
         h_session = yline(ax, belt.session.value, '-', 'Color', [0.45 0.10 0.65], ...
             'LineWidth', 2, 'DisplayName', 'session reference median');
@@ -124,17 +120,9 @@ function plot_belt_reference(ax, breaths, belt, session_reference, belt_name)
 end
 
 function plot_spo2_reference(ax, data, spo2_ref, session_reference, config)
-% PLOT_SPO2_REFERENCE Plot spo2 reference.
-%
-% Syntax:
-%   plot_spo2_reference(ax, data, spo2_ref, session_reference, config)
-%
-% Inputs:
-%   ax - Target axes handle.
-%   data - Input physiological signal data.
-%   spo2_ref - SpO2-reference structure.
-%   session_reference - Session-reference metadata.
-%   config - Pipeline configuration structure.
+% PLOT_SPO2_REFERENCE Plot sample-level SpO2 and its session median.
+% data is the physiological signal matrix; config resolves the SpO2 column
+% and fs, while session_reference supplies the shaded interval in seconds.
 
     hold(ax, 'on');
     grid(ax, 'on');
@@ -181,42 +169,31 @@ function plot_spo2_reference(ax, data, spo2_ref, session_reference, config)
     hold(ax, 'off');
 end
 
-function shade_edge_regions(ax, peak_t, edge_window_sec)
-% SHADE_EDGE_REGIONS Perform the shade edge regions operation.
-%
-% Syntax:
-%   shade_edge_regions(ax, peak_t, edge_window_sec)
-%
-% Inputs:
-%   ax - Target axes handle.
-%   peak_t - Input value `peak_t`.
-%   edge_window_sec - Duration or window length in seconds.
+function [h_early, h_late] = shade_edge_regions(ax, peak_t, edge_window_sec)
+% SHADE_EDGE_REGIONS Mark early and late belt-reference QC windows.
+% peak_t contains ordered breath-peak times in seconds; edge_window_sec is
+% drawn from each end. h_early and h_late are the actual shaded patches.
 
+    h_early = gobjects(0);
+    h_late = gobjects(0);
     if ~isfinite(edge_window_sec) || edge_window_sec <= 0
         return;
     end
     y_limits = robust_plot_limits(ax);
     t0 = peak_t(1);
     t1 = peak_t(end);
-    patch(ax, [t0 t0+edge_window_sec t0+edge_window_sec t0], ...
+    h_early = patch(ax, [t0 t0+edge_window_sec t0+edge_window_sec t0], ...
         [y_limits(1) y_limits(1) y_limits(2) y_limits(2)], [0.80 0.92 0.82], ...
-        'EdgeColor', 'none', 'FaceAlpha', 0.18, 'HandleVisibility', 'off');
-    patch(ax, [t1-edge_window_sec t1 t1 t1-edge_window_sec], ...
+        'EdgeColor', 'none', 'FaceAlpha', 0.18, ...
+        'DisplayName', 'early edge window');
+    h_late = patch(ax, [t1-edge_window_sec t1 t1 t1-edge_window_sec], ...
         [y_limits(1) y_limits(1) y_limits(2) y_limits(2)], [0.98 0.86 0.76], ...
-        'EdgeColor', 'none', 'FaceAlpha', 0.18, 'HandleVisibility', 'off');
+        'EdgeColor', 'none', 'FaceAlpha', 0.18, ...
+        'DisplayName', 'late edge window');
 end
 
 function y_limits = robust_plot_limits(ax)
-% ROBUST_PLOT_LIMITS Perform the robust plot limits operation.
-%
-% Syntax:
-%   y_limits = robust_plot_limits(ax)
-%
-% Inputs:
-%   ax - Target axes handle.
-%
-% Outputs:
-%   y_limits - Computed output value `y_limits`.
+% ROBUST_PLOT_LIMITS Return finite two-element limits for patch construction.
 
     y_limits = ylim(ax);
     if ~all(isfinite(y_limits)) || y_limits(1) == y_limits(2)
@@ -225,17 +202,9 @@ function y_limits = robust_plot_limits(ax)
 end
 
 function [peak_t, amp] = valid_amplitudes(breaths)
-% VALID_AMPLITUDES Perform the valid amplitudes operation.
-%
-% Syntax:
-%   [peak_t, amp] = valid_amplitudes(breaths)
-%
-% Inputs:
-%   breaths - Respiratory-cycle or belt-evidence structure.
-%
-% Outputs:
-%   peak_t - Computed output value `peak_t`.
-%   amp - Computed output value `amp`.
+% VALID_AMPLITUDES Return sorted finite breath times and positive excursions.
+% peak_t is seconds and amp is raw belt units. Missing or unequal trailing
+% entries are ignored for this diagnostic plot only.
 
     peak_t = [];
     amp = [];
@@ -256,17 +225,7 @@ function [peak_t, amp] = valid_amplitudes(breaths)
 end
 
 function breaths = get_belt(resp_cycles, name)
-% GET_BELT Return belt.
-%
-% Syntax:
-%   breaths = get_belt(resp_cycles, name)
-%
-% Inputs:
-%   resp_cycles - Respiratory-cycle structure.
-%   name - Input value `name`.
-%
-% Outputs:
-%   breaths - Updated respiratory-cycle or belt structure.
+% GET_BELT Read a named belt struct, returning empty when it is absent.
 
     breaths = [];
     if isstruct(resp_cycles) && isfield(resp_cycles, name)
@@ -275,16 +234,7 @@ function breaths = get_belt(resp_cycles, name)
 end
 
 function value = numeric_text(x)
-% NUMERIC_TEXT Perform the numeric text operation.
-%
-% Syntax:
-%   value = numeric_text(x)
-%
-% Inputs:
-%   x - Input value `x`.
-%
-% Outputs:
-%   value - Computed numeric value.
+% NUMERIC_TEXT Format a finite scalar to three decimals or return "n/a".
 
     if isfinite(x)
         value = sprintf('%.3f', x);

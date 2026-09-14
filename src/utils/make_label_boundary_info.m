@@ -2,26 +2,13 @@ function info = make_label_boundary_info( ...
     label, detector, method, candidate_events, localized_events, ...
     uncertainty_sec, evidence_source, evidence_endpoint_mask, ...
     candidate_support_mask, localized_state_mask, final_state_mask)
-% MAKE_LABEL_BOUNDARY_INFO Create label boundary info.
-%
-% Syntax:
-%   info = make_label_boundary_info(label, detector, method, candidate_events, localized_events, uncertainty_sec, evidence_source, evidence_endpoint_mask, candidate_support_mask, localized_state_mask, final_state_mask)
-%
-% Inputs:
-%   label - Label identifier or label metadata.
-%   detector - Input value `detector`.
-%   method - Input value `method`.
-%   candidate_events - Event structure data.
-%   localized_events - Event structure data.
-%   uncertainty_sec - Duration or window length in seconds.
-%   evidence_source - Input value `evidence_source`.
-%   evidence_endpoint_mask - Logical state or selection mask.
-%   candidate_support_mask - Logical state or selection mask.
-%   localized_state_mask - Logical state or selection mask.
-%   final_state_mask - Logical state or selection mask.
-%
-% Outputs:
-%   info - Computed summary or metadata structure.
+% MAKE_LABEL_BOUNDARY_INFO Package detector timing evidence and provenance.
+% Inputs identify the label/detector/method/source, candidate and localized
+% event arrays, uncertainty in seconds, and grid-level endpoint, candidate,
+% localized, and final masks. info fields mirror those values and add
+% rejected_localized_mask plus per-event records. Each record stores label,
+% detector, method, candidate/localized times, localized/final-duration status,
+% rejection reason, uncertainty_sec, and evidence_source.
 
     if nargin < 8 || isempty(evidence_endpoint_mask), evidence_endpoint_mask = []; end
     if nargin < 9 || isempty(candidate_support_mask), candidate_support_mask = []; end
@@ -45,22 +32,9 @@ function info = make_label_boundary_info( ...
 end
 
 function records = boundary_records(label, detector, method, candidates, localized, uncertainty, source)
-% BOUNDARY_RECORDS Perform the boundary records operation.
-%
-% Syntax:
-%   records = boundary_records(label, detector, method, candidates, localized, uncertainty, source)
-%
-% Inputs:
-%   label - Label identifier or label metadata.
-%   detector - Input value `detector`.
-%   method - Input value `method`.
-%   candidates - Event structure data.
-%   localized - Input value `localized`.
-%   uncertainty - Input value `uncertainty`.
-%   source - Input value `source`.
-%
-% Outputs:
-%   records - Computed output value `records`.
+% BOUNDARY_RECORDS Align candidate/localized events into provenance records.
+% Text inputs are copied to each record; uncertainty may be scalar or per-event.
+% Missing event counterparts remain NaN, while localized events initially pass.
 
     template = struct( ...
         'label', char(string(label)), ...
@@ -100,17 +74,7 @@ function records = boundary_records(label, detector, method, candidates, localiz
 end
 
 function event = event_at(events, i)
-% EVENT_AT Perform the event at operation.
-%
-% Syntax:
-%   event = event_at(events, i)
-%
-% Inputs:
-%   events - Event structure data.
-%   i - Input value `i`.
-%
-% Outputs:
-%   event - Computed output value `event`.
+% EVENT_AT Return event i, repeating the final event when i exceeds the array.
 
     event = [];
     if ~isempty(events)
@@ -119,17 +83,8 @@ function event = event_at(events, i)
 end
 
 function value = scalar_or_index(values, i)
-% SCALAR_OR_INDEX Perform the scalar or index operation.
-%
-% Syntax:
-%   value = scalar_or_index(values, i)
-%
-% Inputs:
-%   values - Input value `values`.
-%   i - Input value `i`.
-%
-% Outputs:
-%   value - Computed numeric value.
+% SCALAR_OR_INDEX Expand scalar metadata or read a clamped vector element.
+% Empty input maps to NaN.
 
     if isempty(values)
         value = NaN;

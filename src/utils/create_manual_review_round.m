@@ -1,20 +1,12 @@
 function [final_event_sets, review_round] = create_manual_review_round( ...
     source_event_sets, edited_event_sets, review_coverage_mask, config, metadata)
-% CREATE_MANUAL_REVIEW_ROUND Create manual review round.
-%
-% Syntax:
-%   [final_event_sets, review_round] = create_manual_review_round(source_event_sets, edited_event_sets, review_coverage_mask, config, metadata)
-%
-% Inputs:
-%   source_event_sets - Input value `source_event_sets`.
-%   edited_event_sets - Input value `edited_event_sets`.
-%   review_coverage_mask - Logical state or selection mask.
-%   config - Pipeline configuration structure.
-%   metadata - Input value `metadata`.
-%
-% Outputs:
-%   final_event_sets - Computed output value `final_event_sets`.
-%   review_round - Computed output value `review_round`.
+% CREATE_MANUAL_REVIEW_ROUND Replace labels only inside explicit review coverage.
+% source_event_sets and edited_event_sets are structs keyed by editable label;
+% review_coverage_mask is Nsample-by-Neditable-label; config supplies canonical
+% label order and fs. final_event_sets preserves source labels outside coverage.
+% review_round fields include round/timestamp/reviewer/source metadata; canonical
+% events and mask; full-label review_mask/status; changed_labels; notes; schema
+% version; and accepted_as_active.
 
     defs = manual_label_definitions();
     label_names = {config.labels.short};
@@ -83,19 +75,7 @@ function [final_event_sets, review_round] = create_manual_review_round( ...
 end
 
 function mask = event_sets_to_mask(event_sets, defs, N, config)
-% EVENT_SETS_TO_MASK Perform the event sets to mask operation.
-%
-% Syntax:
-%   mask = event_sets_to_mask(event_sets, defs, N, config)
-%
-% Inputs:
-%   event_sets - Input value `event_sets`.
-%   defs - Input value `defs`.
-%   N - Number of samples.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   mask - Logical output mask.
+% EVENT_SETS_TO_MASK Normalize editable event fields into a canonical sample mask.
 
     parts = cell(1, numel(defs));
     for i = 1:numel(defs)
@@ -114,17 +94,7 @@ function mask = event_sets_to_mask(event_sets, defs, N, config)
 end
 
 function event_sets = events_to_event_sets(events, defs)
-% EVENTS_TO_EVENT_SETS Perform the events to event sets operation.
-%
-% Syntax:
-%   event_sets = events_to_event_sets(events, defs)
-%
-% Inputs:
-%   events - Event structure data.
-%   defs - Input value `defs`.
-%
-% Outputs:
-%   event_sets - Computed output value `event_sets`.
+% EVENTS_TO_EVENT_SETS Split canonical events into fields defined by defs.
 
     event_sets = struct();
     for i = 1:numel(defs)
@@ -138,16 +108,9 @@ function event_sets = events_to_event_sets(events, defs)
 end
 
 function metadata = normalize_metadata(metadata)
-% NORMALIZE_METADATA Normalize metadata.
-%
-% Syntax:
-%   metadata = normalize_metadata(metadata)
-%
-% Inputs:
-%   metadata - Input value `metadata`.
-%
-% Outputs:
-%   metadata - Computed output value `metadata`.
+% NORMALIZE_METADATA Fill and validate manual-review round metadata.
+% Fields are round_id, timestamp, reviewer_role, start_from, source_review_round,
+% reviewer_id, and notes; start_from is automatic or latest_reviewed.
 
     if nargin < 1 || isempty(metadata), metadata = struct(); end
     metadata = with_default(metadata, 'round_id', 1);
@@ -172,30 +135,13 @@ function metadata = normalize_metadata(metadata)
 end
 
 function value = current_timestamp()
-% CURRENT_TIMESTAMP Perform the current timestamp operation.
-%
-% Syntax:
-%   value = current_timestamp()
-%
-% Outputs:
-%   value - Computed numeric value.
+% CURRENT_TIMESTAMP Return local wall-clock time as yyyy-MM-dd HH:mm:ss text.
 
     value = char(datetime('now', 'Format', 'yyyy-MM-dd HH:mm:ss'));
 end
 
 function source = with_default(source, field, value)
-% WITH_DEFAULT Perform the with default operation.
-%
-% Syntax:
-%   source = with_default(source, field, value)
-%
-% Inputs:
-%   source - Input value `source`.
-%   field - Input value `field`.
-%   value - Input value `value`.
-%
-% Outputs:
-%   source - Computed output value `source`.
+% WITH_DEFAULT Set a struct field only when absent or empty.
 
     if ~isfield(source, field) || isempty(source.(field))
         source.(field) = value;

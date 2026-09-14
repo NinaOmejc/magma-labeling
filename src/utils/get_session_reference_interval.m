@@ -1,15 +1,10 @@
 function reference = get_session_reference_interval(N, config)
-% GET_SESSION_REFERENCE_INTERVAL Return session reference interval.
-%
-% Syntax:
-%   reference = get_session_reference_interval(N, config)
-%
-% Inputs:
-%   N - Number of samples.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   reference - Computed output value `reference`.
+% GET_SESSION_REFERENCE_INTERVAL Resolve the protocol-specific baseline interval.
+% N is recording samples; config.fs and config.measure select/convert pre- or
+% post-stress minute bounds. reference fields include actual and requested
+% start/end indices, times, and durations; protocol_phase and measurement;
+% available/complete/truncated flags; quality and truncation_reason; and
+% reference_schema_version. Actual bounds truncate safely at recording end.
 
     validate_inputs(N, config);
     cfg = reference_config(config);
@@ -83,16 +78,7 @@ function reference = get_session_reference_interval(N, config)
 end
 
 function cfg = reference_config(config)
-% REFERENCE_CONFIG Perform the reference config operation.
-%
-% Syntax:
-%   cfg = reference_config(config)
-%
-% Inputs:
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   cfg - Computed output value `cfg`.
+% REFERENCE_CONFIG Resolve pre/post session-reference bounds in minutes.
 
     cfg = struct( ...
         'pre_start_min', 3, ...
@@ -110,14 +96,7 @@ function cfg = reference_config(config)
 end
 
 function validate_inputs(N, config)
-% VALIDATE_INPUTS Validate inputs.
-%
-% Syntax:
-%   validate_inputs(N, config)
-%
-% Inputs:
-%   N - Number of samples.
-%   config - Pipeline configuration structure.
+% VALIDATE_INPUTS Require a nonnegative sample count, positive fs, and measurement.
 
     if ~isscalar(N) || ~isnumeric(N) || ~isfinite(N) || N < 0 || N ~= round(N)
         error('MAGMA:SessionReference:InvalidLength', ...
@@ -136,15 +115,8 @@ function validate_inputs(N, config)
 end
 
 function validate_minutes(start_min, end_min, interval_name)
-% VALIDATE_MINUTES Validate minutes.
-%
-% Syntax:
-%   validate_minutes(start_min, end_min, interval_name)
-%
-% Inputs:
-%   start_min - Input value `start_min`.
-%   end_min - Input value `end_min`.
-%   interval_name - Input value `interval_name`.
+% VALIDATE_MINUTES Require finite ordered nonnegative minute bounds.
+% interval_name is included in any configuration error.
 
     if ~isscalar(start_min) || ~isscalar(end_min) || ...
             ~isfinite(start_min) || ~isfinite(end_min) || ...

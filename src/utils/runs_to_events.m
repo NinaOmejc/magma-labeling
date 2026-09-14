@@ -1,17 +1,8 @@
 function ev = runs_to_events(cond, fs_like, min_sec, label)
-% RUNS_TO_EVENTS Perform the runs to events operation.
-%
-% Syntax:
-%   ev = runs_to_events(cond, fs_like, min_sec, label)
-%
-% Inputs:
-%   cond - Input value `cond`.
-%   fs_like - Input value `fs_like`.
-%   min_sec - Duration or window length in seconds.
-%   label - Label identifier or label metadata.
-%
-% Outputs:
-%   ev - Event structure array.
+% RUNS_TO_EVENTS Encode sufficiently long true runs as canonical events.
+% cond is a sample- or grid-level logical vector and fs_like is its elements
+% per second. Retained runs receive type label, inclusive indices, half-open
+% time bounds, and inclusive-count duration in seconds.
 
     cond = cond(:) ~= 0;
 

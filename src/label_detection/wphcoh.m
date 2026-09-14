@@ -2,17 +2,9 @@
 
 function [phcoh,varargout] = wphcoh(WT1,WT2)
 % WPHCOH Compute wavelet phase coherence.
-%
-% Syntax:
-%   [phcoh, varargout] = wphcoh(WT1, WT2)
-%
-% Inputs:
-%   WT1 - Wavelet transform of the first signal.
-%   WT2 - Wavelet transform of the second signal.
-%
-% Outputs:
-%   phcoh - Time-averaged phase coherence at each frequency.
-%   varargout - Optional phase-difference output.
+% WT1 and WT2 are complex Nfrequency-by-Ntime transforms. phcoh is one
+% unitless value per common frequency row; the optional second output is the
+% corresponding mean phase difference in radians.
 
 FN=min([size(WT1,1),size(WT2,1)]);
 WT1=WT1(1:FN,:); WT2=WT2(1:FN,:);

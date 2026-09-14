@@ -1,16 +1,13 @@
 function spo2_ref = compute_spo2_reference(data, session_reference, config)
-% COMPUTE_SPO2_REFERENCE Compute spo2 reference.
-%
-% Syntax:
-%   spo2_ref = compute_spo2_reference(data, session_reference, config)
-%
-% Inputs:
-%   data - Input physiological signal data.
-%   session_reference - Session-reference metadata.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   spo2_ref - SpO2-reference structure.
+% COMPUTE_SPO2_REFERENCE Summarize SpO2 over the common session reference interval.
+% data is Nsample-by-Nchannel and SpO2 values are percentages. The resolved
+% session_reference supplies inclusive sample bounds; config supplies the
+% SpO2 channel and minimum valid-sample count. spo2_ref fields are:
+%   available/quality - Usability flag and reason or warning state.
+%   median_percent/mean_percent - Reference saturation statistics (%).
+%   n_valid_samples/n_interval_samples/valid_fraction - Coverage metrics.
+%   minimum_valid_samples - Configured eligibility requirement.
+%   source - Provenance label for the common session interval.
 
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);

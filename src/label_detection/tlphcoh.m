@@ -2,19 +2,10 @@
 
 function TPC = tlphcoh(TFR1,TFR2,freq,fs,varargin)
 % TLPHCOH Compute time-localized wavelet phase coherence.
-%
-% Syntax:
-%   TPC = tlphcoh(TFR1, TFR2, freq, fs, varargin)
-%
-% Inputs:
-%   TFR1 - Wavelet transform of the first signal.
-%   TFR2 - Wavelet transform of the second signal.
-%   freq - Wavelet frequencies in hertz.
-%   fs - Sampling frequency in hertz.
-%   varargin - Optional number of cycles used for the adaptive window.
-%
-% Outputs:
-%   TPC - Time-localized phase coherence.
+% TFR1/TFR2 are aligned Nfrequency-by-Ntime complex transforms; freq and fs
+% are hertz. The optional scalar is the number of cycles in each frequency-
+% dependent odd window. TPC matches the transforms and is NaN where a full
+% local window cannot be evaluated.
 
 [NF,L]=size(TFR1);
 if nargin>4, wsize=varargin{1}; else wsize=10; end

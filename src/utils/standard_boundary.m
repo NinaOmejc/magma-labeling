@@ -1,19 +1,8 @@
 function info = standard_boundary(label, detector, events, method, uncertainty, source)
 % STANDARD_BOUNDARY Create standard boundary-provenance metadata.
-%
-% Syntax:
-%   info = standard_boundary(label, detector, events, method, uncertainty, source)
-%
-% Inputs:
-%   label - Label identifier or label metadata.
-%   detector - Input value `detector`.
-%   events - Event structure data.
-%   method - Input value `method`.
-%   uncertainty - Input value `uncertainty`.
-%   source - Input value `source`.
-%
-% Outputs:
-%   info - Computed summary or metadata structure.
+% Wraps final events as both candidate and localized events via
+% make_label_boundary_info. label/detector/method/source are provenance text;
+% uncertainty is seconds or NaN when no defensible scalar applies.
 
     info = make_label_boundary_info(label, detector, method, events, events, ...
         uncertainty, source, [], [], []);

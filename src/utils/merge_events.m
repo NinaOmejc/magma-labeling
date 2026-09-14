@@ -1,15 +1,8 @@
 function sub_events = merge_events(event_lists, merge_gap_sec)
-% MERGE_EVENTS Merge events.
-%
-% Syntax:
-%   sub_events = merge_events(event_lists, merge_gap_sec)
-%
-% Inputs:
-%   event_lists - Event structure data.
-%   merge_gap_sec - Duration or window length in seconds.
-%
-% Outputs:
-%   sub_events - Event structure array.
+% MERGE_EVENTS Merge overlapping or nearby events of the same type.
+% event_lists is a cell array of canonical event arrays. Events are sorted by
+% type/start_t and joined when the gap is at most merge_gap_sec (default zero);
+% sample/time bounds expand to the union.
 
     if nargin < 2 || isempty(merge_gap_sec)
         merge_gap_sec = 0;

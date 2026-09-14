@@ -404,16 +404,18 @@ function testAutomaticSighCandidatesSurviveWithoutReview(testCase)
     phys.resp = struct('lungs', belt, 'diaph', belt);
     resp_feat = struct('lungs', belt, 'diaph', belt);
     data = zeros(1000, 6);
-    session_reference = get_session_reference_interval(size(data,1), config);
-    spo2_ref = struct();
-    spo2 = struct();
     [events, diagnostics, review] = detect_sigh( ...
-        data, phys, resp_feat, spo2_ref, session_reference, spo2, config);
+        data, phys, resp_feat, config);
     verifyNotEmpty(testCase, events);
     verifyEqual(testCase, review.automatic_events, events);
     verifyFalse(testCase, review.reviewed);
     verifyEqual(testCase, diagnostics.lungs.selected_breath_mask, ...
         review.automatic_flags_lungs);
+end
+
+function testSighInterfacesAreRespiratoryOnly(testCase)
+    verifyEqual(testCase, nargin('detect_sigh'), 4);
+    verifyEqual(testCase, nargin('manual_edit_sigh_flags'), 7);
 end
 
 function testReviewedSighDoesNotDestroyAutomaticCandidates(testCase)

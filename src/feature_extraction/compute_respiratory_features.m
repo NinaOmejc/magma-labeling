@@ -1,17 +1,14 @@
 function resp_features = compute_respiratory_features(data, resp_cycles, resp_ref, config)
-% COMPUTE_RESPIRATORY_FEATURES Compute respiratory features.
-%
-% Syntax:
-%   resp_features = compute_respiratory_features(data, resp_cycles, resp_ref, config)
-%
-% Inputs:
-%   data - Input physiological signal data.
-%   resp_cycles - Respiratory-cycle structure.
-%   resp_ref - Respiratory-reference structure.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   resp_features - Respiratory-feature structure.
+% COMPUTE_RESPIRATORY_FEATURES Project breath evidence onto a common time grid.
+% data is Nsample-by-Nchannel; resp_cycles supplies per-breath timing/amplitude,
+% resp_ref supplies session/global amplitude references, and config defines
+% grid spacing, trailing windows, and thresholds. resp_features.resp contains:
+%   time_sec/grid_step_sec - Analysis-grid coordinates and spacing in seconds.
+%   rate_windows_sec/amplitude_windows_sec - Window durations by label.
+%   shallow_band_ratio/deep_ratio_threshold - Stored amplitude criteria.
+%   lungs/diaph - Per-belt evidence structs documented by empty_belt_evidence.
+%   belt_availability/both_belts_available - Usable timing-evidence flags.
+%   thoracoabdominal_balance - Cross-belt amplitude-balance evidence.
 
     N = size(data, 1);
     t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';
@@ -45,21 +42,11 @@ function resp_features = compute_respiratory_features(data, resp_cycles, resp_re
 end
 
 function belt = build_belt_evidence(source, reference, ignored, t_grid, cfg, config)
-% BUILD_BELT_EVIDENCE Build belt evidence.
-%
-% Syntax:
-%   belt = build_belt_evidence(source, reference, ignored, t_grid, cfg, config)
-%
-% Inputs:
-%   source - Input value `source`.
-%   reference - Session-reference metadata.
-%   ignored - Input value `ignored`.
-%   t_grid - Time coordinates in seconds.
-%   cfg - Pipeline configuration structure.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   belt - Updated respiratory-cycle or belt structure.
+% BUILD_BELT_EVIDENCE Derive rate, amplitude, and irregularity evidence for one belt.
+% source is one respiratory-cycle struct; reference is its respiratory
+% amplitude-reference struct; ignored disables all evidence. t_grid is in
+% seconds, cfg holds resolved thresholds/windows, and config supplies fs.
+% belt follows the schema initialized by empty_belt_evidence.
 
     belt = empty_belt_evidence(t_grid);
     belt.ignored = logical(ignored);
@@ -140,32 +127,25 @@ function belt = build_belt_evidence(source, reference, ignored, t_grid, cfg, con
         % irregular breathing features
         irregular_input = struct('ok', true, 'peak_t', belt.peak_t, 'ibi', belt.ibi);
         [belt.irregularity.window_mask, belt.irregularity.cov, ...
-            belt.irregularity.robust_cov, belt.irregularity.endpoint_mask] = ...
-            compute_irregularity_metrics( ...
+            belt.irregularity.robust_cov, belt.irregularity.endpoint_mask] = compute_irregularity_metrics( ...
                 irregular_input, t_grid, cfg.irregularity_win_sec, cfg.cov_thr);
 
-        % slow and rapid breathing features
+        % slow breathing features
         belt.rate_slow_endpoint_mask = isfinite(belt.rate_slow_window_bpm) & belt.rate_slow_window_bpm <= cfg.slow_rr_threshold;
         belt.rate_slow_state_mask = analysis_window_endpoints_to_state_mask(belt.rate_slow_endpoint_mask, t_grid, cfg.slow_win_sec);
+        % rapid breathing features
         belt.rate_rapid_endpoint_mask = isfinite(belt.rate_rapid_window_bpm) & belt.rate_rapid_window_bpm >= cfg.rapid_rr_threshold;
         belt.rate_rapid_state_mask = analysis_window_endpoints_to_state_mask(belt.rate_rapid_endpoint_mask, t_grid, cfg.rapid_win_sec);
     end
 end
 
 function balance = build_thoracoabdominal_balance(lungs, diaph, t_grid, cfg)
-% BUILD_THORACOABDOMINAL_BALANCE Build thoracoabdominal balance.
-%
-% Syntax:
-%   balance = build_thoracoabdominal_balance(lungs, diaph, t_grid, cfg)
-%
-% Inputs:
-%   lungs - Respiratory-cycle or belt-evidence structure.
-%   diaph - Respiratory-cycle or belt-evidence structure.
-%   t_grid - Time coordinates in seconds.
-%   cfg - Pipeline configuration structure.
-%
-% Outputs:
-%   balance - Computed output value `balance`.
+% BUILD_THORACOABDOMINAL_BALANCE Compare normalized belt amplitudes in trailing windows.
+% lungs and diaph provide breath times and session-normalized amplitudes;
+% t_grid is in seconds. balance fields include availability and configured
+% window/minimum/threshold metadata; per-grid belt medians; thoracic-to-
+% abdominal ratio, log ratio, and thoracic fraction; and dominance endpoint,
+% back-projected state, and compatibility masks.
 
     balance = struct( ...
         'available', false, ...
@@ -229,19 +209,9 @@ function balance = build_thoracoabdominal_balance(lungs, diaph, t_grid, cfg)
 end
 
 function values = values_in_window(peak_t, values, start_t, end_t)
-% VALUES_IN_WINDOW Perform the values in window operation.
-%
-% Syntax:
-%   values = values_in_window(peak_t, values, start_t, end_t)
-%
-% Inputs:
-%   peak_t - Input value `peak_t`.
-%   values - Input value `values`.
-%   start_t - Input value `start_t`.
-%   end_t - Input value `end_t`.
-%
-% Outputs:
-%   values - Computed numeric value.
+% VALUES_IN_WINDOW Select positive finite breath values by peak time.
+% peak_t (s) and values are aligned breath-level vectors; start_t/end_t are
+% inclusive bounds in seconds. A length mismatch is an error.
 
     peak_t = peak_t(:);
     values = values(:);
@@ -255,16 +225,14 @@ function values = values_in_window(peak_t, values, start_t, end_t)
 end
 
 function belt = empty_belt_evidence(t_grid)
-% EMPTY_BELT_EVIDENCE Create an empty belt evidence value.
-%
-% Syntax:
-%   belt = empty_belt_evidence(t_grid)
-%
-% Inputs:
-%   t_grid - Time coordinates in seconds.
-%
-% Outputs:
-%   belt - Updated respiratory-cycle or belt structure.
+% EMPTY_BELT_EVIDENCE Initialize all per-belt evidence fields on t_grid.
+% Breath-level fields: peak_idx, peak_t (s), amp, amp_ratio_session/global,
+% ibi (s), rr_bpm, and ibi_source/rr_source provenance.
+% Availability fields distinguish timing, raw amplitude, and session/global
+% normalized amplitude; reference fields store values, flags, and quality.
+% Grid-level fields include slow/rapid rate traces and endpoint/state masks;
+% raw and normalized amplitude medians; shallow/deep/apnea endpoint/state
+% masks; and irregularity.window_mask, endpoint_mask, cov, and robust_cov.
 
     belt = struct( ...
         'available', false, ...
@@ -310,18 +278,9 @@ function belt = empty_belt_evidence(t_grid)
 end
 
 function ratio = amplitude_ratio(amp, reference, reference_available)
-% AMPLITUDE_RATIO Perform the amplitude ratio operation.
-%
-% Syntax:
-%   ratio = amplitude_ratio(amp, reference, reference_available)
-%
-% Inputs:
-%   amp - Input value `amp`.
-%   reference - Session-reference metadata.
-%   reference_available - Session-reference metadata.
-%
-% Outputs:
-%   ratio - Computed numeric value.
+% AMPLITUDE_RATIO Normalize positive breath amplitudes by one scalar reference.
+% amp is breath-level in belt units; ratio is dimensionless and shape-matched.
+% Unavailable/invalid references leave the output NaN.
 
     ratio = nan(size(amp));
     if ~reference_available || ~isscalar(reference) || ...
@@ -333,19 +292,10 @@ function ratio = amplitude_ratio(amp, reference, reference_available)
 end
 
 function trace = respiratory_rate_trace(peak_t, t_grid, win_sec)
-% RESPIRATORY_RATE_TRACE - Perform the respiratory rate trace operation:
-% RR = 60 / mean(IBI)
-%
-% Syntax:
-%   trace = respiratory_rate_trace(peak_t, t_grid, win_sec)
-%
-% Inputs:
-%   peak_t - Input value `peak_t`.
-%   t_grid - Time coordinates in seconds.
-%   win_sec - Duration or window length in seconds.
-%
-% Outputs:
-%   trace - Computed output value `trace`.
+% RESPIRATORY_RATE_TRACE Estimate trailing-window rate as 60/mean(IBI).
+% peak_t contains breath times in seconds; t_grid is the output grid and
+% win_sec is the full trailing-window duration. trace is breaths/min and
+% requires at least three peaks (two positive IBIs) per complete window.
 
     trace = nan(size(t_grid));
     peak_t = peak_t(:);
@@ -372,22 +322,10 @@ function trace = respiratory_rate_trace(peak_t, t_grid, win_sec)
 end
 
 function [endpoint_mask, state_mask] = amplitude_band_mask(peak_t, ratio, t_grid, win_sec, r_lo, r_hi)
-% AMPLITUDE_BAND_MASK Perform the amplitude band mask operation.
-%
-% Syntax:
-%   [endpoint_mask, state_mask] = amplitude_band_mask(peak_t, ratio, t_grid, win_sec, r_lo, r_hi)
-%
-% Inputs:
-%   peak_t - Input value `peak_t`.
-%   ratio - Input value `ratio`.
-%   t_grid - Time coordinates in seconds.
-%   win_sec - Duration or window length in seconds.
-%   r_lo - Input value `r_lo`.
-%   r_hi - Input value `r_hi`.
-%
-% Outputs:
-%   endpoint_mask - Logical output mask.
-%   state_mask - Logical output mask.
+% AMPLITUDE_BAND_MASK Require every breath ratio in a trailing window to lie in a band.
+% peak_t (s) and dimensionless ratio are aligned breath vectors; t_grid is
+% the output grid. A full win_sec window and at least three values are
+% required. endpoint_mask marks passing ends; state_mask covers their windows.
 
     endpoint_mask = false(size(t_grid));
     peak_t = peak_t(:);
@@ -415,23 +353,11 @@ end
 
 function [endpoint_mask, state_mask] = amplitude_threshold_mask( ...
     peak_t, ratio, t_grid, win_sec, threshold, min_breaths, direction)
-% AMPLITUDE_THRESHOLD_MASK Perform the amplitude threshold mask operation.
-%
-% Syntax:
-%   [endpoint_mask, state_mask] = amplitude_threshold_mask(peak_t, ratio, t_grid, win_sec, threshold, min_breaths, direction)
-%
-% Inputs:
-%   peak_t - Input value `peak_t`.
-%   ratio - Input value `ratio`.
-%   t_grid - Time coordinates in seconds.
-%   win_sec - Duration or window length in seconds.
-%   threshold - Selection threshold value.
-%   min_breaths - Minimum number of valid breaths in the window.
-%   direction - Threshold direction: 'le' or 'ge'.
-%
-% Outputs:
-%   endpoint_mask - Logical output mask.
-%   state_mask - Logical output mask.
+% AMPLITUDE_THRESHOLD_MASK Apply an all-breath threshold in trailing windows.
+% peak_t (s) and normalized ratio are aligned breath vectors. direction='le'
+% requires all positive finite ratios <= threshold; direction='ge' requires
+% all values finite and >= threshold. Full windows need min_breaths values.
+% endpoint_mask marks passing ends; state_mask covers their source windows.
 
     direction = string(direction);
     if ~isscalar(direction) || ~any(direction == ["le" "ge"])
@@ -466,23 +392,10 @@ function [endpoint_mask, state_mask] = amplitude_threshold_mask( ...
 end
 
 function [raw_trace, ratio_trace] = amplitude_window_medians(peak_t, amp, ratio, t_grid, win_sec, min_breaths)
-% AMPLITUDE_WINDOW_MEDIANS Perform the amplitude window medians operation.
-% This function creates rolling median breathing-amplitude traces.
-%
-% Syntax:
-%   [raw_trace, ratio_trace] = amplitude_window_medians(peak_t, amp, ratio, t_grid, win_sec, min_breaths)
-%
-% Inputs:
-%   peak_t - Input value `peak_t`.
-%   amp - Input value `amp`.
-%   ratio - Input value `ratio`.
-%   t_grid - Time coordinates in seconds.
-%   win_sec - Duration or window length in seconds.
-%   min_breaths - Input value `min_breaths`.
-%
-% Outputs:
-%   raw_trace - Computed output value `raw_trace`.
-%   ratio_trace - Computed numeric value.
+% AMPLITUDE_WINDOW_MEDIANS Compute raw and normalized breath medians on t_grid.
+% peak_t (s), amp (belt units), and ratio (dimensionless) are aligned breath
+% vectors. Each full trailing win_sec window needs min_breaths positive finite
+% values independently for raw_trace and ratio_trace.
 
     raw_trace = nan(size(t_grid));
     ratio_trace = nan(size(t_grid));
@@ -514,21 +427,10 @@ function [raw_trace, ratio_trace] = amplitude_window_medians(peak_t, amp, ratio,
 end
 
 function [values, source_name] = interval_values(source, field_name, peak_idx, peak_t, fs)
-% INTERVAL_VALUES Perform the interval values operation.
-%
-% Syntax:
-%   [values, source_name] = interval_values(source, field_name, peak_idx, peak_t, fs)
-%
-% Inputs:
-%   source - Input value `source`.
-%   field_name - Input value `field_name`.
-%   peak_idx - Input value `peak_idx`.
-%   peak_t - Input value `peak_t`.
-%   fs - Sampling frequency in hertz.
-%
-% Outputs:
-%   values - Computed numeric value.
-%   source_name - Output text or identifier.
+% INTERVAL_VALUES Obtain an interval vector or derive it from adjacent peaks.
+% source is a cycle struct and field_name is normally 'ibi'. If absent,
+% aligned peak_idx and fs are preferred over peak_t; values are seconds and
+% source_name records the chosen provenance.
 
     values = get_field(source, field_name, []);
     source_name = 'resp_cycles';
@@ -545,18 +447,9 @@ function [values, source_name] = interval_values(source, field_name, peak_idx, p
 end
 
 function [values, source_name] = rate_values(source, ibi)
-% RATE_VALUES Perform the rate values operation.
-%
-% Syntax:
-%   [values, source_name] = rate_values(source, ibi)
-%
-% Inputs:
-%   source - Input value `source`.
-%   ibi - Input value `ibi`.
-%
-% Outputs:
-%   values - Computed numeric value.
-%   source_name - Output text or identifier.
+% RATE_VALUES Obtain breathwise RR or derive 60/IBI.
+% source may provide rr_bpm; otherwise ibi is an interval vector in seconds.
+% values are breaths/min and source_name records whether values were derived.
 
     values = get_field(source, 'rr_bpm', []);
     source_name = 'resp_cycles';
@@ -568,13 +461,8 @@ function [values, source_name] = rate_values(source, ibi)
 end
 
 function validate_available_alignment(belt)
-% VALIDATE_AVAILABLE_ALIGNMENT Validate available alignment.
-%
-% Syntax:
-%   validate_available_alignment(belt)
-%
-% Inputs:
-%   belt - Respiratory-cycle or belt-evidence structure.
+% VALIDATE_AVAILABLE_ALIGNMENT Enforce one peak time per peak index and N-1 intervals.
+% Checks apply only when the belt's timing evidence is marked available.
 
     if ~belt.available
         return;
@@ -591,17 +479,10 @@ function validate_available_alignment(belt)
 end
 
 function varargout = reference_value(reference, kind)
-% REFERENCE_VALUE Perform the reference value operation.
-%
-% Syntax:
-%   varargout = reference_value(reference, kind)
-%
-% Inputs:
-%   reference - Session-reference metadata.
-%   kind - Input value `kind`.
-%
-% Outputs:
-%   varargout - Optional function outputs.
+% REFERENCE_VALUE Read a usable session or global amplitude reference.
+% reference is one belt reference struct and kind selects its nested part.
+% Outputs are positive scalar value, availability flag, and reference quality;
+% callers may request only the leading outputs.
 
     value = NaN;
     available = false;
@@ -625,18 +506,7 @@ function varargout = reference_value(reference, kind)
 end
 
 function value = get_field(source, name, default_value)
-% GET_FIELD Return field.
-%
-% Syntax:
-%   value = get_field(source, name, default_value)
-%
-% Inputs:
-%   source - Input value `source`.
-%   name - Input value `name`.
-%   default_value - Input value `default_value`.
-%
-% Outputs:
-%   value - Computed numeric value.
+% GET_FIELD Read a struct field, falling back when the struct or field is absent.
 
     value = default_value;
     if isstruct(source) && isfield(source, name)
@@ -645,17 +515,7 @@ function value = get_field(source, name, default_value)
 end
 
 function value = get_belt(source, name)
-% GET_BELT Return belt.
-%
-% Syntax:
-%   value = get_belt(source, name)
-%
-% Inputs:
-%   source - Input value `source`.
-%   name - Input value `name`.
-%
-% Outputs:
-%   value - Computed numeric value.
+% GET_BELT Read a named belt struct, returning an empty struct when absent.
 
     value = struct();
     if isstruct(source) && isfield(source, name)
@@ -664,16 +524,10 @@ function value = get_belt(source, name)
 end
 
 function cfg = evidence_config(config)
-% EVIDENCE_CONFIG Perform the evidence config operation.
-%
-% Syntax:
-%   cfg = evidence_config(config)
-%
-% Inputs:
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   cfg - Computed output value `cfg`.
+% EVIDENCE_CONFIG Resolve respiratory windows and thresholds with defaults.
+% cfg contains label-specific durations (s), RR thresholds (breaths/min),
+% normalized amplitude criteria, irregular CoV threshold, and thoracic-balance
+% window, minimum-breath, and dominance-ratio settings.
 
     cfg = struct();
     cfg.slow_win_sec = get_config_value(config, 'slow', 'analysis_win_sec', 60);

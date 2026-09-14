@@ -1,17 +1,8 @@
 function [mask, labelNames] = events_to_time_mask(events, N, config)
-% EVENTS_TO_TIME_MASK Perform the events to time mask operation.
-%
-% Syntax:
-%   [mask, labelNames] = events_to_time_mask(events, N, config)
-%
-% Inputs:
-%   events - Event structure data.
-%   N - Number of samples.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   mask - Logical output mask.
-%   labelNames - Output text or identifier.
+% EVENTS_TO_TIME_MASK Build the canonical Nsample-by-Nlabel annotation matrix.
+% events must use canonical types and finite inclusive sample bounds. Columns
+% follow config.labels.short exactly; labelNames reports that order. Unknown
+% types and duplicate configured labels are errors.
 
     if nargin < 3 || ~isstruct(config) || ~isfield(config, 'labels') || ...
             ~isfield(config.labels, 'short')

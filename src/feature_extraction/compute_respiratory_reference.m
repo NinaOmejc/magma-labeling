@@ -1,16 +1,13 @@
 function resp_ref = compute_respiratory_reference(resp_cycles, session_reference, config)
-% COMPUTE_RESPIRATORY_REFERENCE Compute respiratory reference.
-%
-% Syntax:
-%   resp_ref = compute_respiratory_reference(resp_cycles, session_reference, config)
-%
-% Inputs:
-%   resp_cycles - Respiratory-cycle structure.
-%   session_reference - Session-reference metadata.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   resp_ref - Respiratory-reference structure.
+% COMPUTE_RESPIRATORY_REFERENCE Estimate session/global amplitude references per belt.
+% resp_cycles supplies breath times and amplitudes; session_reference defines
+% the common reference interval; config controls breath counts and change
+% diagnostics. resp_ref fields are:
+%   lungs/diaph - Belt reference structs described by empty_belt_reference.
+%   default_warning_action - Pipeline action associated with reference warnings.
+%   change_pattern - none, one-belt, or two-belt change classification.
+%   change_time_difference_sec/change_ratio_log_difference - Cross-belt diagnostics.
+%   agreement_quality - Overall cross-belt reference agreement state.
 
     cfg = respiratory_reference_config(config);
     validate_session_reference(session_reference);
@@ -30,18 +27,11 @@ function resp_ref = compute_respiratory_reference(resp_cycles, session_reference
 end
 
 function belt = analyze_belt(breaths, cfg, session_reference)
-% ANALYZE_BELT Perform the analyze belt operation.
-%
-% Syntax:
-%   belt = analyze_belt(breaths, cfg, session_reference)
-%
-% Inputs:
-%   breaths - Respiratory-cycle or belt-evidence structure.
-%   cfg - Pipeline configuration structure.
-%   session_reference - Session-reference metadata.
-%
-% Outputs:
-%   belt - Updated respiratory-cycle or belt structure.
+% ANALYZE_BELT Derive amplitude references and flag persistent level changes.
+% breaths supplies aligned peak_t (s) and positive breath amp values. cfg
+% controls edge windows, minimum breaths, and change acceptance; the common
+% session_reference determines which breaths contribute to session.value.
+% belt is initialized with the complete schema from empty_belt_reference.
 
     belt = empty_belt_reference();
     if isempty(breaths) || ~isstruct(breaths) || ...
@@ -191,17 +181,8 @@ function belt = analyze_belt(breaths, cfg, session_reference)
 end
 
 function quality = warning_quality(current_quality, warning_value)
-% WARNING_QUALITY Perform the warning quality operation.
-%
-% Syntax:
-%   quality = warning_quality(current_quality, warning_value)
-%
-% Inputs:
-%   current_quality - Input value `current_quality`.
-%   warning_value - Input value `warning_value`.
-%
-% Outputs:
-%   quality - Computed output value `quality`.
+% WARNING_QUALITY Replace a good reference state with a more specific warning.
+% Existing non-good states are preserved so earlier failure reasons win.
 
     quality = current_quality;
     if strcmp(current_quality, 'good')
@@ -211,16 +192,10 @@ end
 
 function candidate = best_single_change_candidate(z, min_breaths)
 % BEST_SINGLE_CHANGE_CANDIDATE Find the best valid split in log-amplitude values.
-%
-% Syntax:
-%   candidate = best_single_change_candidate(z, min_breaths)
-%
-% Inputs:
-%   z - Log-transformed respiratory-cycle amplitudes.
-%   min_breaths - Minimum valid respiratory cycles on each side of a split.
-%
-% Outputs:
-%   candidate - Best change-point candidate and fit diagnostics.
+% z is an ordered breath-level log-amplitude vector; min_breaths is required
+% on each side. candidate records availability, split_idx, fitted levels,
+% normalized cost improvement, step sharpness, residual drift and its limit,
+% and whether the post-change level persists.
 
     candidate = struct( ...
         'available', false, ...
@@ -292,16 +267,8 @@ function candidate = best_single_change_candidate(z, min_breaths)
 end
 
 function d = segment_edge_change(z)
-% SEGMENT_EDGE_CHANGE Perform the segment edge change operation.
-%
-% Syntax:
-%   d = segment_edge_change(z)
-%
-% Inputs:
-%   z - Input value `z`.
-%
-% Outputs:
-%   d - Computed output value `d`.
+% SEGMENT_EDGE_CHANGE Measure absolute log-level drift across one segment.
+% d is the difference between medians of the first and last segment thirds.
 
     edge_n = max(1, floor(numel(z) / 3));
     first_level = median(z(1:edge_n), 'omitnan');
@@ -310,16 +277,9 @@ function d = segment_edge_change(z)
 end
 
 function value = symmetric_fractional_change(ratio)
-% SYMMETRIC_FRACTIONAL_CHANGE Perform the symmetric fractional change operation.
-%
-% Syntax:
-%   value = symmetric_fractional_change(ratio)
-%
-% Inputs:
-%   ratio - Input value `ratio`.
-%
-% Outputs:
-%   value - Computed numeric value.
+% SYMMETRIC_FRACTIONAL_CHANGE Express a positive ratio as direction-free change.
+% value is max(ratio,1/ratio)-1, so reciprocal increases/decreases are equal;
+% invalid or nonpositive ratios return NaN.
 
     if ~isfinite(ratio) || ratio <= 0
         value = NaN;
@@ -329,17 +289,9 @@ function value = symmetric_fractional_change(ratio)
 end
 
 function resp_ref = add_belt_agreement(resp_ref, cfg)
-% ADD_BELT_AGREEMENT Add belt agreement.
-%
-% Syntax:
-%   resp_ref = add_belt_agreement(resp_ref, cfg)
-%
-% Inputs:
-%   resp_ref - Respiratory-reference structure.
-%   cfg - Pipeline configuration structure.
-%
-% Outputs:
-%   resp_ref - Respiratory-reference structure.
+% ADD_BELT_AGREEMENT Compare lung and diaphragm reference-change candidates.
+% Adds change_pattern, agreement_quality, change_time_difference_sec, and
+% change_ratio_log_difference to resp_ref using configured tolerances.
 
     resp_ref.change_pattern = 'insufficient_data';
     resp_ref.change_time_difference_sec = NaN;
@@ -389,33 +341,14 @@ function resp_ref = add_belt_agreement(resp_ref, cfg)
 end
 
 function tf = belt_is_analyzable(belt)
-% BELT_IS_ANALYZABLE Perform the belt is analyzable operation.
-%
-% Syntax:
-%   tf = belt_is_analyzable(belt)
-%
-% Inputs:
-%   belt - Respiratory-cycle or belt-evidence structure.
-%
-% Outputs:
-%   tf - Computed output value `tf`.
+% BELT_IS_ANALYZABLE Test whether belt reference diagnostics reached edge analysis.
 
     tf = belt.available && ~strcmp(belt.quality, 'insufficient_data') && ...
         ~strcmp(belt.quality, 'insufficient_edge_breaths');
 end
 
 function breaths = get_belt_features(resp_cycles, name)
-% GET_BELT_FEATURES Return belt features.
-%
-% Syntax:
-%   breaths = get_belt_features(resp_cycles, name)
-%
-% Inputs:
-%   resp_cycles - Respiratory-cycle structure.
-%   name - Input value `name`.
-%
-% Outputs:
-%   breaths - Updated respiratory-cycle or belt structure.
+% GET_BELT_FEATURES Return the named belt-cycle struct, or [] when absent.
 
     breaths = [];
     if isstruct(resp_cycles) && isfield(resp_cycles, name)
@@ -424,13 +357,21 @@ function breaths = get_belt_features(resp_cycles, name)
 end
 
 function belt = empty_belt_reference()
-% EMPTY_BELT_REFERENCE Create an empty belt reference value.
-%
-% Syntax:
-%   belt = empty_belt_reference()
-%
-% Outputs:
-%   belt - Updated respiratory-cycle or belt structure.
+% EMPTY_BELT_REFERENCE Return the canonical unavailable amplitude-reference struct.
+% Fields:
+%   available - At least one positive breath amplitude was supplied.
+%   session/global - value, contributing n_breaths, and availability; session
+%                    also carries its quality state.
+%   global_to_session_ratio - Ratio of global and session medians.
+%   reference_quality/reference_action - Downstream usability state and action.
+%   mode/quality - Change-analysis mode and diagnostic result.
+%   start_ref/end_ref/end_to_start_ratio/log_change/edge_change_frac - Edge summaries.
+%   edge_change_triggered/change_detected - Screening and accepted-change flags.
+%   change_breath_idx/change_t - First post-split breath and time in seconds.
+%   ref_before/ref_after/change_ratio - Fitted amplitude levels and ratio.
+%   cost_improvement/step_sharpness/residual_drift_log/persistence_ok - Fit guards.
+%   n_input_breaths/n_valid_breaths/n_invalid_breaths - Breath counts.
+%   edge_window_sec_used - Actual duration of each disjoint edge window.
 
     belt = struct( ...
         'available', false, ...
@@ -471,16 +412,9 @@ function belt = empty_belt_reference()
 end
 
 function cfg = respiratory_reference_config(config)
-% RESPIRATORY_REFERENCE_CONFIG Perform the respiratory reference config operation.
-%
-% Syntax:
-%   cfg = respiratory_reference_config(config)
-%
-% Inputs:
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   cfg - Computed output value `cfg`.
+% RESPIRATORY_REFERENCE_CONFIG Resolve and validate amplitude-change settings.
+% cfg contains min_breaths, edge_window_sec, change_trigger_frac, and
+% min_cost_improvement, using documented defaults when config omits them.
 
     cfg = struct( ...
         'min_breaths', 10, ...
@@ -519,13 +453,9 @@ function cfg = respiratory_reference_config(config)
 end
 
 function validate_session_reference(reference)
-% VALIDATE_SESSION_REFERENCE Validate session reference.
-%
-% Syntax:
-%   validate_session_reference(reference)
-%
-% Inputs:
-%   reference - Session-reference metadata.
+% VALIDATE_SESSION_REFERENCE Require the common-reference v1 schema.
+% reference must provide sample/time bounds, availability/completeness flags,
+% and reference_schema_version='session_physiological_reference_v1'.
 
     required = {'reference_start_idx', 'reference_end_idx', ...
         'reference_start_t', 'reference_end_t', 'available', 'complete', ...

@@ -156,13 +156,11 @@ function testDiagnosticPlotUsesRepositorySaveConvention(testCase)
     [t, amp] = step_series(120, 60, 1.0, 0.55);
     resp_feat = make_resp_feat(t, amp, t, 0.8*amp);
     data = zeros(round(400 * config.fs), numel(config.data_columns));
-    data(:, config.channels.spo2_idx) = 96;
     session_reference = get_session_reference_interval(size(data, 1), config);
     resp_ref = compute_respiratory_reference(resp_feat, session_reference, config);
-    spo2_ref = struct('median_percent', 96, 'quality', 'good');
 
     plot_session_reference( ...
-        data, resp_feat, resp_ref, spo2_ref, session_reference, config);
+        data, resp_feat, resp_ref, session_reference, config);
 
     expected_file = fullfile(output_dir, ...
         sprintf('Sub%d_M%d_session_reference.png', config.subject, config.measure));

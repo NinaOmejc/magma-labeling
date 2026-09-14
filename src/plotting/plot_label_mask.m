@@ -1,16 +1,13 @@
 function fig = plot_label_mask(label_mask, label_names, config)
-% PLOT_LABEL_MASK Plot label mask.
-%
-% Syntax:
-%   fig = plot_label_mask(label_mask, label_names, config)
+% PLOT_LABEL_MASK Render detected label states as a time-by-label raster.
 %
 % Inputs:
-%   label_mask - Logical state or selection mask.
-%   label_names - Label identifier or label metadata.
-%   config - Pipeline configuration structure.
+%   label_mask  - Nsample x Nlabel logical matrix on the native sample grid.
+%   label_names - Nlabel cell array of canonical short label names.
+%   config      - Pipeline settings supplying fs, label metadata, and plot options.
 %
 % Outputs:
-%   fig - Figure handle.
+%   fig - Figure handle while plotting; empty after save_figure or when disabled.
 
     fig = [];
 
@@ -84,16 +81,8 @@ function fig = plot_label_mask(label_mask, label_names, config)
 end
 
 function cmap = build_label_mask_colormap(config)
-% BUILD_LABEL_MASK_COLORMAP Build label mask colormap.
-%
-% Syntax:
-%   cmap = build_label_mask_colormap(config)
-%
-% Inputs:
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   cmap - Computed output value `cmap`.
+% BUILD_LABEL_MASK_COLORMAP Resolve the two RGB colors for absent/present states.
+% cmap is a clipped 2 x 3 matrix, optionally read from config.LabelMask.
 
     cmap = [ ...
         1.00 1.00 1.00; ...
@@ -108,18 +97,9 @@ function cmap = build_label_mask_colormap(config)
 end
 
 function row_labels = resolve_row_labels(label_names, config, n_labels)
-% RESOLVE_ROW_LABELS Resolve row labels.
-%
-% Syntax:
-%   row_labels = resolve_row_labels(label_names, config, n_labels)
-%
-% Inputs:
-%   label_names - Label identifier or label metadata.
-%   config - Pipeline configuration structure.
-%   n_labels - Label identifier or label metadata.
-%
-% Outputs:
-%   row_labels - Output text or identifier.
+% RESOLVE_ROW_LABELS Format one display string per label-mask column.
+% Canonical short names are optionally paired with their descriptive names;
+% unnamed rows receive positional labels up to n_labels.
 
     row_labels = label_names(:);
     if isempty(row_labels)
@@ -146,16 +126,8 @@ function row_labels = resolve_row_labels(label_names, config, n_labels)
 end
 
 function text_out = prettify_label_text(text_in)
-% PRETTIFY_LABEL_TEXT Perform the prettify label text operation.
-%
-% Syntax:
-%   text_out = prettify_label_text(text_in)
-%
-% Inputs:
-%   text_in - Input value `text_in`.
-%
-% Outputs:
-%   text_out - Output text or identifier.
+% PRETTIFY_LABEL_TEXT Turn identifiers into space-separated display text.
+% Underscores and lower-to-upper camel-case boundaries become spaces.
 
     text_out = char(string(text_in));
     text_out = strrep(text_out, '_', ' ');

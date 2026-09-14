@@ -87,9 +87,9 @@ function testSpO2ReferenceUsesTheSameInterval(testCase)
     data(200, config.channels.spo2_idx) = NaN;
     reference = get_session_reference_interval(size(data, 1), config);
 
-    spo2_ref = compute_spo2_reference(data, reference, config);
     [~, diagnostics_desat] = detect_desaturation( ...
-        data, spo2_ref, reference, config);
+        data, reference, config);
+    spo2_ref = diagnostics_desat.spo2_ref;
 
     verifyTrue(testCase, spo2_ref.available);
     verifyEqual(testCase, spo2_ref.median_percent, 96, 'AbsTol', eps);
@@ -106,7 +106,8 @@ function testUnavailableSpO2DoesNotInvalidateRespiratoryReference(testCase)
     reference = get_session_reference_interval(size(data, 1), config);
     resp_ref = compute_respiratory_reference( ...
         make_resp_feat(t, 2 * ones(size(t)), [], []), reference, config);
-    spo2_ref = compute_spo2_reference(data, reference, config);
+    [~, diagnostics_desat] = detect_desaturation(data, reference, config);
+    spo2_ref = diagnostics_desat.spo2_ref;
 
     verifyTrue(testCase, resp_ref.lungs.session.available);
     verifyFalse(testCase, spo2_ref.available);
@@ -120,9 +121,9 @@ function testSpO2ReferenceNeverFallsBackOutsideInterval(testCase)
     data(181:360, config.channels.spo2_idx) = NaN;
     reference = get_session_reference_interval(size(data, 1), config);
 
-    spo2_ref = compute_spo2_reference(data, reference, config);
     [~, diagnostics_desat] = detect_desaturation( ...
-        data, spo2_ref, reference, config);
+        data, reference, config);
+    spo2_ref = diagnostics_desat.spo2_ref;
 
     verifyFalse(testCase, spo2_ref.available);
     verifyEqual(testCase, spo2_ref.quality, 'insufficient_valid_samples');

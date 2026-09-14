@@ -1,27 +1,19 @@
 function [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags( ...
-    data, bL, bD, flags_lungs, flags_diaph, spo2_ref, ...
-    session_reference, diagnostics_desat, config, window_sec)
-% MANUAL_EDIT_SIGH_FLAGS Perform the manual edit sigh flags operation.
-%
-% Syntax:
-%   [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags(data, bL, bD, flags_lungs, flags_diaph, spo2_ref, session_reference, diagnostics_desat, config, window_sec)
+    data, bL, bD, flags_lungs, flags_diaph, config, window_sec)
+% MANUAL_EDIT_SIGH_FLAGS Review breath-level sigh candidates against both belts.
 %
 % Inputs:
-%   data - Input physiological signal data.
-%   bL - Input value `bL`.
-%   bD - Input value `bD`.
-%   flags_lungs - Logical state or selection mask.
-%   flags_diaph - Logical state or selection mask.
-%   spo2_ref - SpO2-reference structure.
-%   session_reference - Session-reference metadata.
-%   diagnostics_desat - Detector diagnostic data.
-%   config - Pipeline configuration structure.
-%   window_sec - Duration or window length in seconds.
+%   data              - Nsample x Nchannel preprocessed signal matrix.
+%   bL, bD            - Lung/diaphragm breath structs; peak_t is used in seconds.
+%   flags_lungs       - Nlung-breath logical automatic/current sigh flags.
+%   flags_diaph       - Ndiaphragm-breath logical automatic/current sigh flags.
+%   config            - Channel, sampling, recording, and display settings.
+%   window_sec        - Width in seconds of the scrollable review viewport.
 %
 % Outputs:
-%   flags_lungs - Logical output mask.
-%   flags_diaph - Logical output mask.
-%   review_mask - Logical output mask.
+%   flags_lungs - Updated logical flags aligned with bL.peak_t.
+%   flags_diaph - Updated logical flags aligned with bD.peak_t.
+%   review_mask - Nsample logical coverage of time ranges shown to the reviewer.
 
     review_mask = false(size(data,1), 1);
     if ~isfield(config, 'channels')
@@ -37,14 +29,14 @@ function [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags( ...
     window_sec = max(30, window_sec);
 
     fh = figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', 'on');
-    ax1 = subplot(3,1,1); hold(ax1,'on');
+    ax1 = subplot(2,1,1); hold(ax1,'on');
     p1 = plot(ax1, t_raw, data(:,idx_lungs), 'k', 'DisplayName', 'Resp-Lungs');
     m1 = plot(ax1, bL.peak_t(flags_lungs), interp1(t_raw, data(:,idx_lungs), bL.peak_t(flags_lungs), 'linear','extrap'), ...
         'ro', 'MarkerFaceColor','r', 'MarkerSize', 4, 'DisplayName', 'Sigh breaths');
     title(ax1, 'GUI sigh manual editing (lungs)'); ylabel(ax1, 'Resp-Lungs'); grid(ax1,'on');
     update_axis_legend(ax1, [p1; m1], {'Resp-Lungs', 'Sigh breaths'});
 
-    ax2 = subplot(3,1,2); hold(ax2,'on');
+    ax2 = subplot(2,1,2); hold(ax2,'on');
     p2 = plot(ax2, t_raw, data(:,idx_diaph), 'k', 'DisplayName', 'Resp-Diaphragm');
     m2 = plot(ax2, bD.peak_t(flags_diaph), interp1(t_raw, data(:,idx_diaph), bD.peak_t(flags_diaph), 'linear','extrap'), ...
         'ro', 'MarkerFaceColor','r', 'MarkerSize', 4, 'DisplayName', 'Sigh breaths');
@@ -53,14 +45,10 @@ function [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags( ...
     ylim(ax1, compute_global_ylim(data(:, idx_lungs)));
     ylim(ax2, compute_global_ylim(data(:, idx_diaph)));
 
-    ax3 = subplot(3,1,3);
-    plot_spo2_diagnostic_panel(ax3, data, spo2_ref, session_reference, ...
-        diagnostics_desat, config, 'SpO2 with desaturation thresholds');
-
     sgtitle(['GUI SIGH MANUAL EDITING' newline ...
         'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)]);
 
-    linkaxes([ax1 ax2 ax3],'x');
+    linkaxes([ax1 ax2],'x');
     xlim(ax1, [0 min(window_sec,t_raw(end))]);
     mark_current_view_reviewed();
     align_sigh_axes();
@@ -85,23 +73,14 @@ function [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags( ...
     uiwait(fh);
 
     function set_xlim(x0)
-    % SET_XLIM Perform the set xlim operation.
-    %
-    % Syntax:
-    %   set_xlim(x0)
-    %
-    % Inputs:
-    %   x0 - Input value `x0`.
+    % SET_XLIM Move the linked review viewport to start time x0 in seconds.
 
         xlim(ax1, [x0 min(x0+window_sec, t_raw(end))]);
         mark_current_view_reviewed();
     end
 
     function mark_current_view_reviewed()
-    % MARK_CURRENT_VIEW_REVIEWED Mark current view reviewed.
-    %
-    % Syntax:
-    %   mark_current_view_reviewed()
+    % MARK_CURRENT_VIEW_REVIEWED Add the visible time range to sample coverage.
 
         if ~isgraphics(ax1), return; end
         limits = xlim(ax1);
@@ -111,16 +90,8 @@ function [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags( ...
     end
 
     function edit_flag(evt, ax, belt, target)
-    % EDIT_FLAG Perform the edit flag operation.
-    %
-    % Syntax:
-    %   edit_flag(evt, ax, belt, target)
-    %
-    % Inputs:
-    %   evt - Input value `evt`.
-    %   ax - Target axes handle.
-    %   belt - Respiratory-cycle or belt-evidence structure.
-    %   target - Input value `target`.
+    % EDIT_FLAG Add the nearest breath or remove the nearest flagged marker.
+    % belt selects lungs/diaphragm and target distinguishes trace from marker clicks.
 
         if ~strcmp(get(fh, 'SelectionType'), 'normal')
             return;
@@ -160,17 +131,7 @@ function [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags( ...
     end
 
     function t_click = get_click_time(evt, ax)
-    % GET_CLICK_TIME Return click time.
-    %
-    % Syntax:
-    %   t_click = get_click_time(evt, ax)
-    %
-    % Inputs:
-    %   evt - Input value `evt`.
-    %   ax - Target axes handle.
-    %
-    % Outputs:
-    %   t_click - Computed output value `t_click`.
+    % GET_CLICK_TIME Resolve event intersection or axes cursor time in seconds.
 
         t_click = NaN;
         if ~isempty(evt)
@@ -189,18 +150,8 @@ function [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags( ...
     end
 
     function i = nearest_flagged_index(peak_t, flags, t_click)
-    % NEAREST_FLAGGED_INDEX Perform the nearest flagged index operation.
-    %
-    % Syntax:
-    %   i = nearest_flagged_index(peak_t, flags, t_click)
-    %
-    % Inputs:
-    %   peak_t - Input value `peak_t`.
-    %   flags - Logical state or selection mask.
-    %   t_click - Input value `t_click`.
-    %
-    % Outputs:
-    %   i - Computed output value `i`.
+    % NEAREST_FLAGGED_INDEX Find the flagged breath closest to a click time.
+    % peak_t and t_click are seconds; i is empty when no breath is flagged.
 
         flagged_idx = find(flags(:));
         if isempty(flagged_idx)
@@ -213,16 +164,7 @@ function [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags( ...
     end
 
     function update_marker_plot(marker_plot, breaths, flags, signal_idx)
-    % UPDATE_MARKER_PLOT Update marker plot.
-    %
-    % Syntax:
-    %   update_marker_plot(marker_plot, breaths, flags, signal_idx)
-    %
-    % Inputs:
-    %   marker_plot - Input value `marker_plot`.
-    %   breaths - Respiratory-cycle or belt-evidence structure.
-    %   flags - Logical state or selection mask.
-    %   signal_idx - Input value `signal_idx`.
+    % UPDATE_MARKER_PLOT Place sigh markers on their sample-interpolated belt values.
 
         marker_t = breaths.peak_t(flags);
         set(marker_plot, ...
@@ -231,15 +173,7 @@ function [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags( ...
     end
 
     function update_axis_legend(ax, handles, labels)
-    % UPDATE_AXIS_LEGEND Update axis legend.
-    %
-    % Syntax:
-    %   update_axis_legend(ax, handles, labels)
-    %
-    % Inputs:
-    %   ax - Target axes handle.
-    %   handles - Input value `handles`.
-    %   labels - Label identifier or label metadata.
+    % UPDATE_AXIS_LEGEND Include only graphics that currently contain data.
 
         keep = false(size(handles));
         for i = 1:numel(handles)
@@ -265,10 +199,7 @@ function [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags( ...
     end
 
     function align_sigh_axes()
-    % ALIGN_SIGH_AXES Perform the align sigh axes operation.
-    %
-    % Syntax:
-    %   align_sigh_axes()
+    % ALIGN_SIGH_AXES Align the two respiratory-belt panels.
 
         axes_to_align = gobjects(0);
         if exist('ax1', 'var') && isgraphics(ax1)
@@ -277,23 +208,11 @@ function [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags( ...
         if exist('ax2', 'var') && isgraphics(ax2)
             axes_to_align(end+1,1) = ax2;
         end
-        if exist('ax3', 'var') && isgraphics(ax3)
-            axes_to_align(end+1,1) = ax3;
-        end
         align_axes_x_widths(axes_to_align);
     end
 
     function y_limits = compute_global_ylim(signal)
-    % COMPUTE_GLOBAL_YLIM Compute global ylim.
-    %
-    % Syntax:
-    %   y_limits = compute_global_ylim(signal)
-    %
-    % Inputs:
-    %   signal - Input value `signal`.
-    %
-    % Outputs:
-    %   y_limits - Computed output value `y_limits`.
+    % COMPUTE_GLOBAL_YLIM Bound a full sample trace with five-percent padding.
 
         signal = signal(isfinite(signal));
         if isempty(signal)

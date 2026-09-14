@@ -1,20 +1,10 @@
 function summary = compute_recording_label_burden( ...
     mask, label_names, label_available, events, fs, assessable_mask)
-% COMPUTE_RECORDING_LABEL_BURDEN Compute recording label burden.
-%
-% Syntax:
-%   summary = compute_recording_label_burden(mask, label_names, label_available, events, fs, assessable_mask)
-%
-% Inputs:
-%   mask - Logical state or selection mask.
-%   label_names - Label identifier or label metadata.
-%   label_available - Label identifier or label metadata.
-%   events - Event structure data.
-%   fs - Sampling frequency in hertz.
-%   assessable_mask - Logical state or selection mask.
-%
-% Outputs:
-%   summary - Computed summary or metadata structure.
+% COMPUTE_RECORDING_LABEL_BURDEN Summarize duration, fraction, and count per label.
+% mask and assessable_mask are Nsample-by-Nlabel; availability and names align
+% with columns; events are canonical and fs is hertz. summary fields are version,
+% recording_duration_sec, by_label entries (available, duration_sec, fraction,
+% event_count, assessable_duration_sec), plus sigh_count and sighs_per_15_min.
 
     label_names = cellstr(string(label_names));
     label_available = logical(label_available(:)');
@@ -64,17 +54,7 @@ function summary = compute_recording_label_burden( ...
 end
 
 function count = count_events(events, label)
-% COUNT_EVENTS Perform the count events operation.
-%
-% Syntax:
-%   count = count_events(events, label)
-%
-% Inputs:
-%   events - Event structure data.
-%   label - Label identifier or label metadata.
-%
-% Outputs:
-%   count - Computed index or count value.
+% COUNT_EVENTS Count canonical events whose type equals label.
 
     count = 0;
     if ~isempty(events) && isfield(events, 'type')

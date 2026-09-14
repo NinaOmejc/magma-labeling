@@ -1,21 +1,11 @@
 function [assessable_mask, info] = compute_label_assessable_mask( ...
     N, label_names, label_available, diagnostics_desat, rea_diagnostics, config)
-% COMPUTE_LABEL_ASSESSABLE_MASK Compute label assessable mask.
-%
-% Syntax:
-%   [assessable_mask, info] = compute_label_assessable_mask(N, label_names, label_available, diagnostics_desat, rea_diagnostics, config)
-%
-% Inputs:
-%   N - Number of samples.
-%   label_names - Label identifier or label metadata.
-%   label_available - Label identifier or label metadata.
-%   diagnostics_desat - Detector diagnostic data.
-%   rea_diagnostics - Detector diagnostic data.
-%   config - Pipeline configuration structure.
-%
-% Outputs:
-%   assessable_mask - Logical output mask.
-%   info - Computed summary or metadata structure.
+% COMPUTE_LABEL_ASSESSABLE_MASK Refine recording-level availability by sample.
+% label_available aligns with label_names; N/config.fs define the master sample
+% grid. Most labels are assessable for the full recording when available.
+% Desaturation follows finite native SpO2 samples; asynchrony projects valid
+% coherence-grid evidence to master samples. info documents schema version,
+% partial_labels, and the desat/async/other-label rules.
 
     label_names = cellstr(string(label_names));
     label_available = logical(label_available(:)');
@@ -58,19 +48,9 @@ function [assessable_mask, info] = compute_label_assessable_mask( ...
 end
 
 function master_mask = grid_to_master_mask(grid_mask, t_grid, N, fs)
-% GRID_TO_MASTER_MASK Perform the grid to master mask operation.
-%
-% Syntax:
-%   master_mask = grid_to_master_mask(grid_mask, t_grid, N, fs)
-%
-% Inputs:
-%   grid_mask - Logical state or selection mask.
-%   t_grid - Time coordinates in seconds.
-%   N - Number of samples.
-%   fs - Sampling frequency in hertz.
-%
-% Outputs:
-%   master_mask - Logical output mask.
+% GRID_TO_MASTER_MASK Project a logical analysis-grid mask to N raw samples.
+% t_grid is finite, strictly increasing seconds; nearest-neighbor interpolation
+% at fs hertz uses false outside the analysis grid.
 
     grid_mask = logical(grid_mask(:));
     t_grid = t_grid(:);

@@ -1,11 +1,7 @@
 function ev = empty_events()
-% EMPTY_EVENTS Create an empty events value.
-%
-% Syntax:
-%   ev = empty_events()
-%
-% Outputs:
-%   ev - Event structure array.
+% EMPTY_EVENTS Return a zero-length canonical event struct array.
+% Fields are type; inclusive one-based start_idx/end_idx; start_t/end_t in
+% seconds; and duration in seconds.
 
     ev = struct( ...
         'type', {}, ...
