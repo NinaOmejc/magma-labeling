@@ -110,22 +110,46 @@ function testRapidDetectorFallbackUsesSixtySecondConfirmationWindow(testCase)
     verifyEqual(testCase, events.duration, 60);
 end
 
-function testIrregularWindowAndDurationAreSeparateWithoutDoubleApplication(testCase)
+function testOneIrregularAnalysisWindowDirectlyDefinesEventSupport(testCase)
     config = stage_config();
-    verifyEqual(testCase, config.irregular.analysis_win_sec, 60);
-    verifyEqual(testCase, config.irregular.min_dur_sec, 60);
-    t = (0:100)';
+    config.irregular.analysis_win_sec = 10;
+    verifyFalse(testCase, isfield(config.irregular, 'min_dur_sec'));
+    t = (0:30)';
     lungs = empty_detector_belt(t);
     lungs.available = true;
-    lungs.irregularity.window_mask(t <= 60) = true;
-    lungs.irregularity.endpoint_mask(t == 60) = true;
-    lungs.irregularity.cov(t == 60) = 0.4;
+    endpoint_mask = t == 10;
+    lungs.irregularity.window_mask = ...
+        analysis_window_endpoints_to_state_mask(endpoint_mask, t, 10);
+    lungs.irregularity.endpoint_mask = endpoint_mask;
+    lungs.irregularity.cov(endpoint_mask) = 0.4;
     diaph = empty_detector_belt(t);
     phys.resp = struct('time_sec', t, 'lungs', lungs, 'diaph', diaph);
-    events = detect_irregular_breathing(zeros(101, 6), phys, config);
+    events = detect_irregular_breathing(zeros(31, 6), phys, config);
     verifyNotEmpty(testCase, events);
     verifyEqual(testCase, events.start_t, 0);
-    verifyLessThan(testCase, events.duration, 65);
+    verifyLessThan(testCase, events.duration, 15);
+end
+
+function testTouchingIrregularAnalysisWindowsMergeIntoOneEvent(testCase)
+    config = stage_config();
+    config.irregular.analysis_win_sec = 10;
+    t = (0:30)';
+    lungs = empty_detector_belt(t);
+    lungs.available = true;
+    endpoint_mask = t == 10 | t == 20;
+    lungs.irregularity.window_mask = ...
+        analysis_window_endpoints_to_state_mask(endpoint_mask, t, 10);
+    lungs.irregularity.endpoint_mask = endpoint_mask;
+    lungs.irregularity.cov(endpoint_mask) = 0.4;
+    diaph = empty_detector_belt(t);
+    phys.resp = struct('time_sec', t, 'lungs', lungs, 'diaph', diaph);
+
+    events = detect_irregular_breathing(zeros(31, 6), phys, config);
+
+    verifyNumElements(testCase, events, 1);
+    verifyEqual(testCase, events.start_t, 0);
+    verifyGreaterThan(testCase, events.duration, 20);
+    verifyLessThan(testCase, events.duration, 25);
 end
 
 function testTenSecondApneaWindowDoesNotRequireTwentySeconds(testCase)

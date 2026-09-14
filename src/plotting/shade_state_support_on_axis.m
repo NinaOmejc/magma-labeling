@@ -1,5 +1,6 @@
 function handles = shade_state_support_on_axis( ...
-    ax, t_grid, candidate_mask, localized_mask, final_mask, include_candidate)
+    ax, t_grid, candidate_mask, localized_mask, final_mask, include_candidate, ...
+    final_state_label)
 % SHADE_STATE_SUPPORT_ON_AXIS Overlay candidate, localized, and retained state support.
 %
 % Inputs:
@@ -10,6 +11,8 @@ function handles = shade_state_support_on_axis( ...
 %   final_mask     - Ngrid logical support retained as final events.
 %   include_candidate - Optional logical; false omits the candidate layer and
 %                       its legend entry. Defaults to true.
+%   final_state_label - Optional legend label for final_mask. Defaults to
+%                       'Final retained state'.
 %
 % Outputs:
 %   handles - Column vector of patch handles, including legend placeholders.
@@ -17,10 +20,13 @@ function handles = shade_state_support_on_axis( ...
     if nargin < 6
         include_candidate = true;
     end
+    if nargin < 7 || isempty(final_state_label)
+        final_state_label = 'Final retained state';
+    end
     layers = { ...
         candidate_mask, [0.55 0.55 0.55], 0.16, 'Rolling/candidate support'; ...
         localized_mask, [1.00 0.65 0.00], 0.24, 'All localized qualifying support'; ...
-        final_mask, [0.15 0.60 0.25], 0.34, 'Final retained state'};
+        final_mask, [0.15 0.60 0.25], 0.34, final_state_label};
     if ~include_candidate
         layers = layers(2:end, :);
     end

@@ -220,8 +220,10 @@ function belt = empty_belt_evidence(t_grid)
 % Availability fields distinguish timing, raw amplitude, and session/global
 % normalized amplitude; reference fields store values, flags, and quality.
 % Grid-level fields include slow/rapid rate traces and endpoint/state masks,
-% apnea amplitude evidence, and irregularity.window_mask, endpoint_mask, cov,
-% and robust_cov. Shallow/deep detection consumes breath-level ratios directly.
+% apnea amplitude evidence, and irregularity cov/robust_cov traces. For
+% irregularity, endpoint_mask marks qualifying trailing windows and window_mask
+% is their back-projected union. Shallow/deep detection consumes breath-level
+% ratios directly.
 
     belt = struct( ...
         'available', false, ...

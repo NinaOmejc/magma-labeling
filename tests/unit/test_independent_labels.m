@@ -438,12 +438,12 @@ function testIrregularityMoveAndFallbacks(testCase)
         end
     end
     verifyEqual(testCase, config.irregular.analysis_win_sec, 60);
-    verifyEqual(testCase, config.irregular.min_dur_sec, 60);
     verifyEqual(testCase, config.irregular.cov_thr, 0.3);
     verifyEqual(testCase, config.irregular.plot_cov_step_sec, 1);
     verifyTrue(testCase, config.irregular.do_plot);
     verifyFalse(testCase, any(isfield(config.irregular, ...
-        {'robust_cov_thr', 'detection_metric', 'rmssd_thr', 'pause_thr_sec'})));
+        {'min_dur_sec', 'robust_cov_thr', 'detection_metric', ...
+        'rmssd_thr', 'pause_thr_sec'})));
 end
 
 function testRespiratoryAmplitudeDocumentationMatchesAlignment(testCase)

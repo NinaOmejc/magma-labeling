@@ -117,7 +117,6 @@ function config = get_config()
     %---- LABEL 5 - irregular - DETECTION SETTINGS
     config.irregular = struct();              % irregular breathing settings
     config.irregular.analysis_win_sec = 60;   % trailing IBI-variability analysis window (history used to estimate CoV)
-    config.irregular.min_dur_sec = 60;        % minimum inferred irregular-state duration (how long the rolling CoV decision must persist)
     config.irregular.cov_thr   = 0.3;         % CoV threshold for irregularity
     config.irregular.plot_cov_step_sec = 1;   % display CoV as held values over "step_sec" windows (just for display)
     config.irregular.do_plot       = true;    % save irregular breathing diagnostic plot

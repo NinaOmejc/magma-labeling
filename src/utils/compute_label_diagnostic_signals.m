@@ -6,7 +6,7 @@ function diagnostic_signals = compute_label_diagnostic_signals( ...
 % All trace/mask fields are grid-level unless their names explicitly say count,
 % threshold, window, analysis_fs, or analysis_n_samples. Field groups include:
 %   time/grid metadata; rapid/slow RR (breaths/min), endpoints, states, margins;
-%   irregular CoV/robust CoV, endpoints, states, and CoV margins;
+%   irregular CoV/robust CoV, endpoints, back-projected window support, and margins;
 %   respiratory amplitude reference values and availability;
 %   thoracoabdominal ratios/fractions and dominance evidence;
 %   SpO2 and drop-from-reference percentages; ReA coherence/reference evidence;
@@ -56,6 +56,8 @@ function diagnostic_signals = compute_label_diagnostic_signals( ...
     diagnostic_signals.irregularity_robust_cov_diaph = resp_features.resp.diaph.irregularity.robust_cov;
     diagnostic_signals.irregularity_evidence_endpoint_lungs = double(resp_features.resp.lungs.irregularity.endpoint_mask);
     diagnostic_signals.irregularity_evidence_endpoint_diaph = double(resp_features.resp.diaph.irregularity.endpoint_mask);
+    % The legacy inferred_state field names store qualifying analysis-window
+    % support, not an instantaneous pointwise irregularity decision.
     diagnostic_signals.irregularity_inferred_state_lungs = double(resp_features.resp.lungs.irregularity.window_mask);
     diagnostic_signals.irregularity_inferred_state_diaph = double(resp_features.resp.diaph.irregularity.window_mask);
     diagnostic_signals.irregularity_cov_margin_lungs = ...

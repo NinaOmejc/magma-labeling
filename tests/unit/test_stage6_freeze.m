@@ -243,6 +243,19 @@ function testRapidNearMissPlotIsSavedWithoutFinalEvent(testCase)
     verifyTrue(testCase, any(names == "Final retained state"));
 end
 
+function testSupportLegendAllowsIrregularWindowLabel(testCase)
+    t = (0:60)';
+    fig = figure('Visible', 'off');
+    cleanup_figure = onCleanup(@() close(fig));
+    ax = axes(fig);
+    plot(ax, t, zeros(size(t)));
+    hold(ax, 'on');
+    shade_state_support_on_axis( ...
+        ax, t, [], [], t <= 60, true, 'Final irregular-window support');
+    names = string(get(findall(ax, 'Type', 'patch'), 'DisplayName'));
+    verifyTrue(testCase, any(names == "Final irregular-window support"));
+end
+
 function testThoracicDominanceRetainsExplicitUncertainty(testCase)
     config = stage6_config();
     t = (0:70)';
@@ -270,7 +283,9 @@ function testIrregularityRetainsWindowScaleUncertainty(testCase)
     [events, info] = detect_irregular_breathing(zeros(1010,6), phys, config);
     verifyNotEmpty(testCase, events);
     verifyEqual(testCase, info.boundary_uncertainty_sec, 60);
-    verifyTrue(testCase, contains(info.boundary_method, 'explicit_uncertainty'));
+    verifyEqual(testCase, info.boundary_method, 'multi_breath_window_support');
+    verifyEqual(testCase, info.candidate_support_mask, t <= 60);
+    verifyEqual(testCase, info.final_state_mask, t <= 60);
 end
 
 function testApneaRawFlatStoresBoundaryEvidenceSource(testCase)

@@ -32,6 +32,7 @@ function plot_belt_diagnostic_figure(data, config, t_grid, mask_lungs, mask_diap
     candidate_mask_diaph = get_opt(opts, 'candidate_mask_diaph', []);
     localized_mask_lungs = get_opt(opts, 'localized_mask_lungs', []);
     localized_mask_diaph = get_opt(opts, 'localized_mask_diaph', []);
+    final_state_label = get_opt(opts, 'final_state_label', 'Final retained state');
 
     figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', config.make_figs_visible);
     tl = tiledlayout(4, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
@@ -40,7 +41,7 @@ function plot_belt_diagnostic_figure(data, config, t_grid, mask_lungs, mask_diap
     ax1 = nexttile(tl); hold on
     plot_resp_trace_or_message(t_raw, data, idx_lungs, 'Resp-Lungs')
     shade_state_support_on_axis(ax1, t_grid, candidate_mask_lungs, ...
-        localized_mask_lungs, mask_lungs);
+        localized_mask_lungs, mask_lungs, true, final_state_label);
     title(sprintf('%s (lungs) over raw signal', opts.event_name))
     xlabel('Time (s)'); ylabel('Resp-Lungs'); grid on
     hold off
@@ -55,7 +56,7 @@ function plot_belt_diagnostic_figure(data, config, t_grid, mask_lungs, mask_diap
     ax3 = nexttile(tl); hold on
     plot_resp_trace_or_message(t_raw, data, idx_diaph, 'Resp-Diaphragm')
     shade_state_support_on_axis(ax3, t_grid, candidate_mask_diaph, ...
-        localized_mask_diaph, mask_diaph);
+        localized_mask_diaph, mask_diaph, true, final_state_label);
     title(sprintf('%s (diaphragm) over raw signal', opts.event_name))
     xlabel('Time (s)'); ylabel('Resp-Diaphragm'); grid on
     hold off
@@ -130,7 +131,8 @@ function plot_diagnostic_metric(t_grid, metric_raw, metric_plot, secondary_raw, 
     end
     set_metric_limits(values, opts);
     shade_state_support_on_axis(gca, t_grid, candidate_mask, ...
-        localized_mask, final_mask);
+        localized_mask, final_mask, true, ...
+        get_opt(opts, 'final_state_label', 'Final retained state'));
     if ~isempty(trigger_mask)
         mark_trigger_mask_on_axis(gca, t_grid, trigger_mask);
     end
