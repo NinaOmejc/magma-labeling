@@ -31,6 +31,8 @@ function testGetLabelsFormatsAndConfiguration(testCase)
     verifyEqual(testCase, config.labels(9).short, 'thoracic');
     verifyEqual(testCase, config.deep.amp_ratio_thr, 1.20);
     verifyEqual(testCase, config.deep.min_dur_sec, 30);
+    verifyFalse(testCase, isfield(config.shallow, 'analysis_win_sec'));
+    verifyFalse(testCase, isfield(config.deep, 'analysis_win_sec'));
 
     obsolete = {'classify_depth', 'mark_desat', 'deep_lo_ratio', ...
         'deep_hi_ratio', 'subtype_min_overlap_frac'};
@@ -53,7 +55,7 @@ function testDeepThresholdHasNoUpperCutoffAndUsesSessionReference(testCase)
     events = detect_deep_breathing(data, phys_feat, config);
 
     verifyNotEmpty(testCase, events);
-    verifyTrue(testCase, any(phys_feat.resp.lungs.deep_amplitude_mask));
+    verifyFalse(testCase, isfield(phys_feat.resp.lungs, 'deep_amplitude_mask'));
     verifyEqual(testCase, phys_feat.resp.deep_ratio_threshold, 1.20);
     deep_peak = resp_feat.lungs.peak_t >= 60 & resp_feat.lungs.peak_t <= 120;
     verifyTrue(testCase, all(phys_feat.resp.lungs.amp_ratio_session(deep_peak) >= 1.20));
@@ -76,8 +78,27 @@ function testRatioBelowDeepThresholdIsNotDeep(testCase)
         amplitude_fixture(state_ratios, state_ratios, 2, 3, 2, 3);
     phys_feat = compute_respiratory_features( ...
         data, resp_feat, resp_ref, config);
-    verifyFalse(testCase, any(phys_feat.resp.lungs.deep_amplitude_mask));
     verifyEmpty(testCase, detect_deep_breathing(data, phys_feat, config));
+end
+
+function testShallowUsesClosedBreathwiseAmplitudeBand(testCase)
+    in_band = repmat([0.10; 0.80], 10, 1);
+    [data, resp_feat, resp_ref, ~, config] = ...
+        amplitude_fixture(in_band, in_band, 2, 3, 2, 3);
+    phys_feat = compute_respiratory_features( ...
+        data, resp_feat, resp_ref, config);
+
+    verifyNotEmpty(testCase, ...
+        detect_shallow_breathing(data, phys_feat, config));
+
+    above_band = 0.81 * ones(20, 1);
+    [data, resp_feat, resp_ref, ~, config] = ...
+        amplitude_fixture(above_band, above_band, 2, 3, 2, 3);
+    phys_feat = compute_respiratory_features( ...
+        data, resp_feat, resp_ref, config);
+
+    verifyEmpty(testCase, ...
+        detect_shallow_breathing(data, phys_feat, config));
 end
 
 function testMissingLungBeltUsesDiaphragmForDeep(testCase)
@@ -512,8 +533,6 @@ function [data, phys_feat, config] = detector_fixture()
         'trough_t', 0.5 * (lungs_peak_t(1:end-1) + lungs_peak_t(2:end)), ...
         'rr_bpm', 30 * ones(70,1), ...
         'amp_ratio_session', 0.70 * ones(71,1), ...
-        'shallow_amplitude_mask', state, ...
-        'deep_amplitude_mask', state, ...
         'rate_slow_window_bpm', nan(size(t_grid)), ...
         'rate_slow_endpoint_mask', false(size(t_grid)), ...
         'rate_slow_state_mask', false(size(t_grid)), ...

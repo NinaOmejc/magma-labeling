@@ -1,15 +1,12 @@
 function [events, records, localized_support_events] = localize_confirmed_breath_events( ...
     candidate_events, belt, N, fs, event_type, criterion, lower, upper, ...
     analysis_window_sec, min_duration_sec, belt_name)
-% LOCALIZE_CONFIRMED_BREATH_EVENTS Localize confirmed events from respiratory-cycle evidence.
-% Candidate grid-window events are intersected with qualifying breathwise RR
-% intervals. For amplitude criteria, candidate regions select qualifying internal
-% peaks whose complete cycles use detected trough-to-trough bounds without
-% candidate-edge clipping. N/fs define recording bounds; lower/upper encode the
-% criterion; analysis_window_sec supplies fallback uncertainty; and
-% min_duration_sec filters final events. events pass the duration rule,
-% localized_support_events include rejected short runs, and records document
-% belt, method, bounds, duration decision, and uncertainty.
+% LOCALIZE_CONFIRMED_BREATH_EVENTS Refine confirmed rate windows using breath IBIs.
+% Candidate grid-window events are intersected with qualifying peak-to-peak
+% respiratory-rate intervals. N/fs define recording bounds; lower/upper encode
+% the rate criterion; analysis_window_sec supplies fallback uncertainty; and
+% min_duration_sec filters final events. localized_support_events also retains
+% rejected short runs, while records documents boundary provenance.
 
     events = empty_events();
     records = empty_boundary_records();
@@ -18,25 +15,15 @@ function [events, records, localized_support_events] = localize_confirmed_breath
         return;
     end
 
-    [support_start, support_end, uncertainty, support_peak_t, ...
-        evidence_source, method] = ...
+    [support_start, support_end, uncertainty, evidence_source, method] = ...
         breath_support_intervals(belt, criterion, lower, upper);
-    amplitude_criterion = any(strcmp(criterion, ...
-        {'amplitude_band', 'amplitude_ge', 'amplitude_le'}));
 
     for i = 1:numel(candidate_events)
         candidate = candidate_events(i);
-        if amplitude_criterion
-            [run_starts, run_ends, run_uncertainties] = ...
-                amplitude_support_runs_for_candidate( ...
-                    support_start, support_end, uncertainty, support_peak_t, ...
-                    candidate.start_t, candidate.end_t);
-        else
-            [run_starts, run_ends, run_uncertainties] = ...
-                support_runs_inside_candidate( ...
-                support_start, support_end, uncertainty, ...
-                candidate.start_t, candidate.end_t);
-        end
+        [run_starts, run_ends, run_uncertainties] = ...
+            support_runs_inside_candidate( ...
+            support_start, support_end, uncertainty, ...
+            candidate.start_t, candidate.end_t);
 
         if isempty(run_starts)
             record = boundary_record_template();
@@ -86,18 +73,15 @@ function [events, records, localized_support_events] = localize_confirmed_breath
     end
 end
 
-function [starts, ends, uncertainty, support_peak_t, source, method] = ...
+function [starts, ends, uncertainty, source, method] = ...
     breath_support_intervals(belt, criterion, lower, upper)
-% BREATH_SUPPORT_INTERVALS Convert qualifying breath evidence to time intervals.
-% Rate criteria use peak-to-peak intervals and rr_bpm; amplitude criteria use
-% session-normalized ratios for internal peaks bounded by their two detected
-% troughs. starts/ends/support_peak_t/uncertainty are seconds; source and
-% method describe the chosen breath-level evidence.
+% BREATH_SUPPORT_INTERVALS Convert qualifying rate evidence to IBI intervals.
+% starts/ends/uncertainty are seconds; source and method describe the selected
+% breath-level RR evidence.
 
     starts = [];
     ends = [];
     uncertainty = [];
-    support_peak_t = [];
     source = '';
     method = '';
     if ~isstruct(belt) || ~isfield(belt, 'peak_t')
@@ -105,124 +89,35 @@ function [starts, ends, uncertainty, support_peak_t, source, method] = ...
     end
 
     peak_t = belt.peak_t(:);
-    switch criterion
-        case {'rate_ge', 'rate_le'}
-            if ~isfield(belt, 'rr_bpm') || numel(peak_t) < 2
-                return;
-            end
-            rr = belt.rr_bpm(:);
-            n = min(numel(rr), numel(peak_t) - 1);
-            peak_t = peak_t(1:n+1);
-            rr = rr(1:n);
-            valid = isfinite(peak_t(1:n)) & isfinite(peak_t(2:n+1)) & ...
-                peak_t(2:n+1) > peak_t(1:n) & isfinite(rr);
-            if strcmp(criterion, 'rate_ge')
-                qualifies = valid & rr >= lower;
-            else
-                qualifies = valid & rr <= upper;
-            end
-            starts = peak_t(1:n);
-            ends = peak_t(2:n+1);
-            starts = starts(qualifies);
-            ends = ends(qualifies);
-            uncertainty = 0.5 * (ends - starts);
-            source = 'breathwise_rr_bpm';
-            method = 'confirmed_window_breath_interval_localization';
-
-        case {'amplitude_band', 'amplitude_ge', 'amplitude_le'}
-            if ~isfield(belt, 'amp_ratio_session') || ...
-                    ~isfield(belt, 'trough_t') || numel(peak_t) < 3
-                return;
-            end
-            ratio = belt.amp_ratio_session(:);
-            trough_t = belt.trough_t(:);
-            n = min(numel(peak_t), numel(ratio));
-            if n < 3 || numel(trough_t) < 2
-                return;
-            end
-            peak_t = peak_t(1:n);
-            ratio = ratio(1:n);
-            internal_idx = (2:n-1)';
-            internal_idx = internal_idx(internal_idx <= numel(trough_t));
-            if isempty(internal_idx)
-                return;
-            end
-            support_peak_t = peak_t(internal_idx);
-            starts = trough_t(internal_idx - 1);
-            ends = trough_t(internal_idx);
-            ratio = ratio(internal_idx);
-            valid = isfinite(support_peak_t) & isfinite(ratio) & ...
-                isfinite(starts) & isfinite(ends) & ...
-                starts < support_peak_t & support_peak_t < ends;
-            if strcmp(criterion, 'amplitude_band')
-                qualifies = valid & ratio >= lower & ratio <= upper;
-            elseif strcmp(criterion, 'amplitude_ge')
-                qualifies = valid & ratio >= lower;
-            else
-                qualifies = valid & ratio <= upper;
-            end
-            starts = starts(qualifies);
-            ends = ends(qualifies);
-            support_peak_t = support_peak_t(qualifies);
-            uncertainty = zeros(size(starts));
-            source = 'breath_amplitude_ratio_session';
-            method = 'confirmed_window_breath_trough_localization';
+    if ~isfield(belt, 'rr_bpm') || numel(peak_t) < 2
+        return;
     end
+    rr = belt.rr_bpm(:);
+    n = min(numel(rr), numel(peak_t) - 1);
+    peak_t = peak_t(1:n+1);
+    rr = rr(1:n);
+    valid = isfinite(peak_t(1:n)) & isfinite(peak_t(2:n+1)) & ...
+        peak_t(2:n+1) > peak_t(1:n) & isfinite(rr);
+    if strcmp(criterion, 'rate_ge')
+        qualifies = valid & rr >= lower;
+    elseif strcmp(criterion, 'rate_le')
+        qualifies = valid & rr <= upper;
+    else
+        error('MAGMA:BreathLocalization:InvalidRateCriterion', ...
+            'criterion must be ''rate_ge'' or ''rate_le''.');
+    end
+    starts = peak_t(1:n);
+    ends = peak_t(2:n+1);
+    starts = starts(qualifies);
+    ends = ends(qualifies);
+    uncertainty = 0.5 * (ends - starts);
+    source = 'breathwise_rr_bpm';
+    method = 'confirmed_window_breath_interval_localization';
 
     good = isfinite(starts) & isfinite(ends) & ends > starts;
     starts = starts(good);
     ends = ends(good);
     uncertainty = uncertainty(good);
-    if ~isempty(support_peak_t)
-        support_peak_t = support_peak_t(good);
-    end
-end
-
-function [run_starts, run_ends, run_uncertainties] = ...
-    amplitude_support_runs_for_candidate( ...
-    starts, ends, uncertainty, support_peak_t, c0, c1)
-% AMPLITUDE_SUPPORT_RUNS_FOR_CANDIDATE Merge complete qualifying breath cycles.
-% Candidate bounds select cycles by their peak times but never clip the actual
-% detected trough-to-trough boundaries. Touching cycles merge at shared troughs.
-
-    run_starts = [];
-    run_ends = [];
-    run_uncertainties = [];
-    if isempty(starts)
-        return;
-    end
-
-    keep = support_peak_t >= c0 & support_peak_t < c1;
-    starts = starts(keep);
-    ends = ends(keep);
-    uncertainty = uncertainty(keep);
-    if isempty(starts)
-        return;
-    end
-
-    [starts, order] = sort(starts);
-    ends = ends(order);
-    uncertainty = uncertainty(order);
-    group_start = starts(1);
-    group_end = ends(1);
-    group_uncertainty = uncertainty(1);
-    tol = 1e-9;
-    for i = 2:numel(starts)
-        if starts(i) <= group_end + tol
-            group_end = max(group_end, ends(i));
-            group_uncertainty = max(group_uncertainty, uncertainty(i));
-        else
-            run_starts(end+1, 1) = group_start; %#ok<AGROW>
-            run_ends(end+1, 1) = group_end; %#ok<AGROW>
-            run_uncertainties(end+1, 1) = group_uncertainty; %#ok<AGROW>
-            group_start = starts(i);
-            group_end = ends(i);
-            group_uncertainty = uncertainty(i);
-        end
-    end
-    run_starts(end+1, 1) = group_start;
-    run_ends(end+1, 1) = group_end;
-    run_uncertainties(end+1, 1) = group_uncertainty;
 end
 
 function [run_starts, run_ends, run_uncertainties] = ...

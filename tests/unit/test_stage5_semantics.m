@@ -49,8 +49,8 @@ end
 
 function testRapidAndSlowWindowsAreSeparateFromMinimumDuration(testCase)
     config = stage_config();
-    verifyEqual(testCase, config.shallow.analysis_win_sec, 30);
-    verifyEqual(testCase, config.deep.analysis_win_sec, 30);
+    verifyFalse(testCase, isfield(config.shallow, 'analysis_win_sec'));
+    verifyFalse(testCase, isfield(config.deep, 'analysis_win_sec'));
     verifyEqual(testCase, config.rapid.analysis_win_sec, 60);
     verifyEqual(testCase, config.rapid.min_dur_sec, 30);
     verifyEqual(testCase, config.slow.analysis_win_sec, 60);

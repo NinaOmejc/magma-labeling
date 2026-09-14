@@ -7,7 +7,7 @@ function diagnostic_signals = compute_label_diagnostic_signals( ...
 % threshold, window, analysis_fs, or analysis_n_samples. Field groups include:
 %   time/grid metadata; rapid/slow RR (breaths/min), endpoints, states, margins;
 %   irregular CoV/robust CoV, endpoints, states, and CoV margins;
-%   raw/session-normalized amplitude traces, availability, states, and margins;
+%   respiratory amplitude reference values and availability;
 %   thoracoabdominal ratios/fractions and dominance evidence;
 %   SpO2 and drop-from-reference percentages; ReA coherence/reference evidence;
 %   optional apnea references, sigh thresholds/counts, and CSR cycle diagnostics.
@@ -17,7 +17,6 @@ function diagnostic_signals = compute_label_diagnostic_signals( ...
     rapid_win_sec = resp_features.resp.rate_windows_sec.rapid;
     slow_win_sec = resp_features.resp.rate_windows_sec.slow;
     irregularity_win_sec = get_config_value(config, 'irregular', 'analysis_win_sec', 60);
-    amplitude_win_sec = resp_features.resp.amplitude_windows_sec.shallow;
     cov_thr = get_config_value(config, 'irregular', 'cov_thr', 0.3);
 
     diagnostic_signals = struct();
@@ -28,7 +27,6 @@ function diagnostic_signals = compute_label_diagnostic_signals( ...
     diagnostic_signals.rapid_bpm_threshold = config.rapid.rr_thr_bpm;
     diagnostic_signals.slow_bpm_threshold = config.slow.rr_thr_bpm;
     diagnostic_signals.irregularity_window_sec = irregularity_win_sec;
-    diagnostic_signals.amplitude_window_sec = amplitude_win_sec;
     diagnostic_signals.irregularity_cov_thr = cov_thr;
 
     diagnostic_signals.breathing_rate_rapid_window_bpm_lungs = resp_features.resp.lungs.rate_rapid_window_bpm;
@@ -65,36 +63,10 @@ function diagnostic_signals = compute_label_diagnostic_signals( ...
     diagnostic_signals.irregularity_cov_margin_diaph = ...
         resp_features.resp.diaph.irregularity.cov - cov_thr;
 
-    diagnostic_signals.breath_amplitude_median_raw_units_lungs = resp_features.resp.lungs.amp_window_median_raw_units;
-    diagnostic_signals.breath_amplitude_median_raw_units_diaph = resp_features.resp.diaph.amp_window_median_raw_units;
     diagnostic_signals.breath_amplitude_session_reference_raw_units_lungs = resp_features.resp.lungs.session_reference_value;
     diagnostic_signals.breath_amplitude_session_reference_raw_units_diaph = resp_features.resp.diaph.session_reference_value;
     diagnostic_signals.breath_amplitude_session_reference_available_lungs = double(resp_features.resp.lungs.session_reference_available);
     diagnostic_signals.breath_amplitude_session_reference_available_diaph = double(resp_features.resp.diaph.session_reference_available);
-    diagnostic_signals.breath_amplitude_ratio_to_reference_lungs = resp_features.resp.lungs.amp_ratio_session_window_median;
-    diagnostic_signals.breath_amplitude_ratio_to_reference_diaph = resp_features.resp.diaph.amp_ratio_session_window_median;
-    diagnostic_signals.deep_breath_amplitude_ratio_to_reference_lungs = resp_features.resp.lungs.deep_amp_ratio_session_window_median;
-    diagnostic_signals.deep_breath_amplitude_ratio_to_reference_diaph = resp_features.resp.diaph.deep_amp_ratio_session_window_median;
-    diagnostic_signals.shallow_evidence_endpoint_lungs = double(resp_features.resp.lungs.shallow_amplitude_endpoint_mask);
-    diagnostic_signals.shallow_evidence_endpoint_diaph = double(resp_features.resp.diaph.shallow_amplitude_endpoint_mask);
-    diagnostic_signals.shallow_inferred_state_lungs = double(resp_features.resp.lungs.shallow_amplitude_mask);
-    diagnostic_signals.shallow_inferred_state_diaph = double(resp_features.resp.diaph.shallow_amplitude_mask);
-    diagnostic_signals.deep_evidence_endpoint_lungs = double(resp_features.resp.lungs.deep_amplitude_endpoint_mask);
-    diagnostic_signals.deep_evidence_endpoint_diaph = double(resp_features.resp.diaph.deep_amplitude_endpoint_mask);
-    diagnostic_signals.deep_inferred_state_lungs = double(resp_features.resp.lungs.deep_amplitude_mask);
-    diagnostic_signals.deep_inferred_state_diaph = double(resp_features.resp.diaph.deep_amplitude_mask);
-    diagnostic_signals.deep_margin_ratio_lungs = ...
-        resp_features.resp.lungs.deep_amp_ratio_session_window_median - config.deep.amp_ratio_thr;
-    diagnostic_signals.deep_margin_ratio_diaph = ...
-        resp_features.resp.diaph.deep_amp_ratio_session_window_median - config.deep.amp_ratio_thr;
-    diagnostic_signals.shallow_lower_margin_ratio_lungs = ...
-        resp_features.resp.lungs.amp_ratio_session_window_median - config.shallow.amp_ratio_low;
-    diagnostic_signals.shallow_upper_margin_ratio_lungs = ...
-        config.shallow.amp_ratio_high - resp_features.resp.lungs.amp_ratio_session_window_median;
-    diagnostic_signals.shallow_lower_margin_ratio_diaph = ...
-        resp_features.resp.diaph.amp_ratio_session_window_median - config.shallow.amp_ratio_low;
-    diagnostic_signals.shallow_upper_margin_ratio_diaph = ...
-        config.shallow.amp_ratio_high - resp_features.resp.diaph.amp_ratio_session_window_median;
 
     balance = resp_features.resp.thoracoabdominal_balance;
     diagnostic_signals.thoracic_dominance_available = double(balance.available);

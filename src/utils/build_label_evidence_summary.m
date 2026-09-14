@@ -20,23 +20,21 @@ function summary = build_label_evidence_summary( ...
 
     lungs = resp_features.resp.lungs;
     diaph = resp_features.resp.diaph;
-    summary.shallow.analysis_window_sec = resp_features.resp.amplitude_windows_sec.shallow;
     summary.shallow.ratio_band = resp_features.resp.shallow_band_ratio;
-    summary.shallow.median_ratio_lungs = finite_median(lungs.amp_ratio_session_window_median);
-    summary.shallow.median_ratio_diaph = finite_median(diaph.amp_ratio_session_window_median);
+    summary.shallow.median_ratio_lungs = finite_median(lungs.amp_ratio_session);
+    summary.shallow.median_ratio_diaph = finite_median(diaph.amp_ratio_session);
     summary.shallow.reference_quality_lungs = lungs.reference_quality;
     summary.shallow.reference_quality_diaph = diaph.reference_quality;
     summary.shallow.supporting_belts = belt_support( ...
         lungs.session_amplitude_available, diaph.session_amplitude_available);
 
-    summary.deep.analysis_window_sec = resp_features.resp.amplitude_windows_sec.deep;
     summary.deep.ratio_threshold = resp_features.resp.deep_ratio_threshold;
-    summary.deep.median_ratio_lungs = finite_median(lungs.deep_amp_ratio_session_window_median);
-    summary.deep.median_ratio_diaph = finite_median(diaph.deep_amp_ratio_session_window_median);
+    summary.deep.median_ratio_lungs = finite_median(lungs.amp_ratio_session);
+    summary.deep.median_ratio_diaph = finite_median(diaph.amp_ratio_session);
     summary.deep.median_margin_lungs = finite_median( ...
-        lungs.deep_amp_ratio_session_window_median - resp_features.resp.deep_ratio_threshold);
+        lungs.amp_ratio_session - resp_features.resp.deep_ratio_threshold);
     summary.deep.median_margin_diaph = finite_median( ...
-        diaph.deep_amp_ratio_session_window_median - resp_features.resp.deep_ratio_threshold);
+        diaph.amp_ratio_session - resp_features.resp.deep_ratio_threshold);
     summary.deep.reference_quality_lungs = lungs.reference_quality;
     summary.deep.reference_quality_diaph = diaph.reference_quality;
     summary.deep.supporting_belts = belt_support( ...

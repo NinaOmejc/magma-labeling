@@ -286,39 +286,45 @@ function testRapidWindowDefaultsCannotRevertToThirtySeconds(testCase)
     end
 end
 
-function testAmplitudeEvidenceMatchesPreviousCalculations(testCase)
+function testBreathAmplitudeAndApneaEvidenceMatchDefinitions(testCase)
     [data, resp_cycles, resp_ref, diagnostics_desat, config] = feature_fixture();
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
     t_grid = resp_features.resp.time_sec;
 
-    expected_shallow = legacy_amplitude_band_mask( ...
-        resp_cycles.lungs, t_grid, config.shallow.analysis_win_sec, 2, ...
-        config.shallow.amp_ratio_low, config.shallow.amp_ratio_high);
     expected_apnea = legacy_apnea_ratio_trace( ...
         resp_cycles.lungs, t_grid, config.apnea.amp_analysis_win_sec, 2);
 
-    verifyEqual(testCase, resp_features.resp.lungs.shallow_amplitude_mask, expected_shallow);
     verifyTrue(testCase, isequaln( ...
         resp_features.resp.lungs.apnea_amp_ratio_session_window_median, expected_apnea));
     verifyEqual(testCase, resp_features.resp.lungs.amp_ratio_global, ...
         expected_global_ratio(resp_cycles.lungs.amp, 1.5));
+    verifyEqual(testCase, fieldnames(resp_features.resp.amplitude_windows_sec), ...
+        {'apnea'});
+    obsolete = {'amp_window_median_raw_units', ...
+        'amp_ratio_session_window_median', ...
+        'deep_amp_ratio_session_window_median', ...
+        'shallow_amplitude_endpoint_mask', 'shallow_amplitude_mask', ...
+        'deep_amplitude_endpoint_mask', 'deep_amplitude_mask'};
+    verifyFalse(testCase, any(isfield(resp_features.resp.lungs, obsolete)));
 end
 
-function testShallowCandidatesRequireLowerBandBound(testCase)
+function testShallowBreathsRequireLowerBandBound(testCase)
     [data, resp_cycles, resp_ref, ~, config] = feature_fixture();
     below_band_ratio = config.shallow.amp_ratio_low - 0.05;
-    resp_cycles.lungs.amp(:) = ...
-        resp_ref.lungs.session.value * below_band_ratio;
-    resp_cycles.lungs.amp(end) = NaN;
+    belts = {'lungs', 'diaph'};
+    for i = 1:numel(belts)
+        belt = belts{i};
+        resp_cycles.(belt).amp(:) = ...
+            resp_ref.(belt).session.value * below_band_ratio;
+        resp_cycles.(belt).amp(end) = NaN;
+    end
 
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
 
-    verifyFalse(testCase, any( ...
-        resp_features.resp.lungs.shallow_amplitude_endpoint_mask));
-    verifyFalse(testCase, any( ...
-        resp_features.resp.lungs.shallow_amplitude_mask));
+    verifyEmpty(testCase, ...
+        detect_shallow_breathing(data, resp_features, config));
 end
 
 function testUnavailableSessionReferenceDoesNotUseGlobal(testCase)
@@ -350,10 +356,15 @@ function testDiagnosticSignalsReusePhysiologicalEvidence(testCase)
         resp_features.resp.diaph.rate_rapid_window_bpm);
     verifyEqual(testCase, diagnostic.irregularity_robust_cov_lungs, ...
         resp_features.resp.lungs.irregularity.robust_cov);
-    verifyEqual(testCase, diagnostic.breath_amplitude_ratio_to_reference_diaph, ...
-        resp_features.resp.diaph.amp_ratio_session_window_median);
-    verifyEqual(testCase, diagnostic.breath_amplitude_median_raw_units_lungs, ...
-        resp_features.resp.lungs.amp_window_median_raw_units);
+    verifyEqual(testCase, ...
+        diagnostic.breath_amplitude_session_reference_raw_units_lungs, ...
+        resp_features.resp.lungs.session_reference_value);
+    obsolete = {'amplitude_window_sec', ...
+        'breath_amplitude_ratio_to_reference_lungs', ...
+        'breath_amplitude_ratio_to_reference_diaph', ...
+        'shallow_evidence_endpoint_lungs', 'shallow_inferred_state_lungs', ...
+        'deep_evidence_endpoint_lungs', 'deep_inferred_state_lungs'};
+    verifyFalse(testCase, any(isfield(diagnostic, obsolete)));
 end
 
 function testShallowAndApneaEventsMatchDerivedEvidence(testCase)
@@ -364,22 +375,12 @@ function testShallowAndApneaEventsMatchDerivedEvidence(testCase)
         data, resp_cycles, resp_ref, config);
     [actual_shallow, shallow_boundary] = detect_shallow_breathing(data, resp_features, config);
     t_grid = resp_features.resp.time_sec;
-    expected_lungs_mask = legacy_amplitude_band_mask( ...
-        resp_cycles.lungs, t_grid, config.shallow.analysis_win_sec, 2, ...
-        config.shallow.amp_ratio_low, config.shallow.amp_ratio_high);
-    expected_diaph_mask = legacy_amplitude_band_mask( ...
-        resp_cycles.diaph, t_grid, config.shallow.analysis_win_sec, 4, ...
-        config.shallow.amp_ratio_low, config.shallow.amp_ratio_high);
-    [expected_lungs, ~] = sustained_condition_to_events( ...
-        expected_lungs_mask, t_grid, config.fs, size(data,1), ...
-        config.shallow.min_dur_sec, 'shallow_breathing_lungs');
-    [expected_diaph, ~] = sustained_condition_to_events( ...
-        expected_diaph_mask, t_grid, config.fs, size(data,1), ...
-        config.shallow.min_dur_sec, 'shallow_breathing_diaph');
-    expected_shallow = merge_events({expected_lungs, expected_diaph});
-    verifyTroughLocalizedEventEvidence(testCase, actual_shallow, ...
-        expected_shallow, shallow_boundary, ...
+    verifyTroughLocalizedEventEvidence(testCase, actual_shallow, shallow_boundary, ...
         [resp_cycles.lungs.trough_t; resp_cycles.diaph.trough_t]);
+    verifyEqual(testCase, shallow_boundary.boundary_method, ...
+        'breathwise_amplitude_trough_localization');
+    verifyEmpty(testCase, shallow_boundary.evidence_endpoint_mask);
+    verifyEmpty(testCase, shallow_boundary.candidate_support_mask);
 
     low_lungs = resp_cycles.lungs.peak_t >= 300 & resp_cycles.lungs.peak_t <= 350;
     low_diaph = resp_cycles.diaph.peak_t >= 300 & resp_cycles.diaph.peak_t <= 350;
@@ -444,13 +445,11 @@ function verifyLocalizedEventEvidence(testCase, actual, expected, boundary)
     verifyLessThanOrEqual(testCase, [actual.end_t]', [expected.end_t]');
 end
 
-function verifyTroughLocalizedEventEvidence( ...
-    testCase, actual, expected, boundary, trough_t)
-
-    verifyEqual(testCase, string({actual.type})', string({expected.type})');
-    verifyNumElements(testCase, boundary.events, numel(expected));
-    verifyEqual(testCase, [boundary.events.candidate_start_t]', [expected.start_t]');
-    verifyEqual(testCase, [boundary.events.candidate_end_t]', [expected.end_t]');
+function verifyTroughLocalizedEventEvidence(testCase, actual, boundary, trough_t)
+    verifyNotEmpty(testCase, actual);
+    verifyNumElements(testCase, boundary.events, numel(actual));
+    verifyTrue(testCase, all(isnan([boundary.events.candidate_start_t])));
+    verifyTrue(testCase, all(isnan([boundary.events.candidate_end_t])));
     localized_start = [boundary.events.localized_start_t]';
     localized_end = [boundary.events.localized_end_t]';
     has_localized_bounds = isfinite(localized_start) & isfinite(localized_end);
@@ -565,27 +564,6 @@ function [data, resp_cycles, resp_ref, diagnostics_desat, config] = ...
         'lungs', belt_reference(1, 1, 'good'), ...
         'diaph', belt_reference(NaN, NaN, 'belt_unavailable'));
     diagnostics_desat = struct();
-end
-
-function mask = legacy_amplitude_band_mask(breaths, t_grid, win_sec, reference, lo, hi)
-    mask = false(size(t_grid));
-    peak_t = breaths.peak_t(:);
-    amp = breaths.amp(:);
-    n = min(numel(peak_t), numel(amp));
-    peak_t = peak_t(1:n);
-    amp = amp(1:n);
-    for i = 1:numel(t_grid)
-        t = t_grid(i);
-        lb = t - win_sec;
-        if lb < 0
-            continue;
-        end
-        values = amp(peak_t <= t & peak_t >= lb);
-        if numel(values) >= 3 && all(isfinite(values) & ...
-                values >= reference * lo & values <= reference * hi)
-            mask(t_grid >= lb & t_grid <= t) = true;
-        end
-    end
 end
 
 function trace = legacy_apnea_ratio_trace(breaths, t_grid, win_sec, reference)

@@ -85,10 +85,9 @@ function config = get_config()
 
     %---- LABEL 1 - shallow - DETECTION SETTINGS 
     config.shallow = struct();                  % shallow breathing settings
-    config.shallow.amp_ratio_low    = 0.10;     % lower amplitude ratio bound relative to the per-belt session reference (so only 10 % of the reference). What is lower than 10 %, is considered apnea 
+    config.shallow.amp_ratio_low    = 0.10;     % lower amplitude ratio bound relative to the per-belt session reference (so only 10 % of the reference). What is lower than 10 %, is considered apnea
     config.shallow.amp_ratio_high   = 0.80;     % upper amplitude ratio bound relative to the per-belt session reference (80 % of the reference)
-    config.shallow.analysis_win_sec = 30;       % trailing breath-amplitude analysis window
-    config.shallow.min_dur_sec      = 30;       % minimum final localized shallow-state duration
+    config.shallow.min_dur_sec      = 30;       % minimum merged trough-to-trough shallow-state duration
     config.shallow.do_plot           = true;    % save shallow breathing diagnostic plot
 
     %---- LABEL 2 - deep - DETECTION SETTINGS
@@ -96,8 +95,7 @@ function config = get_config()
     % within-record state, not an absolute tidal-volume measurement.
     config.deep = struct();
     config.deep.amp_ratio_thr = 1.20;              % breath excursion / fixed per-belt session reference
-    config.deep.analysis_win_sec = 30;             % trailing breath-amplitude analysis window
-    config.deep.min_dur_sec = 30;                  % minimum final localized deep-state duration
+    config.deep.min_dur_sec = 30;                  % minimum merged trough-to-trough deep-state duration
     config.deep.do_plot = true;                    % save deep breathing diagnostic plot
 
     %---- LABEL 3 - slow - DETECTION SETTINGS
@@ -118,8 +116,8 @@ function config = get_config()
 
     %---- LABEL 5 - irregular - DETECTION SETTINGS
     config.irregular = struct();              % irregular breathing settings
-    config.irregular.analysis_win_sec = 60;   % trailing IBI-variability analysis window
-    config.irregular.min_dur_sec = 60;        % minimum inferred irregular-state duration
+    config.irregular.analysis_win_sec = 60;   % trailing IBI-variability analysis window (history used to estimate CoV)
+    config.irregular.min_dur_sec = 60;        % minimum inferred irregular-state duration (how long the rolling CoV decision must persist)
     config.irregular.cov_thr   = 0.3;         % CoV threshold for irregularity
     config.irregular.plot_cov_step_sec = 1;   % display CoV as held values over "step_sec" windows (just for display)
     config.irregular.do_plot       = true;    % save irregular breathing diagnostic plot

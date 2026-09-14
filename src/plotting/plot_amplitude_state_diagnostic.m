@@ -8,7 +8,7 @@ function plot_amplitude_state_diagnostic(resp_features, events_lungs, events_dia
 %   events_diaph  - Final diaphragm-belt events with boundaries in seconds.
 %   config        - Pipeline settings for recording identity and figure output.
 %   opts          - Plot text, output name, ratio thresholds, and optional
-%                   candidate/localized masks on the analysis grid.
+%                   localized masks on the analysis grid.
 
     lungs = resp_features.resp.lungs;
     diaph = resp_features.resp.diaph;
@@ -20,8 +20,6 @@ function plot_amplitude_state_diagnostic(resp_features, events_lungs, events_dia
         'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)])
 
     t_grid = resp_features.resp.time_sec;
-    candidate_lungs = get_option(opts, 'candidate_mask_lungs', []);
-    candidate_diaph = get_option(opts, 'candidate_mask_diaph', []);
     localized_lungs = get_option(opts, 'localized_mask_lungs', []);
     localized_diaph = get_option(opts, 'localized_mask_diaph', []);
     final_lungs = events_to_grid_mask(events_lungs, t_grid);
@@ -29,10 +27,10 @@ function plot_amplitude_state_diagnostic(resp_features, events_lungs, events_dia
 
     ax1 = nexttile(tl);
     plot_belt_amplitude(ax1, lungs, opts, 'Lungs', t_grid, ...
-        candidate_lungs, localized_lungs, final_lungs);
+        localized_lungs, final_lungs);
     ax2 = nexttile(tl);
     plot_belt_amplitude(ax2, diaph, opts, 'Diaphragm', t_grid, ...
-        candidate_diaph, localized_diaph, final_diaph);
+        localized_diaph, final_diaph);
 
     ax = [ax1 ax2];
     linkaxes(ax, 'x');
@@ -45,10 +43,9 @@ function plot_amplitude_state_diagnostic(resp_features, events_lungs, events_dia
 end
 
 function plot_belt_amplitude(ax, belt, opts, belt_name, t_grid, ...
-    candidate_mask, localized_mask, final_mask)
+    localized_mask, final_mask)
 % PLOT_BELT_AMPLITUDE Plot normalized breath excursion and support layers.
-% Candidate, localized, and final masks align with t_grid; belt_name labels
-% the respiratory belt shown in the panel.
+% Localized and final masks align with t_grid; belt_name identifies the belt.
 
     hold(ax, 'on');
     values = belt.amp_ratio_session;
@@ -65,8 +62,9 @@ function plot_belt_amplitude(ax, belt, opts, belt_name, t_grid, ...
         text(ax, 0.5, 0.5, 'No usable session-normalized belt amplitude evidence', ...
             'Units', 'normalized', 'HorizontalAlignment', 'center');
     end
-    shade_state_support_on_axis(ax, t_grid, candidate_mask, localized_mask, final_mask);
-    if ~isempty(candidate_mask) || ~isempty(localized_mask) || ~isempty(final_mask)
+    shade_state_support_on_axis( ...
+        ax, t_grid, [], localized_mask, final_mask, false);
+    if ~isempty(localized_mask) || ~isempty(final_mask)
         legend(ax, 'show', 'Location', 'eastoutside');
     end
     hold(ax, 'off');

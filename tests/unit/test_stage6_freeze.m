@@ -55,10 +55,6 @@ function testShallowAndDeepUseDetectedTroughBoundaries(testCase)
     lungs.trough_t = (3.2:2:33.2)';
     lungs.session_amplitude_available = true;
     lungs.amp_ratio_session = 0.7 * ones(size(lungs.peak_t));
-    lungs.shallow_amplitude_mask = t <= 35;
-    lungs.shallow_amplitude_endpoint_mask = t == 35;
-    lungs.deep_amplitude_mask = t <= 35;
-    lungs.deep_amplitude_endpoint_mask = t == 35;
     diaph = empty_rate_belt(t);
     phys.resp = struct('time_sec', t, 'lungs', lungs, 'diaph', diaph);
     [shallow, shallow_info] = detect_shallow_breathing(zeros(710,6), phys, config);
@@ -72,62 +68,65 @@ function testShallowAndDeepUseDetectedTroughBoundaries(testCase)
     verifyEqual(testCase, deep.start_t, lungs.trough_t(1), 'AbsTol', eps);
     verifyEqual(testCase, deep.end_t, lungs.trough_t(end), 'AbsTol', eps);
     verifyEqual(testCase, shallow_info.events.boundary_method, ...
-        'confirmed_window_breath_trough_localization');
+        'breathwise_amplitude_trough_localization');
     verifyEqual(testCase, deep_info.events.boundary_method, ...
-        'confirmed_window_breath_trough_localization');
+        'breathwise_amplitude_trough_localization');
     verifyEqual(testCase, shallow_info.boundary_method, ...
-        'confirmed_all_breath_window_trough_localization');
+        'breathwise_amplitude_trough_localization');
     verifyEqual(testCase, deep_info.boundary_method, ...
-        'confirmed_all_breath_window_trough_localization');
+        'breathwise_amplitude_trough_localization');
+    verifyEmpty(testCase, shallow_info.evidence_endpoint_mask);
+    verifyEmpty(testCase, shallow_info.candidate_support_mask);
+    verifyEmpty(testCase, deep_info.evidence_endpoint_mask);
+    verifyEmpty(testCase, deep_info.candidate_support_mask);
+    verifyTrue(testCase, all(isnan([shallow_info.events.candidate_start_t])));
+    verifyTrue(testCase, all(isnan([shallow_info.events.candidate_end_t])));
+    verifyTrue(testCase, all(isnan([deep_info.events.candidate_start_t])));
+    verifyTrue(testCase, all(isnan([deep_info.events.candidate_end_t])));
     verifyEqual(testCase, [shallow_info.events.uncertainty_sec], 0);
     verifyEqual(testCase, [deep_info.events.uncertainty_sec], 0);
     verifyTrue(testCase, all([shallow_info.events.passes_final_min_duration]));
     verifyTrue(testCase, all([deep_info.events.passes_final_min_duration]));
 end
 
-function testAmplitudeLocalizationKeepsTroughBoundsOutsideCandidate(testCase)
+function testAmplitudeLocalizationUsesCompleteTroughBounds(testCase)
     fs = 10;
-    candidate = make_event_fixture('shallow_breathing_lungs', 10, 20, fs);
     belt = struct( ...
         'peak_t', [8; 12; 18; 22], ...
         'trough_t', [9; 15; 21], ...
         'amp_ratio_session', 0.70 * ones(4, 1));
 
-    [events, records, localized] = localize_confirmed_breath_events( ...
-        candidate, belt, 300, fs, 'shallow_breathing_lungs', ...
-        'amplitude_band', 0.65, 0.80, 30, 0, 'lungs');
+    [events, records, localized] = localize_breath_amplitude_events( ...
+        belt, 300, fs, 'shallow_breathing_lungs', ...
+        'amplitude_band', 0.65, 0.80, 0, 'lungs');
 
     verifyNumElements(testCase, events, 1);
     verifyNumElements(testCase, localized, 1);
     verifyEqual(testCase, events.start_t, 9, 'AbsTol', eps);
     verifyEqual(testCase, events.end_t, 21, 'AbsTol', eps);
-    verifyLessThan(testCase, events.start_t, candidate.start_t);
-    verifyGreaterThan(testCase, events.end_t, candidate.end_t);
+    verifyTrue(testCase, isnan(records.candidate_start_t));
+    verifyTrue(testCase, isnan(records.candidate_end_t));
     verifyEqual(testCase, records.uncertainty_sec, 0);
 end
 
 function testAmplitudeLocalizationRejectsIncompleteEdgeBreaths(testCase)
     fs = 10;
-    candidate = make_event_fixture('shallow_breathing_lungs', 0, 10, fs);
     belt = struct( ...
         'peak_t', [2; 4; 6; 8], ...
         'trough_t', [3; 5; 7], ...
         'amp_ratio_session', [0.70; 1; 1; 0.70]);
 
-    [events, records, localized] = localize_confirmed_breath_events( ...
-        candidate, belt, 110, fs, 'shallow_breathing_lungs', ...
-        'amplitude_band', 0.65, 0.80, 30, 0, 'lungs');
+    [events, records, localized] = localize_breath_amplitude_events( ...
+        belt, 110, fs, 'shallow_breathing_lungs', ...
+        'amplitude_band', 0.65, 0.80, 0, 'lungs');
 
     verifyEmpty(testCase, events);
     verifyEmpty(testCase, localized);
-    verifyNumElements(testCase, records, 1);
-    verifyEqual(testCase, records.boundary_method, ...
-        'no_defensible_localized_support');
+    verifyEmpty(testCase, records);
 end
 
 function testAmplitudeLocalizationRequiresTwoUsableTroughs(testCase)
     fs = 10;
-    candidate = make_event_fixture('deep_breathing_lungs', 0, 10, fs);
     belts = { ...
         struct('peak_t', [2; 4], 'trough_t', 3, ...
             'amp_ratio_session', [1.3; 1.3]), ...
@@ -135,9 +134,9 @@ function testAmplitudeLocalizationRequiresTwoUsableTroughs(testCase)
             'amp_ratio_session', [1.3; 1.3; 1.3])};
 
     for i = 1:numel(belts)
-        [events, ~, localized] = localize_confirmed_breath_events( ...
-            candidate, belts{i}, 110, fs, 'deep_breathing_lungs', ...
-            'amplitude_ge', 1.2, NaN, 30, 0, 'lungs');
+        [events, ~, localized] = localize_breath_amplitude_events( ...
+            belts{i}, 110, fs, 'deep_breathing_lungs', ...
+            'amplitude_ge', 1.2, NaN, 0, 'lungs');
         verifyEmpty(testCase, events);
         verifyEmpty(testCase, localized);
     end
@@ -146,17 +145,12 @@ end
 function testShortLocalizedRunsRemainQcOnlyForAllFourStates(testCase)
     config = stage6_config();
     t = (0:90)';
-    amplitude_candidate_state = t <= 30;
     rate_candidate_state = t <= 60;
     N = 910;
 
     amplitude_belt = rate_belt(t, (1:2:27)');
     amplitude_belt.session_amplitude_available = true;
     amplitude_belt.amp_ratio_session = 0.70 * ones(size(amplitude_belt.peak_t));
-    amplitude_belt.shallow_amplitude_mask = amplitude_candidate_state;
-    amplitude_belt.shallow_amplitude_endpoint_mask = t == 30;
-    amplitude_belt.deep_amplitude_mask = amplitude_candidate_state;
-    amplitude_belt.deep_amplitude_endpoint_mask = t == 30;
     phys = rate_phys(t, amplitude_belt);
     [shallow, shallow_info] = detect_shallow_breathing(zeros(N,6), phys, config);
     amplitude_belt.amp_ratio_session(:) = 1.30;
@@ -196,15 +190,14 @@ end
 
 function testDisconnectedLocalizedRunsAreAllRetainedInQc(testCase)
     fs = 10;
-    candidate = make_event_fixture('shallow_breathing_lungs', 0, 60, fs);
     peak_t = (2:2:58)';
     ratio = 0.70 * ones(size(peak_t));
     ratio(peak_t == 36) = 1;
     belt = struct('peak_t', peak_t, 'trough_t', (3:2:57)', ...
         'amp_ratio_session', ratio);
-    [events, records, localized] = localize_confirmed_breath_events( ...
-        candidate, belt, 610, fs, 'shallow_breathing_lungs', ...
-        'amplitude_band', 0.65, 0.80, 30, 30, 'lungs');
+    [events, records, localized] = localize_breath_amplitude_events( ...
+        belt, 610, fs, 'shallow_breathing_lungs', ...
+        'amplitude_band', 0.65, 0.80, 30, 'lungs');
     verifyNumElements(testCase, localized, 2);
     verifyNumElements(testCase, records, 2);
     verifyNumElements(testCase, events, 1);
@@ -238,6 +231,14 @@ function testRapidNearMissPlotIsSavedWithoutFinalEvent(testCase)
     shade_state_support_on_axis(ax, t, t <= 60, t <= 28, false(size(t)));
     names = string(get(findall(ax, 'Type', 'patch'), 'DisplayName'));
     verifyTrue(testCase, any(names == "Rolling/candidate support"));
+    verifyTrue(testCase, any(names == "All localized qualifying support"));
+    verifyTrue(testCase, any(names == "Final retained state"));
+
+    delete(findall(ax, 'Type', 'patch'));
+    shade_state_support_on_axis( ...
+        ax, t, [], t <= 28, false(size(t)), false);
+    names = string(get(findall(ax, 'Type', 'patch'), 'DisplayName'));
+    verifyFalse(testCase, any(names == "Rolling/candidate support"));
     verifyTrue(testCase, any(names == "All localized qualifying support"));
     verifyTrue(testCase, any(names == "Final retained state"));
 end
@@ -781,10 +782,6 @@ function belt = empty_rate_belt(t)
         'rate_slow_state_mask', false(size(t)), ...
         'rate_rapid_endpoint_mask', false(size(t)), ...
         'rate_rapid_state_mask', false(size(t)), ...
-        'shallow_amplitude_mask', false(size(t)), ...
-        'shallow_amplitude_endpoint_mask', false(size(t)), ...
-        'deep_amplitude_mask', false(size(t)), ...
-        'deep_amplitude_endpoint_mask', false(size(t)), ...
         'apnea_amp_ratio_session_window_median', nan(size(t)), ...
         'irregularity', struct('window_mask', false(size(t)), ...
             'endpoint_mask', false(size(t)), 'cov', nan(size(t)), ...

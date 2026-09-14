@@ -1,5 +1,5 @@
 function handles = shade_state_support_on_axis( ...
-    ax, t_grid, candidate_mask, localized_mask, final_mask)
+    ax, t_grid, candidate_mask, localized_mask, final_mask, include_candidate)
 % SHADE_STATE_SUPPORT_ON_AXIS Overlay candidate, localized, and retained state support.
 %
 % Inputs:
@@ -8,15 +8,24 @@ function handles = shade_state_support_on_axis( ...
 %   candidate_mask - Ngrid logical rolling-window/candidate support.
 %   localized_mask - Ngrid logical support after breath-boundary localization.
 %   final_mask     - Ngrid logical support retained as final events.
+%   include_candidate - Optional logical; false omits the candidate layer and
+%                       its legend entry. Defaults to true.
 %
 % Outputs:
 %   handles - Column vector of patch handles, including legend placeholders.
 
-    three_layer_mode = ~isempty(candidate_mask) || ~isempty(localized_mask);
+    if nargin < 6
+        include_candidate = true;
+    end
     layers = { ...
         candidate_mask, [0.55 0.55 0.55], 0.16, 'Rolling/candidate support'; ...
         localized_mask, [1.00 0.65 0.00], 0.24, 'All localized qualifying support'; ...
         final_mask, [0.15 0.60 0.25], 0.34, 'Final retained state'};
+    if ~include_candidate
+        layers = layers(2:end, :);
+    end
+    layered_mode = ~isempty(localized_mask) || ...
+        (include_candidate && ~isempty(candidate_mask));
     handles = gobjects(0);
     t_grid = t_grid(:);
     if isempty(t_grid)
@@ -36,7 +45,7 @@ function handles = shade_state_support_on_axis( ...
     for layer_index = 1:size(layers, 1)
         mask = logical(layers{layer_index, 1}(:));
         if isempty(mask) || ~any(mask)
-            if three_layer_mode
+            if layered_mode
                 p = patch(ax, nan(1,4), nan(1,4), layers{layer_index, 2}, ...
                     'EdgeColor', 'none', 'FaceAlpha', layers{layer_index, 3}, ...
                     'DisplayName', layers{layer_index, 4});

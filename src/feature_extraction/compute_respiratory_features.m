@@ -4,7 +4,8 @@ function resp_features = compute_respiratory_features(data, resp_cycles, resp_re
 % resp_ref supplies session/global amplitude references, and config defines
 % grid spacing, trailing windows, and thresholds. resp_features.resp contains:
 %   time_sec/grid_step_sec - Analysis-grid coordinates and spacing in seconds.
-%   rate_windows_sec/amplitude_windows_sec - Window durations by label.
+%   rate_windows_sec - Slow/rapid trailing-window durations.
+%   amplitude_windows_sec - Apnea amplitude-window duration.
 %   shallow_band_ratio/deep_ratio_threshold - Stored amplitude criteria.
 %   lungs/diaph - Per-belt evidence structs documented by empty_belt_evidence.
 %   belt_availability/both_belts_available - Usable timing-evidence flags.
@@ -20,10 +21,7 @@ function resp_features = compute_respiratory_features(data, resp_cycles, resp_re
     resp_features.resp.grid_step_sec = config.grid_step_sec;
     resp_features.resp.rate_windows_sec = struct( ...
         'slow', cfg.slow_win_sec, 'rapid', cfg.rapid_win_sec);
-    resp_features.resp.amplitude_windows_sec = struct( ...
-        'shallow', cfg.shallow_win_sec, ...
-        'deep', cfg.deep_win_sec, ...
-        'apnea', cfg.apnea_win_sec);
+    resp_features.resp.amplitude_windows_sec = struct('apnea', cfg.apnea_win_sec);
     resp_features.resp.shallow_band_ratio = [cfg.shallow_lo_ratio cfg.shallow_hi_ratio];
     resp_features.resp.deep_ratio_threshold = cfg.deep_ratio_threshold;
 
@@ -106,33 +104,11 @@ function belt = build_belt_evidence(source, reference, ignored, t_grid, cfg, con
     end
 
     if belt.session_amplitude_available
-        % Shallow: every breath in the trailing window must lie within the
-        % configured normalized-amplitude band.
-        [belt.shallow_amplitude_endpoint_mask, belt.shallow_amplitude_mask] = amplitude_band_mask( ...
-            belt.peak_t, belt.amp_ratio_session, t_grid, cfg.shallow_win_sec, ...
-            cfg.shallow_lo_ratio, cfg.shallow_hi_ratio);
-        % Deep: every breath in the trailing window must meet or exceed the
-        % configured normalized-amplitude threshold.
-        [belt.deep_amplitude_endpoint_mask, belt.deep_amplitude_mask] = amplitude_threshold_mask( ...
-            belt.peak_t, belt.amp_ratio_session, t_grid, cfg.deep_win_sec, cfg.deep_ratio_threshold, 3, 'ge');
-        % apnea
+        % Apnea retains its separate trailing-window amplitude criterion.
         [belt.apnea_amplitude_endpoint_mask, belt.apnea_amplitude_state_mask] = amplitude_threshold_mask( ...
             belt.peak_t, belt.amp_ratio_session, t_grid, cfg.apnea_win_sec, cfg.apnea_ratio_threshold, 2, 'le');
-
-        % Window-summary criterion  (more soft but more robust to normal breath-to-breath variability)
-        % shallow breathing 
-        [belt.amp_window_median_raw_units, belt.amp_ratio_session_window_median] = amplitude_window_medians( ...
-            belt.peak_t, belt.amp, belt.amp_ratio_session, t_grid, cfg.shallow_win_sec, 3);
-        % deep breathing
-        [~, belt.deep_amp_ratio_session_window_median] = amplitude_window_medians( ...
-            belt.peak_t, belt.amp, belt.amp_ratio_session, t_grid, cfg.deep_win_sec, 3);
-        % apnea
         [~, belt.apnea_amp_ratio_session_window_median] = amplitude_window_medians( ...
             belt.peak_t, belt.amp, belt.amp_ratio_session, t_grid, cfg.apnea_win_sec, 2);
-
-    elseif belt.amplitude_available % (for when we have valid breath amplitudes, BUT no usable session reference.)
-        [belt.amp_window_median_raw_units, ~] = amplitude_window_medians( ...
-            belt.peak_t, belt.amp, belt.amp_ratio_session, t_grid, cfg.shallow_win_sec, 3);
     end
 
     if belt.available
@@ -243,9 +219,9 @@ function belt = empty_belt_evidence(t_grid)
 % rr_source provenance.
 % Availability fields distinguish timing, raw amplitude, and session/global
 % normalized amplitude; reference fields store values, flags, and quality.
-% Grid-level fields include slow/rapid rate traces and endpoint/state masks;
-% raw and normalized amplitude medians; shallow/deep/apnea endpoint/state
-% masks; and irregularity.window_mask, endpoint_mask, cov, and robust_cov.
+% Grid-level fields include slow/rapid rate traces and endpoint/state masks,
+% apnea amplitude evidence, and irregularity.window_mask, endpoint_mask, cov,
+% and robust_cov. Shallow/deep detection consumes breath-level ratios directly.
 
     belt = struct( ...
         'available', false, ...
@@ -275,14 +251,7 @@ function belt = empty_belt_evidence(t_grid)
         'rate_slow_state_mask', false(size(t_grid)), ...
         'rate_rapid_endpoint_mask', false(size(t_grid)), ...
         'rate_rapid_state_mask', false(size(t_grid)), ...
-        'amp_window_median_raw_units', nan(size(t_grid)), ...
-        'amp_ratio_session_window_median', nan(size(t_grid)), ...
-        'deep_amp_ratio_session_window_median', nan(size(t_grid)), ...
         'apnea_amp_ratio_session_window_median', nan(size(t_grid)), ...
-        'shallow_amplitude_mask', false(size(t_grid)), ...
-        'shallow_amplitude_endpoint_mask', false(size(t_grid)), ...
-        'deep_amplitude_mask', false(size(t_grid)), ...
-        'deep_amplitude_endpoint_mask', false(size(t_grid)), ...
         'apnea_amplitude_endpoint_mask', false(size(t_grid)), ...
         'apnea_amplitude_state_mask', false(size(t_grid)), ...
         'irregularity', struct( ...
@@ -334,36 +303,6 @@ function trace = respiratory_rate_trace(peak_t, t_grid, win_sec)
             trace(i) = 60 / mean_ibi;
         end
     end
-end
-
-function [endpoint_mask, state_mask] = amplitude_band_mask(peak_t, ratio, t_grid, win_sec, r_lo, r_hi)
-% AMPLITUDE_BAND_MASK Require every breath ratio in a trailing window to lie in a band.
-% peak_t (s) and dimensionless ratio are aligned breath vectors; t_grid is
-% the output grid. A full win_sec window and at least three values are
-% required. endpoint_mask marks passing ends; state_mask covers their windows.
-
-    endpoint_mask = false(size(t_grid));
-    peak_t = peak_t(:);
-    ratio = ratio(:);
-    if numel(peak_t) ~= numel(ratio)
-        error('MAGMA:RespFeatures:SizeMismatch', ...
-            'peak_t and ratio must have equal lengths.');
-    end
-    for i = 1:numel(t_grid)
-        t = t_grid(i);
-        lb = t - win_sec;
-        if lb < 0
-            continue;
-        end
-        values = ratio(peak_t <= t & peak_t >= lb);
-        if numel(values) < 3
-            continue;
-        end
-        if all(isfinite(values) & values >= r_lo & values <= r_hi)
-            endpoint_mask(i) = true;
-        end
-    end
-    state_mask = analysis_window_endpoints_to_state_mask(endpoint_mask, t_grid, win_sec);
 end
 
 function [endpoint_mask, state_mask] = amplitude_threshold_mask( ...
@@ -575,8 +514,6 @@ function cfg = evidence_config(config)
     cfg = struct();
     cfg.slow_win_sec = get_config_value(config, 'slow', 'analysis_win_sec', 60);
     cfg.rapid_win_sec = get_config_value(config, 'rapid', 'analysis_win_sec', 60);
-    cfg.shallow_win_sec = get_config_value(config, 'shallow', 'analysis_win_sec', 30);
-    cfg.deep_win_sec = get_config_value(config, 'deep', 'analysis_win_sec', 30);
     cfg.apnea_win_sec = get_config_value(config, 'apnea', 'amp_analysis_win_sec', 10);
     cfg.apnea_ratio_threshold = get_config_value(config, 'apnea', 'amp_ratio_thr', 0.10);
     cfg.slow_rr_threshold = get_config_value(config, 'slow', 'rr_thr_bpm', 10);
