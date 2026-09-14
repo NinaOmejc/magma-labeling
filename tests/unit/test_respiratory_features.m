@@ -46,6 +46,42 @@ function testExistingTroughTimesTakePrecedenceOverIndices(testCase)
     verifyEqual(testCase, resp_features.resp.lungs.trough_t, supplied);
 end
 
+function testTroughTimeLengthMustMatchPeakIntervals(testCase)
+    [data, resp_cycles, resp_ref, ~, config] = feature_fixture();
+    resp_cycles.lungs.trough_t(end) = [];
+
+    verifyError(testCase, ...
+        @() compute_respiratory_features(data, resp_cycles, resp_ref, config), ...
+        'MAGMA:PhysFeat:TroughTimeAlignment');
+end
+
+function testTroughIndexLengthMustMatchPeakIntervals(testCase)
+    [data, resp_cycles, resp_ref, ~, config] = feature_fixture();
+    resp_cycles.lungs.trough_idx(end) = [];
+
+    verifyError(testCase, ...
+        @() compute_respiratory_features(data, resp_cycles, resp_ref, config), ...
+        'MAGMA:PhysFeat:TroughIndexAlignment');
+end
+
+function testFiniteTroughTimesMustLieBetweenAdjacentPeaks(testCase)
+    [data, resp_cycles, resp_ref, ~, config] = feature_fixture();
+    resp_cycles.lungs.trough_t(2) = resp_cycles.lungs.peak_t(2);
+
+    verifyError(testCase, ...
+        @() compute_respiratory_features(data, resp_cycles, resp_ref, config), ...
+        'MAGMA:PhysFeat:TroughTimeOrder');
+end
+
+function testTroughIndicesMustLieBetweenAdjacentPeakIndices(testCase)
+    [data, resp_cycles, resp_ref, ~, config] = feature_fixture();
+    resp_cycles.lungs.trough_idx(2) = resp_cycles.lungs.peak_idx(2);
+
+    verifyError(testCase, ...
+        @() compute_respiratory_features(data, resp_cycles, resp_ref, config), ...
+        'MAGMA:PhysFeat:TroughIndexOrder');
+end
+
 function testSessionAndGlobalRatiosHandleInvalidAmplitudes(testCase)
     [data, resp_cycles, resp_ref, diagnostics_desat, config] = feature_fixture();
     resp_cycles.lungs.amp(8) = 0;
@@ -267,6 +303,22 @@ function testAmplitudeEvidenceMatchesPreviousCalculations(testCase)
         resp_features.resp.lungs.apnea_amp_ratio_session_window_median, expected_apnea));
     verifyEqual(testCase, resp_features.resp.lungs.amp_ratio_global, ...
         expected_global_ratio(resp_cycles.lungs.amp, 1.5));
+end
+
+function testShallowCandidatesRequireLowerBandBound(testCase)
+    [data, resp_cycles, resp_ref, ~, config] = feature_fixture();
+    below_band_ratio = config.shallow.amp_ratio_low - 0.05;
+    resp_cycles.lungs.amp(:) = ...
+        resp_ref.lungs.session.value * below_band_ratio;
+    resp_cycles.lungs.amp(end) = NaN;
+
+    resp_features = compute_respiratory_features( ...
+        data, resp_cycles, resp_ref, config);
+
+    verifyFalse(testCase, any( ...
+        resp_features.resp.lungs.shallow_amplitude_endpoint_mask));
+    verifyFalse(testCase, any( ...
+        resp_features.resp.lungs.shallow_amplitude_mask));
 end
 
 function testUnavailableSessionReferenceDoesNotUseGlobal(testCase)

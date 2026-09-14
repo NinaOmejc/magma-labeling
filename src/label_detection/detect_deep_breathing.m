@@ -46,7 +46,7 @@ function [events, boundary_info] = detect_deep_breathing(data, resp_features, co
         config.deep.analysis_win_sec, config.deep.min_dur_sec, 'diaph');
     events = merge_events({events_lungs, events_diaph});
     endpoint_mask = get_endpoint_mask(lungs, 'deep_amplitude_endpoint_mask', t_grid) | ...
-        get_endpoint_mask(diaph, 'deep_amplitude_endpoint_mask', t_grid);
+                    get_endpoint_mask(diaph, 'deep_amplitude_endpoint_mask', t_grid);
     localized_lungs = events_to_grid_mask(localized_lungs_events, t_grid);
     localized_diaph = events_to_grid_mask(localized_diaph_events, t_grid);
     final_mask = events_to_grid_mask(events, t_grid);

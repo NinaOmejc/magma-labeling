@@ -85,7 +85,7 @@ function config = get_config()
 
     %---- LABEL 1 - shallow - DETECTION SETTINGS 
     config.shallow = struct();                  % shallow breathing settings
-    config.shallow.amp_ratio_low    = 0.10;     % lower amplitude ratio bound relative to the per-belt session reference (so only 10 % of the reference) 
+    config.shallow.amp_ratio_low    = 0.10;     % lower amplitude ratio bound relative to the per-belt session reference (so only 10 % of the reference). What is lower than 10 %, is considered apnea 
     config.shallow.amp_ratio_high   = 0.80;     % upper amplitude ratio bound relative to the per-belt session reference (80 % of the reference)
     config.shallow.analysis_win_sec = 30;       % trailing breath-amplitude analysis window
     config.shallow.min_dur_sec      = 30;       % minimum final localized shallow-state duration

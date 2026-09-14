@@ -1,9 +1,9 @@
 function plot_amplitude_state_diagnostic(resp_features, events_lungs, events_diaph, config, opts)
-% PLOT_AMPLITUDE_STATE_DIAGNOSTIC Compare raw and session-normalized breath excursion.
+% PLOT_AMPLITUDE_STATE_DIAGNOSTIC Plot session-normalized breath excursion by belt.
 %
 % Inputs:
 %   resp_features - Respiratory evidence; uses resp.time_sec and each belt's
-%                   breath-level amp, amp_ratio_session, and reference status.
+%                   breath-level amp_ratio_session and reference status.
 %   events_lungs  - Final lung-belt events with boundaries in seconds.
 %   events_diaph  - Final diaphragm-belt events with boundaries in seconds.
 %   config        - Pipeline settings for recording identity and figure output.
@@ -15,7 +15,7 @@ function plot_amplitude_state_diagnostic(resp_features, events_lungs, events_dia
 
     fig = figure('Units', 'pixels', 'Position', near_fullscreen_figure_position(), ...
         'Visible', config.make_figs_visible, 'Color', 'w');
-    tl = tiledlayout(fig, 4, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
+    tl = tiledlayout(fig, 2, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
     title(tl, [opts.figure_title newline ...
         'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)])
 
@@ -28,19 +28,13 @@ function plot_amplitude_state_diagnostic(resp_features, events_lungs, events_dia
     final_diaph = events_to_grid_mask(events_diaph, t_grid);
 
     ax1 = nexttile(tl);
-    plot_belt_amplitude(ax1, lungs, opts, false, 'Lungs', t_grid, ...
+    plot_belt_amplitude(ax1, lungs, opts, 'Lungs', t_grid, ...
         candidate_lungs, localized_lungs, final_lungs);
     ax2 = nexttile(tl);
-    plot_belt_amplitude(ax2, lungs, opts, true, 'Lungs', t_grid, ...
-        candidate_lungs, localized_lungs, final_lungs);
-    ax3 = nexttile(tl);
-    plot_belt_amplitude(ax3, diaph, opts, false, 'Diaphragm', t_grid, ...
-        candidate_diaph, localized_diaph, final_diaph);
-    ax4 = nexttile(tl);
-    plot_belt_amplitude(ax4, diaph, opts, true, 'Diaphragm', t_grid, ...
+    plot_belt_amplitude(ax2, diaph, opts, 'Diaphragm', t_grid, ...
         candidate_diaph, localized_diaph, final_diaph);
 
-    ax = [ax1 ax2 ax3 ax4];
+    ax = [ax1 ax2];
     linkaxes(ax, 'x');
     if ~isempty(resp_features.resp.time_sec)
         xlim(ax1, [0 resp_features.resp.time_sec(end)]);
@@ -50,27 +44,16 @@ function plot_amplitude_state_diagnostic(resp_features, events_lungs, events_dia
     save_figure(config, opts.output_name);
 end
 
-function plot_belt_amplitude(ax, belt, opts, normalized, belt_name, t_grid, ...
+function plot_belt_amplitude(ax, belt, opts, belt_name, t_grid, ...
     candidate_mask, localized_mask, final_mask)
-% PLOT_BELT_AMPLITUDE Plot breath-level excursion and time-grid support layers.
-% normalized selects raw amp or unitless amp_ratio_session. Candidate,
-% localized, and final masks must align with t_grid; belt_name labels the panel.
+% PLOT_BELT_AMPLITUDE Plot normalized breath excursion and support layers.
+% Candidate, localized, and final masks align with t_grid; belt_name labels
+% the respiratory belt shown in the panel.
 
     hold(ax, 'on');
-    if normalized
-        values = belt.amp_ratio_session;
-        ylabel_text = 'Session ratio';
-        title_suffix = 'session-normalized breath excursion';
-        lower = opts.lower_ratio;
-        upper = get_option(opts, 'upper_ratio', NaN);
-    else
-        values = belt.amp;
-        ylabel_text = 'Raw belt units';
-        title_suffix = 'raw breath excursion';
-        lower = opts.lower_ratio * belt.session_reference_value;
-        upper_ratio = get_option(opts, 'upper_ratio', NaN);
-        upper = upper_ratio * belt.session_reference_value;
-    end
+    values = belt.amp_ratio_session;
+    lower = opts.lower_ratio;
+    upper = get_option(opts, 'upper_ratio', NaN);
 
     n = min(numel(belt.peak_t), numel(values));
     if belt.session_amplitude_available && n > 0 && any(isfinite(values(1:n)))
@@ -87,9 +70,9 @@ function plot_belt_amplitude(ax, belt, opts, normalized, belt_name, t_grid, ...
         legend(ax, 'show', 'Location', 'eastoutside');
     end
     hold(ax, 'off');
-    title(ax, sprintf('%s: %s', belt_name, title_suffix));
+    title(ax, sprintf('%s: session-normalized breath excursion ratio', belt_name));
     xlabel(ax, 'Time (s)');
-    ylabel(ax, ylabel_text);
+    ylabel(ax, 'Session ratio');
     grid(ax, 'on');
 end
 

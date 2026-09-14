@@ -106,13 +106,13 @@ function belt = build_belt_evidence(source, reference, ignored, t_grid, cfg, con
     end
 
     if belt.session_amplitude_available
-        % All-breath criterion: every valid breath in the window must satisfy the threshold.
-        % for shallow breathing
-        % [belt.shallow_amplitude_endpoint_mask, belt.shallow_amplitude_mask] = amplitude_band_mask( ...
-        %     belt.peak_t, belt.amp_ratio_session, t_grid, cfg.shallow_win_sec, cfg.shallow_lo_ratio, cfg.shallow_hi_ratio);
-        [belt.shallow_amplitude_endpoint_mask, belt.shallow_amplitude_mask] = amplitude_threshold_mask( ...
-            belt.peak_t, belt.amp_ratio_session, t_grid, cfg.shallow_win_sec, cfg.shallow_hi_ratio, 3, 'le');
-        % deep breathing
+        % Shallow: every breath in the trailing window must lie within the
+        % configured normalized-amplitude band.
+        [belt.shallow_amplitude_endpoint_mask, belt.shallow_amplitude_mask] = amplitude_band_mask( ...
+            belt.peak_t, belt.amp_ratio_session, t_grid, cfg.shallow_win_sec, ...
+            cfg.shallow_lo_ratio, cfg.shallow_hi_ratio);
+        % Deep: every breath in the trailing window must meet or exceed the
+        % configured normalized-amplitude threshold.
         [belt.deep_amplitude_endpoint_mask, belt.deep_amplitude_mask] = amplitude_threshold_mask( ...
             belt.peak_t, belt.amp_ratio_session, t_grid, cfg.deep_win_sec, cfg.deep_ratio_threshold, 3, 'ge');
         % apnea
@@ -476,8 +476,9 @@ function [values, source_name] = rate_values(source, ibi)
 end
 
 function validate_available_alignment(belt)
-% VALIDATE_AVAILABLE_ALIGNMENT Enforce one peak time per peak index and N-1 intervals.
-% Checks apply only when the belt's timing evidence is marked available.
+% VALIDATE_AVAILABLE_ALIGNMENT Enforce aligned peak, trough, IBI, and RR evidence.
+% Checks apply only when the belt's timing evidence is marked available. Each
+% supplied trough must correspond to, and lie inside, one adjacent peak pair.
 
     if ~belt.available
         return;
@@ -490,6 +491,33 @@ function validate_available_alignment(belt)
     if numel(belt.ibi) ~= n_peaks - 1 || numel(belt.rr_bpm) ~= n_peaks - 1
         error('MAGMA:PhysFeat:IntervalAlignment', ...
             'IBI and RR must each have length numel(peak_t)-1.');
+    end
+    if ~isempty(belt.trough_t) && numel(belt.trough_t) ~= n_peaks - 1
+        error('MAGMA:PhysFeat:TroughTimeAlignment', ...
+            'Respiratory-cycle trough_t must have length numel(peak_t)-1.');
+    end
+    if ~isempty(belt.trough_idx) && numel(belt.trough_idx) ~= n_peaks - 1
+        error('MAGMA:PhysFeat:TroughIndexAlignment', ...
+            'Respiratory-cycle trough_idx must have length numel(peak_t)-1.');
+    end
+    if ~isempty(belt.trough_t)
+        finite_trough = isfinite(belt.trough_t);
+        between_peaks = belt.peak_t(1:end-1) < belt.trough_t & ...
+            belt.trough_t < belt.peak_t(2:end);
+        if any(finite_trough & ~between_peaks)
+            error('MAGMA:PhysFeat:TroughTimeOrder', ...
+                ['Each finite trough_t(i) must lie strictly between ' ...
+                 'peak_t(i) and peak_t(i+1).']);
+        end
+    end
+    if ~isempty(belt.peak_idx) && ~isempty(belt.trough_idx)
+        between_peak_indices = belt.peak_idx(1:end-1) < belt.trough_idx & ...
+            belt.trough_idx < belt.peak_idx(2:end);
+        if any(~between_peak_indices)
+            error('MAGMA:PhysFeat:TroughIndexOrder', ...
+                ['Each trough_idx(i) must lie strictly between ' ...
+                 'peak_idx(i) and peak_idx(i+1).']);
+        end
     end
 end
 
