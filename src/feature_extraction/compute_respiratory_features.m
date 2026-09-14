@@ -55,14 +55,26 @@ function belt = build_belt_evidence(source, reference, ignored, t_grid, cfg, con
     end
 
     % Preserve cycle alignment from resp_cycles: amp(i) belongs to peak i
-    % (the final amplitude may be NaN), while ibi(i) and rr_bpm(i) span
-    % peak i to peak i+1.
+    % (the final amplitude may be NaN), trough i lies between peaks i and
+    % i+1, and ibi(i)/rr_bpm(i) span peak i to peak i+1.
     belt.peak_idx = get_field(source, 'peak_idx', []);
     belt.peak_t = get_field(source, 'peak_t', []);
+    belt.trough_idx = get_field(source, 'trough_idx', []);
+    belt.trough_t = get_field(source, 'trough_t', []);
     belt.amp = get_field(source, 'amp', []);
     belt.peak_idx = belt.peak_idx(:);
     belt.peak_t = belt.peak_t(:);
+    belt.trough_idx = belt.trough_idx(:);
+    belt.trough_t = belt.trough_t(:);
     belt.amp = belt.amp(:);
+    if isempty(belt.trough_t) && ~isempty(belt.trough_idx) && ...
+            isscalar(config.fs) && isfinite(config.fs) && config.fs > 0
+        belt.trough_t = nan(size(belt.trough_idx));
+        valid_trough_idx = isfinite(belt.trough_idx) & ...
+            belt.trough_idx >= 1 & belt.trough_idx == round(belt.trough_idx);
+        belt.trough_t(valid_trough_idx) = ...
+            (belt.trough_idx(valid_trough_idx) - 1) / config.fs;
+    end
 
     belt.available = is_valid_breath_signal(source, false) && ~belt.ignored;
     belt.amplitude_available = is_valid_breath_signal(source, true) && belt.available;
@@ -226,8 +238,9 @@ end
 
 function belt = empty_belt_evidence(t_grid)
 % EMPTY_BELT_EVIDENCE Initialize all per-belt evidence fields on t_grid.
-% Breath-level fields: peak_idx, peak_t (s), amp, amp_ratio_session/global,
-% ibi (s), rr_bpm, and ibi_source/rr_source provenance.
+% Breath-level fields: peak_idx/peak_t (s), inter-peak trough_idx/trough_t
+% (s), amp, amp_ratio_session/global, ibi (s), rr_bpm, and ibi_source/
+% rr_source provenance.
 % Availability fields distinguish timing, raw amplitude, and session/global
 % normalized amplitude; reference fields store values, flags, and quality.
 % Grid-level fields include slow/rapid rate traces and endpoint/state masks;
@@ -242,6 +255,8 @@ function belt = empty_belt_evidence(t_grid)
         'ignored', false, ...
         'peak_idx', [], ...
         'peak_t', [], ...
+        'trough_idx', [], ...
+        'trough_t', [], ...
         'amp', [], ...
         'amp_ratio_session', [], ...
         'amp_ratio_global', [], ...

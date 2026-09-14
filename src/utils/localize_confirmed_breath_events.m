@@ -3,11 +3,13 @@ function [events, records, localized_support_events] = localize_confirmed_breath
     analysis_window_sec, min_duration_sec, belt_name)
 % LOCALIZE_CONFIRMED_BREATH_EVENTS Localize confirmed events from respiratory-cycle evidence.
 % Candidate grid-window events are intersected with qualifying breathwise RR
-% intervals or midpoint amplitude cells from belt. N/fs define recording bounds;
-% lower/upper encode the selected criterion; analysis_window_sec supplies
-% fallback uncertainty; and min_duration_sec filters final events. events pass
-% the duration rule, localized_support_events include rejected short runs, and
-% records document belt, method, bounds, duration decision, and uncertainty.
+% intervals. For amplitude criteria, candidate regions select qualifying internal
+% peaks whose complete cycles use detected trough-to-trough bounds without
+% candidate-edge clipping. N/fs define recording bounds; lower/upper encode the
+% criterion; analysis_window_sec supplies fallback uncertainty; and
+% min_duration_sec filters final events. events pass the duration rule,
+% localized_support_events include rejected short runs, and records document
+% belt, method, bounds, duration decision, and uncertainty.
 
     events = empty_events();
     records = empty_boundary_records();
@@ -16,15 +18,25 @@ function [events, records, localized_support_events] = localize_confirmed_breath
         return;
     end
 
-    [support_start, support_end, uncertainty, evidence_source, method] = ...
+    [support_start, support_end, uncertainty, support_peak_t, ...
+        evidence_source, method] = ...
         breath_support_intervals(belt, criterion, lower, upper);
+    amplitude_criterion = any(strcmp(criterion, ...
+        {'amplitude_band', 'amplitude_ge', 'amplitude_le'}));
 
     for i = 1:numel(candidate_events)
         candidate = candidate_events(i);
-        [run_starts, run_ends, run_uncertainties] = ...
-            support_runs_inside_candidate( ...
+        if amplitude_criterion
+            [run_starts, run_ends, run_uncertainties] = ...
+                amplitude_support_runs_for_candidate( ...
+                    support_start, support_end, uncertainty, support_peak_t, ...
+                    candidate.start_t, candidate.end_t);
+        else
+            [run_starts, run_ends, run_uncertainties] = ...
+                support_runs_inside_candidate( ...
                 support_start, support_end, uncertainty, ...
                 candidate.start_t, candidate.end_t);
+        end
 
         if isempty(run_starts)
             record = boundary_record_template();
@@ -74,16 +86,18 @@ function [events, records, localized_support_events] = localize_confirmed_breath
     end
 end
 
-function [starts, ends, uncertainty, source, method] = ...
+function [starts, ends, uncertainty, support_peak_t, source, method] = ...
     breath_support_intervals(belt, criterion, lower, upper)
 % BREATH_SUPPORT_INTERVALS Convert qualifying breath evidence to time intervals.
 % Rate criteria use peak-to-peak intervals and rr_bpm; amplitude criteria use
-% session-normalized ratios and midpoint cells. starts/ends/uncertainty are
-% seconds; source and method describe the chosen breath-level evidence.
+% session-normalized ratios for internal peaks bounded by their two detected
+% troughs. starts/ends/support_peak_t/uncertainty are seconds; source and
+% method describe the chosen breath-level evidence.
 
     starts = [];
     ends = [];
     uncertainty = [];
+    support_peak_t = [];
     source = '';
     method = '';
     if ~isstruct(belt) || ~isfield(belt, 'peak_t')
@@ -116,14 +130,30 @@ function [starts, ends, uncertainty, source, method] = ...
             method = 'confirmed_window_breath_interval_localization';
 
         case {'amplitude_band', 'amplitude_ge', 'amplitude_le'}
-            if ~isfield(belt, 'amp_ratio_session') || isempty(peak_t)
+            if ~isfield(belt, 'amp_ratio_session') || ...
+                    ~isfield(belt, 'trough_t') || numel(peak_t) < 3
                 return;
             end
             ratio = belt.amp_ratio_session(:);
+            trough_t = belt.trough_t(:);
             n = min(numel(peak_t), numel(ratio));
+            if n < 3 || numel(trough_t) < 2
+                return;
+            end
             peak_t = peak_t(1:n);
             ratio = ratio(1:n);
-            valid = isfinite(peak_t) & isfinite(ratio);
+            internal_idx = (2:n-1)';
+            internal_idx = internal_idx(internal_idx <= numel(trough_t));
+            if isempty(internal_idx)
+                return;
+            end
+            support_peak_t = peak_t(internal_idx);
+            starts = trough_t(internal_idx - 1);
+            ends = trough_t(internal_idx);
+            ratio = ratio(internal_idx);
+            valid = isfinite(support_peak_t) & isfinite(ratio) & ...
+                isfinite(starts) & isfinite(ends) & ...
+                starts < support_peak_t & support_peak_t < ends;
             if strcmp(criterion, 'amplitude_band')
                 qualifies = valid & ratio >= lower & ratio <= upper;
             elseif strcmp(criterion, 'amplitude_ge')
@@ -131,38 +161,68 @@ function [starts, ends, uncertainty, source, method] = ...
             else
                 qualifies = valid & ratio <= upper;
             end
-            [cell_start, cell_end] = breath_midpoint_cells(peak_t);
-            starts = cell_start(qualifies);
-            ends = cell_end(qualifies);
-            uncertainty = 0.5 * (ends - starts);
+            starts = starts(qualifies);
+            ends = ends(qualifies);
+            support_peak_t = support_peak_t(qualifies);
+            uncertainty = zeros(size(starts));
             source = 'breath_amplitude_ratio_session';
-            method = 'confirmed_window_breath_midpoint_localization';
+            method = 'confirmed_window_breath_trough_localization';
     end
 
     good = isfinite(starts) & isfinite(ends) & ends > starts;
     starts = starts(good);
     ends = ends(good);
     uncertainty = uncertainty(good);
+    if ~isempty(support_peak_t)
+        support_peak_t = support_peak_t(good);
+    end
 end
 
-function [starts, ends] = breath_midpoint_cells(peak_t)
-% BREATH_MIDPOINT_CELLS Assign each breath a midpoint-bounded time cell.
-% peak_t, starts, and ends are seconds; edge cells extend by half the adjacent
-% interval and a lone peak receives a one-second cell.
+function [run_starts, run_ends, run_uncertainties] = ...
+    amplitude_support_runs_for_candidate( ...
+    starts, ends, uncertainty, support_peak_t, c0, c1)
+% AMPLITUDE_SUPPORT_RUNS_FOR_CANDIDATE Merge complete qualifying breath cycles.
+% Candidate bounds select cycles by their peak times but never clip the actual
+% detected trough-to-trough boundaries. Touching cycles merge at shared troughs.
 
-    peak_t = peak_t(:);
-    starts = peak_t;
-    ends = peak_t;
-    if isscalar(peak_t)
-        starts = peak_t - 0.5;
-        ends = peak_t + 0.5;
+    run_starts = [];
+    run_ends = [];
+    run_uncertainties = [];
+    if isempty(starts)
         return;
     end
-    midpoints = 0.5 * (peak_t(1:end-1) + peak_t(2:end));
-    starts(2:end) = midpoints;
-    ends(1:end-1) = midpoints;
-    starts(1) = peak_t(1) - 0.5 * (peak_t(2) - peak_t(1));
-    ends(end) = peak_t(end) + 0.5 * (peak_t(end) - peak_t(end-1));
+
+    keep = support_peak_t >= c0 & support_peak_t < c1;
+    starts = starts(keep);
+    ends = ends(keep);
+    uncertainty = uncertainty(keep);
+    if isempty(starts)
+        return;
+    end
+
+    [starts, order] = sort(starts);
+    ends = ends(order);
+    uncertainty = uncertainty(order);
+    group_start = starts(1);
+    group_end = ends(1);
+    group_uncertainty = uncertainty(1);
+    tol = 1e-9;
+    for i = 2:numel(starts)
+        if starts(i) <= group_end + tol
+            group_end = max(group_end, ends(i));
+            group_uncertainty = max(group_uncertainty, uncertainty(i));
+        else
+            run_starts(end+1, 1) = group_start; %#ok<AGROW>
+            run_ends(end+1, 1) = group_end; %#ok<AGROW>
+            run_uncertainties(end+1, 1) = group_uncertainty; %#ok<AGROW>
+            group_start = starts(i);
+            group_end = ends(i);
+            group_uncertainty = uncertainty(i);
+        end
+    end
+    run_starts(end+1, 1) = group_start;
+    run_ends(end+1, 1) = group_end;
+    run_uncertainties(end+1, 1) = group_uncertainty;
 end
 
 function [run_starts, run_ends, run_uncertainties] = ...

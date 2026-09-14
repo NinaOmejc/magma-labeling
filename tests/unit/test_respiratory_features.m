@@ -11,12 +11,39 @@ function testRespiratoryCycleAlignmentIsPreserved(testCase)
 
     verifyEqual(testCase, lungs.peak_idx, resp_cycles.lungs.peak_idx);
     verifyEqual(testCase, lungs.peak_t, resp_cycles.lungs.peak_t);
+    verifyEqual(testCase, lungs.trough_idx, resp_cycles.lungs.trough_idx);
+    verifyEqual(testCase, lungs.trough_t, resp_cycles.lungs.trough_t);
     verifyEqual(testCase, lungs.amp, resp_cycles.lungs.amp);
     verifyEqual(testCase, lungs.ibi, resp_cycles.lungs.ibi);
     verifyEqual(testCase, lungs.rr_bpm, resp_cycles.lungs.rr_bpm);
     verifyEqual(testCase, numel(lungs.ibi), numel(lungs.peak_t) - 1);
     verifyEqual(testCase, numel(lungs.rr_bpm), numel(lungs.peak_t) - 1);
     verifyTrue(testCase, isnan(lungs.amp(end)));
+end
+
+function testTroughTimesAreReconstructedFromValidIndicesWhenAbsent(testCase)
+    [data, resp_cycles, resp_ref, ~, config] = feature_fixture();
+    expected = (resp_cycles.lungs.trough_idx - 1) / config.fs;
+    resp_cycles.lungs = rmfield(resp_cycles.lungs, 'trough_t');
+
+    resp_features = compute_respiratory_features( ...
+        data, resp_cycles, resp_ref, config);
+
+    verifyEqual(testCase, resp_features.resp.lungs.trough_t, expected, ...
+        'AbsTol', eps);
+    verifySize(testCase, resp_features.resp.lungs.trough_t, ...
+        [numel(expected), 1]);
+end
+
+function testExistingTroughTimesTakePrecedenceOverIndices(testCase)
+    [data, resp_cycles, resp_ref, ~, config] = feature_fixture();
+    supplied = resp_cycles.lungs.trough_t + 0.1 / config.fs;
+    resp_cycles.lungs.trough_t = supplied;
+
+    resp_features = compute_respiratory_features( ...
+        data, resp_cycles, resp_ref, config);
+
+    verifyEqual(testCase, resp_features.resp.lungs.trough_t, supplied);
 end
 
 function testSessionAndGlobalRatiosHandleInvalidAmplitudes(testCase)
@@ -298,7 +325,9 @@ function testShallowAndApneaEventsMatchDerivedEvidence(testCase)
         expected_diaph_mask, t_grid, config.fs, size(data,1), ...
         config.shallow.min_dur_sec, 'shallow_breathing_diaph');
     expected_shallow = merge_events({expected_lungs, expected_diaph});
-    verifyLocalizedEventEvidence(testCase, actual_shallow, expected_shallow, shallow_boundary);
+    verifyTroughLocalizedEventEvidence(testCase, actual_shallow, ...
+        expected_shallow, shallow_boundary, ...
+        [resp_cycles.lungs.trough_t; resp_cycles.diaph.trough_t]);
 
     low_lungs = resp_cycles.lungs.peak_t >= 300 & resp_cycles.lungs.peak_t <= 350;
     low_diaph = resp_cycles.diaph.peak_t >= 300 & resp_cycles.diaph.peak_t <= 350;
@@ -363,6 +392,25 @@ function verifyLocalizedEventEvidence(testCase, actual, expected, boundary)
     verifyLessThanOrEqual(testCase, [actual.end_t]', [expected.end_t]');
 end
 
+function verifyTroughLocalizedEventEvidence( ...
+    testCase, actual, expected, boundary, trough_t)
+
+    verifyEqual(testCase, string({actual.type})', string({expected.type})');
+    verifyNumElements(testCase, boundary.events, numel(expected));
+    verifyEqual(testCase, [boundary.events.candidate_start_t]', [expected.start_t]');
+    verifyEqual(testCase, [boundary.events.candidate_end_t]', [expected.end_t]');
+    localized_start = [boundary.events.localized_start_t]';
+    localized_end = [boundary.events.localized_end_t]';
+    has_localized_bounds = isfinite(localized_start) & isfinite(localized_end);
+    verifyTrue(testCase, all(ismembertol( ...
+        localized_start(has_localized_bounds), trough_t)));
+    verifyTrue(testCase, all(ismembertol( ...
+        localized_end(has_localized_bounds), trough_t)));
+    uncertainty = [boundary.events.uncertainty_sec]';
+    verifyEqual(testCase, uncertainty(has_localized_bounds), ...
+        zeros(nnz(has_localized_bounds), 1));
+end
+
 function [data, resp_cycles, resp_ref, diagnostics_desat, config] = feature_fixture()
     config = make_test_config();
     config.fs = 10;
@@ -404,10 +452,13 @@ end
 
 function belt = reviewed_belt(peak_idx, peak_t, amp, fs)
     ibi = diff(peak_idx) / fs;
+    trough_idx = round(0.5 * (peak_idx(1:end-1) + peak_idx(2:end)));
     belt = struct( ...
         'ok', true, ...
         'peak_idx', peak_idx(:), ...
         'peak_t', peak_t(:), ...
+        'trough_idx', trough_idx(:), ...
+        'trough_t', (trough_idx(:) - 1) / fs, ...
         'amp', amp(:), ...
         'ibi', ibi(:), ...
         'rr_bpm', 60 ./ ibi(:));
