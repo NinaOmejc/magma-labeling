@@ -10,8 +10,8 @@ function [label_available, reason] = compute_label_availability( ...
     label_available = false(1, numel(label_names));
     reason = repmat({'detector_analysis_failed'}, 1, numel(label_names));
 
-    lungs = resp_features.resp.lungs;
-    diaph = resp_features.resp.diaph;
+    lungs = resp_features.lungs;
+    diaph = resp_features.diaph;
     any_resp = lungs.available || diaph.available;
     session_amp = lungs.session_amplitude_available || ...
         diaph.session_amplitude_available;
@@ -89,7 +89,7 @@ function [label_available, reason] = compute_label_availability( ...
                 end
             case 'thoracic'
                 label_available(i) = ...
-                    resp_features.resp.thoracoabdominal_balance.available;
+                    resp_features.thoracoabdominal_balance.available;
                 if label_available(i)
                     reason{i} = 'available';
                 elseif ~(lungs.available && diaph.available)

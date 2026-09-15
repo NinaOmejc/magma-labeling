@@ -3,11 +3,24 @@ function tests = test_respiratory_features
     tests = functiontests(localfunctions);
 end
 
+function testOutputUsesFlatTopLevelSchema(testCase)
+    [data, resp_cycles, resp_ref, ~, config] = feature_fixture();
+    resp_features = compute_respiratory_features( ...
+        data, resp_cycles, resp_ref, config);
+
+    required = {'time_sec', 'grid_step_sec', 'rate_windows_sec', ...
+        'amplitude_windows_sec', 'shallow_band_ratio', ...
+        'deep_ratio_threshold', 'lungs', 'diaph', 'belt_availability', ...
+        'both_belts_available', 'thoracoabdominal_balance'};
+    verifyTrue(testCase, all(isfield(resp_features, required)));
+    verifyFalse(testCase, isfield(resp_features, 'resp'));
+end
+
 function testRespiratoryCycleAlignmentIsPreserved(testCase)
     [data, resp_cycles, resp_ref, diagnostics_desat, config] = feature_fixture();
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
-    lungs = resp_features.resp.lungs;
+    lungs = resp_features.lungs;
 
     verifyEqual(testCase, lungs.peak_idx, resp_cycles.lungs.peak_idx);
     verifyEqual(testCase, lungs.peak_t, resp_cycles.lungs.peak_t);
@@ -29,9 +42,9 @@ function testTroughTimesAreReconstructedFromValidIndicesWhenAbsent(testCase)
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
 
-    verifyEqual(testCase, resp_features.resp.lungs.trough_t, expected, ...
+    verifyEqual(testCase, resp_features.lungs.trough_t, expected, ...
         'AbsTol', eps);
-    verifySize(testCase, resp_features.resp.lungs.trough_t, ...
+    verifySize(testCase, resp_features.lungs.trough_t, ...
         [numel(expected), 1]);
 end
 
@@ -43,7 +56,7 @@ function testExistingTroughTimesTakePrecedenceOverIndices(testCase)
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
 
-    verifyEqual(testCase, resp_features.resp.lungs.trough_t, supplied);
+    verifyEqual(testCase, resp_features.lungs.trough_t, supplied);
 end
 
 function testTroughTimeLengthMustMatchPeakIntervals(testCase)
@@ -89,7 +102,7 @@ function testSessionAndGlobalRatiosHandleInvalidAmplitudes(testCase)
     resp_cycles.lungs.amp(10) = NaN;
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
-    lungs = resp_features.resp.lungs;
+    lungs = resp_features.lungs;
 
     valid = isfinite(resp_cycles.lungs.amp) & resp_cycles.lungs.amp > 0;
     expected_session = nan(size(resp_cycles.lungs.amp));
@@ -117,11 +130,11 @@ function testBeltsRemainIndependentAndSpo2IsExcluded(testCase)
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
 
-    verifyEqual(testCase, resp_features.resp.lungs.session_reference_value, 2);
-    verifyEqual(testCase, resp_features.resp.diaph.session_reference_value, 4);
-    verifyEqual(testCase, resp_features.resp.lungs.amp_ratio_session(1), 1);
-    verifyEqual(testCase, resp_features.resp.diaph.amp_ratio_session(1), 0.5);
-    verifyTrue(testCase, resp_features.resp.both_belts_available);
+    verifyEqual(testCase, resp_features.lungs.session_reference_value, 2);
+    verifyEqual(testCase, resp_features.diaph.session_reference_value, 4);
+    verifyEqual(testCase, resp_features.lungs.amp_ratio_session(1), 1);
+    verifyEqual(testCase, resp_features.diaph.amp_ratio_session(1), 0.5);
+    verifyTrue(testCase, resp_features.both_belts_available);
     verifyFalse(testCase, isfield(resp_features, 'spo2'));
 end
 
@@ -133,34 +146,34 @@ function testMissingLungBeltLeavesDiaphragmValid(testCase)
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
 
-    verifyTrue(testCase, resp_features.resp.lungs.ignored);
-    verifyFalse(testCase, resp_features.resp.lungs.available);
-    verifyFalse(testCase, resp_features.resp.lungs.session_reference_available);
-    verifyTrue(testCase, all(isnan(resp_features.resp.lungs.amp_ratio_session)));
-    verifyTrue(testCase, resp_features.resp.diaph.available);
-    verifyTrue(testCase, resp_features.resp.diaph.session_amplitude_available);
-    verifyFalse(testCase, resp_features.resp.both_belts_available);
+    verifyTrue(testCase, resp_features.lungs.ignored);
+    verifyFalse(testCase, resp_features.lungs.available);
+    verifyFalse(testCase, resp_features.lungs.session_reference_available);
+    verifyTrue(testCase, all(isnan(resp_features.lungs.amp_ratio_session)));
+    verifyTrue(testCase, resp_features.diaph.available);
+    verifyTrue(testCase, resp_features.diaph.session_amplitude_available);
+    verifyFalse(testCase, resp_features.both_belts_available);
 end
 
 function testRateAndIrregularityEvidenceMatchesDefinitions(testCase)
     [data, resp_cycles, resp_ref, diagnostics_desat, config] = feature_fixture();
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
-    t_grid = resp_features.resp.time_sec;
+    t_grid = resp_features.time_sec;
 
     expected_slow = ibi_rate_trace_reference( ...
         resp_cycles.lungs.peak_t, t_grid, config.slow.analysis_win_sec);
     expected_rapid = ibi_rate_trace_reference( ...
         resp_cycles.lungs.peak_t, t_grid, config.rapid.analysis_win_sec);
     verifyTrue(testCase, isequaln( ...
-        resp_features.resp.lungs.rate_slow_window_bpm, expected_slow));
+        resp_features.lungs.rate_slow_window_bpm, expected_slow));
     verifyTrue(testCase, isequaln( ...
-        resp_features.resp.lungs.rate_rapid_window_bpm, expected_rapid));
+        resp_features.lungs.rate_rapid_window_bpm, expected_rapid));
 
     [expected_mask, expected_cov, expected_robust, expected_endpoint] = ...
         compute_irregularity_metrics(resp_cycles.lungs, t_grid, ...
             config.irregular.analysis_win_sec, config.irregular.cov_thr);
-    actual = resp_features.resp.lungs.irregularity;
+    actual = resp_features.lungs.irregularity;
     verifyTrue(testCase, isequaln(actual.window_mask, expected_mask));
     verifyTrue(testCase, isequaln(actual.endpoint_mask, expected_endpoint));
     verifyTrue(testCase, isequaln(actual.cov, expected_cov));
@@ -218,21 +231,21 @@ function testWindowRateUsesSixtyOverMeanIbiAndIsShared(testCase)
         rate_only_feature_fixture(peaks, 120);
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
-    t_grid = resp_features.resp.time_sec;
+    t_grid = resp_features.time_sec;
     endpoint = t_grid == 60;
 
     expected = 60 / mean(diff(peaks));
     count_based = nnz(peaks >= 0 & peaks < 60) / 60 * 60;
-    actual_slow = resp_features.resp.lungs.rate_slow_window_bpm(endpoint);
-    actual_rapid = resp_features.resp.lungs.rate_rapid_window_bpm(endpoint);
+    actual_slow = resp_features.lungs.rate_slow_window_bpm(endpoint);
+    actual_rapid = resp_features.lungs.rate_rapid_window_bpm(endpoint);
 
     verifyEqual(testCase, expected, 4.5, 'AbsTol', eps);
     verifyNotEqual(testCase, expected, count_based);
     verifyEqual(testCase, actual_slow, expected, 'AbsTol', eps);
     verifyEqual(testCase, actual_rapid, expected, 'AbsTol', eps);
     verifyTrue(testCase, isequaln( ...
-        resp_features.resp.lungs.rate_slow_window_bpm, ...
-        resp_features.resp.lungs.rate_rapid_window_bpm));
+        resp_features.lungs.rate_slow_window_bpm, ...
+        resp_features.lungs.rate_rapid_window_bpm));
 end
 
 function testRateWindowRequiresFullHistoryAndAtLeastTwoValidIbis(testCase)
@@ -240,29 +253,29 @@ function testRateWindowRequiresFullHistoryAndAtLeastTwoValidIbis(testCase)
         rate_only_feature_fixture([10; 30; 50], 120);
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
-    t_grid = resp_features.resp.time_sec;
+    t_grid = resp_features.time_sec;
     verifyTrue(testCase, all(isnan( ...
-        resp_features.resp.lungs.rate_slow_window_bpm(t_grid < 60))));
+        resp_features.lungs.rate_slow_window_bpm(t_grid < 60))));
     verifyTrue(testCase, all(isnan( ...
-        resp_features.resp.lungs.rate_rapid_window_bpm(t_grid < 60))));
+        resp_features.lungs.rate_rapid_window_bpm(t_grid < 60))));
 
     [data, resp_cycles, resp_ref, diagnostics_desat, config] = ...
         rate_only_feature_fixture([10; 50], 120);
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
-    endpoint = resp_features.resp.time_sec == 60;
+    endpoint = resp_features.time_sec == 60;
     verifyTrue(testCase, isnan( ...
-        resp_features.resp.lungs.rate_slow_window_bpm(endpoint)));
+        resp_features.lungs.rate_slow_window_bpm(endpoint)));
     verifyTrue(testCase, isnan( ...
-        resp_features.resp.lungs.rate_rapid_window_bpm(endpoint)));
+        resp_features.lungs.rate_rapid_window_bpm(endpoint)));
 
     [data, resp_cycles, resp_ref, diagnostics_desat, config] = ...
         rate_only_feature_fixture([10; 10; 50], 120);
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
-    endpoint = resp_features.resp.time_sec == 60;
+    endpoint = resp_features.time_sec == 60;
     verifyTrue(testCase, isnan( ...
-        resp_features.resp.lungs.rate_slow_window_bpm(endpoint)));
+        resp_features.lungs.rate_slow_window_bpm(endpoint)));
 end
 
 function testRapidWindowDefaultsCannotRevertToThirtySeconds(testCase)
@@ -272,7 +285,7 @@ function testRapidWindowDefaultsCannotRevertToThirtySeconds(testCase)
         rate_only_feature_fixture((0:2:80)', 100, config);
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
-    verifyEqual(testCase, resp_features.resp.rate_windows_sec.rapid, 60);
+    verifyEqual(testCase, resp_features.rate_windows_sec.rapid, 60);
 
     repo_root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
     files = {fullfile(repo_root, 'src', 'feature_extraction', ...
@@ -290,23 +303,23 @@ function testBreathAmplitudeAndApneaEvidenceMatchDefinitions(testCase)
     [data, resp_cycles, resp_ref, diagnostics_desat, config] = feature_fixture();
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
-    t_grid = resp_features.resp.time_sec;
+    t_grid = resp_features.time_sec;
 
     expected_apnea = legacy_apnea_ratio_trace( ...
         resp_cycles.lungs, t_grid, config.apnea.amp_analysis_win_sec, 2);
 
     verifyTrue(testCase, isequaln( ...
-        resp_features.resp.lungs.apnea_amp_ratio_session_window_median, expected_apnea));
-    verifyEqual(testCase, resp_features.resp.lungs.amp_ratio_global, ...
+        resp_features.lungs.apnea_amp_ratio_session_window_median, expected_apnea));
+    verifyEqual(testCase, resp_features.lungs.amp_ratio_global, ...
         expected_global_ratio(resp_cycles.lungs.amp, 1.5));
-    verifyEqual(testCase, fieldnames(resp_features.resp.amplitude_windows_sec), ...
+    verifyEqual(testCase, fieldnames(resp_features.amplitude_windows_sec), ...
         {'apnea'});
     obsolete = {'amp_window_median_raw_units', ...
         'amp_ratio_session_window_median', ...
         'deep_amp_ratio_session_window_median', ...
         'shallow_amplitude_endpoint_mask', 'shallow_amplitude_mask', ...
         'deep_amplitude_endpoint_mask', 'deep_amplitude_mask'};
-    verifyFalse(testCase, any(isfield(resp_features.resp.lungs, obsolete)));
+    verifyFalse(testCase, any(isfield(resp_features.lungs, obsolete)));
 end
 
 function testShallowBreathsRequireLowerBandBound(testCase)
@@ -335,30 +348,30 @@ function testUnavailableSessionReferenceDoesNotUseGlobal(testCase)
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
 
-    verifyFalse(testCase, resp_features.resp.lungs.session_reference_available);
-    verifyTrue(testCase, resp_features.resp.lungs.global_reference_available);
-    verifyTrue(testCase, all(isnan(resp_features.resp.lungs.amp_ratio_session)));
-    verifyTrue(testCase, any(isfinite(resp_features.resp.lungs.amp_ratio_global)));
-    verifyEqual(testCase, resp_features.resp.lungs.reference_quality, 'insufficient_breaths');
+    verifyFalse(testCase, resp_features.lungs.session_reference_available);
+    verifyTrue(testCase, resp_features.lungs.global_reference_available);
+    verifyTrue(testCase, all(isnan(resp_features.lungs.amp_ratio_session)));
+    verifyTrue(testCase, any(isfinite(resp_features.lungs.amp_ratio_global)));
+    verifyEqual(testCase, resp_features.lungs.reference_quality, 'insufficient_breaths');
 end
 
 function testDiagnosticSignalsReusePhysiologicalEvidence(testCase)
     [data, resp_cycles, resp_ref, diagnostics_desat, config] = feature_fixture();
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
-    rea = synthetic_rea_metrics(resp_features.resp.time_sec);
+    rea = synthetic_rea_metrics(resp_features.time_sec);
     diagnostic = compute_label_diagnostic_signals( ...
         resp_features, diagnostics_desat, config, rea);
 
     verifyEqual(testCase, diagnostic.breathing_rate_slow_window_bpm_lungs, ...
-        resp_features.resp.lungs.rate_slow_window_bpm);
+        resp_features.lungs.rate_slow_window_bpm);
     verifyEqual(testCase, diagnostic.breathing_rate_rapid_window_bpm_diaph, ...
-        resp_features.resp.diaph.rate_rapid_window_bpm);
+        resp_features.diaph.rate_rapid_window_bpm);
     verifyEqual(testCase, diagnostic.irregularity_robust_cov_lungs, ...
-        resp_features.resp.lungs.irregularity.robust_cov);
+        resp_features.lungs.irregularity.robust_cov);
     verifyEqual(testCase, ...
         diagnostic.breath_amplitude_session_reference_raw_units_lungs, ...
-        resp_features.resp.lungs.session_reference_value);
+        resp_features.lungs.session_reference_value);
     obsolete = {'amplitude_window_sec', ...
         'breath_amplitude_ratio_to_reference_lungs', ...
         'breath_amplitude_ratio_to_reference_diaph', ...
@@ -374,7 +387,7 @@ function testShallowAndApneaEventsMatchDerivedEvidence(testCase)
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
     [actual_shallow, shallow_boundary] = detect_shallow_breathing(data, resp_features, config);
-    t_grid = resp_features.resp.time_sec;
+    t_grid = resp_features.time_sec;
     verifyTroughLocalizedEventEvidence(testCase, actual_shallow, shallow_boundary, ...
         [resp_cycles.lungs.trough_t; resp_cycles.diaph.trough_t]);
     verifyEqual(testCase, shallow_boundary.boundary_method, ...
@@ -392,8 +405,8 @@ function testShallowAndApneaEventsMatchDerivedEvidence(testCase)
     [actual_apnea, ~, apnea_boundary] = detect_apnea( ...
         data, resp_features, session_reference, config);
 
-    endpoint = resp_features.resp.lungs.apnea_amplitude_endpoint_mask & ...
-        resp_features.resp.diaph.apnea_amplitude_endpoint_mask;
+    endpoint = resp_features.lungs.apnea_amplitude_endpoint_mask & ...
+        resp_features.diaph.apnea_amplitude_endpoint_mask;
     peak_mask = analysis_window_endpoints_to_state_mask( ...
         endpoint, t_grid, config.apnea.amp_analysis_win_sec);
     [expected_apnea, ~] = sustained_condition_to_events( ...

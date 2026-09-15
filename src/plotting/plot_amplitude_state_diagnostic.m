@@ -2,7 +2,7 @@ function plot_amplitude_state_diagnostic(resp_features, events_lungs, events_dia
 % PLOT_AMPLITUDE_STATE_DIAGNOSTIC Plot session-normalized breath excursion by belt.
 %
 % Inputs:
-%   resp_features - Respiratory evidence; uses resp.time_sec and each belt's
+%   resp_features - Respiratory evidence; uses top-level time_sec and each belt's
 %                   breath-level amp_ratio_session and reference status.
 %   events_lungs  - Final lung-belt events with boundaries in seconds.
 %   events_diaph  - Final diaphragm-belt events with boundaries in seconds.
@@ -10,8 +10,8 @@ function plot_amplitude_state_diagnostic(resp_features, events_lungs, events_dia
 %   opts          - Plot text, output name, ratio thresholds, and optional
 %                   localized masks on the analysis grid.
 
-    lungs = resp_features.resp.lungs;
-    diaph = resp_features.resp.diaph;
+    lungs = resp_features.lungs;
+    diaph = resp_features.diaph;
 
     fig = figure('Units', 'pixels', 'Position', near_fullscreen_figure_position(), ...
         'Visible', config.make_figs_visible, 'Color', 'w');
@@ -19,7 +19,7 @@ function plot_amplitude_state_diagnostic(resp_features, events_lungs, events_dia
     title(tl, [opts.figure_title newline ...
         'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)])
 
-    t_grid = resp_features.resp.time_sec;
+    t_grid = resp_features.time_sec;
     localized_lungs = get_option(opts, 'localized_mask_lungs', []);
     localized_diaph = get_option(opts, 'localized_mask_diaph', []);
     final_lungs = events_to_grid_mask(events_lungs, t_grid);
@@ -34,8 +34,8 @@ function plot_amplitude_state_diagnostic(resp_features, events_lungs, events_dia
 
     ax = [ax1 ax2];
     linkaxes(ax, 'x');
-    if ~isempty(resp_features.resp.time_sec)
-        xlim(ax1, [0 resp_features.resp.time_sec(end)]);
+    if ~isempty(resp_features.time_sec)
+        xlim(ax1, [0 resp_features.time_sec(end)]);
     end
     align_axes_x_widths(ax);
     set(fig, 'Visible', config.make_figs_visible);

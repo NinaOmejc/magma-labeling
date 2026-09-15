@@ -34,8 +34,8 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
     write_numeric(filename, '/signals/preprocessed', signals_preprocessed);
     write_numeric(filename, '/time', (0:N-1)' / fs);
 
-    write_resp_belt(filename, '/resp/lungs', results.resp_features.resp.lungs);
-    write_resp_belt(filename, '/resp/diaph', results.resp_features.resp.diaph);
+    write_resp_belt(filename, '/resp/lungs', results.resp_features.lungs);
+    write_resp_belt(filename, '/resp/diaph', results.resp_features.diaph);
     if isfield(results, 'resp_cycles') && isstruct(results.resp_cycles) && ...
             isfield(results.resp_cycles, 'provenance')
         write_value(filename, '/resp/cycle_provenance', ...
@@ -45,7 +45,9 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
     write_value(filename, '/resp_reference/lungs', results.resp_ref.lungs);
     write_value(filename, '/resp_reference/diaph', results.resp_ref.diaph);
     write_value(filename, '/spo2_reference', results.spo2_ref);
-    write_value(filename, '/resp_features', results.resp_features);
+    % Preserve the established HDF5 hierarchy even though the in-memory
+    % resp_features struct no longer has an intermediate resp field.
+    write_value(filename, '/resp_features/resp', results.resp_features);
     if isfield(results, 'diagnostic_signals')
         write_value(filename, '/resp_features/detector_signals', ...
             results.diagnostic_signals);

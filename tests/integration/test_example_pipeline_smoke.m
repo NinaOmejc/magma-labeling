@@ -105,8 +105,8 @@ function testExampleRecordingRunsAtMasterRate(testCase)
 
     verifyEqual(testCase, size(mask,1), size(data,1));
     verifyEqual(testCase, size(mask,2), numel(label_names));
-    verifyEqual(testCase, resp_features.resp.lungs.peak_idx, resp_cycles.lungs.peak_idx);
-    verifyEqual(testCase, diagnostic.time_sec, resp_features.resp.time_sec);
+    verifyEqual(testCase, resp_features.lungs.peak_idx, resp_cycles.lungs.peak_idx);
+    verifyEqual(testCase, diagnostic.time_sec, resp_features.time_sec);
     verifyEqual(testCase, export_results.spo2_ref, diagnostics_desat.spo2_ref);
     verifyEqual(testCase, numel(reasons), 11);
     verifyEqual(testCase, phenotypes.version, 'magma_db_phenotype_evidence_v1');

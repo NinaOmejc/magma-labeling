@@ -313,11 +313,13 @@ function row = add_belt_availability_summary(row, loaded)
     lungs = false;
     diaph = false;
     if isfield(loaded, 'resp_features') && isstruct(loaded.resp_features) && ...
-            isfield(loaded.resp_features, 'resp')
-        resp = loaded.resp_features.resp;
+            isfield(loaded.resp_features, 'lungs') && ...
+            isfield(loaded.resp_features, 'diaph')
+        resp = loaded.resp_features;
     elseif isfield(loaded, 'phys_feat') && isstruct(loaded.phys_feat) && ...
-            isfield(loaded.phys_feat, 'resp')
-        resp = loaded.phys_feat.resp;
+            isfield(loaded.phys_feat, 'lungs') && ...
+            isfield(loaded.phys_feat, 'diaph')
+        resp = loaded.phys_feat;
     else
         resp = struct();
     end

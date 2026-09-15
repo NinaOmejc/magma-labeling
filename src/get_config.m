@@ -100,9 +100,9 @@ function config = get_config()
 
     %---- LABEL 3 - slow - DETECTION SETTINGS
     config.slow = struct();                % slow breathing settings
-    config.slow.analysis_win_sec = 60;     % 60-s respiratory-rate analysis window
+    config.slow.analysis_win_sec = 60;     % 60-s respiratory-rate analysis window (use the preceding 60 s of breathing to obtain a reasonably stable estimate of respiratory rate.)
     config.slow.rr_thr_bpm       = 10;     % window RR = 60/mean(IBI) <= 10 bpm
-    config.slow.min_dur_sec      = 30;     % minimum final localized slow-state duration
+    config.slow.min_dur_sec      = 30;     % minimum final localized slow-state duration 
     config.slow.plot_rr_step_sec = 5;      % display RR as held values that can change 12 times/min (60/5). So its averaged over X seconds, here 5 seconds.
     config.slow.do_plot          = true;   % save slow breathing diagnostic plot
 

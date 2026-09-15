@@ -12,9 +12,9 @@ function [events, diagnostics, boundary_info] = detect_apnea( ...
     events = empty_events();
 
     N = size(data, 1);
-    t_grid = resp_features.resp.time_sec;
-    lungs = resp_features.resp.lungs;
-    diaph = resp_features.resp.diaph;
+    t_grid = resp_features.time_sec;
+    lungs = resp_features.lungs;
+    diaph = resp_features.diaph;
     boundary_info = make_label_boundary_info('apnea', 'detect_apnea', ...
         'not_evaluated', empty_events(), empty_events(), NaN, '', [], [], []);
 

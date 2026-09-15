@@ -22,8 +22,7 @@ function testThoracicEndpointAndStateHaveDistinctSemantics(testCase)
         'dominance_endpoint_mask', endpoint, ...
         'dominance_state_mask', state, ...
         'dominance_mask', state);
-    phys = struct('resp', struct('time_sec', t, ...
-        'thoracoabdominal_balance', evidence));
+    phys = struct('time_sec', t, 'thoracoabdominal_balance', evidence);
     data = zeros(101, 6);
     events = detect_thoracic_dominant_breathing(data, phys, config);
     verifyNumElements(testCase, events, 1);
@@ -40,7 +39,7 @@ function testThirtySecondThoracicStateDoesNotRequireSixtySeconds(testCase)
     evidence = struct('available', true, ...
         'dominance_endpoint_mask', endpoint, ...
         'dominance_state_mask', state, 'dominance_mask', state);
-    phys.resp = struct('time_sec', t, 'thoracoabdominal_balance', evidence);
+    phys = struct('time_sec', t, 'thoracoabdominal_balance', evidence);
     events = detect_thoracic_dominant_breathing(zeros(91, 6), phys, config);
     verifyNotEmpty(testCase, events);
     verifyGreaterThanOrEqual(testCase, events.duration, 30);
@@ -66,7 +65,7 @@ function testRapidAndSlowWindowsAreSeparateFromMinimumDuration(testCase)
     lungs.rate_rapid_endpoint_mask = rapid_endpoint;
     lungs.rate_rapid_state_mask = analysis_window_endpoints_to_state_mask(rapid_endpoint, t, 60);
     diaph = empty_detector_belt(t);
-    phys.resp = struct('time_sec', t, 'rate_windows_sec', ...
+    phys = struct('time_sec', t, 'rate_windows_sec', ...
         struct('slow', 60, 'rapid', 60), 'lungs', lungs, 'diaph', diaph);
 
     rapid = detect_rapid_breathing(zeros(101, 6), phys, config);
@@ -78,7 +77,7 @@ function testRapidAndSlowWindowsAreSeparateFromMinimumDuration(testCase)
     lungs.rate_slow_window_bpm(slow_endpoint) = 8;
     lungs.rate_slow_endpoint_mask = slow_endpoint;
     lungs.rate_slow_state_mask = analysis_window_endpoints_to_state_mask(slow_endpoint, t, 60);
-    phys.resp.lungs = lungs;
+    phys.lungs = lungs;
     slow = detect_slow_breathing(zeros(101, 6), phys, config);
     verifyNotEmpty(testCase, rapid);
     verifyEqual(testCase, rapid.start_t, 0);
@@ -99,7 +98,7 @@ function testRapidDetectorFallbackUsesSixtySecondConfirmationWindow(testCase)
     lungs.rate_rapid_window_bpm(endpoint) = 25;
     lungs.rate_rapid_endpoint_mask = endpoint;
     diaph = empty_detector_belt(t);
-    phys.resp = struct('time_sec', t, 'rate_windows_sec', ...
+    phys = struct('time_sec', t, 'rate_windows_sec', ...
         struct('slow', 60, 'rapid', 60), 'lungs', lungs, 'diaph', diaph);
 
     [events, boundary] = detect_rapid_breathing(zeros(81, 6), phys, config);
@@ -123,7 +122,7 @@ function testOneIrregularAnalysisWindowDirectlyDefinesEventSupport(testCase)
     lungs.irregularity.endpoint_mask = endpoint_mask;
     lungs.irregularity.cov(endpoint_mask) = 0.4;
     diaph = empty_detector_belt(t);
-    phys.resp = struct('time_sec', t, 'lungs', lungs, 'diaph', diaph);
+    phys = struct('time_sec', t, 'lungs', lungs, 'diaph', diaph);
     events = detect_irregular_breathing(zeros(31, 6), phys, config);
     verifyNotEmpty(testCase, events);
     verifyEqual(testCase, events.start_t, 0);
@@ -142,7 +141,7 @@ function testTouchingIrregularAnalysisWindowsMergeIntoOneEvent(testCase)
     lungs.irregularity.endpoint_mask = endpoint_mask;
     lungs.irregularity.cov(endpoint_mask) = 0.4;
     diaph = empty_detector_belt(t);
-    phys.resp = struct('time_sec', t, 'lungs', lungs, 'diaph', diaph);
+    phys = struct('time_sec', t, 'lungs', lungs, 'diaph', diaph);
 
     events = detect_irregular_breathing(zeros(31, 6), phys, config);
 
@@ -161,7 +160,7 @@ function testTenSecondApneaWindowDoesNotRequireTwentySeconds(testCase)
     lungs.session_amplitude_available = true;
     lungs.apnea_amplitude_endpoint_mask(t == 20) = true;
     diaph = empty_detector_belt(t);
-    phys.resp = struct('time_sec', t, 'lungs', lungs, 'diaph', diaph);
+    phys = struct('time_sec', t, 'lungs', lungs, 'diaph', diaph);
     session_reference = get_session_reference_interval(51, config);
     [events, diagnostics] = detect_apnea( ...
         zeros(51, 6), phys, session_reference, config);
@@ -190,9 +189,9 @@ end
 
 function testKnownOneBeltCaseMakesThoracicAndAsynchronyUnavailable(testCase)
     [names, phys, spo2, rea, apnea, sigh, csr] = availability_fixture();
-    phys.resp.lungs.available = false;
-    phys.resp.lungs.session_amplitude_available = false;
-    phys.resp.thoracoabdominal_balance.available = false;
+    phys.lungs.available = false;
+    phys.lungs.session_amplitude_available = false;
+    phys.thoracoabdominal_balance.available = false;
     rea.valid_analysis = false;
     rea.skip_code = 2;
     [available, reasons] = compute_label_availability( ...
@@ -340,8 +339,8 @@ function [names, phys, spo2, rea, apnea, sigh, csr] = availability_fixture()
     belt.rate_rapid_window_bpm(61:end) = 12;
     belt.irregularity.cov(61:end) = 0.1;
     balance = struct('available', true);
-    phys = struct('resp', struct('lungs', belt, 'diaph', belt, ...
-        'thoracoabdominal_balance', balance));
+    phys = struct('lungs', belt, 'diaph', belt, ...
+        'thoracoabdominal_balance', balance);
     spo2 = struct('signal_available', true, ...
         'detection_available', true);
     rea = struct('valid_analysis', true, 'skip_code', 0);

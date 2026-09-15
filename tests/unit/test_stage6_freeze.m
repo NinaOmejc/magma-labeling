@@ -56,10 +56,10 @@ function testShallowAndDeepUseDetectedTroughBoundaries(testCase)
     lungs.session_amplitude_available = true;
     lungs.amp_ratio_session = 0.7 * ones(size(lungs.peak_t));
     diaph = empty_rate_belt(t);
-    phys.resp = struct('time_sec', t, 'lungs', lungs, 'diaph', diaph);
+    phys = struct('time_sec', t, 'lungs', lungs, 'diaph', diaph);
     [shallow, shallow_info] = detect_shallow_breathing(zeros(710,6), phys, config);
     lungs.amp_ratio_session(:) = 1.3;
-    phys.resp.lungs = lungs;
+    phys.lungs = lungs;
     [deep, deep_info] = detect_deep_breathing(zeros(710,6), phys, config);
     verifyNotEmpty(testCase, shallow);
     verifyNotEmpty(testCase, deep);
@@ -154,7 +154,7 @@ function testShortLocalizedRunsRemainQcOnlyForAllFourStates(testCase)
     phys = rate_phys(t, amplitude_belt);
     [shallow, shallow_info] = detect_shallow_breathing(zeros(N,6), phys, config);
     amplitude_belt.amp_ratio_session(:) = 1.30;
-    phys.resp.lungs = amplitude_belt;
+    phys.lungs = amplitude_belt;
     [deep, deep_info] = detect_deep_breathing(zeros(N,6), phys, config);
 
     rapid_belt = rate_belt(t, (1:2:29)');
@@ -263,7 +263,7 @@ function testThoracicDominanceRetainsExplicitUncertainty(testCase)
     evidence = struct('available', true, 'analysis_window_sec', 30, ...
         'dominance_endpoint_mask', t == 40, ...
         'dominance_state_mask', state, 'dominance_mask', state);
-    phys.resp = struct('time_sec', t, 'thoracoabdominal_balance', evidence);
+    phys = struct('time_sec', t, 'thoracoabdominal_balance', evidence);
     [events, info] = detect_thoracic_dominant_breathing(zeros(710,6), phys, config);
     verifyNotEmpty(testCase, events);
     verifyEqual(testCase, info.boundary_uncertainty_sec, 30);
@@ -278,7 +278,7 @@ function testIrregularityRetainsWindowScaleUncertainty(testCase)
     lungs.irregularity.window_mask(t <= 60) = true;
     lungs.irregularity.endpoint_mask(t == 60) = true;
     lungs.irregularity.cov(t == 60) = 0.4;
-    phys.resp = struct('time_sec', t, 'lungs', lungs, ...
+    phys = struct('time_sec', t, 'lungs', lungs, ...
         'diaph', empty_rate_belt(t));
     [events, info] = detect_irregular_breathing(zeros(1010,6), phys, config);
     verifyNotEmpty(testCase, events);
@@ -302,7 +302,7 @@ function testApneaRawFlatStoresBoundaryEvidenceSource(testCase)
     belt = empty_rate_belt(t);
     belt.available = false;
     belt.session_amplitude_available = false;
-    phys.resp = struct('time_sec', t, 'lungs', belt, 'diaph', belt);
+    phys = struct('time_sec', t, 'lungs', belt, 'diaph', belt);
     session_reference = get_session_reference_interval(size(data,1), config);
     [events, diagnostics, info] = detect_apnea( ...
         data, phys, session_reference, config);
@@ -485,7 +485,7 @@ function testAutomaticSighCandidatesSurviveWithoutReview(testCase)
     belt = struct('peak_t', peak_t, 'amp', amp, ...
         'amp_ratio_global', amp, 'global_reference_value', 1, ...
         'global_amplitude_available', true, 'reference_quality', 'good');
-    phys.resp = struct('lungs', belt, 'diaph', belt);
+    phys = struct('lungs', belt, 'diaph', belt);
     resp_feat = struct('lungs', belt, 'diaph', belt);
     data = zeros(1000, 6);
     [events, diagnostics, review] = detect_sigh( ...
@@ -679,7 +679,10 @@ function testHdf5RoundTripPreservesOrderMasksNaNsAndRespiration(testCase)
         '/labels/reviewed_assessable_mask')), ...
         results.label_reviewed_assessable_mask);
     verifyEqual(testCase, h5read(filename, '/resp/lungs/peak_idx'), ...
-        results.resp_features.resp.lungs.peak_idx);
+        results.resp_features.lungs.peak_idx);
+    verifyEqual(testCase, h5read(filename, ...
+        '/resp_features/resp/lungs/peak_idx'), ...
+        results.resp_features.lungs.peak_idx);
     verifyEqual(testCase, read_hdf5_text(filename, ...
         '/resp/cycle_provenance/review_status'), {'automatic'});
     verifyEqual(testCase, h5read(filename, '/review/history/number_of_rounds'), 1);
@@ -804,7 +807,7 @@ function belt = empty_rate_belt(t)
 end
 
 function phys = rate_phys(t, lungs)
-    phys.resp = struct('time_sec', t, ...
+    phys = struct('time_sec', t, ...
         'rate_windows_sec', struct('slow',60,'rapid',60), ...
         'lungs', lungs, 'diaph', empty_rate_belt(t));
 end
@@ -841,8 +844,7 @@ function results = export_fixture(config, N)
     results.subject = 999;
     results.measure = 1;
     results.config = config;
-    results.resp_features = struct( ...
-        'resp', struct('lungs', belt, 'diaph', belt));
+    results.resp_features = struct('lungs', belt, 'diaph', belt);
     results.resp_cycles = struct('provenance', struct( ...
         'review_status', 'automatic', ...
         'manual_review_performed', false, ...

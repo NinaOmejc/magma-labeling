@@ -15,8 +15,8 @@ function [events, diagnostics, review_info] = detect_sigh( ...
     fs = config.fs;
     t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';
 
-    lungs = resp_features.resp.lungs;
-    diaph = resp_features.resp.diaph;
+    lungs = resp_features.lungs;
+    diaph = resp_features.diaph;
     lungs_valid = lungs.global_amplitude_available;
     diaph_valid = diaph.global_amplitude_available;
     diagnostics = struct( ...

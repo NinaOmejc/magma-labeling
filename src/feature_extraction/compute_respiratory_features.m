@@ -2,7 +2,7 @@ function resp_features = compute_respiratory_features(data, resp_cycles, resp_re
 % COMPUTE_RESPIRATORY_FEATURES Project breath evidence onto a common time grid.
 % data is Nsample-by-Nchannel; resp_cycles supplies per-breath timing/amplitude,
 % resp_ref supplies session/global amplitude references, and config defines
-% grid spacing, trailing windows, and thresholds. resp_features.resp contains:
+% grid spacing, trailing windows, and thresholds. resp_features contains:
 %   time_sec/grid_step_sec - Analysis-grid coordinates and spacing in seconds.
 %   rate_windows_sec - Slow/rapid trailing-window durations.
 %   amplitude_windows_sec - Apnea amplitude-window duration.
@@ -16,27 +16,26 @@ function resp_features = compute_respiratory_features(data, resp_cycles, resp_re
     cfg = evidence_config(config);
 
     resp_features = struct();
-    resp_features.resp = struct();
-    resp_features.resp.time_sec = t_grid;
-    resp_features.resp.grid_step_sec = config.grid_step_sec;
-    resp_features.resp.rate_windows_sec = struct( ...
+    resp_features.time_sec = t_grid;
+    resp_features.grid_step_sec = config.grid_step_sec;
+    resp_features.rate_windows_sec = struct( ...
         'slow', cfg.slow_win_sec, 'rapid', cfg.rapid_win_sec);
-    resp_features.resp.amplitude_windows_sec = struct('apnea', cfg.apnea_win_sec);
-    resp_features.resp.shallow_band_ratio = [cfg.shallow_lo_ratio cfg.shallow_hi_ratio];
-    resp_features.resp.deep_ratio_threshold = cfg.deep_ratio_threshold;
+    resp_features.amplitude_windows_sec = struct('apnea', cfg.apnea_win_sec);
+    resp_features.shallow_band_ratio = [cfg.shallow_lo_ratio cfg.shallow_hi_ratio];
+    resp_features.deep_ratio_threshold = cfg.deep_ratio_threshold;
 
     % compute on individual belts 
     lungs_ignored = is_lung_belt_ignored(config);
-    resp_features.resp.lungs = build_belt_evidence( ...
+    resp_features.lungs = build_belt_evidence( ...
         get_belt(resp_cycles, 'lungs'), get_belt(resp_ref, 'lungs'), lungs_ignored, t_grid, cfg, config);
-    resp_features.resp.diaph = build_belt_evidence( ...
+    resp_features.diaph = build_belt_evidence( ...
         get_belt(resp_cycles, 'diaph'), get_belt(resp_ref, 'diaph'), false, t_grid, cfg, config);
 
     % compute on both belts 
-    resp_features.resp.belt_availability = struct( ...
-        'lungs', resp_features.resp.lungs.available, 'diaph', resp_features.resp.diaph.available);
-    resp_features.resp.both_belts_available = resp_features.resp.lungs.available && resp_features.resp.diaph.available;
-    resp_features.resp.thoracoabdominal_balance = build_thoracoabdominal_balance(resp_features.resp.lungs, resp_features.resp.diaph, t_grid, cfg);
+    resp_features.belt_availability = struct( ...
+        'lungs', resp_features.lungs.available, 'diaph', resp_features.diaph.available);
+    resp_features.both_belts_available = resp_features.lungs.available && resp_features.diaph.available;
+    resp_features.thoracoabdominal_balance = build_thoracoabdominal_balance(resp_features.lungs, resp_features.diaph, t_grid, cfg);
 end
 
 function belt = build_belt_evidence(source, reference, ignored, t_grid, cfg, config)

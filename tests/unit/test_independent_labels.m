@@ -55,14 +55,14 @@ function testDeepThresholdHasNoUpperCutoffAndUsesSessionReference(testCase)
     events = detect_deep_breathing(data, phys_feat, config);
 
     verifyNotEmpty(testCase, events);
-    verifyFalse(testCase, isfield(phys_feat.resp.lungs, 'deep_amplitude_mask'));
-    verifyEqual(testCase, phys_feat.resp.deep_ratio_threshold, 1.20);
+    verifyFalse(testCase, isfield(phys_feat.lungs, 'deep_amplitude_mask'));
+    verifyEqual(testCase, phys_feat.deep_ratio_threshold, 1.20);
     deep_peak = resp_feat.lungs.peak_t >= 60 & resp_feat.lungs.peak_t <= 120;
-    verifyTrue(testCase, all(phys_feat.resp.lungs.amp_ratio_session(deep_peak) >= 1.20));
-    verifyTrue(testCase, any(phys_feat.resp.lungs.amp_ratio_session(deep_peak) >= 2.00));
-    verifyTrue(testCase, all(phys_feat.resp.lungs.amp_ratio_global(deep_peak) < 1.20));
-    verifyEqual(testCase, phys_feat.resp.lungs.session_reference_value, 2);
-    verifyEqual(testCase, phys_feat.resp.diaph.session_reference_value, 10);
+    verifyTrue(testCase, all(phys_feat.lungs.amp_ratio_session(deep_peak) >= 1.20));
+    verifyTrue(testCase, any(phys_feat.lungs.amp_ratio_session(deep_peak) >= 2.00));
+    verifyTrue(testCase, all(phys_feat.lungs.amp_ratio_global(deep_peak) < 1.20));
+    verifyEqual(testCase, phys_feat.lungs.session_reference_value, 2);
+    verifyEqual(testCase, phys_feat.diaph.session_reference_value, 10);
     verifyNotEqual(testCase, resp_feat.lungs.amp(find(deep_peak, 1)), ...
         resp_feat.diaph.amp(find(deep_peak, 1)));
 
@@ -112,7 +112,7 @@ function testMissingLungBeltUsesDiaphragmForDeep(testCase)
         data, resp_feat, resp_ref, config);
     events = detect_deep_breathing(data, phys_feat, config);
 
-    verifyTrue(testCase, phys_feat.resp.lungs.ignored);
+    verifyTrue(testCase, phys_feat.lungs.ignored);
     verifyNotEmpty(testCase, events);
     verifyTrue(testCase, all(contains(string({events.type}), '_diaph')));
     normalized = normalize_event_types_and_meta(events, config.fs);
@@ -150,15 +150,15 @@ function testThoracicDominanceThresholdAndContinuousEvidence(testCase)
         amplitude_fixture(1.40 * ones(20, 1), ones(20, 1), 2, 9, 2, 9);
     phys_feat = compute_respiratory_features( ...
         data, resp_feat, resp_ref, config);
-    verifyFalse(testCase, any(phys_feat.resp.thoracoabdominal_balance.dominance_mask));
+    verifyFalse(testCase, any(phys_feat.thoracoabdominal_balance.dominance_mask));
     verifyEmpty(testCase, detect_thoracic_dominant_breathing(data, phys_feat, config));
 
     [data, resp_feat, resp_ref, diagnostics_desat, config] = ...
         amplitude_fixture(1.80 * ones(20, 1), ones(20, 1), 2, 9, 2, 9);
     phys_feat = compute_respiratory_features( ...
         data, resp_feat, resp_ref, config);
-    balance = phys_feat.resp.thoracoabdominal_balance;
-    grid_index = find(phys_feat.resp.time_sec == 100, 1);
+    balance = phys_feat.thoracoabdominal_balance;
+    grid_index = find(phys_feat.time_sec == 100, 1);
     verifyEqual(testCase, balance.thoracic_to_abdominal_ratio(grid_index), 1.8, 'AbsTol', 1e-12);
     verifyEqual(testCase, balance.thoracic_dominance_log_ratio(grid_index), log(1.8), 'AbsTol', 1e-12);
     verifyEqual(testCase, balance.thoracic_relative_fraction(grid_index), 1.8/2.8, 'AbsTol', 1e-12);
@@ -177,14 +177,14 @@ function testThoracicDominanceHasNoOneBeltFallback(testCase)
     config.problems.missing_lung_belt = [7 1; 7 2];
     phys_feat = compute_respiratory_features( ...
         data, resp_feat, resp_ref, config);
-    verifyFalse(testCase, phys_feat.resp.thoracoabdominal_balance.available);
+    verifyFalse(testCase, phys_feat.thoracoabdominal_balance.available);
     verifyEmpty(testCase, detect_thoracic_dominant_breathing(data, phys_feat, config));
 
     config.measure = 3;
     phys_feat = compute_respiratory_features( ...
         data, resp_feat, resp_ref, config);
-    verifyFalse(testCase, phys_feat.resp.lungs.ignored);
-    verifyTrue(testCase, phys_feat.resp.thoracoabdominal_balance.available);
+    verifyFalse(testCase, phys_feat.lungs.ignored);
+    verifyTrue(testCase, phys_feat.thoracoabdominal_balance.available);
 end
 
 function testEffectiveInputConfigurationUsesKnownExclusion(testCase)
@@ -554,10 +554,9 @@ function [data, phys_feat, config] = detector_fixture()
     diaph.rate_rapid_window_bpm = nan(size(t_grid));
     diaph.rate_rapid_endpoint_mask = false(size(t_grid));
     diaph.rate_rapid_state_mask = false(size(t_grid));
-    phys_feat = struct();
     balance = struct('available', true, 'dominance_endpoint_mask', state, ...
         'dominance_state_mask', state, 'dominance_mask', state);
-    phys_feat.resp = struct('time_sec', t_grid, 'lungs', lungs, ...
+    phys_feat = struct('time_sec', t_grid, 'lungs', lungs, ...
         'diaph', diaph, 'thoracoabdominal_balance', balance);
 end
 

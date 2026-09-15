@@ -75,8 +75,9 @@ function [events_desat, diagnostics_desat] = detect_desaturation( ...
         return;
     end
 
-    fig = figure('Units', 'pixels', 'Position', near_fullscreen_figure_position(), ...
-        'Visible', config.make_figs_visible);
+    pos = near_fullscreen_figure_position();
+    pos(4) = 0.55 * pos(4);   % reduce figure height
+    fig = figure('Units', 'pixels', 'Position', pos, 'Visible', config.make_figs_visible);
     sgtitle(['Subject: ' num2str(config.subject) ' | Measurement: ' ...
         num2str(config.measure) ' | Label 11 - Desaturation (Hypoxia)'])
 
