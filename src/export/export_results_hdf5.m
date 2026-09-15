@@ -12,7 +12,7 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
 % The v4 file stores sample signals/time under /signals and /time;
 % breath-level belt arrays and detector evidence under /resp and
 % /resp_features; common-interval metadata under /session_reference, per-belt
-% breath-amplitude and raw excursion/slope references under /resp_reference,
+% breath-amplitude and raw-excursion references under /resp_reference,
 % and SpO2 reference metadata under /spo2_reference; sample x label masks
 % and per-label
 % metadata under /labels; canonical automatic/reviewed events under /events;

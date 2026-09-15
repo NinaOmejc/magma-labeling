@@ -105,7 +105,9 @@ function belt = build_belt_evidence(source, reference, ignored, t_grid, cfg, con
     if belt.session_amplitude_available
         % A complete window passes when it contains at least one valid breath
         % and every valid session-normalized amplitude is below threshold.
-        [belt.apnea_amplitude_endpoint_mask, belt.apnea_amplitude_state_mask] = ...
+        [belt.apnea_amplitude_endpoint_mask, ...
+            belt.apnea_amplitude_evaluable_endpoint_mask, ...
+            belt.apnea_amplitude_state_mask] = ...
             apnea_amplitude_window_mask( ...
                 belt.peak_t, belt.amp_ratio_session, t_grid, ...
                 cfg.apnea_win_sec, cfg.apnea_ratio_threshold);
@@ -255,6 +257,7 @@ function belt = empty_belt_evidence(t_grid)
         'rate_slow_state_mask', false(size(t_grid)), ...
         'rate_rapid_endpoint_mask', false(size(t_grid)), ...
         'rate_rapid_state_mask', false(size(t_grid)), ...
+        'apnea_amplitude_evaluable_endpoint_mask', false(size(t_grid)), ...
         'apnea_amplitude_endpoint_mask', false(size(t_grid)), ...
         'apnea_amplitude_state_mask', false(size(t_grid)), ...
         'irregularity', struct( ...
@@ -308,15 +311,19 @@ function trace = respiratory_rate_trace(peak_t, t_grid, win_sec)
     end
 end
 
-function [endpoint_mask, state_mask] = apnea_amplitude_window_mask( ...
+function [endpoint_mask, evaluable_endpoint_mask, state_mask] = ...
+    apnea_amplitude_window_mask( ...
     peak_t, ratio, t_grid, win_sec, threshold)
 % APNEA_AMPLITUDE_WINDOW_MASK Confirm low-amplitude breaths in trailing windows.
 % peak_t and ratio are aligned breath-level vectors in seconds and relative
 % to the session reference. A complete trailing window passes only when it
 % contains one or more finite positive ratios and all are <= threshold.
-% endpoint_mask marks passing window ends; state_mask covers their support.
+% evaluable_endpoint_mask distinguishes windows containing usable breaths from
+% empty windows; endpoint_mask marks evaluable windows that pass, and state_mask
+% covers the support of passing windows.
 
     endpoint_mask = false(size(t_grid));
+    evaluable_endpoint_mask = false(size(t_grid));
     peak_t = peak_t(:);
     ratio = ratio(:);
     if numel(peak_t) ~= numel(ratio)
@@ -334,6 +341,7 @@ function [endpoint_mask, state_mask] = apnea_amplitude_window_mask( ...
         if isempty(values)
             continue;
         end
+        evaluable_endpoint_mask(i) = true;
         endpoint_mask(i) = all(values <= threshold);
     end
     state_mask = analysis_window_endpoints_to_state_mask(endpoint_mask, t_grid, win_sec);
@@ -473,7 +481,7 @@ function cfg = evidence_config(config)
     cfg = struct();
     cfg.slow_win_sec = get_config_value(config, 'slow', 'analysis_win_sec', 60);
     cfg.rapid_win_sec = get_config_value(config, 'rapid', 'analysis_win_sec', 60);
-    cfg.apnea_win_sec = get_config_value(config, 'apnea', 'amp_analysis_win_sec', 10);
+    cfg.apnea_win_sec = get_config_value(config, 'apnea', 'min_dur_sec', 10);
     cfg.apnea_ratio_threshold = get_config_value(config, 'apnea', 'amp_ratio_thr', 0.10);
     cfg.slow_rr_threshold = get_config_value(config, 'slow', 'rr_thr_bpm', 10);
     cfg.rapid_rr_threshold = get_config_value(config, 'rapid', 'rr_thr_bpm', 20);

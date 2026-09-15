@@ -79,6 +79,7 @@ function config = get_config()
     config.reference.resp.edge_window_sec = 180;          % duration of early and late recording regions used to compare respiratory excursion stability
     config.reference.resp.change_trigger_frac = 0.25;     % minimum fractional early-vs-late excursion change that triggers change-point assessment
     config.reference.resp.min_cost_improvement = 0.30;    % minimum relative split-model cost improvement required to support a candidate change
+    config.reference.resp.raw_min_finite_fraction = 0.80; % minimum finite fraction for fixed raw-excursion references and raw apnea windows
         
     %---- GENERAL DETECTION SETTINGS
     config.grid_step_sec = 1;      % evaluation grid for "state" labels
@@ -122,20 +123,11 @@ function config = get_config()
     config.irregular.do_plot       = true;    % save irregular breathing diagnostic plot
 
     %---- LABEL 6 - apnea - DETECTION SETTINGS
-    config.apnea = struct();                  % apnea settings
-    config.apnea.amp_ratio_thr    = 0.10;     % <=10% of each usable belt's session median breath-amplitude reference
-    config.apnea.amp_analysis_win_sec = 10;   % trailing normalized-amplitude evidence window
-    config.apnea.min_dur_sec      = 10;       % minimum inferred low-motion/pause-state duration
-    config.apnea.raw_flat_win_sec = 10;       % raw-signal analysis window for flat/low-motion apnea evidence
-    config.apnea.raw_flat_ref_win_sec = 60;   % prior raw-signal reference window for normal belt motion
-    config.apnea.raw_flat_ref_lag_sec = 10;   % ignore the most recent seconds when estimating the raw-signal reference
-    config.apnea.raw_flat_ref_floor_ratio = 0.25;     % keep adaptive excursion/slope references above this fraction of their fixed raw references
-    config.apnea.raw_flat_motion_ratio_thr = 0.10;    % raw P95-P5 excursion must be <= this fraction of its fixed/adaptive raw excursion reference
-    config.apnea.raw_flat_slope_ratio_thr = 0.15;     % raw median abs slope must be <= this fraction of its fixed/adaptive raw slope reference
-    config.apnea.raw_flat_hist_peak_frac_thr = 0.35;  % histogram peak must contain at least this fraction of window samples
-    config.apnea.raw_flat_min_plateau_sec = 5;        % minimum continuous time spent inside the dominant histogram amplitude band
-    config.apnea.raw_flat_hist_bins = 40;             % histogram bins used to find held-amplitude plateaus
-    config.apnea.do_plot = true;                      % save apnea diagnostic plot
+    config.apnea = struct();                          % apnea settings
+    config.apnea.min_dur_sec = 10;                % defining apnea duration and amplitude/raw evidence-window duration
+    config.apnea.amp_ratio_thr = 0.10;            % breath amplitude / fixed session breath-amplitude reference
+    config.apnea.raw_excursion_ratio_thr = 0.10;  % raw P95-P5 / fixed session raw-excursion reference
+    config.apnea.do_plot = true;                  % save apnea diagnostic plot
 
     %---- LABEL 7 - sigh - DETECTION SETTINGS
     config.sigh = struct();                      % sigh detection settings

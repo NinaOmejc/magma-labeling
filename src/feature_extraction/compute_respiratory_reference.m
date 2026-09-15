@@ -30,17 +30,21 @@ function resp_ref = compute_respiratory_reference( ...
     resp_ref.lungs = analyze_belt(lungs, cfg, session_reference);
     resp_ref.diaph = analyze_belt(diaph, cfg, session_reference);
     resp_ref.lungs.raw = analyze_raw_belt( ...
-        data, config.channels.lungs_idx, session_reference, lungs_ignored);
+        data, config.channels.lungs_idx, session_reference, lungs_ignored, ...
+        cfg.raw_min_finite_fraction);
     resp_ref.diaph.raw = analyze_raw_belt( ...
-        data, config.channels.diaph_idx, session_reference, false);
+        data, config.channels.diaph_idx, session_reference, false, ...
+        cfg.raw_min_finite_fraction);
     resp_ref = add_belt_agreement(resp_ref, cfg);
 end
 
-function raw = analyze_raw_belt(data, channel_idx, session_reference, ignored)
-% ANALYZE_RAW_BELT Estimate fixed raw excursion and slope on the common interval.
+function raw = analyze_raw_belt( ...
+    data, channel_idx, session_reference, ignored, min_finite_fraction)
+% ANALYZE_RAW_BELT Estimate fixed raw excursion on the common interval.
 % data is the raw recording, channel_idx selects one belt, and ignored marks an
-% excluded lung belt. raw fields are availability/quality, sample count, finite
-% fraction, P95-P5 excursion, and median absolute sample-to-sample difference.
+% excluded lung belt. min_finite_fraction is the configured raw-signal coverage
+% requirement. raw fields are availability/quality, sample count, finite fraction,
+% and P95-P5 excursion.
 
     raw = empty_raw_reference();
     if ignored
@@ -73,18 +77,13 @@ function raw = analyze_raw_belt(data, channel_idx, session_reference, ignored)
     raw.n_samples = numel(segment);
     raw.finite_fraction = finite_fraction(segment);
     raw.excursion = robust_resp_excursion(segment);
-    raw.slope = raw_resp_slope_level(segment);
 
-    if raw.finite_fraction < 0.8
+    if raw.finite_fraction < min_finite_fraction
         raw.quality = 'insufficient_finite_coverage';
         return;
     end
     if ~isfinite(raw.excursion) || raw.excursion <= 0
         raw.quality = 'invalid_excursion';
-        return;
-    end
-    if ~isfinite(raw.slope) || raw.slope <= 0
-        raw.quality = 'invalid_slope';
         return;
     end
 
@@ -114,8 +113,7 @@ function raw = empty_raw_reference()
         'quality', 'not_evaluated', ...
         'n_samples', 0, ...
         'finite_fraction', NaN, ...
-        'excursion', NaN, ...
-        'slope', NaN);
+        'excursion', NaN);
 end
 
 function belt = analyze_belt(breaths, cfg, session_reference)
@@ -455,7 +453,7 @@ function belt = empty_belt_reference()
 %   session/global - value, contributing n_breaths, and availability; session
 %                    also carries its quality state.
 %   raw - Independent fixed raw-signal reference: available, quality,
-%         n_samples, finite_fraction, excursion, and slope.
+%         n_samples, finite_fraction, and P95-P5 excursion.
 %   global_to_session_ratio - Ratio of global and session medians.
 %   reference_quality/reference_action - Downstream usability state and action.
 %   mode/quality - Change-analysis mode and diagnostic result.
@@ -507,22 +505,23 @@ function belt = empty_belt_reference()
 end
 
 function cfg = respiratory_reference_config(config)
-% RESPIRATORY_REFERENCE_CONFIG Resolve and validate amplitude-change settings.
-% cfg contains min_breaths, edge_window_sec, change_trigger_frac, and
-% min_cost_improvement, using documented defaults when config omits them.
+% RESPIRATORY_REFERENCE_CONFIG Resolve respiratory-reference and raw-signal QC.
+% cfg contains breath-count/change-detection settings plus the minimum finite
+% coverage accepted for fixed raw-excursion references.
 
     cfg = struct( ...
         'min_breaths', 10, ...
         'edge_window_sec', 300, ...
         'change_trigger_frac', 0.25, ...
-        'min_cost_improvement', 0.30);
+        'min_cost_improvement', 0.30, ...
+        'raw_min_finite_fraction', 0.80);
     if isfield(config, 'reference') && isstruct(config.reference)
         if isfield(config.reference, 'resp_min_breaths')
             cfg.min_breaths = config.reference.resp_min_breaths;
         end
         if isfield(config.reference, 'resp') && isstruct(config.reference.resp)
             names = {'edge_window_sec', 'change_trigger_frac', ...
-                'min_cost_improvement'};
+                'min_cost_improvement', 'raw_min_finite_fraction'};
             for i = 1:numel(names)
                 if isfield(config.reference.resp, names{i})
                     cfg.(names{i}) = config.reference.resp.(names{i});
@@ -544,6 +543,12 @@ function cfg = respiratory_reference_config(config)
     if ~isscalar(cfg.min_cost_improvement) || ~isfinite(cfg.min_cost_improvement) || ...
             cfg.min_cost_improvement < 0 || cfg.min_cost_improvement > 1
         error('config.reference.resp.min_cost_improvement must be between 0 and 1.');
+    end
+    if ~isscalar(cfg.raw_min_finite_fraction) || ...
+            ~isfinite(cfg.raw_min_finite_fraction) || ...
+            cfg.raw_min_finite_fraction < 0 || cfg.raw_min_finite_fraction > 1
+        error(['config.reference.resp.raw_min_finite_fraction must be ' ...
+            'between 0 and 1.']);
     end
 end
 

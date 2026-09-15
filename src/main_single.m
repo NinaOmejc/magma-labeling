@@ -23,8 +23,7 @@ for isub = 1:length(config.subjects)
 
         % MODALITY-SPECIFIC REFERENCES FROM THE COMMON INTERVAL
         session_reference = get_session_reference_interval(size(data, 1), config);
-        resp_ref = compute_respiratory_reference( ...
-            data, resp_cycles, session_reference, config);
+        resp_ref = compute_respiratory_reference(data, resp_cycles, session_reference, config);
         plot_session_reference(data, resp_cycles, resp_ref, session_reference, config);
 
         % RESPIRATORY FEATURES (derived; no peak redetection)
@@ -39,8 +38,7 @@ for isub = 1:length(config.subjects)
         [events_rapid, boundary_rapid] = detect_rapid_breathing(data, resp_features, config);
         [events_async, diagnostics_async] = detect_respiratory_asynchrony(data, session_reference, resp_cycles, config);
         [events_desat, diagnostics_desat] = detect_desaturation(data, session_reference, config);
-        [events_apnea, diagnostics_apnea, boundary_apnea] = detect_apnea( ...
-            data, resp_features, resp_ref, config);
+        [events_apnea, diagnostics_apnea, boundary_apnea] = detect_apnea(data, resp_features, resp_ref, config);
         [~, diagnostics_sigh, sigh_review] = detect_sigh(data, resp_features, resp_cycles, config);
         [events_csr, diagnostics_csr] = detect_periodic_breathing(data, resp_cycles, config);
  

@@ -100,13 +100,19 @@ function summary = build_label_evidence_summary( ...
     summary.desat.supporting_signal = 'SpO2';
 
     apnea = detector_diagnostics.apnea;
-    summary.apnea.peak_path_available = apnea.peak_path_available;
-    summary.apnea.raw_flat_path_available = apnea.raw_flat_path_available;
-    summary.apnea.peak_support_belts = apnea.peak_support_belts;
-    summary.apnea.raw_flat_support_belts = apnea.raw_flat_support_belts;
+    summary.apnea.amplitude_path_available = apnea.amplitude_path_available;
+    summary.apnea.raw_excursion_path_available = apnea.raw_excursion_path_available;
+    summary.apnea.amplitude_support_belts = apnea.amplitude_support_belts;
+    summary.apnea.raw_excursion_support_belts = apnea.raw_excursion_support_belts;
     summary.apnea.amp_ratio_threshold = apnea.amp_ratio_threshold;
-    summary.apnea.peak_supported_fraction = finite_mean(apnea.peak_state_mask);
-    summary.apnea.raw_flat_supported_fraction = finite_mean(apnea.raw_flat_state_mask);
+    summary.apnea.raw_excursion_ratio_threshold = ...
+        apnea.raw_excursion_ratio_threshold;
+    summary.apnea.amplitude_supported_fraction = ...
+        finite_mean(apnea.amplitude_state_mask);
+    summary.apnea.raw_fallback_supported_fraction = ...
+        finite_mean(apnea.raw_fallback_state_mask);
+    summary.apnea.combined_supported_fraction = ...
+        finite_mean(apnea.combined_state_mask);
 
     sigh = detector_diagnostics.sigh;
     summary.sigh.method = sigh.method;
