@@ -1,4 +1,4 @@
-function [events, records, localized_support_events] = ...
+function [events, candidates, localized_support_events] = ...
     localize_breath_amplitude_events( ...
         belt, N, fs, event_type, criterion, lower, upper, ...
         min_duration_sec, belt_name)
@@ -6,11 +6,11 @@ function [events, records, localized_support_events] = ...
 % Internal peaks are tested using session-normalized amplitude, represented by
 % their complete detected trough-to-trough cycles, and merged when those cycles
 % touch. localized_support_events contains every merged run; events retains only
-% runs meeting min_duration_sec. records preserves per-run boundary provenance
-% with NaN candidate times because no rolling candidate stage is used.
+% runs meeting min_duration_sec. candidates retains every localized run with
+% its compact acceptance result.
 
     events = empty_events();
-    records = empty_boundary_records();
+    candidates = empty_candidate_events();
     localized_support_events = empty_events();
     if isstruct(belt) && isfield(belt, 'session_amplitude_available') && ...
             ~belt.session_amplitude_available
@@ -30,22 +30,13 @@ function [events, records, localized_support_events] = ...
             events(end+1, 1) = localized; %#ok<AGROW>
         end
 
-        record = boundary_record_template();
-        record.label = event_type;
-        record.detector = event_type;
-        record.belt = belt_name;
-        record.boundary_method = 'breathwise_amplitude_trough_localization';
-        record.localized_start_t = localized.start_t;
-        record.localized_end_t = localized.end_t;
-        record.localized_duration_sec = localized.duration;
-        record.final_min_duration_sec = min_duration_sec;
-        record.passes_final_min_duration = passes;
-        if ~passes
-            record.rejection_reason = 'localized_duration_below_minimum';
+        if passes
+            reason = '';
+        else
+            reason = 'too_short';
         end
-        record.uncertainty_sec = 0;
-        record.evidence_source = 'breath_amplitude_ratio_session';
-        records(end+1, 1) = record; %#ok<AGROW>
+        candidates(end + 1, 1) = events_to_candidate_events( ...
+            localized, belt_name, passes, reason, 0); %#ok<AGROW>
     end
 end
 
@@ -145,31 +136,4 @@ function event = event_from_times(start_t, end_t, N, fs, event_type)
         'start_t', (start_idx - 1) / fs, ...
         'end_t', end_idx / fs, ...
         'duration', (end_idx - start_idx + 1) / fs);
-end
-
-function records = empty_boundary_records()
-% EMPTY_BOUNDARY_RECORDS Return a zero-length localized-boundary record array.
-
-    records = boundary_record_template();
-    records = records([]);
-end
-
-function record = boundary_record_template()
-% BOUNDARY_RECORD_TEMPLATE Define direct amplitude-event provenance fields.
-
-    record = struct( ...
-        'label', '', ...
-        'detector', '', ...
-        'belt', '', ...
-        'boundary_method', '', ...
-        'candidate_start_t', NaN, ...
-        'candidate_end_t', NaN, ...
-        'localized_start_t', NaN, ...
-        'localized_end_t', NaN, ...
-        'localized_duration_sec', NaN, ...
-        'final_min_duration_sec', NaN, ...
-        'passes_final_min_duration', false, ...
-        'rejection_reason', '', ...
-        'uncertainty_sec', NaN, ...
-        'evidence_source', '');
 end

@@ -1,13 +1,13 @@
 function h = plot_spo2_diagnostic_panel( ...
-    ax, data, session_reference, diagnostics_desat, config, title_text)
+    ax, data, session_reference, spo2_ref, desat_events, config, title_text)
 % PLOT_SPO2_DIAGNOSTIC_PANEL Plot SpO2, reference thresholds, and desaturation events.
 %
 % Inputs:
 %   ax                - Target axes handle, or empty for the current axes.
 %   data              - Nsample x Nchannel physiological signal matrix.
 %   session_reference - Common reference interval with boundaries in seconds.
-%   diagnostics_desat - Desaturation diagnostics with spo2_ref and optional
-%                       time_sec, spo2, and events.
+%   spo2_ref          - Recording-specific SpO2 reference metadata.
+%   desat_events      - Final desaturation events for optional shading.
 %   config            - Channel, sampling, and desaturation threshold settings.
 %   title_text        - Optional panel title.
 %
@@ -18,13 +18,8 @@ function h = plot_spo2_diagnostic_panel( ...
     if nargin < 1 || isempty(ax)
         ax = gca;
     end
-    if nargin < 6 || isempty(title_text)
+    if nargin < 7 || isempty(title_text)
         title_text = 'SpO2';
-    end
-
-    spo2_ref = struct();
-    if isstruct(diagnostics_desat) && isfield(diagnostics_desat, 'spo2_ref')
-        spo2_ref = diagnostics_desat.spo2_ref;
     end
 
     h = struct();
@@ -34,7 +29,7 @@ function h = plot_spo2_diagnostic_panel( ...
     ylabel(ax, 'SpO2 (%)');
     title(ax, title_text);
 
-    [t_spo2, spo2] = get_spo2_trace(data, diagnostics_desat, config);
+    [t_spo2, spo2] = get_spo2_trace(data, config);
     if isempty(spo2)
         plot(ax, 0, 0, 'w', 'HandleVisibility', 'off');
         ylim(ax, [-1 1]);
@@ -72,10 +67,9 @@ function h = plot_spo2_diagnostic_panel( ...
         'DisplayName', sprintf('%g%% floor', floor_thr));
 
     h.desat_events = gobjects(0);
-    if isstruct(diagnostics_desat) && isfield(diagnostics_desat, 'events') && ...
-            ~isempty(diagnostics_desat.events)
+    if ~isempty(desat_events)
         h.desat_events = shade_events_on_axis( ...
-            ax, diagnostics_desat.events, 'desaturation');
+            ax, desat_events, 'desaturation');
     end
     if ~isempty(t_spo2)
         xlim(ax, [0 t_spo2(end)]);
@@ -84,26 +78,13 @@ function h = plot_spo2_diagnostic_panel( ...
     hold(ax, 'off');
 end
 
-function [t_spo2, spo2] = get_spo2_trace(data, diagnostics_desat, config)
+function [t_spo2, spo2] = get_spo2_trace(data, config)
 % GET_SPO2_TRACE Resolve aligned sample times and SpO2 percentages for plotting.
-% A diagnostic trace takes precedence; otherwise the configured data column
-% is sampled at config.fs. Empty vectors indicate unavailable SpO2.
+% The configured raw/preprocessed recording column is authoritative; no signal
+% or time-vector copy is read from detector diagnostics.
 
-    if nargin >= 2 && ~isempty(diagnostics_desat) && ...
-            isstruct(diagnostics_desat) && ...
-            isfield(diagnostics_desat, 'spo2') && ...
-            isfield(diagnostics_desat, 'time_sec') && ...
-            ~isempty(diagnostics_desat.spo2) && ...
-            ~isempty(diagnostics_desat.time_sec)
-        spo2 = diagnostics_desat.spo2(:);
-        t_spo2 = diagnostics_desat.time_sec(:);
-        n = min(numel(spo2), numel(t_spo2));
-        spo2 = spo2(1:n);
-        t_spo2 = t_spo2(1:n);
-        return;
-    end
-
-    if nargin < 1 || isempty(data) || nargin < 3 || isempty(config) || ~isfield(config, 'data_columns')
+    if nargin < 1 || isempty(data) || nargin < 2 || isempty(config) || ...
+            ~isfield(config, 'data_columns')
         t_spo2 = [];
         spo2 = [];
         return;

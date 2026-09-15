@@ -1,15 +1,13 @@
-function [events, boundary_info] = detect_thoracic_dominant_breathing(data, resp_features, config)
+function [events, candidate_events] = detect_thoracic_dominant_breathing(data, resp_features, config)
 % DETECT_THORACIC_DOMINANT_BREATHING Convert sustained cross-belt dominance to events.
 % resp_features supplies trailing-window medians of independently session-
 % normalized thoracic and abdominal amplitudes. data/config provide recording
-% length, sampling, minimum duration, and plotting. boundary_info preserves
-% endpoint evidence and back-projected candidate-state support.
+% length, sampling, minimum duration, and plotting. candidate_events retains
+% every event-like state run before the final duration decision.
 
     events = empty_events();
     evidence = resp_features.thoracoabdominal_balance;
-    boundary_info = make_label_boundary_info('thoracic', ...
-        'detect_thoracic_dominant_breathing', 'not_evaluated', ...
-        empty_events(), empty_events(), NaN, '', [], [], []);
+    candidate_events = empty_candidate_events();
     if ~evidence.available
         fprintf('Skipping thoracic detection: both session-normalized respiratory belts are required.\n');
         return;
@@ -26,16 +24,18 @@ function [events, boundary_info] = detect_thoracic_dominant_breathing(data, resp
         'thoracic_dominant_breathing');
     analysis_window_sec = get_config_value( ...
         config, 'thoracic', 'analysis_win_sec', 30);
-    endpoint_mask = false(size(state_mask));
-    if isfield(evidence, 'dominance_endpoint_mask')
-        endpoint_mask = evidence.dominance_endpoint_mask;
+    [pre_duration_events, ~] = sustained_condition_to_events( ...
+        state_mask, resp_features.time_sec, config.fs, ...
+        size(data, 1), 0, 'thoracic_dominant_breathing');
+    if ~isempty(pre_duration_events)
+        accepted = [pre_duration_events.duration]' >= ...
+            config.thoracic.min_dur_sec;
+        reasons = repmat({''}, numel(pre_duration_events), 1);
+        reasons(~accepted) = {'too_short'};
+        candidate_events = events_to_candidate_events( ...
+            pre_duration_events, 'both', accepted, reasons, ...
+            analysis_window_sec);
     end
-    boundary_info = make_label_boundary_info('thoracic', ...
-        'detect_thoracic_dominant_breathing', ...
-        'aggregate_window_candidate_support_with_explicit_uncertainty', ...
-        events, events, analysis_window_sec, ...
-        'independently_session_normalized_belt_window_medians', ...
-        endpoint_mask, state_mask, dominance_mask);
 
     if config.thoracic.do_plot
         plot_thoracic_dominance_diagnostic( ...

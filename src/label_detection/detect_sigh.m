@@ -4,9 +4,9 @@ function [events, diagnostics, review_info] = detect_sigh( ...
 % data/resp_cycles supply sample signals and breath markers; resp_features
 % supplies global-normalized amplitudes; config controls outlier or legacy
 % criteria, spacing, plotting, and review.
-% events are midpoint-bounded breath events. diagnostics stores method settings
-% and per-belt availability, reference quality, breath times, ratios, threshold,
-% and automatic/reviewed selections. review_info records review scope/status,
+% events are midpoint-bounded breath events. diagnostics stores compact per-belt
+% availability, reference quality, and recording-specific decision thresholds.
+% review_info records review scope/status,
 % sample review_mask, automatic/reviewed events, and per-belt breath flags.
 
     events = empty_events();
@@ -20,10 +20,6 @@ function [events, diagnostics, review_info] = detect_sigh( ...
     diaph_valid = diaph.global_amplitude_available;
     diagnostics = struct( ...
         'available', lungs_valid || diaph_valid, ...
-        'method', '', ...
-        'ratio_percentile', NaN, ...
-        'minimum_absolute_ratio', NaN, ...
-        'iqr_multiplier', NaN, ...
         'lungs', empty_sigh_belt_diagnostics(lungs), ...
         'diaph', empty_sigh_belt_diagnostics(diaph));
     review_info = struct( ...
@@ -90,7 +86,7 @@ function [events, diagnostics, review_info] = detect_sigh( ...
         otherwise
             sigh_lungs = false(size(lungs.peak_t(:)));
             if lungs_valid
-                [sigh_lungs, ~, diagnostics.lungs.amp_ratio_global, ...
+                [sigh_lungs, ~, ~, ...
                     diagnostics.lungs.decision_threshold] = sigh_flags_global_ratio_outlier( ...
                     lungs, ratio_prctile, ...
                     min_abs_ratio, iqr_k, min_gap_sec);
@@ -98,17 +94,12 @@ function [events, diagnostics, review_info] = detect_sigh( ...
             
             sigh_diaph = false(size(diaph.peak_t(:)));
             if diaph_valid
-                [sigh_diaph, ~, diagnostics.diaph.amp_ratio_global, ...
+                [sigh_diaph, ~, ~, ...
                     diagnostics.diaph.decision_threshold] = sigh_flags_global_ratio_outlier( ...
                     diaph, ratio_prctile, ...
                     min_abs_ratio, iqr_k, min_gap_sec);
             end
     end
-    diagnostics.method = char(string(method));
-    diagnostics.ratio_percentile = ratio_prctile;
-    diagnostics.minimum_absolute_ratio = min_abs_ratio;
-    diagnostics.iqr_multiplier = iqr_k;
-
     automatic_sigh_lungs = sigh_lungs;
     automatic_sigh_diaph = sigh_diaph;
     automatic_events_L = sigh_flags_to_events(lungs.peak_t, automatic_sigh_lungs, N, fs, 'lungs');
@@ -132,10 +123,6 @@ function [events, diagnostics, review_info] = detect_sigh( ...
 
     events_L = sigh_flags_to_events(lungs.peak_t, sigh_lungs, N, fs, 'lungs');
     events_D = sigh_flags_to_events(diaph.peak_t, sigh_diaph, N, fs, 'diaph');
-    diagnostics.lungs.selected_breath_mask = automatic_sigh_lungs;
-    diagnostics.diaph.selected_breath_mask = automatic_sigh_diaph;
-    diagnostics.lungs.reviewed_selected_breath_mask = sigh_lungs;
-    diagnostics.diaph.reviewed_selected_breath_mask = sigh_diaph;
     events = merge_events({events_L, events_D});
     review_info.reviewed_events = events;
     review_info.reviewed_flags_lungs = sigh_lungs;
@@ -194,11 +181,11 @@ function [events, diagnostics, review_info] = detect_sigh( ...
 
         ax3 = subplot(4,1,3);
         plot_sigh_ratio_evidence( ...
-            ax3, diagnostics.lungs, sigh_lungs, 'lungs');
+            ax3, lungs, diagnostics.lungs, sigh_lungs, 'lungs');
 
         ax4 = subplot(4,1,4);
         plot_sigh_ratio_evidence( ...
-            ax4, diagnostics.diaph, sigh_diaph, 'diaphragm');
+            ax4, diaph, diagnostics.diaph, sigh_diaph, 'diaphragm');
 
         linkaxes([ax1 ax2], 'x');
         recording_end_t = (N - 1) / fs;
@@ -211,7 +198,8 @@ function [events, diagnostics, review_info] = detect_sigh( ...
     end
 end
 
-function plot_sigh_ratio_evidence(ax, belt_diagnostics, selected_mask, belt_name)
+function plot_sigh_ratio_evidence( ...
+    ax, belt, belt_diagnostics, selected_mask, belt_name)
 % PLOT_SIGH_RATIO_EVIDENCE Show global breath ratios and the final threshold.
 
     hold(ax, 'on');
@@ -220,8 +208,8 @@ function plot_sigh_ratio_evidence(ax, belt_diagnostics, selected_mask, belt_name
     ylabel(ax, 'Breath amplitude / global reference');
     grid(ax, 'on');
 
-    peak_t = belt_diagnostics.peak_t(:);
-    ratio = belt_diagnostics.amp_ratio_global(:);
+    peak_t = belt.peak_t(:);
+    ratio = belt.amp_ratio_global(:);
     selected_mask = logical(selected_mask(:));
     n_breaths = min([numel(peak_t), numel(ratio), numel(selected_mask)]);
     peak_t = peak_t(1:n_breaths);
@@ -279,17 +267,12 @@ end
 
 function diagnostics = empty_sigh_belt_diagnostics(belt)
 % EMPTY_SIGH_BELT_DIAGNOSTICS Initialize breath-level sigh evidence for one belt.
-% Fields are availability, reference_quality, peak_t (s), global amplitude
-% ratio, scalar decision_threshold, and automatic/reviewed breath masks.
+% Fields are availability, reference quality, and the adaptive threshold.
 
     diagnostics = struct( ...
         'available', belt.global_amplitude_available, ...
         'reference_quality', belt.reference_quality, ...
-        'peak_t', belt.peak_t, ...
-        'amp_ratio_global', belt.amp_ratio_global, ...
-        'decision_threshold', NaN, ...
-        'selected_breath_mask', false(size(belt.peak_t)), ...
-        'reviewed_selected_breath_mask', false(size(belt.peak_t)));
+        'decision_threshold', NaN);
 end
 
 function tf = event_sets_equal(a, b)

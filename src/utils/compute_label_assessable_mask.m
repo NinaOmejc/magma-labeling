@@ -1,7 +1,7 @@
 function [assessable_mask, info] = compute_label_assessable_mask( ...
-    N, label_names, label_available, diagnostics_desat, rea_diagnostics, config)
+    data, label_names, label_available, rea_diagnostics, t_grid, config)
 % COMPUTE_LABEL_ASSESSABLE_MASK Refine recording-level availability by sample.
-% label_available aligns with label_names; N/config.fs define the master sample
+% label_available aligns with label_names; data/config.fs define the master sample
 % grid. Most labels are assessable for the full recording when available.
 % Desaturation follows finite native SpO2 samples; asynchrony projects valid
 % coherence-grid evidence to master samples. info documents schema version,
@@ -9,6 +9,7 @@ function [assessable_mask, info] = compute_label_assessable_mask( ...
 
     label_names = cellstr(string(label_names));
     label_available = logical(label_available(:)');
+    N = size(data, 1);
     if ~isscalar(N) || ~isnumeric(N) || ~isfinite(N) || N < 0 || N ~= round(N)
         error('MAGMA:Assessability:InvalidSampleCount', ...
             'N must be a finite nonnegative integer.');
@@ -20,21 +21,24 @@ function [assessable_mask, info] = compute_label_assessable_mask( ...
     assessable_mask = repmat(label_available, N, 1);
 
     desat_idx = find(strcmp(label_names, 'desat'), 1);
-    if ~isempty(desat_idx) && label_available(desat_idx) && ...
-            isstruct(diagnostics_desat) && ...
-            isfield(diagnostics_desat, 'valid_sample_mask') && ...
-            numel(diagnostics_desat.valid_sample_mask) == N
-        assessable_mask(:, desat_idx) = ...
-            logical(diagnostics_desat.valid_sample_mask(:));
+    if ~isempty(desat_idx) && label_available(desat_idx)
+        if ~isfield(config, 'channels')
+            config = resolve_signal_channels(config);
+        end
+        idx_spo2 = config.channels.spo2_idx;
+        if ~isempty(idx_spo2) && idx_spo2 <= size(data, 2)
+            assessable_mask(:, desat_idx) = isfinite(data(:, idx_spo2));
+        else
+            assessable_mask(:, desat_idx) = false(N, 1);
+        end
     end
 
     async_idx = find(strcmp(label_names, 'async'), 1);
     if ~isempty(async_idx) && label_available(async_idx) && ...
             isstruct(rea_diagnostics) && ...
-            isfield(rea_diagnostics, 'valid_evidence_mask') && ...
-            isfield(rea_diagnostics, 'time_sec')
+            isfield(rea_diagnostics, 'valid_evidence_mask')
         assessable_mask(:, async_idx) = grid_to_master_mask( ...
-            rea_diagnostics.valid_evidence_mask, rea_diagnostics.time_sec, ...
+            rea_diagnostics.valid_evidence_mask, t_grid, ...
             N, config.fs);
     end
 

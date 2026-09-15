@@ -26,15 +26,15 @@ function results = build_recording_results( ...
 %     label_reviewed_available, label_reviewed_availability_reason - Reviewed assessability.
 %     label_reviewed_assessable_mask - Review-limited Nsample x Nlabel support.
 %     resp_cycles, resp_ref, session_reference, resp_features - Scientific inputs above.
-%     spo2_ref - Session SpO2 reference owned by desaturation diagnostics.
-%     diagnostic_signals, detector_diagnostics - Exportable traces and detector-specific details.
+%     spo2_ref - Authoritative session SpO2 reference.
+%     candidate_events - Compact localized pre-final intervals by label.
+%     detector_diagnostics - Unique detector-specific scientific evidence.
 %     label_burden_automatic, label_burden_reviewed - Per-label seconds, fractions, and counts.
 %     label_overlap_summary_automatic, label_overlap_summary_reviewed - Prespecified pair overlaps.
 %     label_evidence_summary_automatic, label_evidence_summary_reviewed - Descriptive label evidence.
 %     db_phenotype_evidence - Automatic/reviewed phenotype evidence bundle.
-%     event_boundary_info - Per-label event timing/localization provenance.
 %     manual_label_edit, manual_sigh_review - Manual review outcomes and coverage.
-%     input_config, config - Resolved input metadata and complete run configuration.
+%     config - Complete resolved run configuration, including config.input_config.
 %     upstream_input_preprocessing - Text describing preprocessing before MAGMA.
 
     results = struct();
@@ -62,9 +62,9 @@ function results = build_recording_results( ...
     results.resp_cycles = resp_cycles;
     results.resp_ref = resp_ref;
     results.session_reference = session_reference;
-    results.spo2_ref = label_results.detector_diagnostics.desat.spo2_ref;
+    results.spo2_ref = label_results.spo2_ref;
     results.resp_features = resp_features;
-    results.diagnostic_signals = label_results.diagnostic_signals;
+    results.candidate_events = label_results.candidate_events;
     results.detector_diagnostics = label_results.detector_diagnostics;
     results.label_burden_automatic = label_results.burden_automatic;
     results.label_burden_reviewed = label_results.burden_reviewed;
@@ -73,10 +73,8 @@ function results = build_recording_results( ...
     results.label_evidence_summary_automatic = label_results.evidence_automatic;
     results.label_evidence_summary_reviewed = label_results.evidence_reviewed;
     results.db_phenotype_evidence = label_results.db_phenotype_evidence;
-    results.event_boundary_info = label_results.event_boundary_info;
     results.manual_label_edit = label_results.manual_label_edit;
     results.manual_sigh_review = label_results.sigh_review;
-    results.input_config = config.input_config;
     results.config = config;
     results.upstream_input_preprocessing = get_config_value( ...
         config, 'HDF5', 'upstream_input_preprocessing', ...

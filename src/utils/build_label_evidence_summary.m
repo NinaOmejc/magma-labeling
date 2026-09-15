@@ -1,6 +1,6 @@
 function summary = build_label_evidence_summary( ...
-    label_names, label_available, reasons, resp_features, diagnostic_signals, ...
-    detector_diagnostics, label_burden)
+    label_names, label_available, reasons, data, resp_features, spo2_ref, ...
+    detector_diagnostics, label_burden, config)
 % BUILD_LABEL_EVIDENCE_SUMMARY Reduce detector traces to descriptive recording metrics.
 % Availability/reasons align with label_names; respiratory and specialized
 % diagnostics supply trace summaries; label_burden supplies event burden.
@@ -43,30 +43,34 @@ function summary = build_label_evidence_summary( ...
     summary.slow.analysis_window_sec = resp_features.rate_windows_sec.slow;
     summary.slow.median_rr_lungs = finite_median(lungs.rate_slow_window_bpm);
     summary.slow.median_rr_diaph = finite_median(diaph.rate_slow_window_bpm);
-    summary.slow.rr_threshold_bpm = diagnostic_signals.slow_bpm_threshold;
-    summary.slow.median_margin_lungs = finite_median(diagnostic_signals.slow_margin_bpm_lungs);
-    summary.slow.median_margin_diaph = finite_median(diagnostic_signals.slow_margin_bpm_diaph);
+    summary.slow.rr_threshold_bpm = config.slow.rr_thr_bpm;
+    summary.slow.median_margin_lungs = finite_median( ...
+        config.slow.rr_thr_bpm - lungs.rate_slow_window_bpm);
+    summary.slow.median_margin_diaph = finite_median( ...
+        config.slow.rr_thr_bpm - diaph.rate_slow_window_bpm);
     summary.slow.supporting_belts = belt_support( ...
         any_finite(lungs.rate_slow_window_bpm), any_finite(diaph.rate_slow_window_bpm));
 
     summary.rapid.analysis_window_sec = resp_features.rate_windows_sec.rapid;
     summary.rapid.median_rr_lungs = finite_median(lungs.rate_rapid_window_bpm);
     summary.rapid.median_rr_diaph = finite_median(diaph.rate_rapid_window_bpm);
-    summary.rapid.rr_threshold_bpm = diagnostic_signals.rapid_bpm_threshold;
-    summary.rapid.median_margin_lungs = finite_median(diagnostic_signals.rapid_margin_bpm_lungs);
-    summary.rapid.median_margin_diaph = finite_median(diagnostic_signals.rapid_margin_bpm_diaph);
+    summary.rapid.rr_threshold_bpm = config.rapid.rr_thr_bpm;
+    summary.rapid.median_margin_lungs = finite_median( ...
+        lungs.rate_rapid_window_bpm - config.rapid.rr_thr_bpm);
+    summary.rapid.median_margin_diaph = finite_median( ...
+        diaph.rate_rapid_window_bpm - config.rapid.rr_thr_bpm);
     summary.rapid.supporting_belts = belt_support( ...
         any_finite(lungs.rate_rapid_window_bpm), any_finite(diaph.rate_rapid_window_bpm));
 
-    summary.irregular.cov_threshold = diagnostic_signals.irregularity_cov_thr;
+    summary.irregular.cov_threshold = config.irregular.cov_thr;
     summary.irregular.median_cov_lungs = finite_median(lungs.irregularity.cov);
     summary.irregular.median_cov_diaph = finite_median(diaph.irregularity.cov);
     summary.irregular.median_robust_cov_lungs = finite_median(lungs.irregularity.robust_cov);
     summary.irregular.median_robust_cov_diaph = finite_median(diaph.irregularity.robust_cov);
     summary.irregular.median_cov_margin_lungs = finite_median( ...
-        diagnostic_signals.irregularity_cov_margin_lungs);
+        lungs.irregularity.cov - config.irregular.cov_thr);
     summary.irregular.median_cov_margin_diaph = finite_median( ...
-        diagnostic_signals.irregularity_cov_margin_diaph);
+        diaph.irregularity.cov - config.irregular.cov_thr);
     summary.irregular.supporting_belts = belt_support( ...
         any_finite(lungs.irregularity.cov), any_finite(diaph.irregularity.cov));
 
@@ -92,10 +96,16 @@ function summary = build_label_evidence_summary( ...
         'low', finite_median(rea.phase_coherence_low));
     summary.async.maximum_deviating_bins = finite_max(rea.deviation_bin_count);
 
-    summary.desat.median_spo2_percent = finite_median(diagnostic_signals.spo2_percent);
-    summary.desat.minimum_spo2_percent = finite_min(diagnostic_signals.spo2_percent);
-    summary.desat.maximum_drop_from_reference_percent = ...
-        finite_max(diagnostic_signals.spo2_drop_from_reference_percent);
+    spo2 = recording_spo2(data, config);
+    summary.desat.median_spo2_percent = finite_median(spo2);
+    summary.desat.minimum_spo2_percent = finite_min(spo2);
+    if isstruct(spo2_ref) && isfield(spo2_ref, 'median_percent') && ...
+            isfinite(spo2_ref.median_percent)
+        summary.desat.maximum_drop_from_reference_percent = ...
+            finite_max(spo2_ref.median_percent - spo2);
+    else
+        summary.desat.maximum_drop_from_reference_percent = NaN;
+    end
     summary.desat.duration_sec = label_burden.by_label.desat.duration_sec;
     summary.desat.supporting_signal = 'SpO2';
 
@@ -104,18 +114,18 @@ function summary = build_label_evidence_summary( ...
     summary.apnea.raw_excursion_path_available = apnea.raw_excursion_path_available;
     summary.apnea.amplitude_support_belts = apnea.amplitude_support_belts;
     summary.apnea.raw_excursion_support_belts = apnea.raw_excursion_support_belts;
-    summary.apnea.amp_ratio_threshold = apnea.amp_ratio_threshold;
+    summary.apnea.amp_ratio_threshold = config.apnea.amp_ratio_thr;
     summary.apnea.raw_excursion_ratio_threshold = ...
-        apnea.raw_excursion_ratio_threshold;
+        config.apnea.raw_excursion_ratio_thr;
     summary.apnea.amplitude_supported_fraction = ...
         finite_mean(apnea.amplitude_state_mask);
     summary.apnea.raw_fallback_supported_fraction = ...
         finite_mean(apnea.raw_fallback_state_mask);
     summary.apnea.combined_supported_fraction = ...
-        finite_mean(apnea.combined_state_mask);
+        finite_mean(apnea.combined_endpoint_mask);
 
     sigh = detector_diagnostics.sigh;
-    summary.sigh.method = sigh.method;
+    summary.sigh.method = config.sigh.method;
     summary.sigh.ratio_threshold_lungs = sigh.lungs.decision_threshold;
     summary.sigh.ratio_threshold_diaph = sigh.diaph.decision_threshold;
     summary.sigh.global_reference_quality_lungs = sigh.lungs.reference_quality;
@@ -130,10 +140,8 @@ function summary = build_label_evidence_summary( ...
     summary.csr.eami_available = csr.eami.available;
     summary.csr.eami_supporting_belts = belt_support( ...
         csr.eami.lungs.available, csr.eami.diaph.available);
-    summary.csr.eami_candidate_event_count = ...
-        numel(csr.eami.combined.events);
-    summary.csr.eami_candidate_duration_sec = ...
-        event_duration_sec(csr.eami.combined.events);
+    summary.csr.eami_candidate_event_count = csr.eami.event_count;
+    summary.csr.eami_candidate_duration_sec = csr.eami.event_duration_sec;
     eami_values = [csr.eami.lungs.eami(:); csr.eami.diaph.eami(:)];
     summary.csr.eami_max = finite_max(eami_values);
     summary.csr.eami_median = finite_median(eami_values);
@@ -141,27 +149,27 @@ function summary = build_label_evidence_summary( ...
     summary.csr.guyot_available = csr.guyot.available;
     summary.csr.guyot_supporting_belts = belt_support( ...
         csr.guyot.lungs.available, csr.guyot.diaph.available);
-    summary.csr.guyot_candidate_event_count = ...
-        numel(csr.guyot.combined.events);
-    summary.csr.guyot_candidate_duration_sec = ...
-        event_duration_sec(csr.guyot.combined.events);
+    summary.csr.guyot_candidate_event_count = csr.guyot.event_count;
+    summary.csr.guyot_candidate_duration_sec = csr.guyot.event_duration_sec;
     guyot_h = [csr.guyot.lungs.h(:); csr.guyot.diaph.h(:)];
-    guyot_fm = [csr.guyot.lungs.fm_mhz(:); csr.guyot.diaph.fm_mhz(:)];
+    guyot_fm = 1000 * [csr.guyot.lungs.fm_hz(:); ...
+        csr.guyot.diaph.fm_hz(:)];
     summary.csr.guyot_max_h = finite_max(guyot_h);
     summary.csr.guyot_median_h = finite_median(guyot_h);
     summary.csr.guyot_median_fm_mhz = finite_median(guyot_fm);
 end
 
-function duration_sec = event_duration_sec(events)
-% EVENT_DURATION_SEC Sum finite event durations without inventing missing data.
+function spo2 = recording_spo2(data, config)
+% RECORDING_SPO2 Read the authoritative recording signal without persisting it.
 
-    if isempty(events)
-        duration_sec = 0;
-        return;
+    spo2 = [];
+    if ~isfield(config, 'channels')
+        config = resolve_signal_channels(config);
     end
-    values = [events.duration];
-    values = values(isfinite(values));
-    duration_sec = sum(values);
+    index = config.channels.spo2_idx;
+    if ~isempty(index) && index <= size(data, 2)
+        spo2 = data(:, index);
+    end
 end
 
 function value = finite_median(x)

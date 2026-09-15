@@ -1,21 +1,22 @@
-function [events, records, localized_support_events] = localize_confirmed_breath_events( ...
+function [events, candidates, localized_support_events] = localize_confirmed_breath_events( ...
     candidate_events, belt, N, fs, event_type, criterion, lower, upper, ...
-    analysis_window_sec, min_duration_sec, belt_name)
+    min_duration_sec, belt_name)
 % LOCALIZE_CONFIRMED_BREATH_EVENTS Refine confirmed rate windows using breath IBIs.
 % Candidate grid-window events are intersected with qualifying peak-to-peak
 % respiratory-rate intervals. N/fs define recording bounds; lower/upper encode
 % the rate criterion; analysis_window_sec supplies fallback uncertainty; and
-% min_duration_sec filters final events. localized_support_events also retains
-% rejected short runs, while records documents boundary provenance.
+% min_duration_sec filters final events. localized_support_events and compact
+% candidates retain rejected short runs. Rolling candidates without a
+% defensible localized interval do not create placeholder records.
 
     events = empty_events();
-    records = empty_boundary_records();
+    candidates = empty_candidate_events();
     localized_support_events = empty_events();
     if isempty(candidate_events)
         return;
     end
 
-    [support_start, support_end, uncertainty, evidence_source, method] = ...
+    [support_start, support_end, uncertainty] = ...
         breath_support_intervals(belt, criterion, lower, upper);
 
     for i = 1:numel(candidate_events)
@@ -26,20 +27,6 @@ function [events, records, localized_support_events] = localize_confirmed_breath
             candidate.start_t, candidate.end_t);
 
         if isempty(run_starts)
-            record = boundary_record_template();
-            record.label = event_type;
-            record.detector = event_type;
-            record.belt = belt_name;
-            record.boundary_method = 'no_defensible_localized_support';
-            record.candidate_start_t = candidate.start_t;
-            record.candidate_end_t = candidate.end_t;
-            record.localized_duration_sec = 0;
-            record.final_min_duration_sec = min_duration_sec;
-            record.passes_final_min_duration = false;
-            record.rejection_reason = 'no_localized_qualifying_support';
-            record.uncertainty_sec = analysis_window_sec;
-            record.evidence_source = 'confirmation_window_only';
-            records(end+1,1) = record; %#ok<AGROW>
             continue;
         end
 
@@ -51,39 +38,26 @@ function [events, records, localized_support_events] = localize_confirmed_breath
             if passes
                 events(end+1,1) = localized; %#ok<AGROW>
             end
-            record = boundary_record_template();
-            record.label = event_type;
-            record.detector = event_type;
-            record.belt = belt_name;
-            record.boundary_method = method;
-            record.candidate_start_t = candidate.start_t;
-            record.candidate_end_t = candidate.end_t;
-            record.localized_start_t = localized.start_t;
-            record.localized_end_t = localized.end_t;
-            record.localized_duration_sec = localized.duration;
-            record.final_min_duration_sec = min_duration_sec;
-            record.passes_final_min_duration = passes;
-            if ~passes
-                record.rejection_reason = 'localized_duration_below_minimum';
+            if passes
+                reason = '';
+            else
+                reason = 'too_short';
             end
-            record.uncertainty_sec = run_uncertainties(j);
-            record.evidence_source = evidence_source;
-            records(end+1,1) = record; %#ok<AGROW>
+            candidates(end + 1, 1) = events_to_candidate_events( ...
+                localized, belt_name, passes, reason, ...
+                run_uncertainties(j)); %#ok<AGROW>
         end
     end
 end
 
-function [starts, ends, uncertainty, source, method] = ...
+function [starts, ends, uncertainty] = ...
     breath_support_intervals(belt, criterion, lower, upper)
 % BREATH_SUPPORT_INTERVALS Convert qualifying rate evidence to IBI intervals.
-% starts/ends/uncertainty are seconds; source and method describe the selected
-% breath-level RR evidence.
+% starts/ends/uncertainty are seconds.
 
     starts = [];
     ends = [];
     uncertainty = [];
-    source = '';
-    method = '';
     if ~isstruct(belt) || ~isfield(belt, 'peak_t')
         return;
     end
@@ -111,8 +85,6 @@ function [starts, ends, uncertainty, source, method] = ...
     starts = starts(qualifies);
     ends = ends(qualifies);
     uncertainty = 0.5 * (ends - starts);
-    source = 'breathwise_rr_bpm';
-    method = 'confirmed_window_breath_interval_localization';
 
     good = isfinite(starts) & isfinite(ends) & ends > starts;
     starts = starts(good);
@@ -184,33 +156,4 @@ function event = event_from_times(template, start_t, end_t, N, fs, event_type)
     event.start_t = (event.start_idx - 1) / fs;
     event.end_t = event.end_idx / fs;
     event.duration = (event.end_idx - event.start_idx + 1) / fs;
-end
-
-function records = empty_boundary_records()
-% EMPTY_BOUNDARY_RECORDS Return a zero-length localized-boundary record array.
-
-    records = boundary_record_template();
-    records = records([]);
-end
-
-function record = boundary_record_template()
-% BOUNDARY_RECORD_TEMPLATE Define localized respiratory-event provenance fields.
-% Stores label/detector/belt/method/source, candidate and localized times (s),
-% localized and required durations (s), pass/rejection status, and uncertainty (s).
-
-    record = struct( ...
-        'label', '', ...
-        'detector', '', ...
-        'belt', '', ...
-        'boundary_method', '', ...
-        'candidate_start_t', NaN, ...
-        'candidate_end_t', NaN, ...
-        'localized_start_t', NaN, ...
-        'localized_end_t', NaN, ...
-        'localized_duration_sec', NaN, ...
-        'final_min_duration_sec', NaN, ...
-        'passes_final_min_duration', false, ...
-        'rejection_reason', '', ...
-        'uncertainty_sec', NaN, ...
-        'evidence_source', '');
 end

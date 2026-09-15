@@ -1,18 +1,17 @@
-function [events, boundary_info] = detect_slow_breathing(data, resp_features, config)
+function [events, candidate_events] = detect_slow_breathing(data, resp_features, config)
 % DETECT_SLOW_BREATHING Convert sustained low trailing-window RR to events.
 % data supplies recording length; resp_features supplies per-belt RR traces,
 % endpoint masks, state masks, and breath intervals; config supplies the
 % breaths/min threshold, minimum duration, sampling, and plot settings.
-% boundary_info retains window evidence and breath-localized boundaries.
+% candidate_events retains only breath-localized intervals before the final
+% duration decision; rolling evidence remains authoritative in resp_features.
 
     events = empty_events();
     N = size(data, 1);
     t_grid = resp_features.time_sec;
     lungs = resp_features.lungs;
     diaph = resp_features.diaph;
-    boundary_info = make_label_boundary_info('slow', ...
-        'detect_slow_breathing', 'not_evaluated', empty_events(), ...
-        empty_events(), NaN, '', [], [], []);
+    candidate_events = empty_candidate_events();
 
     if ~lungs.available && ~diaph.available
         fprintf('Skipping slow detection: no valid respiratory belt with usable breath timing.\n');
@@ -58,28 +57,20 @@ function [events, boundary_info] = detect_slow_breathing(data, resp_features, co
     [candidate_diaph, slow_diaph_candidate] = sustained_condition_to_events( ...
         slow_diaph_state, t_grid, config.fs, N, 0, ...
         'slow_breathing_diaph');
-    [events_lungs, records_lungs, localized_lungs_events] = ...
+    [events_lungs, candidates_lungs, localized_lungs_events] = ...
         localize_confirmed_breath_events( ...
-        candidate_lungs, lungs, N, config.fs, 'slow_breathing_lungs', ...
-        'rate_le', NaN, rr_thr_bpm, analysis_win_sec, min_dur_sec, 'lungs');
-    [events_diaph, records_diaph, localized_diaph_events] = ...
+            candidate_lungs, lungs, N, config.fs, 'slow_breathing_lungs', ...
+        'rate_le', NaN, rr_thr_bpm, min_dur_sec, 'lungs');
+    [events_diaph, candidates_diaph, localized_diaph_events] = ...
         localize_confirmed_breath_events( ...
-        candidate_diaph, diaph, N, config.fs, 'slow_breathing_diaph', ...
-        'rate_le', NaN, rr_thr_bpm, analysis_win_sec, min_dur_sec, 'diaph');
+            candidate_diaph, diaph, N, config.fs, 'slow_breathing_diaph', ...
+        'rate_le', NaN, rr_thr_bpm, min_dur_sec, 'diaph');
     events = merge_events({events_lungs, events_diaph});
     slow_lungs = events_to_grid_mask(events_lungs, t_grid);
     slow_diaph = events_to_grid_mask(events_diaph, t_grid);
     localized_lungs = events_to_grid_mask(localized_lungs_events, t_grid);
     localized_diaph = events_to_grid_mask(localized_diaph_events, t_grid);
-    boundary_info = make_label_boundary_info('slow', ...
-        'detect_slow_breathing', 'confirmed_window_breath_interval_localization', ...
-        [candidate_lungs; candidate_diaph], [events_lungs; events_diaph], ...
-        NaN, 'breathwise_rr_bpm', ...
-        slow_lungs_endpoint | slow_diaph_endpoint, ...
-        slow_lungs_candidate | slow_diaph_candidate, ...
-        localized_lungs | localized_diaph, slow_lungs | slow_diaph);
-    boundary_info.events = normalize_records([records_lungs; records_diaph]);
-    boundary_info.boundary_uncertainty_sec = record_uncertainty(boundary_info.events);
+    candidate_events = [candidates_lungs; candidates_diaph];
 
     if isfield(config, 'slow') && isfield(config.slow, 'do_plot') && config.slow.do_plot
         opts = struct( ...
@@ -102,19 +93,4 @@ function [events, boundary_info] = detect_slow_breathing(data, resp_features, co
         plot_belt_diagnostic_figure( ...
             data, config, t_grid, slow_lungs, slow_diaph, rr_lungs, rr_diaph, opts);
     end
-end
-
-function records = normalize_records(records)
-% NORMALIZE_RECORDS Stamp localized boundary records with slow-label provenance.
-
-    for i = 1:numel(records)
-        records(i).label = 'slow';
-        records(i).detector = 'detect_slow_breathing';
-    end
-end
-
-function value = record_uncertainty(records)
-% RECORD_UNCERTAINTY Collect per-event uncertainty in seconds, or NaN if empty.
-
-    if isempty(records), value = NaN; else, value = [records.uncertainty_sec]'; end
 end

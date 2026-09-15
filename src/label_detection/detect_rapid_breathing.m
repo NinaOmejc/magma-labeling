@@ -1,18 +1,17 @@
-function [events, boundary_info] = detect_rapid_breathing(data, resp_features, config)
+function [events, candidate_events] = detect_rapid_breathing(data, resp_features, config)
 % DETECT_RAPID_BREATHING Convert sustained high trailing-window RR to events.
 % data supplies recording length; resp_features supplies per-belt RR traces,
 % endpoint masks, state masks, and breath intervals; config supplies the
 % breaths/min threshold, minimum duration, sampling, and plot settings.
-% boundary_info retains window evidence and breath-localized boundaries.
+% candidate_events retains only breath-localized intervals before the final
+% duration decision; rolling evidence remains authoritative in resp_features.
 
     events = empty_events();
     N = size(data, 1);
     t_grid = resp_features.time_sec;
     lungs = resp_features.lungs;
     diaph = resp_features.diaph;
-    boundary_info = make_label_boundary_info('rapid', ...
-        'detect_rapid_breathing', 'not_evaluated', empty_events(), ...
-        empty_events(), NaN, '', [], [], []);
+    candidate_events = empty_candidate_events();
 
     if ~lungs.available && ~diaph.available
         fprintf('Skipping rapid detection: no valid respiratory belt with usable breath timing.\n');
@@ -58,28 +57,20 @@ function [events, boundary_info] = detect_rapid_breathing(data, resp_features, c
     [candidate_diaph, rapid_diaph_candidate] = sustained_condition_to_events( ...
         rapid_diaph_state, t_grid, config.fs, N, 0, ...
         'rapid_breathing_diaph');
-    [events_lungs, records_lungs, localized_lungs_events] = ...
+    [events_lungs, candidates_lungs, localized_lungs_events] = ...
         localize_confirmed_breath_events( ...
-        candidate_lungs, lungs, N, config.fs, 'rapid_breathing_lungs', ...
-        'rate_ge', rr_thr_bpm, NaN, analysis_win_sec, min_dur_sec, 'lungs');
-    [events_diaph, records_diaph, localized_diaph_events] = ...
+            candidate_lungs, lungs, N, config.fs, 'rapid_breathing_lungs', ...
+        'rate_ge', rr_thr_bpm, NaN, min_dur_sec, 'lungs');
+    [events_diaph, candidates_diaph, localized_diaph_events] = ...
         localize_confirmed_breath_events( ...
-        candidate_diaph, diaph, N, config.fs, 'rapid_breathing_diaph', ...
-        'rate_ge', rr_thr_bpm, NaN, analysis_win_sec, min_dur_sec, 'diaph');
+            candidate_diaph, diaph, N, config.fs, 'rapid_breathing_diaph', ...
+        'rate_ge', rr_thr_bpm, NaN, min_dur_sec, 'diaph');
     events = merge_events({events_lungs, events_diaph});
     rapid_lungs = events_to_grid_mask(events_lungs, t_grid);
     rapid_diaph = events_to_grid_mask(events_diaph, t_grid);
     localized_lungs = events_to_grid_mask(localized_lungs_events, t_grid);
     localized_diaph = events_to_grid_mask(localized_diaph_events, t_grid);
-    boundary_info = make_label_boundary_info('rapid', ...
-        'detect_rapid_breathing', 'confirmed_window_breath_interval_localization', ...
-        [candidate_lungs; candidate_diaph], [events_lungs; events_diaph], ...
-        NaN, 'breathwise_rr_bpm', ...
-        rapid_lungs_endpoint | rapid_diaph_endpoint, ...
-        rapid_lungs_candidate | rapid_diaph_candidate, ...
-        localized_lungs | localized_diaph, rapid_lungs | rapid_diaph);
-    boundary_info.events = normalize_records([records_lungs; records_diaph]);
-    boundary_info.boundary_uncertainty_sec = record_uncertainty(boundary_info.events);
+    candidate_events = [candidates_lungs; candidates_diaph];
 
     if isfield(config, 'rapid') && isfield(config.rapid, 'do_plot') && config.rapid.do_plot
         opts = struct( ...
@@ -102,19 +93,4 @@ function [events, boundary_info] = detect_rapid_breathing(data, resp_features, c
         plot_belt_diagnostic_figure( ...
             data, config, t_grid, rapid_lungs, rapid_diaph, rr_lungs, rr_diaph, opts);
     end
-end
-
-function records = normalize_records(records)
-% NORMALIZE_RECORDS Stamp localized boundary records with rapid-label provenance.
-
-    for i = 1:numel(records)
-        records(i).label = 'rapid';
-        records(i).detector = 'detect_rapid_breathing';
-    end
-end
-
-function value = record_uncertainty(records)
-% RECORD_UNCERTAINTY Collect per-event uncertainty in seconds, or NaN if empty.
-
-    if isempty(records), value = NaN; else, value = [records.uncertainty_sec]'; end
 end

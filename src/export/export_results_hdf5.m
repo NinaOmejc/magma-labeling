@@ -9,7 +9,7 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
 %   signals_raw          - Nsample x Nchannel raw physiological signal matrix.
 %   signals_preprocessed - Nsample x Nchannel processed signal matrix.
 %
-% The v4 file stores sample signals/time under /signals and /time;
+% The v5 file stores sample signals/time under /signals and /time;
 % breath-level belt arrays and detector evidence under /resp and
 % /resp_features; common-interval metadata under /session_reference, per-belt
 % breath-amplitude and raw-excursion references under /resp_reference,
@@ -17,11 +17,12 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
 % and per-label
 % metadata under /labels; canonical automatic/reviewed events under /events;
 % review rounds under /review; and burden, overlap, phenotype, and recording
-% identifiers under /burden, /overlap, /phenotype_evidence, and /meta.
+% identifiers/configuration under /burden, /overlap, /phenotype_evidence,
+% /config, and /meta. Compact pre-final intervals live under /events/candidate.
 
     filename = char(string(filename));
     validate_export_inputs(filename, results, signals_raw, signals_preprocessed);
-    export_schema_version = 'magma_ml_hdf5_v4';
+    export_schema_version = 'magma_ml_hdf5_v5';
     out_dir = fileparts(filename);
     if ~isempty(out_dir) && ~isfolder(out_dir)
         mkdir(out_dir);
@@ -50,10 +51,6 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
     % Preserve the established HDF5 hierarchy even though the in-memory
     % resp_features struct no longer has an intermediate resp field.
     write_value(filename, '/resp_features/resp', results.resp_features);
-    if isfield(results, 'diagnostic_signals')
-        write_value(filename, '/resp_features/detector_signals', ...
-            results.diagnostic_signals);
-    end
     if isfield(results, 'detector_diagnostics')
         write_value(filename, '/resp_features/detector_diagnostics', ...
             results.detector_diagnostics);
@@ -83,21 +80,27 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
 
     write_events(filename, '/events/automatic', results.events_automatic);
     write_events(filename, '/events/reviewed', results.events_reviewed);
+    write_value(filename, '/events/candidate', results.candidate_events);
     if isfield(results, 'review_provenance')
         write_value(filename, '/review/provenance', results.review_provenance);
     end
     if isfield(results, 'review_history')
         write_review_history(filename, '/review/history', results.review_history);
     end
-    if isfield(results, 'event_boundary_info')
-        write_value(filename, '/events/boundary_info', results.event_boundary_info);
+    if isfield(results, 'review_scope')
+        write_value(filename, '/review/scope', results.review_scope);
     end
 
     write_value(filename, '/burden/automatic', results.label_burden_automatic);
     write_value(filename, '/burden/reviewed', results.label_burden_reviewed);
     write_value(filename, '/overlap/automatic', results.label_overlap_summary_automatic);
     write_value(filename, '/overlap/reviewed', results.label_overlap_summary_reviewed);
+    write_value(filename, '/evidence_summary/automatic', ...
+        results.label_evidence_summary_automatic);
+    write_value(filename, '/evidence_summary/reviewed', ...
+        results.label_evidence_summary_reviewed);
     write_value(filename, '/phenotype_evidence', results.db_phenotype_evidence);
+    write_value(filename, '/config', results.config);
 
     write_numeric(filename, '/meta/subject', results.subject);
     write_numeric(filename, '/meta/measurement', results.measure);
@@ -125,6 +128,9 @@ function validate_export_inputs(filename, results, raw, preprocessed)
         'label_overlap_summary_reviewed', 'db_phenotype_evidence', ...
         'label_reviewed_available', 'label_reviewed_availability_reason', ...
         'label_reviewed_assessable_mask', ...
+        'candidate_events', 'detector_diagnostics', ...
+        'label_evidence_summary_automatic', ...
+        'label_evidence_summary_reviewed', ...
         'upstream_input_preprocessing', ...
         'subject', 'measure'};
     missing = required(~isfield(results, required));

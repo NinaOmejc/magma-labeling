@@ -10,7 +10,7 @@ function group_table = build_group_label_table(config_or_results_path)
 %                 summaries, belt/reference QC, overlap, and numeric detector
 %                 summaries. Dynamic per-label fields use canonical short names.
 % Also writes group_label_summary CSV/MAT, measure-comparability metadata,
-% per-event durations, localized-boundary QC, and cohort QC summaries.
+% per-event durations, compact candidate-event QC, and cohort QC summaries.
 
     if nargin < 1 || isempty(config_or_results_path)
         config = get_config();
@@ -53,9 +53,9 @@ function group_table = build_group_label_table(config_or_results_path)
     save(out_mat, 'group_table');
     write_measure_comparability_table(out_dir);
     event_duration_table = build_group_event_duration_table(files);
-    localized_boundary_qc = build_group_boundary_qc_table(files);
+    candidate_event_qc = build_group_candidate_event_table(files);
     cohort_qc = build_cohort_qc_summary( ...
-        group_table, canonical_labels, event_duration_table, localized_boundary_qc);
+        group_table, canonical_labels, event_duration_table, candidate_event_qc);
     save(fullfile(out_dir, 'cohort_qc_summary.mat'), 'cohort_qc');
     if ~isempty(cohort_qc.by_label)
         writetable(cohort_qc.by_label, ...
@@ -63,8 +63,8 @@ function group_table = build_group_label_table(config_or_results_path)
     end
     writetable(event_duration_table, ...
         fullfile(out_dir, 'cohort_event_durations.csv'));
-    writetable(localized_boundary_qc, ...
-        fullfile(out_dir, 'cohort_localized_boundary_qc.csv'));
+    writetable(candidate_event_qc, ...
+        fullfile(out_dir, 'cohort_candidate_events.csv'));
     fprintf('Saved group label summary: %s\n', out_csv);
 end
 
@@ -99,9 +99,11 @@ function row = label_file_to_summary_row(label_file, config, canonical_labels)
     row = add_belt_availability_summary(row, loaded);
     row = add_overlap_summaries(row, loaded);
 
-    if isfield(loaded, 'diagnostic_signals')
-        row = add_diagnostic_summaries(row, loaded.diagnostic_signals);
+    if isfield(loaded, 'label_evidence_summary_automatic')
+        row = add_compact_evidence_summaries( ...
+            row, loaded.label_evidence_summary_automatic);
     end
+    row = add_authoritative_trace_summaries(row, loaded);
 
 end
 
@@ -556,56 +558,100 @@ function row = add_event_counts(row, events, canonical_labels)
     end
 end
 
-function row = add_diagnostic_summaries(row, diagnostic_signals)
-% ADD_DIAGNOSTIC_SUMMARIES Add diagnostic summaries.
-% Flattens numeric detector traces while excluding the analysis time vector.
+function row = add_compact_evidence_summaries(row, evidence)
+% ADD_COMPACT_EVIDENCE_SUMMARIES Flatten scalar ML-ready evidence only.
 
-    row = add_numeric_struct_summaries(row, diagnostic_signals, ...
-        'diagnostic', {'time_sec'});
+    row = add_scalar_summary_fields(row, evidence, 'evidence');
 end
 
-function row = add_numeric_struct_summaries(row, source, prefix, skip_names)
-% ADD_NUMERIC_STRUCT_SUMMARIES Add numeric struct summaries.
-% Scalars become one prefixed column; numeric arrays become finite mean,
-% median, p10, p90, standard deviation, and median-normalized CV columns.
+function row = add_scalar_summary_fields(row, source, prefix)
+% ADD_SCALAR_SUMMARY_FIELDS Recursively retain scalar numeric/text summaries.
 
     names = fieldnames(source);
+    skip = {'version', 'kind', 'available', 'availability_reason'};
     for i = 1:numel(names)
         name = names{i};
-        if any(strcmp(name, skip_names))
+        if ismember(name, skip)
             continue;
         end
+        value = source.(name);
+        field = [prefix '_' matlab.lang.makeValidName(name)];
+        if isstruct(value) && isscalar(value)
+            row = add_scalar_summary_fields(row, value, field);
+        elseif (isnumeric(value) || islogical(value)) && isscalar(value)
+            row.(field) = double(value);
+        end
+    end
+end
 
-        x = source.(name);
-        if ~isnumeric(x)
+function row = add_authoritative_trace_summaries(row, loaded)
+% ADD_AUTHORITATIVE_TRACE_SUMMARIES Summarize traces without a saved flat copy.
+
+    mappings = { ...
+        'resp_features', 'diaph.rate_slow_window_bpm', ...
+            'trace_breathing_rate_slow_window_bpm_diaph'; ...
+        'resp_features', 'diaph.irregularity.robust_cov', ...
+            'trace_irregularity_robust_cov_diaph'; ...
+        'detector_diagnostics', 'async.phase_coherence_mid', ...
+            'trace_resp_asynchrony_phase_coherence_mid'; ...
+        'resp_features', 'thoracoabdominal_balance.thoracic_to_abdominal_ratio', ...
+            'trace_thoracic_to_abdominal_ratio'; ...
+        'resp_features', 'thoracoabdominal_balance.thoracic_dominance_log_ratio', ...
+            'trace_thoracic_dominance_log_ratio'; ...
+        'resp_features', 'thoracoabdominal_balance.thoracic_relative_fraction', ...
+            'trace_thoracic_relative_fraction'; ...
+        'detector_diagnostics', 'csr.eami.lungs.eami', ...
+            'trace_eami_lungs'};
+    for i = 1:size(mappings, 1)
+        if ~isfield(loaded, mappings{i, 1})
             continue;
         end
-
-        col = [prefix '_' matlab.lang.makeValidName(name)];
-        if isscalar(x)
-            row.(col) = x;
-        else
-            x = x(:);
-            x = x(isfinite(x));
-            if isempty(x)
-                row.([col '_mean']) = nan;
-                row.([col '_median']) = nan;
-                row.([col '_p10']) = nan;
-                row.([col '_p90']) = nan;
-            else
-                row.([col '_mean']) = mean(x, 'omitnan');
-                row.([col '_median']) = median(x, 'omitnan');
-                row.([col '_p10']) = prctile(x, 10);
-                row.([col '_p90']) = prctile(x, 90);
-                row.([col '_std']) = std(x, 'omitnan');
-                med_x = median(x, 'omitnan');
-                if isfinite(med_x) && med_x ~= 0
-                    row.([col '_cv']) = std(x, 'omitnan') / abs(med_x);
-                else
-                    row.([col '_cv']) = nan;
-                end
-            end
+        value = nested_value(loaded.(mappings{i, 1}), mappings{i, 2});
+        if isnumeric(value) || islogical(value)
+            row = add_numeric_array_summary(row, value, mappings{i, 3});
         end
+    end
+end
+
+function value = nested_value(source, path)
+% NESTED_VALUE Resolve a dot-separated scalar-struct path.
+
+    value = [];
+    parts = strsplit(path, '.');
+    for i = 1:numel(parts)
+        if ~isstruct(source) || ~isscalar(source) || ...
+                ~isfield(source, parts{i})
+            return;
+        end
+        source = source.(parts{i});
+    end
+    value = source;
+end
+
+function row = add_numeric_array_summary(row, values, prefix)
+% ADD_NUMERIC_ARRAY_SUMMARY Add finite distribution summaries for one trace.
+
+    values = double(values(:));
+    values = values(isfinite(values));
+    if isempty(values)
+        row.([prefix '_mean']) = NaN;
+        row.([prefix '_median']) = NaN;
+        row.([prefix '_p10']) = NaN;
+        row.([prefix '_p90']) = NaN;
+        row.([prefix '_std']) = NaN;
+        row.([prefix '_cv']) = NaN;
+        return;
+    end
+    row.([prefix '_mean']) = mean(values, 'omitnan');
+    row.([prefix '_median']) = median(values, 'omitnan');
+    row.([prefix '_p10']) = prctile(values, 10);
+    row.([prefix '_p90']) = prctile(values, 90);
+    row.([prefix '_std']) = std(values, 'omitnan');
+    median_value = median(values, 'omitnan');
+    if median_value ~= 0
+        row.([prefix '_cv']) = row.([prefix '_std']) / abs(median_value);
+    else
+        row.([prefix '_cv']) = NaN;
     end
 end
 
@@ -784,77 +830,54 @@ function duration = authoritative_event_duration(event, fs)
     end
 end
 
-function boundary_table = build_group_boundary_qc_table(files)
-% BUILD_GROUP_BOUNDARY_QC_TABLE Build group boundary qc table.
-% Returns one row per localized candidate with subject/measurement/label/belt;
-% candidate and localized boundaries/duration in seconds; required duration,
-% pass/shortfall/rejection reason; evidence source; and uncertainty_sec.
+function candidate_table = build_group_candidate_event_table(files)
+% BUILD_GROUP_CANDIDATE_EVENT_TABLE Concatenate compact candidates by label.
 
     subject = zeros(0,1);
     measurement = zeros(0,1);
     label = strings(0,1);
     belt = strings(0,1);
-    candidate_start_t = zeros(0,1);
-    candidate_end_t = zeros(0,1);
-    localized_start_t = zeros(0,1);
-    localized_end_t = zeros(0,1);
-    localized_duration_sec = zeros(0,1);
-    final_min_duration_sec = zeros(0,1);
-    passes_final_min_duration = false(0,1);
-    duration_shortfall_sec = zeros(0,1);
+    start_t = zeros(0,1);
+    end_t = zeros(0,1);
+    duration = zeros(0,1);
+    accepted = false(0,1);
     rejection_reason = strings(0,1);
-    evidence_source = strings(0,1);
     uncertainty_sec = zeros(0,1);
 
     for file_index = 1:numel(files)
         filename = fullfile(files(file_index).folder, files(file_index).name);
         loaded = load(filename);
-        if ~isfield(loaded, 'event_boundary_info') || ...
-                ~isstruct(loaded.event_boundary_info)
+        if ~isfield(loaded, 'candidate_events') || ...
+                ~isstruct(loaded.candidate_events)
             continue;
         end
         [file_subject, file_measure] = parse_subject_measure(filename);
-        boundary_fields = setdiff(fieldnames(loaded.event_boundary_info), {'version'});
-        for field_index = 1:numel(boundary_fields)
-            info = loaded.event_boundary_info.(boundary_fields{field_index});
-            if ~isstruct(info) || ~isfield(info, 'events') || isempty(info.events)
+        candidate_fields = fieldnames(loaded.candidate_events);
+        for field_index = 1:numel(candidate_fields)
+            records = loaded.candidate_events.(candidate_fields{field_index});
+            if ~isstruct(records) || isempty(records)
                 continue;
             end
-            records = info.events;
             for record_index = 1:numel(records)
                 record = records(record_index);
-                minimum = numeric_record_field(record, 'final_min_duration_sec', NaN);
-                if ~isfinite(minimum)
-                    continue;
-                end
-                duration = numeric_record_field(record, 'localized_duration_sec', NaN);
-                passed = logical(numeric_record_field( ...
-                    record, 'passes_final_min_duration', false));
-                record_label = text_record_field(record, 'label', boundary_fields{field_index});
+                record_label = candidate_fields{field_index};
                 mapped_label = canonicalize_label_names({record_label});
                 subject(end+1,1) = get_loaded_value(loaded, 'subject', file_subject); %#ok<AGROW>
                 measurement(end+1,1) = get_loaded_value(loaded, 'measure', file_measure); %#ok<AGROW>
                 label(end+1,1) = string(mapped_label{1}); %#ok<AGROW>
                 belt(end+1,1) = string(text_record_field(record, 'belt', '')); %#ok<AGROW>
-                candidate_start_t(end+1,1) = numeric_record_field(record, 'candidate_start_t', NaN); %#ok<AGROW>
-                candidate_end_t(end+1,1) = numeric_record_field(record, 'candidate_end_t', NaN); %#ok<AGROW>
-                localized_start_t(end+1,1) = numeric_record_field(record, 'localized_start_t', NaN); %#ok<AGROW>
-                localized_end_t(end+1,1) = numeric_record_field(record, 'localized_end_t', NaN); %#ok<AGROW>
-                localized_duration_sec(end+1,1) = duration; %#ok<AGROW>
-                final_min_duration_sec(end+1,1) = minimum; %#ok<AGROW>
-                passes_final_min_duration(end+1,1) = passed; %#ok<AGROW>
-                duration_shortfall_sec(end+1,1) = max(0, minimum - duration); %#ok<AGROW>
+                start_t(end+1,1) = numeric_record_field(record, 'start_t', NaN); %#ok<AGROW>
+                end_t(end+1,1) = numeric_record_field(record, 'end_t', NaN); %#ok<AGROW>
+                duration(end+1,1) = numeric_record_field(record, 'duration', NaN); %#ok<AGROW>
+                accepted(end+1,1) = logical(numeric_record_field( ...
+                    record, 'accepted', false)); %#ok<AGROW>
                 rejection_reason(end+1,1) = string(text_record_field(record, 'rejection_reason', '')); %#ok<AGROW>
-                evidence_source(end+1,1) = string(text_record_field(record, 'evidence_source', '')); %#ok<AGROW>
                 uncertainty_sec(end+1,1) = numeric_record_field(record, 'uncertainty_sec', NaN); %#ok<AGROW>
             end
         end
     end
-    boundary_table = table(subject, measurement, label, belt, ...
-        candidate_start_t, candidate_end_t, localized_start_t, localized_end_t, ...
-        localized_duration_sec, final_min_duration_sec, ...
-        passes_final_min_duration, duration_shortfall_sec, rejection_reason, ...
-        evidence_source, uncertainty_sec);
+    candidate_table = table(subject, measurement, label, belt, ...
+        start_t, end_t, duration, accepted, rejection_reason, uncertainty_sec);
 end
 
 function value = numeric_record_field(record, name, default_value)
