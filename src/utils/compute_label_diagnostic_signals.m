@@ -3,14 +3,16 @@ function diagnostic_signals = compute_label_diagnostic_signals( ...
 % COMPUTE_LABEL_DIAGNOSTIC_SIGNALS Collect detector evidence for export and QC.
 % resp_features supplies the common analysis grid and respiratory evidence;
 % desaturation (including spo2_ref), ReA, apnea, sigh, and CSR diagnostics add specialized data.
-% All trace/mask fields are grid-level unless their names explicitly say count,
-% threshold, window, analysis_fs, or analysis_n_samples. Field groups include:
+% All trace/mask fields are grid-level unless their names explicitly identify a
+% detector time axis, window center, count, threshold, or analysis rate/size.
+% Field groups include:
 %   time/grid metadata; rapid/slow RR (breaths/min), endpoints, states, margins;
 %   irregular CoV/robust CoV, endpoints, back-projected window support, and margins;
 %   respiratory amplitude reference values and availability;
 %   thoracoabdominal ratios/fractions and dominance evidence;
 %   SpO2 and drop-from-reference percentages; ReA coherence/reference evidence;
-%   optional apnea state evidence, sigh thresholds/counts, and CSR cycle diagnostics.
+%   optional apnea state evidence, sigh thresholds/counts, and literature-based
+%   eAMI/Guyot periodic-breathing diagnostics.
 
     t_grid = resp_features.time_sec;
 
@@ -128,23 +130,44 @@ function diagnostic_signals = compute_label_diagnostic_signals( ...
         diagnostic_signals.sigh_selected_count_diaph = nnz(sigh_metrics.diaph.selected_breath_mask);
     end
     if nargin >= 7 && isstruct(csr_metrics) && isfield(csr_metrics, 'available')
-        diagnostic_signals.periodic_analysis_available = double(csr_metrics.available);
-        diagnostic_signals.periodic_cycle_count_lungs = numel(csr_metrics.lungs.cycles);
-        diagnostic_signals.periodic_cycle_count_diaph = numel(csr_metrics.diaph.cycles);
-        diagnostic_signals.periodic_modulation_ratio_lungs = ...
-            cycle_field(csr_metrics.lungs.cycles, 'modulation_ratio');
-        diagnostic_signals.periodic_modulation_ratio_diaph = ...
-            cycle_field(csr_metrics.diaph.cycles, 'modulation_ratio');
-    end
-end
+        diagnostic_signals.periodic_analysis_available = ...
+            double(csr_metrics.available);
+        diagnostic_signals.periodic_primary_method = csr_metrics.primary_method;
+        diagnostic_signals.periodic_eami_available = ...
+            double(csr_metrics.eami.available);
+        diagnostic_signals.periodic_eami_time_sec = ...
+            csr_metrics.eami.combined.t_sec;
+        diagnostic_signals.periodic_eami_lungs = csr_metrics.eami.lungs.eami;
+        diagnostic_signals.periodic_eami_diaph = csr_metrics.eami.diaph.eami;
+        diagnostic_signals.periodic_eami_threshold = ...
+            csr_metrics.eami.lungs.threshold;
+        diagnostic_signals.periodic_eami_evaluable = double( ...
+            csr_metrics.eami.combined.evaluable_mask);
+        diagnostic_signals.periodic_eami_candidate = double( ...
+            csr_metrics.eami.combined.candidate_mask);
 
-function values = cycle_field(cycles, name)
-% CYCLE_FIELD Collect one numeric field from a periodic-cycle struct array.
-
-    if isempty(cycles)
-        values = [];
-    else
-        values = [cycles.(name)]';
+        diagnostic_signals.periodic_guyot_available = ...
+            double(csr_metrics.guyot.available);
+        diagnostic_signals.periodic_guyot_window_center_sec_lungs = ...
+            csr_metrics.guyot.lungs.window_center_t;
+        diagnostic_signals.periodic_guyot_window_center_sec_diaph = ...
+            csr_metrics.guyot.diaph.window_center_t;
+        diagnostic_signals.periodic_guyot_h_lungs = csr_metrics.guyot.lungs.h;
+        diagnostic_signals.periodic_guyot_h_diaph = csr_metrics.guyot.diaph.h;
+        diagnostic_signals.periodic_guyot_fm_mhz_lungs = ...
+            csr_metrics.guyot.lungs.fm_mhz;
+        diagnostic_signals.periodic_guyot_fm_mhz_diaph = ...
+            csr_metrics.guyot.diaph.fm_mhz;
+        diagnostic_signals.periodic_guyot_h_threshold = ...
+            csr_metrics.guyot.h_threshold;
+        diagnostic_signals.periodic_guyot_fm_band_hz = ...
+            csr_metrics.guyot.fm_band_hz;
+        diagnostic_signals.periodic_guyot_time_sec = ...
+            csr_metrics.guyot.combined.t_sec;
+        diagnostic_signals.periodic_guyot_evaluable = double( ...
+            csr_metrics.guyot.combined.evaluable_mask);
+        diagnostic_signals.periodic_guyot_candidate = double( ...
+            csr_metrics.guyot.combined.candidate_mask);
     end
 end
 

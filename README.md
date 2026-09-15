@@ -115,13 +115,21 @@ The thresholds below are operational research criteria and should not be interpr
 
 - **`sigh`** — isolated unusually large breaths are detected as whole-record amplitude outliers. The default rule combines the 98th percentile, an IQR-based outlier threshold, and a minimum amplitude ratio of 2.0. Sighs are discrete breath events.
 
-- **`csr`** — Cheyne-Stokes-like / periodic breathing requires at least two adjacent waxing-waning respiratory cycles satisfying the configured cycle-duration, shape, breath-count, and modulation criteria.
+- **`csr`** — periodic breathing / Cheyne-Stokes-like respiratory-effort evidence is computed with both eAMI and a MAGMA adaptation of the Guyot demodulation / Matrix Pencil method. `config.csr.primary_method` explicitly selects which method supplies the automatic `csr` event set; both method results remain in detector diagnostics.
 
 - **`thoracic`** — thoracic dominance is assessed from independently normalized thoracic and abdominal excursion. The operational condition is a 30-s thoracic-to-abdominal ratio `T/A >= 1.5`. Both belts are required. Because the measure is window-based, boundaries retain explicit temporal uncertainty.
 
 - **`async`** — thoracoabdominal asynchrony is assessed from time-localized wavelet phase coherence between the two belts. Respiratory signals are temporarily downsampled to 20 Hz for this analysis only. Sustained session-reference-relative low-coherence evidence must persist for at least 30 s.
 
 - **`desat`** — SpO2 is `< 90%` or decreases by at least 3 percentage points from the valid session reference for at least 10 s.
+
+### Periodic-Breathing Literature Methods
+
+MAGMA computes two literature-based methods independently for every supported recording. The first is **eAMI**, following Fernandez Tellez et al. 2015 ([DOI 10.5665/sleep.4494](https://doi.org/10.5665/sleep.4494)). Each usable raw respiratory belt is band-pass filtered to isolate the respiratory carrier, downsampled to 1 Hz, rectified, and low-pass filtered to obtain its amplitude envelope. Locally mean-removed carrier and envelope energies are compared with `eAMI = 1 - 0.5*log(E_resp/E_am)`. Evidence at or above 0.65 must persist after dynamic belt combination for twice `config.csr.eami.energy_win_sec`; the 60-s default therefore yields a 120-s event requirement. The 60-s window is a MAGMA comparison choice, not a published optimum; the paper reports relatively stable behavior for windows above approximately 40 s.
+
+The second method estimates modulation depth and frequency following Guyot et al. 2020 ([DOI 10.1371/journal.pone.0221191](https://doi.org/10.1371/journal.pone.0221191)). This is explicitly a **MAGMA adaptation**: reviewed `resp_cycles.<belt>.peak_t` and canonical `resp_cycles.<belt>.amp` replace the publication's change-point breath detector. Canonical breath amplitudes are linearly reconstructed on a 1-Hz ventilation envelope; interruptions longer than three median inter-breath intervals are set to zero, with no extrapolation outside the first and final valid breaths. An order-three Matrix Pencil model estimates DC plus a conjugate modulation pair in 120-s windows with 80% overlap. A window is pathological when `h > 0.12` and modulation frequency is within 8–30 mHz; combined evidence must persist for at least 60 s.
+
+For each method, both evaluable belts must agree at a given time; a single evaluable belt is used when the other is unavailable. This dynamic belt rule is a MAGMA design choice rather than part of either publication. `config.csr.primary_method` accepts `eami` or `guyot` and never unions, votes, or automatically switches methods. These outputs describe a periodic breathing / Cheyne-Stokes-like respiratory-effort pattern; without direct airflow they do not establish central sleep apnea or confirmed Cheyne-Stokes respiration.
 
 Amplitude-dependent sustained labels use participant/session-relative respiratory excursion rather than absolute tidal volume. Respiratory belts are uncalibrated, so raw amplitudes should not be compared directly across subjects.
 

@@ -145,21 +145,37 @@ function config = get_config()
     config.sigh.legacy_amp_ratio_thr = 1.5;      % amplitude ratio threshold for legacy sigh method
     config.sigh.legacy_min_prev_breaths = 3;     % minimum previous breaths for legacy sigh method
 
-    %---- LABEL 8 - csr (Cheyne-Stokes-like / periodic breathing)
-    config.csr = struct();                       % periodic breathing / Cheyne-Stokes-like settings
-    config.csr.min_cycle_sec = 35;               % permissive lower cycle duration, close to AASM >=40 s rule
-    config.csr.max_cycle_sec = 120;              % upper cycle duration for periodic breathing envelopes
-    config.csr.min_cycles = 2;                   % require repeated waxing-waning cycles
-    config.csr.min_modulation_ratio = 1.5;       % envelope peak must be at least this multiple of trough envelope
-    config.csr.min_breaths_per_cycle = 3;        % minimum breath count in each trough-to-trough cycle
-    config.csr.min_side_breaths = 1;             % breaths required on each side of the envelope peak
-    config.csr.env_smooth_breaths = 3;           % moving median smoothing of normalized breath amplitude
-    config.csr.normalization_window_breaths = 0; % 0 = global median scale only; use large values only to remove very slow amplitude-scale drift
-    config.csr.min_peak_prominence = 0.25;       % envelope peak prominence for candidate cycles
-    config.csr.min_trough_prominence = 0.15;     % envelope trough prominence for candidate cycles
-    config.csr.min_shape_fraction = 0.55;        % loose monotonicity score for rise and fall limbs
-    config.csr.max_cycle_gap_sec = 10;           % allowed gap when merging adjacent candidate cycles
-    config.csr.do_plot = true;                   % save periodic breathing diagnostic plot
+    %---- LABEL 8 - csr (periodic breathing / Cheyne-Stokes-like effort pattern)
+    config.csr = struct();
+    config.csr.primary_method = 'eami';          % explicit source of the canonical csr event set: 'eami' or 'guyot'
+    config.csr.do_plot = true;                   % save the two-method comparison figure
+
+    % Fernandez Tellez et al., Sleep 2015 (DOI 10.5665/sleep.4494).
+    % The filter bands/orders, 1-Hz rate, and threshold follow the published
+    % eAMI method. The 60-s energy window is a MAGMA comparison default; the
+    % paper reports relative insensitivity once this window exceeds about 40 s.
+    config.csr.eami = struct();
+    config.csr.eami.resp_band_hz = [0.125 0.40];
+    config.csr.eami.bandpass_order = 12;
+    config.csr.eami.resample_hz = 1;
+    config.csr.eami.envelope_lowpass_hz = 0.125;
+    config.csr.eami.envelope_lowpass_order = 6;
+    config.csr.eami.energy_win_sec = 60;
+    config.csr.eami.threshold = 0.65;
+
+    % Guyot et al., PLOS ONE 2020 (DOI 10.1371/journal.pone.0221191).
+    % Window, overlap, h/fm criteria, one-minute zone, and three-IBI gap rule
+    % follow the publication. MAGMA uses a 1-Hz reconstruction and reviewed
+    % canonical MAGMA breath amplitudes instead of the paper's change-point
+    % breath front-end.
+    config.csr.guyot = struct();
+    config.csr.guyot.resample_hz = 1;
+    config.csr.guyot.window_sec = 120;
+    config.csr.guyot.overlap_fraction = 0.80;
+    config.csr.guyot.h_threshold = 0.12;
+    config.csr.guyot.fm_band_hz = [0.008 0.030];
+    config.csr.guyot.min_zone_sec = 60;
+    config.csr.guyot.gap_factor = 3;
 
     %---- LABEL 9 - thoracic - DETECTION SETTINGS
     % Relative thoracoabdominal excursion dominance after normalizing each

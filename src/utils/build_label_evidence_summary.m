@@ -126,20 +126,42 @@ function summary = build_label_evidence_summary( ...
         sigh.lungs.available, sigh.diaph.available);
 
     csr = detector_diagnostics.csr;
-    summary.csr.minimum_cycles = csr.minimum_cycles;
-    summary.csr.minimum_modulation_ratio = csr.minimum_modulation_ratio;
-    summary.csr.detected_cycle_count_lungs = numel(csr.lungs.cycles);
-    summary.csr.detected_cycle_count_diaph = numel(csr.diaph.cycles);
-    summary.csr.median_modulation_ratio_lungs = finite_median(cycle_values(csr.lungs.cycles));
-    summary.csr.median_modulation_ratio_diaph = finite_median(cycle_values(csr.diaph.cycles));
-    summary.csr.supporting_belts = belt_support( ...
-        csr.lungs.analysis_available, csr.diaph.analysis_available);
+    summary.csr.primary_method = csr.primary_method;
+    summary.csr.eami_available = csr.eami.available;
+    summary.csr.eami_supporting_belts = belt_support( ...
+        csr.eami.lungs.available, csr.eami.diaph.available);
+    summary.csr.eami_candidate_event_count = ...
+        numel(csr.eami.combined.events);
+    summary.csr.eami_candidate_duration_sec = ...
+        event_duration_sec(csr.eami.combined.events);
+    eami_values = [csr.eami.lungs.eami(:); csr.eami.diaph.eami(:)];
+    summary.csr.eami_max = finite_max(eami_values);
+    summary.csr.eami_median = finite_median(eami_values);
+
+    summary.csr.guyot_available = csr.guyot.available;
+    summary.csr.guyot_supporting_belts = belt_support( ...
+        csr.guyot.lungs.available, csr.guyot.diaph.available);
+    summary.csr.guyot_candidate_event_count = ...
+        numel(csr.guyot.combined.events);
+    summary.csr.guyot_candidate_duration_sec = ...
+        event_duration_sec(csr.guyot.combined.events);
+    guyot_h = [csr.guyot.lungs.h(:); csr.guyot.diaph.h(:)];
+    guyot_fm = [csr.guyot.lungs.fm_mhz(:); csr.guyot.diaph.fm_mhz(:)];
+    summary.csr.guyot_max_h = finite_max(guyot_h);
+    summary.csr.guyot_median_h = finite_median(guyot_h);
+    summary.csr.guyot_median_fm_mhz = finite_median(guyot_fm);
 end
 
-function values = cycle_values(cycles)
-% CYCLE_VALUES Collect modulation ratios from periodic-breathing cycles.
+function duration_sec = event_duration_sec(events)
+% EVENT_DURATION_SEC Sum finite event durations without inventing missing data.
 
-    if isempty(cycles), values = []; else, values = [cycles.modulation_ratio]; end
+    if isempty(events)
+        duration_sec = 0;
+        return;
+    end
+    values = [events.duration];
+    values = values(isfinite(values));
+    duration_sec = sum(values);
 end
 
 function value = finite_median(x)

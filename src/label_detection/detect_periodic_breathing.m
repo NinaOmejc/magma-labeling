@@ -1,509 +1,224 @@
-function [events, diagnostics] = detect_periodic_breathing(data, resp_cycles, config)
-% DETECT_PERIODIC_BREATHING Find repeated waxing-and-waning breath-amplitude cycles.
-% data supplies recording length; resp_cycles supplies breath times and raw
-% amplitudes for both belts; config defines cycle duration, modulation, shape,
-% grouping, and plot settings. events merge qualifying cycle groups across
-% belts. diagnostics contains availability, minimum criteria, and lungs/diaph
-% entries documented by init_periodic_diag.
+function [events, diagnostics] = detect_periodic_breathing( ...
+    data, resp_cycles, config)
+% DETECT_PERIODIC_BREATHING Compute eAMI and Guyot literature methods.
+% Both methods are always evaluated independently when their inputs support
+% them. config.csr.primary_method explicitly selects which combined method
+% supplies the canonical csr events; there is no union, vote, or fallback.
 
-    events = empty_events();
+    if ~isfield(config, 'csr') || ~isstruct(config.csr)
+        error('MAGMA:CSR:MissingConfig', 'config.csr is required.');
+    end
+    primary_method = 'eami';
+    if isfield(config.csr, 'primary_method')
+        primary_method = lower(char(string(config.csr.primary_method)));
+    end
+    if ~ismember(primary_method, {'eami', 'guyot'})
+        error('MAGMA:CSR:InvalidPrimaryMethod', ...
+            'config.csr.primary_method must be ''eami'' or ''guyot'' (received ''%s'').', ...
+            primary_method);
+    end
 
-    N = size(data, 1);
-    fs = config.fs;
-    cfg = periodic_breathing_config(config);
+    eami = compute_eami_periodic_breathing(data, config);
+    guyot = compute_guyot_periodic_breathing(data, resp_cycles, config);
+    switch primary_method
+        case 'eami'
+            selected = eami;
+        case 'guyot'
+            selected = guyot;
+    end
+    if selected.available
+        events = selected.combined.events;
+        unavailable_reason = '';
+    else
+        events = empty_events();
+        unavailable_reason = ['Selected primary method ''' primary_method ...
+            ''' is not scientifically evaluable for this recording.'];
+    end
+
     diagnostics = struct( ...
-        'available', false, ...
-        'minimum_cycles', cfg.min_cycles, ...
-        'minimum_modulation_ratio', cfg.min_modulation_ratio, ...
-        'lungs', init_periodic_diag(), ...
-        'diaph', init_periodic_diag());
+        'available', selected.available, ...
+        'primary_method', primary_method, ...
+        'primary_events', events, ...
+        'primary_unavailable_reason', unavailable_reason, ...
+        'eami', eami, ...
+        'guyot', guyot);
 
-    lungs_broken = is_lung_belt_ignored(config);
-    lungs_valid = is_valid_breath_signal(resp_cycles.lungs, true) && ~lungs_broken;
-    diaph_valid = is_valid_breath_signal(resp_cycles.diaph, true);
-
-    if ~lungs_valid && ~diaph_valid
-        fprintf('Skipping CSR detection: no valid respiratory belt with usable breath amplitudes.\n');
-        return;
-    end
-
-    events_lungs = empty_events();
-    diag_lungs = init_periodic_diag();
-    if lungs_valid
-        [events_lungs, diag_lungs] = periodic_breathing_events_for_belt( ...
-            resp_cycles.lungs, N, fs, cfg, 'lungs');
-    end
-
-    events_diaph = empty_events();
-    diag_diaph = init_periodic_diag();
-    if diaph_valid
-        [events_diaph, diag_diaph] = periodic_breathing_events_for_belt( ...
-            resp_cycles.diaph, N, fs, cfg, 'diaph');
-    end
-
-    events = merge_events({events_lungs, events_diaph}, cfg.max_cycle_gap_sec);
-    diagnostics.lungs = diag_lungs;
-    diagnostics.diaph = diag_diaph;
-    diagnostics.available = diag_lungs.analysis_available || ...
-        diag_diaph.analysis_available;
-
-    if cfg.do_plot
-        plot_periodic_breathing_diagnostics( ...
-            data, config, events, events_lungs, events_diaph, diag_lungs, diag_diaph, cfg);
+    do_plot = isfield(config.csr, 'do_plot') && logical(config.csr.do_plot);
+    if do_plot
+        plot_periodic_method_comparison(data, config, diagnostics);
     end
 end
 
-function cfg = periodic_breathing_config(config)
-% PERIODIC_BREATHING_CONFIG Resolve cycle, envelope, shape, and grouping settings.
-% Durations are seconds; breath-window counts are converted to odd integers.
-
-    cfg = struct();
-    cfg.min_cycle_sec = get_config_value(config, 'csr', 'min_cycle_sec', 35);
-    cfg.max_cycle_sec = get_config_value(config, 'csr', 'max_cycle_sec', 120);
-    cfg.min_cycles = get_config_value(config, 'csr', 'min_cycles', 2);
-    cfg.min_modulation_ratio = get_config_value(config, 'csr', 'min_modulation_ratio', 1.5);
-    cfg.min_breaths_per_cycle = get_config_value(config, 'csr', 'min_breaths_per_cycle', 3);
-    cfg.min_side_breaths = get_config_value(config, 'csr', 'min_side_breaths', 1);
-    cfg.env_smooth_breaths = odd_window(get_config_value(config, 'csr', 'env_smooth_breaths', 3));
-    cfg.normalization_window_breaths = get_config_value(config, 'csr', 'normalization_window_breaths', 0);
-    if cfg.normalization_window_breaths >= 3
-        cfg.normalization_window_breaths = odd_window(cfg.normalization_window_breaths);
-    end
-    cfg.min_peak_prominence = get_config_value(config, 'csr', 'min_peak_prominence', 0.25);
-    cfg.min_trough_prominence = get_config_value(config, 'csr', 'min_trough_prominence', 0.15);
-    cfg.min_shape_fraction = get_config_value(config, 'csr', 'min_shape_fraction', 0.55);
-    cfg.max_cycle_gap_sec = get_config_value(config, 'csr', 'max_cycle_gap_sec', 10);
-    cfg.do_plot = get_config_value(config, 'csr', 'do_plot', false);
-end
-
-function win = odd_window(value)
-% ODD_WINDOW Round a requested window to a positive odd sample/breath count.
-
-    win = max(1, round(value));
-    if mod(win, 2) == 0
-        win = win + 1;
-    end
-end
-
-function [events, diag] = periodic_breathing_events_for_belt(breaths, N, fs, cfg, belt)
-% PERIODIC_BREATHING_EVENTS_FOR_BELT Analyze one belt's breath-amplitude envelope.
-% breaths is a respiratory-cycle struct; N/fs define event bounds; cfg holds
-% scientific criteria; belt is the output provenance name. diag stores aligned
-% breath times/amplitudes, normalized/smoothed envelope, and accepted cycles.
-
-    events = empty_events();
-    diag = init_periodic_diag();
-
-    [breath_t, amp] = breath_amp_vectors(breaths);
-    diag.breath_t = breath_t;
-    diag.amp = amp;
-
-    if numel(breath_t) < max(6, cfg.min_breaths_per_cycle * cfg.min_cycles)
-        return;
-    end
-
-    [amp_env, amp_norm] = normalized_amplitude_envelope(amp, cfg);
-    diag.amp_norm = amp_norm;
-    diag.amp_env = amp_env;
-    diag.analysis_available = any(isfinite(amp_env));
-
-    cycles = find_periodic_cycles(breath_t, amp_env, cfg);
-    diag.cycles = cycles;
-    events = cycles_to_periodic_events(cycles, N, fs, cfg, belt);
-end
-
-function [breath_t, amp] = breath_amp_vectors(breaths)
-% BREATH_AMP_VECTORS Build sorted positive breath amplitudes and times.
-% When peaks/troughs exist, amplitude is peak i minus the preceding trough
-% and is assigned to peak i; otherwise stored peak_t/amp pairs are used.
-% breath_t is seconds and amp remains in belt units.
-
-    breath_t = [];
-    amp = [];
-
-    if isempty(breaths) || ~isstruct(breaths) || ...
-            ~isfield(breaths, 'peak_t') || ~isfield(breaths, 'amp')
-        return;
-    end
-
-    if isfield(breaths, 'peak_val') && isfield(breaths, 'trough_val') && ...
-            numel(breaths.peak_t) >= 2 && numel(breaths.trough_val) >= 1
-        peak_t = breaths.peak_t(:);
-        peak_val = breaths.peak_val(:);
-        trough_val = breaths.trough_val(:);
-        n = min([numel(peak_t) - 1, numel(peak_val) - 1, numel(trough_val)]);
-
-        % Breath amplitude at peak i is peak(i) minus the preceding trough.
-        breath_t = peak_t(2:n+1);
-        amp = peak_val(2:n+1) - trough_val(1:n);
-    else
-        breath_t = breaths.peak_t(:);
-        amp = breaths.amp(:);
-        n = min(numel(breath_t), numel(amp));
-        breath_t = breath_t(1:n);
-        amp = amp(1:n);
-    end
-
-    valid = isfinite(breath_t) & isfinite(amp) & amp > 0;
-    breath_t = breath_t(valid);
-    amp = amp(valid);
-
-    [breath_t, order] = sort(breath_t);
-    amp = amp(order);
-end
-
-function [amp_env, amp_norm] = normalized_amplitude_envelope(amp, cfg)
-% NORMALIZED_AMPLITUDE_ENVELOPE Normalize and median-smooth breath amplitudes.
-% amp is breath-level belt amplitude. amp_norm divides by either a moving or
-% global median; amp_env is a moving-median envelope, both dimensionless.
-
-    amp = amp(:);
-
-    global_ref = median(amp(isfinite(amp) & amp > 0), 'omitnan');
-    if ~isfinite(global_ref) || global_ref <= 0
-        global_ref = 1;
-    end
-
-    if cfg.normalization_window_breaths >= 3
-        local_ref = movmedian(amp, cfg.normalization_window_breaths, 'omitnan');
-        bad_ref = ~isfinite(local_ref) | local_ref <= 0;
-        local_ref(bad_ref) = global_ref;
-        amp_norm = amp ./ max(local_ref, eps);
-    else
-        amp_norm = amp ./ max(global_ref, eps);
-    end
-
-    amp_env = movmedian(amp_norm, cfg.env_smooth_breaths, 'omitnan');
-end
-
-function cycles = find_periodic_cycles(breath_t, amp_env, cfg)
-% FIND_PERIODIC_CYCLES Accept trough-to-trough envelope cycles meeting all criteria.
-% breath_t (s) and amp_env are aligned breath vectors. Each returned cycle
-% contains start_t/end_t/duration, peak_t, peak_amp, trough_amp,
-% modulation_ratio, n_breaths, and rise/fall shape_score.
-
-    cycles = empty_cycles();
-
-    if numel(breath_t) < 4 || all(~isfinite(amp_env))
-        return;
-    end
-
-    min_extrema_distance = max(cfg.min_cycle_sec / 3, median(diff(breath_t), 'omitnan'));
-
-    try
-        [pks, pk_locs] = findpeaks(amp_env, breath_t, ...
-            'MinPeakProminence', cfg.min_peak_prominence, ...
-            'MinPeakDistance', min_extrema_distance);
-        [troughs_neg, tr_locs] = findpeaks(-amp_env, breath_t, ...
-            'MinPeakProminence', cfg.min_trough_prominence, ...
-            'MinPeakDistance', min_extrema_distance);
-    catch
-        return;
-    end
-
-    troughs = -troughs_neg;
-    pks = pks(:);
-    pk_locs = pk_locs(:);
-    troughs = troughs(:);
-    tr_locs = tr_locs(:);
-
-    if numel(tr_locs) < 2
-        return;
-    end
-    cycles = repmat(cycle_template(), numel(tr_locs)-1, 1);
-    cycle_count = 0;
-
-    for i = 1:numel(tr_locs)-1
-        t1 = tr_locs(i);
-        t2 = tr_locs(i+1);
-        cycle_dur = t2 - t1;
-
-        if cycle_dur < cfg.min_cycle_sec || cycle_dur > cfg.max_cycle_sec
-            continue;
-        end
-
-        in_cycle = breath_t >= t1 & breath_t <= t2;
-        cycle_idx = find(in_cycle);
-        n_breaths = numel(cycle_idx);
-        if n_breaths < cfg.min_breaths_per_cycle
-            continue;
-        end
-
-        [peak_amp, peak_t] = cycle_peak_between_troughs( ...
-            breath_t, amp_env, pks, pk_locs, t1, t2, cycle_idx);
-        if ~isfinite(peak_amp) || ~isfinite(peak_t)
-            continue;
-        end
-
-        n_rise = sum(breath_t >= t1 & breath_t <= peak_t);
-        n_fall = sum(breath_t >= peak_t & breath_t <= t2);
-        if n_rise < (cfg.min_side_breaths + 1) || n_fall < (cfg.min_side_breaths + 1)
-            continue;
-        end
-
-        trough_amp = median([troughs(i), troughs(i+1)], 'omitnan');
-        if ~isfinite(trough_amp) || trough_amp <= 0
-            continue;
-        end
-
-        modulation_ratio = peak_amp / max(trough_amp, eps);
-        if modulation_ratio < cfg.min_modulation_ratio
-            continue;
-        end
-
-        shape_score = rise_fall_shape_score(breath_t, amp_env, t1, peak_t, t2);
-        if shape_score < cfg.min_shape_fraction
-            continue;
-        end
-
-        cycle_count = cycle_count + 1;
-        cycles(cycle_count,1) = struct( ...
-            'start_t', t1, ...
-            'end_t', t2, ...
-            'duration', cycle_dur, ...
-            'peak_t', peak_t, ...
-            'peak_amp', peak_amp, ...
-            'trough_amp', trough_amp, ...
-            'modulation_ratio', modulation_ratio, ...
-            'n_breaths', n_breaths, ...
-            'shape_score', shape_score );
-    end
-    cycles = cycles(1:cycle_count);
-end
-
-function [peak_amp, peak_t] = cycle_peak_between_troughs( ...
-    breath_t, amp_env, pks, pk_locs, t1, t2, cycle_idx)
-% CYCLE_PEAK_BETWEEN_TROUGHS Select an interior envelope maximum for one cycle.
-% Detected peaks inside (t1,t2) are preferred; otherwise the largest interior
-% breath value is used. peak_t is seconds and invalid boundary maxima yield NaN.
-
-    peak_amp = NaN;
-    peak_t = NaN;
-
-    mid_peak_idx = find(pk_locs > t1 & pk_locs < t2);
-    if ~isempty(mid_peak_idx)
-        [peak_amp, rel] = max(pks(mid_peak_idx), [], 'omitnan');
-        peak_t = pk_locs(mid_peak_idx(rel));
-        return;
-    end
-
-    env_cycle = amp_env(cycle_idx);
-    breath_t_cycle = breath_t(cycle_idx);
-    if numel(env_cycle) < 3
-        return;
-    end
-
-    [peak_amp, rel] = max(env_cycle, [], 'omitnan');
-    if rel <= 1 || rel >= numel(env_cycle)
-        peak_amp = NaN;
-        peak_t = NaN;
-        return;
-    end
-    peak_t = breath_t_cycle(rel);
-end
-
-function score = rise_fall_shape_score(breath_t, amp_env, t1, peak_t, t2)
-% RISE_FALL_SHAPE_SCORE Score the weaker of monotonic rise and fall fractions.
-% Times are seconds and select aligned samples from the breath-level envelope.
-
-    rise = amp_env(breath_t >= t1 & breath_t <= peak_t);
-    fall = amp_env(breath_t >= peak_t & breath_t <= t2);
-
-    rise_score = monotonic_fraction(rise, 1);
-    fall_score = monotonic_fraction(fall, -1);
-    score = min(rise_score, fall_score);
-end
-
-function frac = monotonic_fraction(values, direction)
-% MONOTONIC_FRACTION Fraction of finite steps following a signed trend.
-% Positive direction scores nondecreasing steps and negative direction scores
-% nonincreasing steps, each with the encoded 0.03 tolerance.
-
-    values = values(:);
-    values = values(isfinite(values));
-
-    if numel(values) < 2
-        frac = 0;
-        return;
-    end
-
-    d = diff(values);
-    tol = 0.03;
-    if direction > 0
-        frac = mean(d >= -tol);
-    else
-        frac = mean(d <= tol);
-    end
-end
-
-function events = cycles_to_periodic_events(cycles, N, fs, cfg, belt)
-% CYCLES_TO_PERIODIC_EVENTS Group nearby accepted cycles into sample/time events.
-% A group needs cfg.min_cycles and adjacent cycles may be separated by at most
-% cfg.max_cycle_gap_sec. N/fs clamp output bounds; belt names the source.
-
-    events = empty_events();
-    if isempty(cycles)
-        return;
-    end
-
-    group_start = 1;
-    for i = 2:numel(cycles)+1
-        close_to_previous = false;
-        if i <= numel(cycles)
-            close_to_previous = cycles(i).start_t <= cycles(i-1).end_t + cfg.max_cycle_gap_sec;
-        end
-
-        if close_to_previous
-            continue;
-        end
-
-        group_end = i - 1;
-        if (group_end - group_start + 1) >= cfg.min_cycles
-            start_t = cycles(group_start).start_t;
-            end_t = cycles(group_end).end_t;
-            events(end+1,1) = make_periodic_event(start_t, end_t, N, fs, belt); %#ok<AGROW>
-        end
-        group_start = i;
-    end
-end
-
-function event = make_periodic_event(start_t, end_t, N, fs, belt)
-% MAKE_PERIODIC_EVENT Convert second-based bounds to one canonical belt event.
-% event has type, one-based start_idx/end_idx, start_t/end_t (s), and duration (s).
-
-    start_idx = max(1, min(N, round(start_t * fs) + 1));
-    end_idx = max(start_idx, min(N, round(end_t * fs)));
-
-    event = struct( ...
-        'type', ['periodic_breathing_' belt], ...
-        'start_idx', start_idx, ...
-        'end_idx', end_idx, ...
-        'start_t', (start_idx - 1) / fs, ...
-        'end_t', end_idx / fs, ...
-        'duration', (end_idx - start_idx + 1) / fs );
-end
-
-function cycles = empty_cycles()
-% EMPTY_CYCLES Return a zero-length periodic-cycle struct array with stable fields.
-
-    template = cycle_template();
-    cycles = template([]);
-end
-
-function cycle = cycle_template()
-% CYCLE_TEMPLATE Define one trough-to-trough periodic-amplitude cycle.
-% Times/duration are seconds; peak/trough amplitudes are normalized envelope
-% values; modulation_ratio is dimensionless; n_breaths and shape_score record
-% cycle support and monotonicity.
-
-    cycle = struct( ...
-        'start_t', NaN, ...
-        'end_t', NaN, ...
-        'duration', NaN, ...
-        'peak_t', NaN, ...
-        'peak_amp', NaN, ...
-        'trough_amp', NaN, ...
-        'modulation_ratio', NaN, ...
-        'n_breaths', 0, ...
-        'shape_score', NaN );
-end
-
-function diag = init_periodic_diag()
-% INIT_PERIODIC_DIAG Initialize one belt's periodic-breathing diagnostics.
-% Fields are analysis_available, breath_t (s), raw amp, normalized amp_norm,
-% smoothed amp_env, and the accepted periodic cycles struct array.
-
-    diag = struct( ...
-        'analysis_available', false, ...
-        'breath_t', [], ...
-        'amp', [], ...
-        'amp_norm', [], ...
-        'amp_env', [], ...
-        'cycles', empty_cycles() );
-end
-
-function plot_periodic_breathing_diagnostics( ...
-    data, config, events, events_lungs, events_diaph, diag_lungs, diag_diaph, cfg)
-% PLOT_PERIODIC_BREATHING_DIAGNOSTICS Plot periodic breathing diagnostics.
-% Shows both raw belts and breath-level normalized amplitude envelopes with
-% belt-specific and merged events. config supplies channels/fs/output settings.
+function plot_periodic_method_comparison(data, config, diagnostics)
+% PLOT_PERIODIC_METHOD_COMPARISON Compare raw, eAMI, and Guyot evidence.
 
     N = size(data, 1);
-    t_raw = (0:N-1) / config.fs;
+    t_raw = (0:N - 1)' / config.fs;
+    recording_end_t = max(0, (N - 1) / config.fs);
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
     end
     idx_lungs = config.channels.lungs_idx;
     idx_diaph = config.channels.diaph_idx;
+    if is_lung_belt_ignored(config)
+        idx_lungs = [];
+    end
+    eami = diagnostics.eami;
+    guyot = diagnostics.guyot;
 
-    fig = figure('Units', 'pixels', 'Position', near_fullscreen_figure_position(), ...
+    figure('Units', 'pixels', 'Position', near_fullscreen_figure_position(), ...
         'Visible', config.make_figs_visible);
-    sgtitle(['PERIODIC BREATHING / CHEYNE-STOKES-LIKE' newline ...
-        'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)])
+    sgtitle(['PERIODIC BREATHING / CHEYNE-STOKES-LIKE EFFORT PATTERN' newline ...
+        'Primary method: ' upper(diagnostics.primary_method) ...
+        ' | Subject: ' num2str(config.subject) ...
+        ' | Measurement: ' num2str(config.measure)])
 
-    ax1 = subplot(3, 1, 1); hold on
-    plot_resp_trace_or_message(t_raw, data, idx_lungs, 'Resp-Lungs');
-    shade_events_on_axis(gca, events_lungs, 'periodic breathing lungs');
-    title('Lungs raw signal')
-    xlabel('Time (s)'); ylabel('Resp-Lungs'); grid on
-    hold off
+    ax1 = subplot(6, 1, 1); hold on
+    plot_raw_belts(ax1, t_raw, data, idx_lungs, idx_diaph);
+    title('Raw respiratory effort belts')
+    xlabel('Time (s)'); ylabel('Raw belt'); grid on; hold off
 
-    ax2 = subplot(3, 1, 2); hold on
-    plot_resp_trace_or_message(t_raw, data, idx_diaph, 'Resp-Diaphragm');
-    shade_events_on_axis(gca, events_diaph, 'periodic breathing diaphragm');
-    title('Diaphragm raw signal')
-    xlabel('Time (s)'); ylabel('Resp-Diaphragm'); grid on
-    hold off
+    ax2 = subplot(6, 1, 2); hold on
+    plot_finite_trace(ax2, eami.lungs.t_sec, eami.lungs.eami, ...
+        [0.15 0.15 0.15], 'lungs eAMI');
+    plot_finite_trace(ax2, eami.diaph.t_sec, eami.diaph.eami, ...
+        [0.10 0.35 0.90], 'diaphragm eAMI');
+    yline(ax2, config.csr.eami.threshold, 'r--', ...
+        'DisplayName', 'eAMI threshold');
+    shade_events_on_axis(ax2, eami.combined.events, 'combined eAMI events');
+    title('eAMI literature method')
+    xlabel('Time (s)'); ylabel('eAMI'); grid on
+    show_legend_if_data(ax2); hold off
 
-    ax3 = subplot(3, 1, 3); hold on
-    plot_envelope_trace(diag_lungs, [0.1 0.1 0.1], 'lungs envelope');
-    plot_envelope_trace(diag_diaph, [0.1 0.35 0.9], 'diaph envelope');
-    yline(1.0, 'k:');
-    shade_events_on_axis(gca, events, 'periodic breathing');
-    title(sprintf('Normalized breath-amplitude envelope | cycles %d-%d s | ratio >= %.2f', ...
-        cfg.min_cycle_sec, cfg.max_cycle_sec, cfg.min_modulation_ratio))
-    xlabel('Time (s)'); ylabel('Normalized envelope'); grid on
-    legend('Location', 'eastoutside')
-    hold off
+    ax3 = subplot(6, 1, 3); hold on
+    plot_finite_trace(ax3, guyot.lungs.envelope_t, guyot.lungs.envelope, ...
+        [0.15 0.15 0.15], 'lungs envelope');
+    plot_finite_trace(ax3, guyot.diaph.envelope_t, guyot.diaph.envelope, ...
+        [0.10 0.35 0.90], 'diaphragm envelope');
+    title('Guyot reconstructed ventilation envelope')
+    xlabel('Time (s)'); ylabel('Canonical amplitude'); grid on
+    show_legend_if_data(ax3); hold off
 
-    ax = [ax1 ax2 ax3];
-    linkaxes(ax, 'x');
-    xlim(ax1, [0 t_raw(end)]);
-    align_axes_x_widths(ax);
+    ax4 = subplot(6, 1, 4); hold on
+    plot_window_points(ax4, guyot.lungs.window_center_t, guyot.lungs.h, ...
+        [0.15 0.15 0.15], 'lungs h');
+    plot_window_points(ax4, guyot.diaph.window_center_t, guyot.diaph.h, ...
+        [0.10 0.35 0.90], 'diaphragm h');
+    yline(ax4, config.csr.guyot.h_threshold, 'r--', ...
+        'DisplayName', 'h threshold');
+    shade_events_on_axis(ax4, guyot.combined.events, 'combined Guyot events');
+    title('Guyot modulation depth')
+    xlabel('Time (s)'); ylabel('h'); grid on
+    show_legend_if_data(ax4); hold off
 
-    set(fig, 'Visible', config.make_figs_visible);
+    ax5 = subplot(6, 1, 5); hold on
+    plot_window_points(ax5, guyot.lungs.window_center_t, guyot.lungs.fm_mhz, ...
+        [0.15 0.15 0.15], 'lungs f_m');
+    plot_window_points(ax5, guyot.diaph.window_center_t, guyot.diaph.fm_mhz, ...
+        [0.10 0.35 0.90], 'diaphragm f_m');
+    yline(ax5, 1000 * config.csr.guyot.fm_band_hz(1), 'r--', ...
+        'DisplayName', 'accepted f_m band');
+    yline(ax5, 1000 * config.csr.guyot.fm_band_hz(2), 'r--', ...
+        'HandleVisibility', 'off');
+    shade_events_on_axis(ax5, guyot.combined.events, 'combined Guyot events');
+    title('Guyot modulation frequency')
+    xlabel('Time (s)'); ylabel('f_m (mHz)'); grid on
+    show_legend_if_data(ax5); hold off
+
+    ax6 = subplot(6, 1, 6); hold on
+    plot_method_timeline(ax6, eami.combined.t_sec, ...
+        eami.combined.candidate_mask, 2, [0.75 0.10 0.10]);
+    plot_method_timeline(ax6, guyot.combined.t_sec, ...
+        guyot.combined.candidate_mask, 1, [0.10 0.35 0.90]);
+    yticks(ax6, [1 2]); yticklabels(ax6, {'Guyot', 'eAMI'});
+    ylim(ax6, [0.5 2.5]);
+    title(['Final method timelines | primary = ' diagnostics.primary_method])
+    xlabel('Time (s)'); ylabel('Method'); grid on; hold off
+
+    axes_handles = [ax1 ax2 ax3 ax4 ax5 ax6];
+    linkaxes(axes_handles, 'x');
+    if recording_end_t > 0
+        xlim(ax1, [0 recording_end_t]);
+    end
+    align_axes_x_widths(axes_handles);
     save_figure(config, 'periodic_breathing');
 end
 
-function plot_envelope_trace(diag, color, display_name)
-% PLOT_ENVELOPE_TRACE Plot one belt's breath envelope and accepted cycle landmarks.
+function plot_raw_belts(ax, t_raw, data, idx_lungs, idx_diaph)
+% PLOT_RAW_BELTS Plot each available raw belt without changing its scale.
 
-    if isempty(diag.breath_t) || isempty(diag.amp_env)
-        return;
+    plotted = false;
+    if valid_plot_channel(idx_lungs, size(data, 2))
+        plot(ax, t_raw, data(:, idx_lungs), 'Color', [0.15 0.15 0.15], ...
+            'DisplayName', 'Resp-Lungs');
+        plotted = true;
     end
-
-    plot(diag.breath_t, diag.amp_env, '-', 'Color', color, ...
-        'LineWidth', 1.3, 'DisplayName', display_name);
-    scatter(diag.breath_t, diag.amp_env, 10, color, 'filled', ...
-        'DisplayName', [display_name ' breaths']);
-
-    for i = 1:numel(diag.cycles)
-        c = diag.cycles(i);
-        plot([c.start_t c.peak_t c.end_t], ...
-            [c.trough_amp c.peak_amp c.trough_amp], 'o-', ...
-            'Color', color, 'MarkerFaceColor', color, ...
-            'HandleVisibility', 'off');
+    if valid_plot_channel(idx_diaph, size(data, 2))
+        plot(ax, t_raw, data(:, idx_diaph), 'Color', [0.10 0.35 0.90], ...
+            'DisplayName', 'Resp-Diaphragm');
+        plotted = true;
+    end
+    if plotted
+        legend(ax, 'Location', 'eastoutside');
+    else
+        text(ax, 0.5, 0.5, 'No usable raw respiratory belt', ...
+            'Units', 'normalized', 'HorizontalAlignment', 'center');
     end
 end
 
-function plot_resp_trace_or_message(t_raw, data, idx, label_text)
-% PLOT_RESP_TRACE_OR_MESSAGE Plot one raw belt channel or an absent-channel note.
-% t_raw is sample time in seconds; idx selects a column of data.
+function plot_finite_trace(ax, t_sec, values, color, display_name)
+% PLOT_FINITE_TRACE Plot supported samples while retaining gaps as gaps.
 
-    if isempty(idx)
-        text(0.5, 0.5, [label_text ' channel not found'], ...
-            'Units', 'normalized', 'HorizontalAlignment', 'center')
-    else
-        plot(t_raw, data(:, idx), 'k')
+    if isempty(t_sec) || isempty(values)
+        return;
     end
+    values = values(:);
+    values(~isfinite(values)) = NaN;
+    plot(ax, t_sec(:), values, '-', 'Color', color, ...
+        'LineWidth', 1.1, 'DisplayName', display_name);
+end
+
+function plot_window_points(ax, t_sec, values, color, display_name)
+% PLOT_WINDOW_POINTS Plot center-associated Guyot estimates without joining.
+
+    if isempty(t_sec) || isempty(values)
+        return;
+    end
+    valid = isfinite(t_sec) & isfinite(values);
+    plot(ax, t_sec(valid), values(valid), 'o', 'LineStyle', 'none', ...
+        'Color', color, 'MarkerSize', 4, 'DisplayName', display_name);
+end
+
+function plot_method_timeline(ax, t_sec, candidate_mask, row, color)
+% PLOT_METHOD_TIMELINE Draw retained method support on a compact fixed row.
+
+    plot(ax, [0 max([0; t_sec(:)])], [row row], '-', ...
+        'Color', [0.8 0.8 0.8], 'HandleVisibility', 'off');
+    candidate_mask = logical(candidate_mask(:));
+    state = nan(size(t_sec));
+    state(candidate_mask) = row;
+    plot(ax, t_sec, state, '-', 'Color', color, 'LineWidth', 4, ...
+        'HandleVisibility', 'off');
+end
+
+function show_legend_if_data(ax)
+% SHOW_LEGEND_IF_DATA Avoid empty legends on unavailable diagnostics.
+
+    objects = findobj(ax, '-property', 'DisplayName');
+    if isempty(objects)
+        legend(ax, 'off');
+        return;
+    end
+    names = get(objects, 'DisplayName');
+    if ischar(names), names = {names}; end
+    if any(~cellfun(@isempty, names))
+        legend(ax, 'Location', 'eastoutside');
+    end
+end
+
+function tf = valid_plot_channel(index, n_columns)
+% VALID_PLOT_CHANNEL Validate a resolved data-column index.
+
+    tf = ~isempty(index) && isscalar(index) && isfinite(index) && ...
+        index == round(index) && index >= 1 && index <= n_columns;
 end
