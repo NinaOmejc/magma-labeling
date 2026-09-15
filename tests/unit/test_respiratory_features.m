@@ -303,13 +303,6 @@ function testBreathAmplitudeAndApneaEvidenceMatchDefinitions(testCase)
     [data, resp_cycles, resp_ref, diagnostics_desat, config] = feature_fixture();
     resp_features = compute_respiratory_features( ...
         data, resp_cycles, resp_ref, config);
-    t_grid = resp_features.time_sec;
-
-    expected_apnea = legacy_apnea_ratio_trace( ...
-        resp_cycles.lungs, t_grid, config.apnea.amp_analysis_win_sec, 2);
-
-    verifyTrue(testCase, isequaln( ...
-        resp_features.lungs.apnea_amp_ratio_session_window_median, expected_apnea));
     verifyEqual(testCase, resp_features.lungs.amp_ratio_global, ...
         expected_global_ratio(resp_cycles.lungs.amp, 1.5));
     verifyEqual(testCase, fieldnames(resp_features.amplitude_windows_sec), ...
@@ -317,9 +310,68 @@ function testBreathAmplitudeAndApneaEvidenceMatchDefinitions(testCase)
     obsolete = {'amp_window_median_raw_units', ...
         'amp_ratio_session_window_median', ...
         'deep_amp_ratio_session_window_median', ...
+        'apnea_amp_ratio_session_window_median', ...
         'shallow_amplitude_endpoint_mask', 'shallow_amplitude_mask', ...
         'deep_amplitude_endpoint_mask', 'deep_amplitude_mask'};
     verifyFalse(testCase, any(isfield(resp_features.lungs, obsolete)));
+end
+
+function testApneaAmplitudeWindowsRequireNonemptyAllLowBreaths(testCase)
+    config = make_test_config();
+    config.fs = 10;
+    config.grid_step_sec = 1;
+    config.subject = 999;
+    config.measure = 1;
+    config.problems.missing_lung_belt = zeros(0, 2);
+    N = 41 * config.fs;
+    data = zeros(N, numel(config.data_columns));
+    peak_t = [10; 15; 30];
+    peak_idx = round(peak_t * config.fs) + 1;
+    resp_cycles = struct( ...
+        'lungs', reviewed_belt( ...
+            peak_idx, peak_t, [0.05; 0.20; 0.05], config.fs), ...
+        'diaph', empty_respiration_feature('Resp-Diaphragm'));
+    resp_ref = struct( ...
+        'lungs', belt_reference(1, 1, 'good'), ...
+        'diaph', belt_reference(NaN, NaN, 'belt_unavailable'));
+
+    resp_features = compute_respiratory_features( ...
+        data, resp_cycles, resp_ref, config);
+    t_grid = resp_features.time_sec;
+    endpoint_mask = resp_features.lungs.apnea_amplitude_endpoint_mask;
+
+    verifyTrue(testCase, endpoint_mask(t_grid == 10));
+    verifyFalse(testCase, endpoint_mask(t_grid == 15));
+    verifyFalse(testCase, endpoint_mask(t_grid == 26));
+    verifyEqual(testCase, resp_features.lungs.apnea_amplitude_state_mask, ...
+        analysis_window_endpoints_to_state_mask( ...
+            endpoint_mask, t_grid, config.apnea.amp_analysis_win_sec));
+    verifyFalse(testCase, isfield(resp_features.lungs, ...
+        'apnea_amp_ratio_session_window_median'));
+end
+
+function testApneaDiagnosticPlotShowsDirectPathEvidence(testCase)
+    repo_root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
+    source = fileread(fullfile(repo_root, 'src', ...
+        'label_detection', 'detect_apnea.m'));
+
+    required = { ...
+        'Breath-amplitude apnea evidence', ...
+        'lungs breaths', 'diaphragm breaths', 'amplitude threshold', ...
+        'Raw-flat apnea evidence', ...
+        'belt_diag.excursion_ratio ./ excursion_threshold', ...
+        'belt_diag.slope_ratio ./ slope_threshold', ...
+        'criterion threshold', '[belt_name '' plateau'']', ...
+        '''lungs'', ''v'', 0.08', '''diaphragm'', ''^'', 0.16', ...
+        'recording_end_t = (N - 1) / config.fs'};
+    for i = 1:numel(required)
+        verifyTrue(testCase, contains(source, required{i}));
+    end
+    verifyEqual(testCase, count(source, 'subplot(4, 1'), 4);
+    verifyFalse(testCase, contains(source, ...
+        'plot(t_grid, raw_diag.lungs.hist_peak_frac'));
+    verifyFalse(testCase, contains(source, ...
+        'plot(t_grid, raw_diag.diaph.hist_peak_frac'));
 end
 
 function testShallowBreathsRequireLowerBandBound(testCase)
@@ -579,28 +631,6 @@ function [data, resp_cycles, resp_ref, diagnostics_desat, config] = ...
         'lungs', belt_reference(1, 1, 'good'), ...
         'diaph', belt_reference(NaN, NaN, 'belt_unavailable'));
     diagnostics_desat = struct();
-end
-
-function trace = legacy_apnea_ratio_trace(breaths, t_grid, win_sec, reference)
-    peak_t = breaths.peak_t(:);
-    amp = breaths.amp(:);
-    n = min(numel(peak_t), numel(amp));
-    peak_t = peak_t(1:n);
-    amp = amp(1:n);
-    valid = isfinite(peak_t) & isfinite(amp) & amp > 0;
-    peak_t = peak_t(valid);
-    amp = amp(valid);
-    trace = nan(size(t_grid));
-    for i = 1:numel(t_grid)
-        t = t_grid(i);
-        if t - win_sec < 0
-            continue;
-        end
-        values = amp(peak_t <= t & peak_t >= t-win_sec);
-        if numel(values) >= 2
-            trace(i) = median(values, 'omitnan') / reference;
-        end
-    end
 end
 
 function ratio = expected_global_ratio(amp, reference)

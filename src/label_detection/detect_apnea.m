@@ -188,51 +188,121 @@ function [events, diagnostics, boundary_info] = detect_apnea( ...
         xlabel('Time (s)'); ylabel('Resp-Diaphragm'); grid on
         hold off
 
-        subplot(4, 1, 3); hold on
-        lungs_ratio = nan(size(t_grid));
-        if lungs_breath_valid
-            lungs_ratio = lungs.apnea_amp_ratio_session_window_median;
-        end
-        diaph_ratio = nan(size(t_grid));
-        if diaph_breath_valid
-            diaph_ratio = diaph.apnea_amp_ratio_session_window_median;
-        end
-        plot(t_grid, lungs_ratio, 'k')
-        plot(t_grid, diaph_ratio, 'b')
-        yline(amp_ratio_thr, 'r--')
+        ax_amplitude = subplot(4, 1, 3); hold on
+        h_lungs_breaths = plot_breath_amplitude_points( ...
+            ax_amplitude, lungs, lungs_breath_valid, 'k', 'lungs breaths');
+        h_diaph_breaths = plot_breath_amplitude_points( ...
+            ax_amplitude, diaph, diaph_breath_valid, 'b', 'diaphragm breaths');
+        h_amp_threshold = yline(ax_amplitude, amp_ratio_thr, 'r--', ...
+            'DisplayName', 'amplitude threshold');
         shade_mask_on_axis(t_grid, diagnostics.localized_state_mask);
-        title('Peak-amplitude ratios (common session reference)')
-        xlabel('Time (s)'); ylabel('Amp ratio'); grid on
-        legend('lungs ratio', 'diaph ratio', 'thr', 'Location', 'eastoutside')
+        title('Breath-amplitude apnea evidence')
+        xlabel('Time (s)'); ylabel('Breath amplitude / session reference'); grid on
+        amplitude_handles = [h_lungs_breaths; h_diaph_breaths; h_amp_threshold];
+        legend(ax_amplitude, amplitude_handles(isgraphics(amplitude_handles)), ...
+            'Location', 'eastoutside')
         hold off
 
-        subplot(4, 1, 4); hold on
+        ax_raw_flat = subplot(4, 1, 4); hold on
         if diagnostics.raw_flat_path_available
-            plot(t_grid, raw_diag.lungs.excursion_ratio, 'k')
-            plot(t_grid, raw_diag.diaph.excursion_ratio, 'b')
-            plot(t_grid, raw_diag.lungs.hist_peak_frac, 'Color', [0.2 0.2 0.2], 'LineStyle', ':')
-            plot(t_grid, raw_diag.diaph.hist_peak_frac, 'Color', [0.1 0.35 0.9], 'LineStyle', ':')
-            yline(raw_cfg.excursion_ratio_thr, 'r--')
-            yline(raw_cfg.hist_peak_frac_thr, 'm--')
+            [h_lungs_excursion, h_lungs_slope, h_lungs_plateau] = ...
+                plot_raw_flat_belt_evidence( ...
+                    ax_raw_flat, t_grid, raw_diag.lungs, ...
+                    raw_cfg.excursion_ratio_thr, raw_cfg.slope_ratio_thr, ...
+                    'k', 'lungs', 'v', 0.08);
+            [h_diaph_excursion, h_diaph_slope, h_diaph_plateau] = ...
+                plot_raw_flat_belt_evidence( ...
+                    ax_raw_flat, t_grid, raw_diag.diaph, ...
+                    raw_cfg.excursion_ratio_thr, raw_cfg.slope_ratio_thr, ...
+                    'b', 'diaphragm', '^', 0.16);
+            h_criterion = yline(ax_raw_flat, 1, 'r--', ...
+                'DisplayName', 'criterion threshold');
             shade_mask_on_axis(t_grid, diagnostics.localized_state_mask);
-            title('Raw-flat diagnostics: excursion ratio and histogram plateau score')
-            xlabel('Time (s)'); ylabel('Ratio / fraction'); grid on
-            legend('lungs excursion', 'diaph excursion', 'lungs hist peak', 'diaph hist peak', ...
-                'excursion thr', 'hist thr', 'Location', 'eastoutside')
+            title('Raw-flat apnea evidence')
+            xlabel('Time (s)'); ylabel('Value / criterion threshold'); grid on
+            raw_handles = [h_lungs_excursion; h_diaph_excursion; ...
+                h_lungs_slope; h_diaph_slope; h_criterion; ...
+                h_lungs_plateau; h_diaph_plateau];
+            legend(ax_raw_flat, raw_handles(isgraphics(raw_handles)), ...
+                'Location', 'eastoutside')
         else
-            text(0.5, 0.5, 'Raw-flat apnea evidence unavailable', ...
+            ylim(ax_raw_flat, [0 1]);
+            shade_mask_on_axis(t_grid, diagnostics.localized_state_mask);
+            text(ax_raw_flat, 0.5, 0.5, 'Raw-flat apnea evidence unavailable', ...
                 'Units', 'normalized', 'HorizontalAlignment', 'center')
-            axis off
+            title('Raw-flat apnea evidence')
+            xlabel('Time (s)'); ylabel('Value / criterion threshold'); grid on
         end
         hold off
 
         ax = findall(gcf, 'Type', 'axes');
         ax = ax(arrayfun(@(a) ~strcmp(a.Tag, 'legend'), ax));
         linkaxes(ax, 'x');
-        xlim(ax(1), [0 t_grid(end)]);
+        recording_end_t = (N - 1) / config.fs;
+        if recording_end_t > 0
+            xlim(ax(1), [0 recording_end_t]);
+        end
         align_axes_x_widths(ax);
 
         save_figure(config, 'apnea');
+    end
+end
+
+function handle = plot_breath_amplitude_points( ...
+    ax, belt, available, color, display_name)
+% PLOT_BREATH_AMPLITUDE_POINTS Plot valid normalized breaths as markers.
+
+    handle = gobjects(0, 1);
+    if ~available || ~isstruct(belt) || ~isfield(belt, 'peak_t') || ...
+            ~isfield(belt, 'amp_ratio_session')
+        return;
+    end
+    peak_t = belt.peak_t(:);
+    ratio = belt.amp_ratio_session(:);
+    if numel(peak_t) ~= numel(ratio)
+        error('MAGMA:ApneaPlot:SizeMismatch', ...
+            'peak_t and amp_ratio_session must have equal lengths.');
+    end
+    valid = isfinite(peak_t) & isfinite(ratio) & ratio > 0;
+    if ~any(valid)
+        return;
+    end
+    handle = plot(ax, peak_t(valid), ratio(valid), '.', ...
+        'LineStyle', 'none', 'Color', color, 'MarkerSize', 11, ...
+        'DisplayName', display_name);
+end
+
+function [h_excursion, h_slope, h_plateau] = ...
+    plot_raw_flat_belt_evidence( ...
+        ax, t_grid, belt_diag, excursion_threshold, slope_threshold, ...
+        color, belt_name, plateau_marker, plateau_y)
+% PLOT_RAW_FLAT_BELT_EVIDENCE Plot one belt's threshold-relative criteria.
+% Excursion and slope scores are visualization-only; values <=1 satisfy the
+% corresponding detector threshold. Plateau markers show canonical qualifying
+% plateau support without plotting the internal histogram fraction trace.
+
+    h_excursion = gobjects(0, 1);
+    h_slope = gobjects(0, 1);
+    h_plateau = gobjects(0, 1);
+    if ~isstruct(belt_diag) || ~isfield(belt_diag, 'valid') || ...
+            ~belt_diag.valid
+        return;
+    end
+
+    excursion_score = belt_diag.excursion_ratio ./ excursion_threshold;
+    slope_score = belt_diag.slope_ratio ./ slope_threshold;
+    h_excursion = plot(ax, t_grid, excursion_score, '-', ...
+        'Color', color, 'DisplayName', [belt_name ' excursion']);
+    h_slope = plot(ax, t_grid, slope_score, '--', ...
+        'Color', color, 'DisplayName', [belt_name ' slope']);
+
+    plateau_mask = logical(belt_diag.plateau_mask(:));
+    if any(plateau_mask)
+        h_plateau = plot(ax, t_grid(plateau_mask), ...
+            plateau_y * ones(nnz(plateau_mask), 1), plateau_marker, ...
+            'LineStyle', 'none', 'Color', color, ...
+            'MarkerFaceColor', color, 'MarkerSize', 4, ...
+            'DisplayName', [belt_name ' plateau']);
     end
 end
 

@@ -103,11 +103,12 @@ function belt = build_belt_evidence(source, reference, ignored, t_grid, cfg, con
     end
 
     if belt.session_amplitude_available
-        % Apnea retains its separate trailing-window amplitude criterion.
-        [belt.apnea_amplitude_endpoint_mask, belt.apnea_amplitude_state_mask] = amplitude_threshold_mask( ...
-            belt.peak_t, belt.amp_ratio_session, t_grid, cfg.apnea_win_sec, cfg.apnea_ratio_threshold, 2, 'le');
-        [~, belt.apnea_amp_ratio_session_window_median] = amplitude_window_medians( ...
-            belt.peak_t, belt.amp, belt.amp_ratio_session, t_grid, cfg.apnea_win_sec, 2);
+        % A complete window passes when it contains at least one valid breath
+        % and every valid session-normalized amplitude is below threshold.
+        [belt.apnea_amplitude_endpoint_mask, belt.apnea_amplitude_state_mask] = ...
+            apnea_amplitude_window_mask( ...
+                belt.peak_t, belt.amp_ratio_session, t_grid, ...
+                cfg.apnea_win_sec, cfg.apnea_ratio_threshold);
     end
 
     if belt.available
@@ -218,8 +219,10 @@ function belt = empty_belt_evidence(t_grid)
 % rr_source provenance.
 % Availability fields distinguish timing, raw amplitude, and session/global
 % normalized amplitude; reference fields store values, flags, and quality.
-% Grid-level fields include slow/rapid rate traces and endpoint/state masks,
-% apnea amplitude evidence, and irregularity cov/robust_cov traces. For
+% Grid-level fields include slow/rapid rate traces and endpoint/state masks;
+% apnea endpoint/state masks, whose complete trailing windows require one or
+% more valid breaths all at or below threshold; and irregularity cov/robust_cov
+% traces. For
 % irregularity, endpoint_mask marks qualifying trailing windows and window_mask
 % is their back-projected union. Shallow/deep detection consumes breath-level
 % ratios directly.
@@ -252,7 +255,6 @@ function belt = empty_belt_evidence(t_grid)
         'rate_slow_state_mask', false(size(t_grid)), ...
         'rate_rapid_endpoint_mask', false(size(t_grid)), ...
         'rate_rapid_state_mask', false(size(t_grid)), ...
-        'apnea_amp_ratio_session_window_median', nan(size(t_grid)), ...
         'apnea_amplitude_endpoint_mask', false(size(t_grid)), ...
         'apnea_amplitude_state_mask', false(size(t_grid)), ...
         'irregularity', struct( ...
@@ -306,20 +308,13 @@ function trace = respiratory_rate_trace(peak_t, t_grid, win_sec)
     end
 end
 
-function [endpoint_mask, state_mask] = amplitude_threshold_mask( ...
-    peak_t, ratio, t_grid, win_sec, threshold, min_breaths, direction)
-% AMPLITUDE_THRESHOLD_MASK Apply an all-breath threshold in trailing windows.
-% peak_t (s) and normalized ratio are aligned breath vectors. direction='le'
-% requires all positive finite ratios <= threshold; direction='ge' requires
-% all values finite and >= threshold. Full windows need min_breaths values.
-% endpoint_mask marks passing ends; state_mask covers their source windows.
-
-    direction = string(direction);
-    if ~isscalar(direction) || ~any(direction == ["le" "ge"])
-        error('MAGMA:RespFeatures:InvalidThresholdDirection', ...
-            'direction must be ''le'' or ''ge''.');
-    end
-    direction = char(direction);
+function [endpoint_mask, state_mask] = apnea_amplitude_window_mask( ...
+    peak_t, ratio, t_grid, win_sec, threshold)
+% APNEA_AMPLITUDE_WINDOW_MASK Confirm low-amplitude breaths in trailing windows.
+% peak_t and ratio are aligned breath-level vectors in seconds and relative
+% to the session reference. A complete trailing window passes only when it
+% contains one or more finite positive ratios and all are <= threshold.
+% endpoint_mask marks passing window ends; state_mask covers their support.
 
     endpoint_mask = false(size(t_grid));
     peak_t = peak_t(:);
@@ -335,50 +330,13 @@ function [endpoint_mask, state_mask] = amplitude_threshold_mask( ...
             continue;
         end
         values = ratio(peak_t <= t & peak_t >= lb);
-        if strcmp(direction, 'le')
-            values = values(isfinite(values) & values > 0);
-            passes_threshold = all(values <= threshold);
-        else
-            passes_threshold = all(isfinite(values) & values >= threshold);
-        end
-        endpoint_mask(i) = numel(values) >= min_breaths && passes_threshold;
-    end
-    state_mask = analysis_window_endpoints_to_state_mask(endpoint_mask, t_grid, win_sec);
-end
-
-function [raw_trace, ratio_trace] = amplitude_window_medians(peak_t, amp, ratio, t_grid, win_sec, min_breaths)
-% AMPLITUDE_WINDOW_MEDIANS Compute raw and normalized breath medians on t_grid.
-% peak_t (s), amp (belt units), and ratio (dimensionless) are aligned breath
-% vectors. Each full trailing win_sec window needs min_breaths positive finite
-% values independently for raw_trace and ratio_trace.
-
-    raw_trace = nan(size(t_grid));
-    ratio_trace = nan(size(t_grid));
-    peak_t = peak_t(:);
-    amp = amp(:);
-    ratio = ratio(:);
-    if numel(peak_t) ~= numel(amp) || numel(peak_t) ~= numel(ratio)
-        error('MAGMA:RespFeatures:SizeMismatch', ...
-            'peak_t, amp, and ratio must have equal lengths.');
-    end
-    for i = 1:numel(t_grid)
-        t = t_grid(i);
-        lb = t - win_sec;
-        if lb < 0
+        values = values(isfinite(values) & values > 0);
+        if isempty(values)
             continue;
         end
-        in_window = peak_t >= lb & peak_t <= t;
-        raw_values = amp(in_window);
-        ratio_values = ratio(in_window);
-        valid_raw = isfinite(raw_values) & raw_values > 0;
-        if nnz(valid_raw) >= min_breaths
-            raw_trace(i) = median(raw_values(valid_raw), 'omitnan');
-        end
-        valid_ratio = isfinite(ratio_values) & ratio_values > 0;
-        if nnz(valid_ratio) >= min_breaths
-            ratio_trace(i) = median(ratio_values(valid_ratio), 'omitnan');
-        end
+        endpoint_mask(i) = all(values <= threshold);
     end
+    state_mask = analysis_window_endpoints_to_state_mask(endpoint_mask, t_grid, win_sec);
 end
 
 function [values, source_name] = interval_values(source, field_name, peak_idx, peak_t, fs)
