@@ -93,9 +93,9 @@ Each recording has one fixed three-minute temporal reference interval:
 
 The interval is resolved once on the native `config.fs` timeline. Its indices are inclusive and its times are half-open: `[reference_start_t, reference_end_t)`. If a recording ends within the requested interval, the available tail is explicitly marked as truncated; if it ends before the requested start, the reference interval is unavailable. The interval is never shifted to another part of the recording.
 
-Respiratory excursion, SpO2, respiratory-asynchrony coherence, and raw respiratory motion/slope each calculate their own statistic from this same interval. Sharing the time interval does not share a numerical normalization scale across modalities, and an unavailable statistic for one modality does not invalidate the others. Reference-quality warnings retain the data by default and do not trigger automatic correction, interval movement, or threshold tuning.
+Breath amplitude, raw respiratory-belt excursion, SpO2, and respiratory-asynchrony coherence each calculate their own statistic from this same interval. Sharing the time interval does not share a numerical normalization scale across modalities, and an unavailable statistic for one modality does not invalidate the others. Reference-quality warnings retain the data by default and do not trigger automatic correction, interval movement, or threshold tuning.
 
-Respiratory excursion is calculated independently for each usable belt as the median of finite positive respiratory-cycle excursions in the interval, with at least 10 qualifying cycles required. There is no whole-record fallback. The whole-record stability comparison remains descriptive respiratory QC and is not a second reference interval.
+For each usable belt, the fixed breath-amplitude reference is the median of finite positive respiratory-cycle amplitudes in the interval, with at least 10 qualifying cycles required. The fixed raw-excursion reference is calculated independently as the P95-P5 excursion of finite raw belt samples in the same interval, subject to the configured finite-coverage requirement. There is no whole-record fallback. The whole-record stability comparison remains descriptive respiratory QC and is not a second reference interval.
 
 ## Conditions for Detecting Individual Physiological Events
 
@@ -111,7 +111,7 @@ The thresholds below are operational research criteria and should not be interpr
 
 - **`irregular`** — respiratory-rhythm variability is assessed over 60-s windows using complete IBIs contained within each window. The detection criterion is `CV_IBI >= 0.30`; robust CoV is retained only as a descriptive trace. Because irregularity is intrinsically window-based, event boundaries retain window-scale uncertainty.
 
-- **`apnea`** — apnea-like low-motion evidence is detected either from very low normalized respiratory excursion (`<= 10%` of the session reference) or from sustained raw-belt flatness/low motion. Events must last at least 10 s. This label represents respiratory pause/low-motion evidence, not confirmed airflow cessation or central/obstructive apnea.
+- **`apnea`** — apnea uses a 10-s defining duration (`config.apnea.min_dur_sec`). For each belt and complete 10-s window, breath evidence is preferred: when at least one valid breath amplitude is available, every valid amplitude must be `<= 10%` of that belt's fixed session breath-amplitude reference. Only when breath evidence is not evaluable is the raw excursion fallback used, requiring the window's raw P95-P5 excursion to be `<= 10%` of the fixed session raw-excursion reference. If both belts are evaluable, both must support apnea; if only one is evaluable, that belt is used. Final combined support must persist for at least 10 s. This label represents respiratory pause/low-motion evidence, not confirmed airflow cessation or central/obstructive apnea.
 
 - **`sigh`** — isolated unusually large breaths are detected as whole-record amplitude outliers. The default rule combines the 98th percentile, an IQR-based outlier threshold, and a minimum amplitude ratio of 2.0. Sighs are discrete breath events.
 
@@ -127,7 +127,7 @@ Amplitude-dependent sustained labels use participant/session-relative respirator
 
 For `shallow`, `deep`, `slow`, and `rapid`, rolling evidence confirms a candidate but does not define its final onset and offset. Respiratory-cycle evidence localizes every contiguous qualifying run inside that candidate. The configured `min_dur_sec` is then applied once to each localized run. Passing runs become final automatic events; shorter runs remain in `results.event_boundary_info` as rejected QC evidence, including their duration, minimum duration, shortfall, evidence source, and temporal uncertainty. Diagnostic plots show rolling/candidate support, all localized qualifying support, and the final retained state even when no final event remains.
 
-`irregular` and `thoracic` remain aggregate-window events with explicit boundary uncertainty because no finer localization is defensible from their current evidence. `apnea` retains its detector-specific breath-amplitude and raw-flat localization paths.
+`irregular` and `thoracic` remain aggregate-window events with explicit boundary uncertainty because no finer localization is defensible from their current evidence. `apnea` retains its detector-specific breath-amplitude and raw-excursion fallback localization paths.
 
 All canonical event times are half-open intervals `[start_t,end_t)`, while `start_idx:end_idx` are inclusive sample indices:
 

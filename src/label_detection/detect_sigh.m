@@ -13,7 +13,6 @@ function [events, diagnostics, review_info] = detect_sigh( ...
 
     N = size(data,1);
     fs = config.fs;
-    t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';
 
     lungs = resp_features.lungs;
     diaph = resp_features.diaph;
@@ -163,7 +162,7 @@ function [events, diagnostics, review_info] = detect_sigh( ...
         figure('Units','pixels','Position', near_fullscreen_figure_position(), 'Visible', config.make_figs_visible);
         sgtitle(['SIGH | Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)])
 
-        ax1 = subplot(2,1,1); hold on
+        ax1 = subplot(4,1,1); hold on
         h_lungs_trace = gobjects(0);
         if ~isempty(idx_lungs), h_lungs_trace = plot(t_raw, data(:,idx_lungs), 'k', 'DisplayName', 'Resp-Lungs'); end
         shade_events_on_axis(gca, events_L, 'sigh lungs');
@@ -178,7 +177,7 @@ function [events, diagnostics, review_info] = detect_sigh( ...
         add_axis_legend(gca, [h_lungs_trace; h_lungs_sigh], {'Resp-Lungs', 'Sigh breaths'});
         xlabel('Time (s)'); ylabel('Resp-Lungs'); grid on; hold off
 
-        ax2 = subplot(2,1,2); hold on
+        ax2 = subplot(4,1,2); hold on
         h_diaph_trace = gobjects(0);
         if ~isempty(idx_diaph), h_diaph_trace = plot(t_raw, data(:,idx_diaph), 'k', 'DisplayName', 'Resp-Diaphragm'); end
         shade_events_on_axis(gca, events_D, 'sigh diaphragm');
@@ -193,12 +192,89 @@ function [events, diagnostics, review_info] = detect_sigh( ...
         add_axis_legend(gca, [h_diaph_trace; h_diaph_sigh], {'Resp-Diaphragm', 'Sigh breaths'});
         xlabel('Time (s)'); ylabel('Resp-Diaphragm'); grid on; hold off
 
+        ax3 = subplot(4,1,3);
+        plot_sigh_ratio_evidence( ...
+            ax3, diagnostics.lungs, sigh_lungs, 'lungs');
+
+        ax4 = subplot(4,1,4);
+        plot_sigh_ratio_evidence( ...
+            ax4, diagnostics.diaph, sigh_diaph, 'diaphragm');
+
         linkaxes([ax1 ax2], 'x');
-        xlim(ax1, [0 t_grid(end)]);
-        align_axes_x_widths([ax1 ax2]);
+        recording_end_t = (N - 1) / fs;
+        if recording_end_t > 0
+            xlim(ax1, [0 recording_end_t]);
+        end
+        align_axes_x_widths([ax1 ax2 ax3 ax4]);
 
         save_figure(config, 'sigh');
     end
+end
+
+function plot_sigh_ratio_evidence(ax, belt_diagnostics, selected_mask, belt_name)
+% PLOT_SIGH_RATIO_EVIDENCE Show global breath ratios and the final threshold.
+
+    hold(ax, 'on');
+    title(ax, sprintf('Sigh amplitude-ratio evidence (%s)', belt_name));
+    xlabel(ax, 'Breath peak time (s)');
+    ylabel(ax, 'Breath amplitude / global reference');
+    grid(ax, 'on');
+
+    peak_t = belt_diagnostics.peak_t(:);
+    ratio = belt_diagnostics.amp_ratio_global(:);
+    selected_mask = logical(selected_mask(:));
+    n_breaths = min([numel(peak_t), numel(ratio), numel(selected_mask)]);
+    peak_t = peak_t(1:n_breaths);
+    ratio = ratio(1:n_breaths);
+    selected_mask = selected_mask(1:n_breaths);
+    valid = isfinite(peak_t) & isfinite(ratio) & ratio > 0;
+
+    set_breath_time_xlim(ax, peak_t(isfinite(peak_t)));
+    if ~belt_diagnostics.available || ~any(valid)
+        ylim(ax, [0 1]);
+        text(ax, 0.5, 0.5, 'No usable breath-ratio evidence', ...
+            'Units', 'normalized', 'HorizontalAlignment', 'center');
+        hold(ax, 'off');
+        return;
+    end
+
+    h_ratios = plot(ax, peak_t(valid), ratio(valid), 'o', ...
+        'LineStyle', 'none', 'Color', [0.35 0.35 0.35], ...
+        'MarkerSize', 4, 'DisplayName', 'breath ratios');
+    h_threshold = gobjects(0);
+    if isscalar(belt_diagnostics.decision_threshold) && ...
+            isfinite(belt_diagnostics.decision_threshold)
+        h_threshold = yline(ax, belt_diagnostics.decision_threshold, 'k--', ...
+            'LineWidth', 1.2, 'DisplayName', 'decision threshold');
+    end
+    sigh_mask = valid & selected_mask;
+    h_sighs = plot(ax, peak_t(sigh_mask), ratio(sigh_mask), 'ro', ...
+        'LineStyle', 'none', 'MarkerFaceColor', 'r', 'MarkerSize', 6, ...
+        'DisplayName', 'sigh breaths');
+    handles = h_ratios;
+    labels = {'breath ratios'};
+    if ~isempty(h_threshold) && isgraphics(h_threshold)
+        handles(end + 1, 1) = h_threshold;
+        labels{end + 1} = 'decision threshold';
+    end
+    handles(end + 1, 1) = h_sighs;
+    labels{end + 1} = 'sigh breaths';
+    add_axis_legend(ax, handles, labels);
+    hold(ax, 'off');
+end
+
+function set_breath_time_xlim(ax, peak_t)
+% SET_BREATH_TIME_XLIM Span available breath times without linking raw panels.
+
+    if isempty(peak_t)
+        return;
+    end
+    limits = [min(peak_t), max(peak_t)];
+    if limits(1) == limits(2)
+        padding = max(0.5, 0.05 * max(1, abs(limits(1))));
+        limits = limits + [-padding padding];
+    end
+    xlim(ax, limits);
 end
 
 function diagnostics = empty_sigh_belt_diagnostics(belt)
