@@ -101,7 +101,13 @@ function row = label_file_to_summary_row(label_file, config, canonical_labels)
 
     if isfield(loaded, 'label_evidence_summary_automatic')
         row = add_compact_evidence_summaries( ...
-            row, loaded.label_evidence_summary_automatic);
+            row, loaded.label_evidence_summary_automatic, ...
+            'evidence_automatic');
+    end
+    if isfield(loaded, 'label_evidence_summary_reviewed')
+        row = add_compact_evidence_summaries( ...
+            row, loaded.label_evidence_summary_reviewed, ...
+            'evidence_reviewed');
     end
     row = add_authoritative_trace_summaries(row, loaded);
 
@@ -231,14 +237,21 @@ end
 
 function available = saved_label_availability(loaded, saved_labels)
 % SAVED_LABEL_AVAILABILITY Resolve one availability flag per saved label.
-% Uses explicit label_available when aligned, then legacy running_labels,
-% otherwise treats every listed label as available.
+% Uses explicit label_available when aligned, then the resolved nested input
+% configuration. A top-level input_config branch reads older result files only.
 
     available = true(1, numel(saved_labels));
     if isfield(loaded, 'label_available') && ...
             (isnumeric(loaded.label_available) || islogical(loaded.label_available)) && ...
             numel(loaded.label_available) == numel(saved_labels)
         available = logical(loaded.label_available(:)');
+    elseif isfield(loaded, 'config') && isstruct(loaded.config) && ...
+            isfield(loaded.config, 'input_config') && ...
+            isstruct(loaded.config.input_config) && ...
+            isfield(loaded.config.input_config, 'running_labels')
+        running_labels = canonicalize_label_names( ...
+            loaded.config.input_config.running_labels);
+        available = ismember(saved_labels, running_labels);
     elseif isfield(loaded, 'input_config') && isstruct(loaded.input_config) && ...
             isfield(loaded.input_config, 'running_labels')
         running_labels = canonicalize_label_names(loaded.input_config.running_labels);
@@ -558,10 +571,10 @@ function row = add_event_counts(row, events, canonical_labels)
     end
 end
 
-function row = add_compact_evidence_summaries(row, evidence)
+function row = add_compact_evidence_summaries(row, evidence, prefix)
 % ADD_COMPACT_EVIDENCE_SUMMARIES Flatten scalar ML-ready evidence only.
 
-    row = add_scalar_summary_fields(row, evidence, 'evidence');
+    row = add_scalar_summary_fields(row, evidence, prefix);
 end
 
 function row = add_scalar_summary_fields(row, source, prefix)

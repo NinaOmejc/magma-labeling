@@ -90,15 +90,17 @@ function testSpO2ReferenceUsesTheSameInterval(testCase)
     data(200, config.channels.spo2_idx) = NaN;
     reference = get_session_reference_interval(size(data, 1), config);
 
-    [~, diagnostics_desat] = detect_desaturation( ...
+    [~, diagnostics_desat, spo2_ref] = detect_desaturation( ...
         data, reference, config);
-    spo2_ref = diagnostics_desat.spo2_ref;
 
     verifyTrue(testCase, spo2_ref.available);
     verifyEqual(testCase, spo2_ref.median_percent, 96, 'AbsTol', eps);
     verifyEqual(testCase, spo2_ref.n_interval_samples, 180);
     verifyEqual(testCase, spo2_ref.n_valid_samples, 179);
     verifyTrue(testCase, diagnostics_desat.reference_available);
+    forbidden = {'spo2','time_sec','desaturation_sample_mask','events', ...
+        'valid_sample_mask','spo2_ref'};
+    verifyFalse(testCase, any(isfield(diagnostics_desat, forbidden)));
 end
 
 function testUnavailableSpO2DoesNotInvalidateRespiratoryReference(testCase)
@@ -109,8 +111,7 @@ function testUnavailableSpO2DoesNotInvalidateRespiratoryReference(testCase)
     reference = get_session_reference_interval(size(data, 1), config);
     resp_ref = compute_respiratory_reference( ...
         data, make_resp_feat(t, 2 * ones(size(t)), [], []), reference, config);
-    [~, diagnostics_desat] = detect_desaturation(data, reference, config);
-    spo2_ref = diagnostics_desat.spo2_ref;
+    [~, ~, spo2_ref] = detect_desaturation(data, reference, config);
 
     verifyTrue(testCase, resp_ref.lungs.session.available);
     verifyFalse(testCase, spo2_ref.available);
@@ -124,9 +125,8 @@ function testSpO2ReferenceNeverFallsBackOutsideInterval(testCase)
     data(181:360, config.channels.spo2_idx) = NaN;
     reference = get_session_reference_interval(size(data, 1), config);
 
-    [~, diagnostics_desat] = detect_desaturation( ...
+    [~, diagnostics_desat, spo2_ref] = detect_desaturation( ...
         data, reference, config);
-    spo2_ref = diagnostics_desat.spo2_ref;
 
     verifyFalse(testCase, spo2_ref.available);
     verifyEqual(testCase, spo2_ref.quality, 'insufficient_valid_samples');
@@ -204,7 +204,7 @@ function testRawApneaReferenceUsesCommonInterval(testCase)
     x_lungs = data(reference.reference_start_idx:reference.reference_end_idx, ...
         config.channels.lungs_idx);
     expected_excursion = prctile(x_lungs, 95) - prctile(x_lungs, 5);
-    verifyTrue(testCase, diagnostics.raw_excursion.lungs.reference_available);
+    verifyTrue(testCase, diagnostics.raw_excursion.lungs.valid);
     verifyEqual(testCase, fieldnames(resp_ref.lungs.raw), ...
         {'available'; 'quality'; 'n_samples'; 'finite_fraction'; ...
          'excursion'});
@@ -215,11 +215,11 @@ function testRawApneaReferenceUsesCommonInterval(testCase)
         resp_ref.lungs.raw.excursion, expected_excursion, 'AbsTol', 1e-12);
     verifyEqual(testCase, resp_ref.lungs.raw.n_samples, numel(x_lungs));
     verifyEqual(testCase, resp_ref.lungs.raw.finite_fraction, 1);
-    verifyEqual(testCase, ...
-        diagnostics.raw_excursion.lungs.session_excursion_reference, ...
-        resp_ref.lungs.raw.excursion, 'AbsTol', 1e-12);
-    verifyEqual(testCase, diagnostics.raw_excursion.lungs.reference_source, ...
-        'common_session_reference_interval');
+    verifyEqual(testCase, resp_ref.lungs.raw.quality, 'good');
+    verifyFalse(testCase, isfield(diagnostics.raw_excursion.lungs, ...
+        'session_excursion_reference'));
+    verifyFalse(testCase, isfield(diagnostics.raw_excursion.lungs, ...
+        'reference_source'));
 end
 
 function testRawReferenceFiniteCoverageUsesConfiguredThreshold(testCase)
@@ -306,11 +306,7 @@ function testApneaNormalizesCurrentRawMetricsByFixedReferences(testCase)
     verifyEqual(testCase, diagnostics.raw_excursion.lungs.excursion_ratio(grid_idx), ...
         robust_resp_excursion(segment) / 10, 'AbsTol', 1e-12);
     verifyEqual(testCase, fieldnames(diagnostics.raw_excursion.lungs), ...
-        {'valid'; 'reference_available'; 'reference_quality'; ...
-         'reference_source'; 'reference_n_samples'; ...
-         'reference_finite_fraction'; 'session_excursion_reference'; ...
-         'evaluable_endpoint_mask'; 'pass_endpoint_mask'; ...
-         'excursion_ratio'});
+        {'valid'; 'evaluable_endpoint_mask'; 'excursion_ratio'});
 end
 
 function testApneaUsesFixedSessionRawExcursionReference(testCase)
@@ -382,10 +378,15 @@ function testRawExcursionCannotRescueFailedAmplitude(testCase)
     [events, diagnostics] = detect_apnea(data, phys, resp_ref, config);
 
     lungs = diagnostics.belt_evidence.lungs;
+    raw_pass = diagnostics.raw_excursion.lungs.evaluable_endpoint_mask & ...
+        diagnostics.raw_excursion.lungs.excursion_ratio <= ...
+            config.apnea.raw_excursion_ratio_thr;
     verifyTrue(testCase, ...
-        diagnostics.raw_excursion.lungs.pass_endpoint_mask(grid_idx));
-    verifyTrue(testCase, lungs.amplitude_evaluable_endpoint_mask(grid_idx));
-    verifyFalse(testCase, lungs.amplitude_pass_endpoint_mask(grid_idx));
+        raw_pass(grid_idx));
+    verifyTrue(testCase, ...
+        phys.lungs.apnea_amplitude_evaluable_endpoint_mask(grid_idx));
+    verifyFalse(testCase, ...
+        phys.lungs.apnea_amplitude_endpoint_mask(grid_idx));
     verifyFalse(testCase, lungs.raw_fallback_used_endpoint_mask(grid_idx));
     verifyFalse(testCase, lungs.combined_belt_endpoint_mask(grid_idx));
     verifyFalse(testCase, diagnostics.combined_endpoint_mask(grid_idx));
@@ -409,8 +410,10 @@ function testRawExcursionSupportsWindowWithoutValidBreaths(testCase)
     [events, diagnostics] = detect_apnea(data, phys, resp_ref, config);
 
     lungs = diagnostics.belt_evidence.lungs;
-    verifyFalse(testCase, lungs.amplitude_evaluable_endpoint_mask(grid_idx));
-    verifyTrue(testCase, lungs.raw_excursion_evaluable_endpoint_mask(grid_idx));
+    verifyFalse(testCase, ...
+        phys.lungs.apnea_amplitude_evaluable_endpoint_mask(grid_idx));
+    verifyTrue(testCase, ...
+        diagnostics.raw_excursion.lungs.evaluable_endpoint_mask(grid_idx));
     verifyTrue(testCase, lungs.raw_fallback_used_endpoint_mask(grid_idx));
     verifyTrue(testCase, lungs.combined_belt_endpoint_mask(grid_idx));
     verifyTrue(testCase, diagnostics.combined_endpoint_mask(grid_idx));
@@ -434,16 +437,17 @@ function testRawExcursionBeltAvailabilityPreservesAgreementSemantics(testCase)
 
     [~, both] = detect_apnea(data, phys, resp_ref, config);
     verifyEqual(testCase, both.raw_excursion_support_belts, 'both');
-    verifyTrue(testCase, any(both.raw_excursion.lungs.pass_endpoint_mask));
+    lungs_pass = raw_excursion_pass_mask(both, 'lungs', config);
+    diaph_pass = raw_excursion_pass_mask(both, 'diaph', config);
+    verifyTrue(testCase, any(lungs_pass));
     verifyEqual(testCase, both.combined_endpoint_mask, ...
-        both.raw_excursion.lungs.pass_endpoint_mask & ...
-        both.raw_excursion.diaph.pass_endpoint_mask);
+        lungs_pass & diaph_pass);
 
     resp_ref.diaph.raw.available = false;
     [~, one] = detect_apnea(data, phys, resp_ref, config);
     verifyEqual(testCase, one.raw_excursion_support_belts, 'lungs');
     verifyEqual(testCase, one.combined_endpoint_mask, ...
-        one.raw_excursion.lungs.pass_endpoint_mask);
+        raw_excursion_pass_mask(one, 'lungs', config));
 end
 
 function testMixedAmplitudeAndRawFallbackRequireBothBeltsToPass(testCase)
@@ -469,7 +473,7 @@ function testMixedAmplitudeAndRawFallbackRequireBothBeltsToPass(testCase)
 
     [events, mixed] = detect_apnea(data, phys, resp_ref, config);
     verifyTrue(testCase, ...
-        mixed.belt_evidence.lungs.amplitude_evaluable_endpoint_mask(grid_idx));
+        phys.lungs.apnea_amplitude_evaluable_endpoint_mask(grid_idx));
     verifyTrue(testCase, ...
         mixed.belt_evidence.diaph.raw_fallback_used_endpoint_mask(grid_idx));
     verifyTrue(testCase, mixed.combined_endpoint_mask(grid_idx));
@@ -496,12 +500,15 @@ function testNeitherEvaluableBeltCreatesNoApneaCandidate(testCase)
     phys = raw_only_phys_fixture(N, config);
     resp_ref = explicit_raw_resp_ref(NaN, NaN);
 
-    [events, diagnostics] = detect_apnea(data, phys, resp_ref, config);
+    [events, diagnostics, candidates] = detect_apnea( ...
+        data, phys, resp_ref, config);
 
     verifyFalse(testCase, any(diagnostics.combined_evaluable_endpoint_mask));
     verifyFalse(testCase, any(diagnostics.combined_endpoint_mask));
-    verifyFalse(testCase, any(diagnostics.candidate_state_mask));
     verifyEmpty(testCase, events);
+    verifyEmpty(testCase, candidates);
+    verifyEqual(testCase, fieldnames(candidates), ...
+        fieldnames(empty_candidate_events()));
 end
 
 function testApneaFinalDurationRejectsShortCombinedSupport(testCase)
@@ -542,11 +549,11 @@ function testRawApneaReferenceNeverFallsBackWhenIntervalIsUnavailable(testCase)
     [~, diagnostics] = detect_apnea(data, phys, resp_ref, config);
 
     verifyFalse(testCase, reference.available);
-    verifyFalse(testCase, diagnostics.raw_excursion.lungs.reference_available);
-    verifyFalse(testCase, diagnostics.raw_excursion.diaph.reference_available);
-    verifyEqual(testCase, diagnostics.raw_excursion.lungs.reference_quality, ...
+    verifyFalse(testCase, diagnostics.raw_excursion.lungs.valid);
+    verifyFalse(testCase, diagnostics.raw_excursion.diaph.valid);
+    verifyEqual(testCase, resp_ref.lungs.raw.quality, ...
         'reference_interval_unavailable');
-    verifyEqual(testCase, diagnostics.raw_excursion.diaph.reference_quality, ...
+    verifyEqual(testCase, resp_ref.diaph.raw.quality, ...
         'reference_interval_unavailable');
 end
 
@@ -610,6 +617,14 @@ function testCurrentReferenceConfigurationAndApneaSourceSemantics(testCase)
     for i = 1:numel(required_apnea_source)
         verifyTrue(testCase, contains(apnea_source, required_apnea_source{i}));
     end
+end
+
+function mask = raw_excursion_pass_mask(diagnostics, belt, config)
+% RAW_EXCURSION_PASS_MASK Reconstruct the configured decision from saved evidence.
+
+    evidence = diagnostics.raw_excursion.(belt);
+    mask = evidence.evaluable_endpoint_mask & ...
+        evidence.excursion_ratio <= config.apnea.raw_excursion_ratio_thr;
 end
 
 function config = session_test_config(measure, fs)

@@ -9,12 +9,12 @@ save(fullfile(base_config.path_results_out, ...
     'analysis_configuration.mat'), 'config');
 
 %---- MEASUREMENT AND SUBJECT LOOPS
-for isub = 1:length(config.subjects)
-    for imeasure = 1:length(config.measurements)
+for isub = 1:length(base_config.subjects)
+    for imeasure = 1:length(base_config.measurements)
 
         config = base_config;
-        config.subject = config.subjects(isub);
-        config.measure = config.measurements(imeasure);
+        config.subject = base_config.subjects(isub);
+        config.measure = base_config.measurements(imeasure);
         
         % LOAD DATA
         [data_raw, config, do_analysis] = load_raw_data(config);

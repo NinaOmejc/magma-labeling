@@ -109,7 +109,7 @@ The thresholds below are operational research criteria and should not be interpr
 
 - **`rapid`** — a full trailing 60-s window estimates respiratory rate as `RR = 60 / mean(IBI)` and confirms a candidate when `RR >= 20 bpm`. Final boundaries are localized from consecutive respiratory-cycle intervals with breathwise `RR_i >= 20 bpm`; only localized runs lasting at least 30 s become final events.
 
-- **`irregular`** — respiratory-rhythm variability is assessed over 60-s windows using complete IBIs contained within each window. The detection criterion is `CV_IBI >= 0.30`; robust CoV is retained only as a descriptive trace. Because irregularity is intrinsically window-based, event boundaries retain window-scale uncertainty.
+- **`irregular`** — respiratory-rhythm variability is assessed over 60-s windows using complete IBIs contained within each window. The detection criterion is `CV_IBI >= 0.30`; robust CoV is retained only as a descriptive trace. The merged window support directly defines final events, so no scientifically distinct candidate stage is stored.
 
 - **`apnea`** — apnea uses a 10-s defining duration (`config.apnea.min_dur_sec`). For each belt and complete 10-s window, breath evidence is preferred: when at least one valid breath amplitude is available, every valid amplitude must be `<= 10%` of that belt's fixed session breath-amplitude reference. Only when breath evidence is not evaluable is the raw excursion fallback used, requiring the window's raw P95-P5 excursion to be `<= 10%` of the fixed session raw-excursion reference. If both belts are evaluable, both must support apnea; if only one is evaluable, that belt is used. Final combined support must persist for at least 10 s. This label represents respiratory pause/low-motion evidence, not confirmed airflow cessation or central/obstructive apnea.
 
@@ -117,7 +117,7 @@ The thresholds below are operational research criteria and should not be interpr
 
 - **`csr`** — periodic breathing / Cheyne-Stokes-like respiratory-effort evidence is computed with both eAMI and a MAGMA adaptation of the Guyot demodulation / Matrix Pencil method. `config.csr.primary_method` explicitly selects which method supplies the automatic `csr` event set; both method results remain in detector diagnostics.
 
-- **`thoracic`** — thoracic dominance is assessed from independently normalized thoracic and abdominal excursion. The operational condition is a 30-s thoracic-to-abdominal ratio `T/A >= 1.5`. Both belts are required. Because the measure is window-based, boundaries retain explicit temporal uncertainty.
+- **`thoracic`** — thoracic dominance is assessed from independently normalized thoracic and abdominal excursion. The operational condition is a 30-s thoracic-to-abdominal ratio `T/A >= 1.5`. Both belts are required. Pre-duration candidates retain the analysis-window uncertainty.
 
 - **`async`** — thoracoabdominal asynchrony is assessed from time-localized wavelet phase coherence between the two belts. Respiratory signals are temporarily downsampled to 20 Hz for this analysis only. Sustained session-reference-relative low-coherence evidence must persist for at least 30 s.
 
@@ -133,9 +133,9 @@ For each method, both evaluable belts must agree at a given time; a single evalu
 
 Amplitude-dependent sustained labels use participant/session-relative respiratory excursion rather than absolute tidal volume. Respiratory belts are uncalibrated, so raw amplitudes should not be compared directly across subjects.
 
-For `shallow`, `deep`, `slow`, and `rapid`, rolling evidence confirms a candidate but does not define its final onset and offset. Respiratory-cycle evidence localizes every contiguous qualifying run inside that candidate. The configured `min_dur_sec` is then applied once to each localized run. Passing runs become final automatic events; shorter runs remain in `results.event_boundary_info` as rejected QC evidence, including their duration, minimum duration, shortfall, evidence source, and temporal uncertainty. Diagnostic plots show rolling/candidate support, all localized qualifying support, and the final retained state even when no final event remains.
+For `shallow`, `deep`, `slow`, and `rapid`, rolling evidence confirms a candidate but does not define its final onset and offset. Respiratory-cycle evidence localizes every contiguous qualifying run inside that candidate. The configured `min_dur_sec` is then applied once to each localized run. Passing runs become final automatic events; meaningful shorter runs remain in `results.candidate_events` with `accepted = false` and `rejection_reason = 'too_short'`. Diagnostic plots show rolling/candidate support, all localized qualifying support, and the final retained state even when no final event remains.
 
-`irregular` and `thoracic` remain aggregate-window events with explicit boundary uncertainty because no finer localization is defensible from their current evidence. `apnea` retains its detector-specific breath-amplitude and raw-excursion fallback localization paths.
+`irregular` remains an aggregate-window final event and therefore has no separate candidate stage. `thoracic` preserves pre-duration state runs as candidates with window-scale uncertainty. `apnea` retains its detector-specific breath-amplitude and raw-excursion fallback localization paths.
 
 All canonical event times are half-open intervals `[start_t,end_t)`, while `start_idx:end_idx` are inclusive sample indices:
 
@@ -204,17 +204,20 @@ The most important result fields include:
 - common temporal reference: `results.session_reference`
 - modality-specific references: `results.resp_ref`, `results.spo2_ref`, plus ReA and raw-apnea reference provenance in `results.detector_diagnostics`
 - respiratory cycles: `results.resp_cycles`
-- respiratory features: `results.resp_features`
-- event-boundary information: `results.event_boundary_info`
+- respiratory features and their common analysis time: `results.resp_features`, including `results.resp_features.time_sec`
+- genuine localized/pre-final intervals: `results.candidate_events`, including meaningful rejected `too_short` candidates
+- unique detector-specific scientific evidence: `results.detector_diagnostics`
 - automatic/reviewed burden, overlap, and evidence summaries: `results.label_burden_automatic`, `results.label_burden_reviewed`, `results.label_overlap_summary_automatic`, `results.label_overlap_summary_reviewed`, `results.label_evidence_summary_automatic`, `results.label_evidence_summary_reviewed`
 - DB phenotype evidence
-- full run configuration and input-channel provenance
+- full resolved per-recording configuration: `results.config`, with input-channel provenance nested at `results.config.input_config` rather than duplicated at the result top level
 
-Additional detector diagnostics and intermediate evidence can be inspected directly in the saved `results` structure or in the HDF5 hierarchy.
+`results.events_automatic` contains final accepted automatic events. `results.candidate_events` is not a copy of those events: it stores a distinct pre-final stage only where the detector has one. `results.detector_diagnostics` retains compact, recording-specific evidence that is not already present in respiratory features, raw signals, configuration, or final events. A separate `diagnostic_signals` copy is not persisted; time-resolved evidence remains available from `results.resp_features` and compact detector diagnostics, while recording-level evidence summaries remain available for group analysis and ML. Raw and preprocessed physiological matrices remain in their authoritative HDF5 locations `/signals/raw` and `/signals/preprocessed`, not inside detector diagnostics.
 
-The HDF5 export schema is `magma_ml_hdf5_v4`. Automatic annotations are stored under `/labels/automatic_mask`, `/events/automatic`, `/burden/automatic`, and `/overlap/automatic`; reviewed annotations retain their corresponding `/reviewed` paths, with coverage under `/labels/review_coverage_mask`. `/review/provenance` and `/review/history` expose round metadata, annotations, and exact per-round coverage. The export stores the common metadata once under `/session_reference`, independent respiratory-belt statistics under `/resp_reference`, and the SpO2 statistic under `/spo2_reference`.
+The HDF5 export schema is `magma_ml_hdf5_v6`. Automatic annotations are stored under `/labels/automatic_mask`, `/events/automatic`, `/burden/automatic`, and `/overlap/automatic`; reviewed annotations retain their corresponding `/reviewed` paths, with coverage under `/labels/review_coverage_mask`. Candidate intervals are under `/events/candidate`, while `/review/provenance`, `/review/history`, and `/review/scope` preserve review metadata. Reviewed breath cycles, derived respiratory evidence, and unique detector evidence have one authoritative copy each under `/resp_cycles`, `/resp_features`, and `/detector_diagnostics`; references remain under `/session_reference`, `/resp_reference`, and `/spo2_reference`. Evidence summaries are under `/evidence_summary`, and the resolved recording configuration is under `/config`.
 
-Group-level summaries are written under the `group_analysis/` output directory. `cohort_localized_boundary_qc.csv` preserves every localized-run duration and duration shortfall; `cohort_label_qc_summary.csv` aggregates rejected-run counts, medians, upper tails, maxima, and the smallest shortfall per label. These outputs are descriptive QC and never change thresholds automatically.
+The immutable base analysis configuration is saved once as `analysis_configuration.mat` in `config.path_results_out` before recording-specific channel resolution or subject/measurement mutation. Each recording still carries its fully resolved `results.config`.
+
+Group-level summaries are written under the `group_analysis/` output directory. `cohort_candidate_events.csv` preserves one row per compact candidate, including acceptance, stable rejection reason, and temporal uncertainty. `cohort_label_qc_summary.csv` aggregates rejected-candidate counts and duration distributions by label. Scalar evidence summaries and `trace_...` distribution columns are derived from the authoritative evidence owners without flattening full time-series samples into the group table. These outputs are descriptive QC and never change thresholds automatically.
 
 Cross-subject interpretation is intentionally separated by scale: respiratory rate, event duration/fraction, SpO2, and timing are absolute/comparable; belt-amplitude ratios, shallow/deep excursion ratios, and global/session ratios are within-record normalized; raw belt amplitude is not safely comparable across subjects.
 

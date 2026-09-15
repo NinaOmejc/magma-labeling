@@ -9,9 +9,10 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
 %   signals_raw          - Nsample x Nchannel raw physiological signal matrix.
 %   signals_preprocessed - Nsample x Nchannel processed signal matrix.
 %
-% The v5 file stores sample signals/time under /signals and /time;
-% breath-level belt arrays and detector evidence under /resp and
-% /resp_features; common-interval metadata under /session_reference, per-belt
+% The v6 file stores sample signals/time under /signals and /time;
+% reviewed breath cycles under /resp_cycles, canonical feature traces under
+% /resp_features, and compact detector evidence under /detector_diagnostics;
+% common-interval metadata under /session_reference, per-belt
 % breath-amplitude and raw-excursion references under /resp_reference,
 % and SpO2 reference metadata under /spo2_reference; sample x label masks
 % and per-label
@@ -22,7 +23,7 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
 
     filename = char(string(filename));
     validate_export_inputs(filename, results, signals_raw, signals_preprocessed);
-    export_schema_version = 'magma_ml_hdf5_v5';
+    export_schema_version = 'magma_ml_hdf5_v6';
     out_dir = fileparts(filename);
     if ~isempty(out_dir) && ~isfolder(out_dir)
         mkdir(out_dir);
@@ -37,24 +38,13 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
     write_numeric(filename, '/signals/preprocessed', signals_preprocessed);
     write_numeric(filename, '/time', (0:N-1)' / fs);
 
-    write_resp_belt(filename, '/resp/lungs', results.resp_features.lungs);
-    write_resp_belt(filename, '/resp/diaph', results.resp_features.diaph);
-    if isfield(results, 'resp_cycles') && isstruct(results.resp_cycles) && ...
-            isfield(results.resp_cycles, 'provenance')
-        write_value(filename, '/resp/cycle_provenance', ...
-            results.resp_cycles.provenance);
-    end
+    write_value(filename, '/resp_cycles', results.resp_cycles);
     write_value(filename, '/session_reference', results.session_reference);
     write_value(filename, '/resp_reference/lungs', results.resp_ref.lungs);
     write_value(filename, '/resp_reference/diaph', results.resp_ref.diaph);
     write_value(filename, '/spo2_reference', results.spo2_ref);
-    % Preserve the established HDF5 hierarchy even though the in-memory
-    % resp_features struct no longer has an intermediate resp field.
-    write_value(filename, '/resp_features/resp', results.resp_features);
-    if isfield(results, 'detector_diagnostics')
-        write_value(filename, '/resp_features/detector_diagnostics', ...
-            results.detector_diagnostics);
-    end
+    write_value(filename, '/resp_features', results.resp_features);
+    write_value(filename, '/detector_diagnostics', results.detector_diagnostics);
 
     write_text(filename, '/labels/names', results.label_names);
     write_numeric(filename, '/labels/available', uint8(results.label_available(:)'));
@@ -80,16 +70,11 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
 
     write_events(filename, '/events/automatic', results.events_automatic);
     write_events(filename, '/events/reviewed', results.events_reviewed);
-    write_value(filename, '/events/candidate', results.candidate_events);
-    if isfield(results, 'review_provenance')
-        write_value(filename, '/review/provenance', results.review_provenance);
-    end
-    if isfield(results, 'review_history')
-        write_review_history(filename, '/review/history', results.review_history);
-    end
-    if isfield(results, 'review_scope')
-        write_value(filename, '/review/scope', results.review_scope);
-    end
+    write_candidate_event_sets(filename, '/events/candidate', ...
+        results.candidate_events, results.label_names);
+    write_value(filename, '/review/provenance', results.review_provenance);
+    write_review_history(filename, '/review/history', results.review_history);
+    write_value(filename, '/review/scope', results.review_scope);
 
     write_value(filename, '/burden/automatic', results.label_burden_automatic);
     write_value(filename, '/burden/reviewed', results.label_burden_reviewed);
@@ -119,7 +104,8 @@ function validate_export_inputs(filename, results, raw, preprocessed)
     if isempty(filename)
         error('MAGMA:HDF5:InvalidFilename', 'A nonempty output filename is required.');
     end
-    required = {'config', 'resp_features', 'session_reference', 'resp_ref', ...
+    required = {'config', 'resp_cycles', 'resp_features', ...
+        'session_reference', 'resp_ref', ...
         'spo2_ref', 'label_names', ...
         'label_available', 'label_availability_reason', 'label_assessable_mask', ...
         'mask_automatic', 'mask_reviewed', 'review_coverage_mask', 'review_status', ...
@@ -129,6 +115,7 @@ function validate_export_inputs(filename, results, raw, preprocessed)
         'label_reviewed_available', 'label_reviewed_availability_reason', ...
         'label_reviewed_assessable_mask', ...
         'candidate_events', 'detector_diagnostics', ...
+        'review_provenance', 'review_history', 'review_scope', ...
         'label_evidence_summary_automatic', ...
         'label_evidence_summary_reviewed', ...
         'upstream_input_preprocessing', ...
@@ -174,8 +161,79 @@ function validate_export_inputs(filename, results, raw, preprocessed)
     end
     validate_canonical_events(results.events_automatic, results.config.fs, expected);
     validate_canonical_events(results.events_reviewed, results.config.fs, expected);
+    validate_candidate_event_sets( ...
+        results.candidate_events, results.config.fs, expected);
     validate_session_reference(results.session_reference, N, ...
         results.config.fs, results.measure);
+end
+
+function validate_candidate_event_sets(sets, fs, labels)
+% VALIDATE_CANDIDATE_EVENT_SETS Enforce the frozen compact candidate schema.
+
+    expected_fields = fieldnames(empty_candidate_events());
+    if ~isstruct(sets) || ~isscalar(sets) || ...
+            ~isequal(fieldnames(sets), labels(:))
+        error('MAGMA:HDF5:CandidateLabelAlignment', ...
+            'candidate_events must contain one field per frozen label in order.');
+    end
+    allowed_belts = {'', 'lungs', 'diaph', 'both', 'combined'};
+    allowed_reasons = {'', 'too_short', 'no_support', 'unevaluable'};
+    for i = 1:numel(labels)
+        candidates = sets.(labels{i});
+        if ~isstruct(candidates) || ...
+                ~isequal(fieldnames(candidates), expected_fields)
+            error('MAGMA:HDF5:CandidateSchema', ...
+                'candidate_events.%s does not use the canonical schema.', ...
+                labels{i});
+        end
+        for j = 1:numel(candidates)
+            candidate = candidates(j);
+            validate_candidate_coordinates(candidate, fs, labels{i});
+            belt = char(string(candidate.belt));
+            reason = char(string(candidate.rejection_reason));
+            accepted = candidate.accepted;
+            if ~ismember(belt, allowed_belts) || ...
+                    ~ismember(reason, allowed_reasons) || ...
+                    ~(islogical(accepted) || isnumeric(accepted)) || ...
+                    ~isscalar(accepted) || ~isfinite(double(accepted)) || ...
+                    ~ismember(double(accepted), [0 1]) || ...
+                    (logical(accepted) && ~isempty(reason)) || ...
+                    (~logical(accepted) && isempty(reason)) || ...
+                    ~isnumeric(candidate.uncertainty_sec) || ...
+                    ~isscalar(candidate.uncertainty_sec) || ...
+                    ~isfinite(candidate.uncertainty_sec) || ...
+                    candidate.uncertainty_sec < 0
+                error('MAGMA:HDF5:CandidateMetadata', ...
+                    'candidate_events.%s contains invalid compact metadata.', ...
+                    labels{i});
+            end
+        end
+    end
+end
+
+function validate_candidate_coordinates(candidate, fs, label)
+% VALIDATE_CANDIDATE_COORDINATES Check half-open candidate timing.
+
+    numeric_fields = {'start_idx','end_idx','start_t','end_t','duration'};
+    if any(~cellfun(@(name) isnumeric(candidate.(name)) && ...
+            isscalar(candidate.(name)) && isfinite(candidate.(name)), ...
+            numeric_fields))
+        error('MAGMA:HDF5:CandidateTiming', ...
+            'candidate_events.%s contains non-finite coordinates.', label);
+    end
+    start_idx = round(candidate.start_idx);
+    end_idx = round(candidate.end_idx);
+    expected_start_t = (start_idx - 1) / fs;
+    expected_end_t = end_idx / fs;
+    expected_duration = (end_idx - start_idx + 1) / fs;
+    tolerance = 10 * eps(max(1, abs(expected_end_t)));
+    if start_idx < 1 || end_idx < start_idx || ...
+            abs(candidate.start_t - expected_start_t) > tolerance || ...
+            abs(candidate.end_t - expected_end_t) > tolerance || ...
+            abs(candidate.duration - expected_duration) > tolerance
+        error('MAGMA:HDF5:CandidateTiming', ...
+            'candidate_events.%s must use half-open index-derived timing.', label);
+    end
 end
 
 function validate_session_reference(reference, N, fs, measurement)
@@ -248,23 +306,6 @@ function validate_canonical_events(events, fs, labels)
     end
 end
 
-function write_resp_belt(filename, path, belt)
-% WRITE_RESP_BELT Export one belt's breath-level timing, rate, and amplitude arrays.
-% peak_idx is sample-based; peak_t and ibi are seconds; rr_bpm is
-% breaths/min; amp is raw excursion; amp_ratio_* are unitless references.
-
-    fields = {'peak_idx', 'peak_t', 'amp', 'ibi', 'rr_bpm', ...
-        'amp_ratio_session', 'amp_ratio_global'};
-    for i = 1:numel(fields)
-        value = [];
-        if isfield(belt, fields{i}), value = belt.(fields{i}); end
-        write_numeric(filename, [path '/' fields{i}], value);
-    end
-    if isfield(belt, 'available')
-        write_numeric(filename, [path '/available'], uint8(belt.available));
-    end
-end
-
 function write_events(filename, path, events)
 % WRITE_EVENTS Export a canonical event array as parallel HDF5 datasets.
 % Index fields are samples, time/duration fields are seconds, and type/belt
@@ -277,6 +318,39 @@ function write_events(filename, path, events)
     write_numeric(filename, [path '/end_t'], event_field(events, 'end_t', 'numeric'));
     write_numeric(filename, [path '/duration'], event_field(events, 'duration', 'numeric'));
     write_text(filename, [path '/belt'], event_field(events, 'belt', 'text'));
+end
+
+function write_candidate_event_sets(filename, path, sets, labels)
+% WRITE_CANDIDATE_EVENT_SETS Export compact candidates by containing label.
+
+    labels = cellstr(string(labels));
+    for i = 1:numel(labels)
+        write_candidate_events(filename, [path '/' labels{i}], ...
+            sets.(labels{i}));
+    end
+end
+
+function write_candidate_events(filename, path, candidates)
+% WRITE_CANDIDATE_EVENTS Export the frozen nine fields as parallel datasets.
+
+    write_numeric(filename, [path '/start_idx'], ...
+        event_field(candidates, 'start_idx', 'numeric'));
+    write_numeric(filename, [path '/end_idx'], ...
+        event_field(candidates, 'end_idx', 'numeric'));
+    write_numeric(filename, [path '/start_t'], ...
+        event_field(candidates, 'start_t', 'numeric'));
+    write_numeric(filename, [path '/end_t'], ...
+        event_field(candidates, 'end_t', 'numeric'));
+    write_numeric(filename, [path '/duration'], ...
+        event_field(candidates, 'duration', 'numeric'));
+    write_text(filename, [path '/belt'], ...
+        event_field(candidates, 'belt', 'text'));
+    write_numeric(filename, [path '/accepted'], logical( ...
+        event_field(candidates, 'accepted', 'numeric')));
+    write_text(filename, [path '/rejection_reason'], ...
+        event_field(candidates, 'rejection_reason', 'text'));
+    write_numeric(filename, [path '/uncertainty_sec'], ...
+        event_field(candidates, 'uncertainty_sec', 'numeric'));
 end
 
 function write_review_history(filename, path, history)

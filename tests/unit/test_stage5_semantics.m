@@ -101,10 +101,12 @@ function testRapidDetectorFallbackUsesSixtySecondConfirmationWindow(testCase)
     phys = struct('time_sec', t, 'rate_windows_sec', ...
         struct('slow', 60, 'rapid', 60), 'lungs', lungs, 'diaph', diaph);
 
-    [events, boundary] = detect_rapid_breathing(zeros(81, 6), phys, config);
+    [events, candidates] = detect_rapid_breathing(zeros(81, 6), phys, config);
 
     verifyNotEmpty(testCase, events);
-    verifyEqual(testCase, boundary.events.candidate_start_t, 0);
+    verifyNotEmpty(testCase, candidates);
+    verifyEqual(testCase, candidates.start_t, 0);
+    verifyTrue(testCase, candidates.accepted);
     verifyEqual(testCase, events.start_t, 0);
     verifyEqual(testCase, events.duration, 60);
 end
@@ -162,18 +164,20 @@ function testTenSecondApneaWindowDoesNotRequireTwentySeconds(testCase)
     diaph = empty_detector_belt(t);
     phys = struct('time_sec', t, 'lungs', lungs, 'diaph', diaph);
     resp_ref = unavailable_raw_resp_ref();
-    [events, diagnostics] = detect_apnea( ...
+    [events, diagnostics, candidates] = detect_apnea( ...
         zeros(51, 6), phys, resp_ref, config);
     verifyNotEmpty(testCase, events);
     verifyEqual(testCase, events.start_t, 10);
     verifyLessThan(testCase, events.duration, 15);
     verifyNotEqual(testCase, diagnostics.combined_endpoint_mask, ...
-        diagnostics.candidate_state_mask);
-    durations = [diagnostics.amp_analysis_window_sec, ...
-        diagnostics.raw_excursion_analysis_window_sec, ...
-        diagnostics.min_state_duration_sec];
-    verifyEqual(testCase, durations, ...
-        repmat(config.apnea.min_dur_sec, 1, numel(durations)));
+        diagnostics.amplitude_state_mask);
+    verifyNumElements(testCase, candidates, 1);
+    verifyTrue(testCase, candidates.accepted);
+    verifyEqual(testCase, candidates.uncertainty_sec, ...
+        config.apnea.min_dur_sec);
+    verifyFalse(testCase, any(isfield(diagnostics, ...
+        {'amp_analysis_window_sec','raw_excursion_analysis_window_sec', ...
+         'min_state_duration_sec'})));
 end
 
 function testEvidenceAwareAvailabilityAndReasonOrder(testCase)
