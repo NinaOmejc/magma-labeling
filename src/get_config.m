@@ -123,16 +123,15 @@ function config = get_config()
 
     %---- LABEL 6 - apnea - DETECTION SETTINGS
     config.apnea = struct();                  % apnea settings
-    config.apnea.amp_ratio_thr    = 0.10;     % <=10% of each usable belt's session excursion reference
+    config.apnea.amp_ratio_thr    = 0.10;     % <=10% of each usable belt's session median breath-amplitude reference
     config.apnea.amp_analysis_win_sec = 10;   % trailing normalized-amplitude evidence window
     config.apnea.min_dur_sec      = 10;       % minimum inferred low-motion/pause-state duration
-    config.apnea.raw_flat_enabled = true;     % optional second apnea detector based directly on raw belt flatness/low motion, independent of detected breath peaks
     config.apnea.raw_flat_win_sec = 10;       % raw-signal analysis window for flat/low-motion apnea evidence
     config.apnea.raw_flat_ref_win_sec = 60;   % prior raw-signal reference window for normal belt motion
     config.apnea.raw_flat_ref_lag_sec = 10;   % ignore the most recent seconds when estimating the raw-signal reference
-    config.apnea.raw_flat_ref_floor_ratio = 0.25;     % prevent raw reference from collapsing during long flat intervals
-    config.apnea.raw_flat_motion_ratio_thr = 0.10;    % raw robust excursion must be <= this fraction of local raw motion reference
-    config.apnea.raw_flat_slope_ratio_thr = 0.15;     % raw median abs slope must be <= this fraction of local raw slope reference
+    config.apnea.raw_flat_ref_floor_ratio = 0.25;     % keep adaptive excursion/slope references above this fraction of their fixed raw references
+    config.apnea.raw_flat_motion_ratio_thr = 0.10;    % raw P95-P5 excursion must be <= this fraction of its fixed/adaptive raw excursion reference
+    config.apnea.raw_flat_slope_ratio_thr = 0.15;     % raw median abs slope must be <= this fraction of its fixed/adaptive raw slope reference
     config.apnea.raw_flat_hist_peak_frac_thr = 0.35;  % histogram peak must contain at least this fraction of window samples
     config.apnea.raw_flat_min_plateau_sec = 5;        % minimum continuous time spent inside the dominant histogram amplitude band
     config.apnea.raw_flat_hist_bins = 40;             % histogram bins used to find held-amplitude plateaus

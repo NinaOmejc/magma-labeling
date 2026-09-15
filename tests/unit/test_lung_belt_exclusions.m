@@ -49,8 +49,9 @@ function testRespiratoryReferenceAnalyzesLungInUnaffectedRecording(testCase)
         'diaph', struct('peak_t', [], 'amp', []));
 
     session_reference = get_session_reference_interval(400*config.fs, config);
+    data = zeros(400*config.fs, numel(config.data_columns));
     resp_ref = compute_respiratory_reference( ...
-        resp_feat, session_reference, config);
+        data, resp_feat, session_reference, config);
 
     verifyFalse(testCase, is_lung_belt_ignored(config));
     verifyTrue(testCase, resp_ref.lungs.available);

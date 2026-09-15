@@ -153,7 +153,6 @@ end
 
 function testTenSecondApneaWindowDoesNotRequireTwentySeconds(testCase)
     config = stage_config();
-    config.apnea.raw_flat_enabled = false;
     t = (0:50)';
     lungs = empty_detector_belt(t);
     lungs.available = true;
@@ -161,9 +160,9 @@ function testTenSecondApneaWindowDoesNotRequireTwentySeconds(testCase)
     lungs.apnea_amplitude_endpoint_mask(t == 20) = true;
     diaph = empty_detector_belt(t);
     phys = struct('time_sec', t, 'lungs', lungs, 'diaph', diaph);
-    session_reference = get_session_reference_interval(51, config);
+    resp_ref = unavailable_raw_resp_ref();
     [events, diagnostics] = detect_apnea( ...
-        zeros(51, 6), phys, session_reference, config);
+        zeros(51, 6), phys, resp_ref, config);
     verifyNotEmpty(testCase, events);
     verifyEqual(testCase, events.start_t, 10);
     verifyLessThan(testCase, events.duration, 15);
@@ -306,6 +305,16 @@ function belt = empty_detector_belt(t)
         'irregularity', struct('window_mask', false(size(t)), ...
             'endpoint_mask', false(size(t)), 'cov', nan(size(t)), ...
             'robust_cov', nan(size(t))));
+end
+
+function resp_ref = unavailable_raw_resp_ref()
+% UNAVAILABLE_RAW_RESP_REF Provide canonical unavailable detector references.
+
+    raw = struct('available', false, 'quality', 'test_unavailable', ...
+        'n_samples', 0, 'finite_fraction', NaN, ...
+        'excursion', NaN, 'slope', NaN);
+    resp_ref = struct('lungs', struct('raw', raw), ...
+        'diaph', struct('raw', raw));
 end
 
 function [data, resp_feat, resp_ref, diagnostics_desat, config] = physiological_fixture()

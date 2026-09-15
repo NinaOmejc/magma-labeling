@@ -10,7 +10,7 @@ function diagnostic_signals = compute_label_diagnostic_signals( ...
 %   respiratory amplitude reference values and availability;
 %   thoracoabdominal ratios/fractions and dominance evidence;
 %   SpO2 and drop-from-reference percentages; ReA coherence/reference evidence;
-%   optional apnea references, sigh thresholds/counts, and CSR cycle diagnostics.
+%   optional apnea state evidence, sigh thresholds/counts, and CSR cycle diagnostics.
 
     t_grid = resp_features.time_sec;
 
@@ -98,20 +98,6 @@ function diagnostic_signals = compute_label_diagnostic_signals( ...
         diagnostic_signals.apnea_raw_flat_inferred_state = double(apnea_metrics.raw_flat_state_mask);
         diagnostic_signals.apnea_combined_state = double(apnea_metrics.combined_state_mask);
         diagnostic_signals.apnea_amp_ratio_threshold = apnea_metrics.amp_ratio_threshold;
-        if isfield(apnea_metrics, 'raw_flat')
-            diagnostic_signals.apnea_raw_lungs_reference_available = ...
-                double(apnea_metrics.raw_flat.lungs.reference_available);
-            diagnostic_signals.apnea_raw_diaph_reference_available = ...
-                double(apnea_metrics.raw_flat.diaph.reference_available);
-            diagnostic_signals.apnea_raw_lungs_session_motion_reference = ...
-                apnea_metrics.raw_flat.lungs.session_motion_reference;
-            diagnostic_signals.apnea_raw_diaph_session_motion_reference = ...
-                apnea_metrics.raw_flat.diaph.session_motion_reference;
-            diagnostic_signals.apnea_raw_lungs_session_slope_reference = ...
-                apnea_metrics.raw_flat.lungs.session_slope_reference;
-            diagnostic_signals.apnea_raw_diaph_session_slope_reference = ...
-                apnea_metrics.raw_flat.diaph.session_slope_reference;
-        end
     end
     if nargin >= 6 && isstruct(sigh_metrics) && isfield(sigh_metrics, 'available')
         diagnostic_signals.sigh_analysis_available = double(sigh_metrics.available);

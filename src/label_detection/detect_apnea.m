@@ -1,9 +1,10 @@
 function [events, diagnostics, boundary_info] = detect_apnea( ...
-    data, resp_features, session_reference, config)
+    data, resp_features, resp_ref, config)
 % DETECT_APNEA Combine low breath amplitude and raw-belt flatness evidence.
 % data is Nsample-by-Nchannel; resp_features provides normalized breath
-% amplitudes on t_grid; session_reference supports raw-motion normalization;
-% config supplies channel, sampling, window, duration, and threshold settings.
+% amplitudes on t_grid; resp_ref supplies independent fixed raw excursion and
+% slope references; config supplies channel, sampling, window, duration, and
+% threshold settings.
 % events are localized sample/time intervals. diagnostics records availability,
 % peak/raw/combined grid masks, supporting belts, thresholds/windows, and the
 % nested raw_flat diagnostics documented by init_raw_flat_diag. boundary_info
@@ -28,30 +29,34 @@ function [events, diagnostics, boundary_info] = detect_apnea( ...
     lungs_breath_valid = lungs.session_amplitude_available;
     diaph_breath_valid = diaph.session_amplitude_available;
 
-    lungs_raw_valid = ~lungs_broken && ~isempty(idx_lungs) && any(isfinite(data(:, idx_lungs)));
-    diaph_raw_valid = ~isempty(idx_diaph) && any(isfinite(data(:, idx_diaph)));
+    lungs_raw_ref = raw_reference_for_belt(resp_ref, 'lungs');
+    diaph_raw_ref = raw_reference_for_belt(resp_ref, 'diaph');
+    lungs_raw_valid = ~lungs_broken && raw_signal_available(data, idx_lungs) && ...
+        raw_reference_is_usable(lungs_raw_ref);
+    diaph_raw_valid = raw_signal_available(data, idx_diaph) && ...
+        raw_reference_is_usable(diaph_raw_ref);
 
     % ----------------------------
     % Config defaults
     % ----------------------------
     amp_ratio_thr = get_config_value(config, 'apnea', 'amp_ratio_thr', 0.10);
     min_dur_sec = get_config_value(config, 'apnea', 'min_dur_sec', 10);
-    raw_flat_enabled = get_config_value(config, 'apnea', 'raw_flat_enabled', true);
 
     raw_cfg = struct();
     raw_cfg.win_sec = get_config_value(config, 'apnea', 'raw_flat_win_sec', min_dur_sec);
     raw_cfg.ref_win_sec = get_config_value(config, 'apnea', 'raw_flat_ref_win_sec', 60);
     raw_cfg.ref_lag_sec = get_config_value(config, 'apnea', 'raw_flat_ref_lag_sec', 10);
     raw_cfg.ref_floor_ratio = get_config_value(config, 'apnea', 'raw_flat_ref_floor_ratio', 0.25);
-    raw_cfg.motion_ratio_thr = get_config_value(config, 'apnea', 'raw_flat_motion_ratio_thr', 0.10);
+    raw_cfg.excursion_ratio_thr = get_config_value(config, 'apnea', 'raw_flat_motion_ratio_thr', 0.10);
     raw_cfg.slope_ratio_thr = get_config_value(config, 'apnea', 'raw_flat_slope_ratio_thr', 0.15);
     raw_cfg.hist_peak_frac_thr = get_config_value(config, 'apnea', 'raw_flat_hist_peak_frac_thr', 0.35);
     raw_cfg.min_plateau_sec = get_config_value(config, 'apnea', 'raw_flat_min_plateau_sec', min(5, min_dur_sec));
     raw_cfg.hist_bins = get_config_value(config, 'apnea', 'raw_flat_hist_bins', 40);
-    raw_cfg.prctile_low = 5;
-    raw_cfg.prctile_high = 95;
     raw_cfg.hist_band_pad_frac = 0.05;
     raw_cfg.min_ref_sec = min(raw_cfg.ref_win_sec, max(raw_cfg.win_sec, 30));
+
+    raw_diag = init_raw_flat_diag( ...
+        t_grid, N, lungs_raw_ref, diaph_raw_ref);
 
     diagnostics = struct( ...
         'available', false, ...
@@ -70,10 +75,10 @@ function [events, diagnostics, boundary_info] = detect_apnea( ...
         'amp_analysis_window_sec', get_config_value(config, 'apnea', 'amp_analysis_win_sec', min_dur_sec), ...
         'raw_flat_analysis_window_sec', raw_cfg.win_sec, ...
         'min_state_duration_sec', min_dur_sec, ...
-        'raw_flat', init_raw_flat_diag(t_grid, N));
+        'raw_flat', raw_diag);
 
     if ~(lungs_breath_valid || diaph_breath_valid || ...
-            (raw_flat_enabled && (lungs_raw_valid || diaph_raw_valid)))
+            lungs_raw_valid || diaph_raw_valid)
         fprintf('Skipping apnea detection: no usable respiratory belt evidence for peak-amplitude or raw-flat apnea logic.\n');
         return;
     end
@@ -107,24 +112,20 @@ function [events, diagnostics, boundary_info] = detect_apnea( ...
     end
 
     % ----------------------------
-    % Optional raw-flat apnea path
+    % Raw-flat apnea path
     % ----------------------------
     apnea_raw = false(size(t_grid));
-    raw_diag = init_raw_flat_diag(t_grid, N);
+    [apnea_raw_candidate, raw_diag] = raw_flat_apnea_condition_on_grid( ...
+        data, config, t_grid, idx_lungs, idx_diaph, ...
+        lungs_raw_ref, diaph_raw_ref, lungs_raw_valid, diaph_raw_valid, raw_cfg);
 
-    if raw_flat_enabled
-        [apnea_raw_candidate, raw_diag] = raw_flat_apnea_condition_on_grid( ...
-            data, session_reference, config, t_grid, idx_lungs, idx_diaph, ...
-            lungs_raw_valid, diaph_raw_valid, raw_cfg);
-
-        apnea_raw = apnea_raw_candidate;
-        diagnostics.raw_flat = raw_diag;
-        diagnostics.raw_flat_path_available = ...
-            raw_diag.lungs.valid || raw_diag.diaph.valid;
-        diagnostics.raw_flat_support_belts = support_belts( ...
-            raw_diag.lungs.valid, raw_diag.diaph.valid);
-        diagnostics.raw_flat_state_mask = apnea_raw;
-    end
+    apnea_raw = apnea_raw_candidate;
+    diagnostics.raw_flat = raw_diag;
+    diagnostics.raw_flat_path_available = ...
+        raw_diag.lungs.valid || raw_diag.diaph.valid;
+    diagnostics.raw_flat_support_belts = support_belts( ...
+        raw_diag.lungs.valid, raw_diag.diaph.valid);
+    diagnostics.raw_flat_state_mask = apnea_raw;
 
     % Merge evidence paths and convert to sample-level events.
     apnea_mask_candidate = apnea_peak | apnea_raw;
@@ -206,20 +207,20 @@ function [events, diagnostics, boundary_info] = detect_apnea( ...
         hold off
 
         subplot(4, 1, 4); hold on
-        if raw_flat_enabled
-            plot(t_grid, raw_diag.lungs.motion_ratio, 'k')
-            plot(t_grid, raw_diag.diaph.motion_ratio, 'b')
+        if diagnostics.raw_flat_path_available
+            plot(t_grid, raw_diag.lungs.excursion_ratio, 'k')
+            plot(t_grid, raw_diag.diaph.excursion_ratio, 'b')
             plot(t_grid, raw_diag.lungs.hist_peak_frac, 'Color', [0.2 0.2 0.2], 'LineStyle', ':')
             plot(t_grid, raw_diag.diaph.hist_peak_frac, 'Color', [0.1 0.35 0.9], 'LineStyle', ':')
-            yline(raw_cfg.motion_ratio_thr, 'r--')
+            yline(raw_cfg.excursion_ratio_thr, 'r--')
             yline(raw_cfg.hist_peak_frac_thr, 'm--')
             shade_mask_on_axis(t_grid, diagnostics.localized_state_mask);
-            title('Raw-flat diagnostics: movement ratio and histogram plateau score')
+            title('Raw-flat diagnostics: excursion ratio and histogram plateau score')
             xlabel('Time (s)'); ylabel('Ratio / fraction'); grid on
-            legend('lungs motion', 'diaph motion', 'lungs hist peak', 'diaph hist peak', ...
-                'motion thr', 'hist thr', 'Location', 'eastoutside')
+            legend('lungs excursion', 'diaph excursion', 'lungs hist peak', 'diaph hist peak', ...
+                'excursion thr', 'hist thr', 'Location', 'eastoutside')
         else
-            text(0.5, 0.5, 'Raw-flat apnea detection disabled', ...
+            text(0.5, 0.5, 'Raw-flat apnea evidence unavailable', ...
                 'Units', 'normalized', 'HorizontalAlignment', 'center')
             axis off
         end
@@ -254,27 +255,29 @@ end
 % =========================================================
 
 function [combined_mask, diag] = raw_flat_apnea_condition_on_grid( ...
-    data, session_reference, config, t_grid, idx_lungs, idx_diaph, ...
+    data, config, t_grid, idx_lungs, idx_diaph, lungs_raw_ref, diaph_raw_ref, ...
     use_lungs, use_diaph, raw_cfg)
 % RAW_FLAT_APNEA_CONDITION_ON_GRID Combine usable raw-flat evidence across belts.
 % data and idx_* select sample-level belt signals; use_* gates each path.
-% session_reference/config/raw_cfg define normalization and trailing windows.
+% The per-belt raw references provide fixed normalization; config/raw_cfg
+% define sampling plus current and adaptive trailing windows.
 % combined_mask is on t_grid and requires both valid belts when both are used;
 % diag contains per-belt and combined candidate/plateau masks.
 
     combined_mask = false(size(t_grid));
-    diag = init_raw_flat_diag(t_grid, size(data, 1));
+    diag = init_raw_flat_diag( ...
+        t_grid, size(data, 1), lungs_raw_ref, diaph_raw_ref);
 
     if use_lungs
         [lungs_mask, lungs_diag] = raw_flat_belt_mask( ...
-            data(:, idx_lungs), session_reference, config, t_grid, raw_cfg);
+            data(:, idx_lungs), lungs_raw_ref, config.fs, t_grid, raw_cfg);
         diag.lungs = lungs_diag;
         diag.lungs.mask = lungs_mask;
     end
 
     if use_diaph
         [diaph_mask, diaph_diag] = raw_flat_belt_mask( ...
-            data(:, idx_diaph), session_reference, config, t_grid, raw_cfg);
+            data(:, idx_diaph), diaph_raw_ref, config.fs, t_grid, raw_cfg);
         diag.diaph = diaph_diag;
         diag.diaph.mask = diaph_mask;
     end
@@ -300,17 +303,23 @@ function [combined_mask, diag] = raw_flat_apnea_condition_on_grid( ...
     diag.combined_candidate = combined_mask;
 end
 
-function diag = init_raw_flat_diag(t_grid, N)
+function diag = init_raw_flat_diag(t_grid, N, lungs_raw_ref, diaph_raw_ref)
 % INIT_RAW_FLAT_DIAG Initialize raw-belt apnea diagnostics at grid and sample levels.
-% diag.lungs/diaph each contain validity and reference provenance/coverage;
-% session motion/slope references; grid-level candidate component masks,
-% ratios, references used, adaptive-reference flags, histogram peak fraction,
-% and plateau duration; plus plateau_mask_native over N raw samples.
+% diag.lungs/diaph each contain path validity; fixed reference values copied
+% from resp_ref; grid-level candidate component masks, ratios, references used,
+% adaptive-reference flags, histogram peak fraction, and plateau duration;
+% plus plateau_mask_native over N raw samples.
 % Combined fields hold the cross-belt grid candidate/plateau masks and the
 % Nsample native plateau mask.
 
     if nargin < 2
         N = numel(t_grid);
+    end
+    if nargin < 3
+        lungs_raw_ref = raw_reference_for_belt(struct(), 'lungs');
+    end
+    if nargin < 4
+        diaph_raw_ref = raw_reference_for_belt(struct(), 'diaph');
     end
     empty_belt = struct( ...
         'valid', false, ...
@@ -319,27 +328,96 @@ function diag = init_raw_flat_diag(t_grid, N)
         'reference_source', 'common_session_reference_interval', ...
         'reference_n_samples', 0, ...
         'reference_finite_fraction', NaN, ...
-        'session_motion_reference', NaN, ...
+        'session_excursion_reference', NaN, ...
         'session_slope_reference', NaN, ...
         'mask', false(size(t_grid)), ...
-        'motion_mask', false(size(t_grid)), ...
+        'excursion_mask', false(size(t_grid)), ...
         'slope_mask', false(size(t_grid)), ...
         'plateau_mask', false(size(t_grid)), ...
         'plateau_mask_native', false(N, 1), ...
-        'motion_ratio', nan(size(t_grid)), ...
+        'excursion_ratio', nan(size(t_grid)), ...
         'slope_ratio', nan(size(t_grid)), ...
-        'motion_reference_used', nan(size(t_grid)), ...
+        'excursion_reference_used', nan(size(t_grid)), ...
         'slope_reference_used', nan(size(t_grid)), ...
         'adaptive_reference_used', false(size(t_grid)), ...
         'hist_peak_frac', nan(size(t_grid)), ...
         'plateau_run_sec', nan(size(t_grid)) );
 
     diag = struct();
-    diag.lungs = empty_belt;
-    diag.diaph = empty_belt;
+    diag.lungs = copy_raw_reference_to_diag(empty_belt, lungs_raw_ref);
+    diag.diaph = copy_raw_reference_to_diag(empty_belt, diaph_raw_ref);
     diag.combined_candidate = false(size(t_grid));
     diag.combined_plateau = false(size(t_grid));
     diag.combined_plateau_native = false(N, 1);
+end
+
+function diag = copy_raw_reference_to_diag(diag, raw_ref)
+% COPY_RAW_REFERENCE_TO_DIAG Copy fixed-reference provenance without recomputing it.
+
+    raw_ref = normalize_raw_reference(raw_ref);
+    diag.reference_available = raw_reference_is_usable(raw_ref);
+    diag.reference_quality = raw_ref.quality;
+    diag.reference_n_samples = raw_ref.n_samples;
+    diag.reference_finite_fraction = raw_ref.finite_fraction;
+    diag.session_excursion_reference = raw_ref.excursion;
+    diag.session_slope_reference = raw_ref.slope;
+end
+
+function raw_ref = raw_reference_for_belt(resp_ref, belt_name)
+% RAW_REFERENCE_FOR_BELT Return one belt's canonical fixed raw reference.
+% Missing or malformed input produces an unavailable reference so the
+% independent breath-amplitude path can still be evaluated.
+
+    raw_ref = normalize_raw_reference([]);
+    if isstruct(resp_ref) && isscalar(resp_ref) && ...
+            isfield(resp_ref, belt_name) && ...
+            isstruct(resp_ref.(belt_name)) && ...
+            isscalar(resp_ref.(belt_name)) && ...
+            isfield(resp_ref.(belt_name), 'raw')
+        raw_ref = normalize_raw_reference(resp_ref.(belt_name).raw);
+    end
+end
+
+function raw_ref = normalize_raw_reference(value)
+% NORMALIZE_RAW_REFERENCE Fill the fixed raw-reference schema safely.
+
+    raw_ref = struct( ...
+        'available', false, ...
+        'quality', 'raw_reference_unavailable', ...
+        'n_samples', 0, ...
+        'finite_fraction', NaN, ...
+        'excursion', NaN, ...
+        'slope', NaN);
+    if ~isstruct(value) || ~isscalar(value)
+        return;
+    end
+
+    names = fieldnames(raw_ref);
+    for i = 1:numel(names)
+        if isfield(value, names{i})
+            raw_ref.(names{i}) = value.(names{i});
+        end
+    end
+end
+
+function tf = raw_reference_is_usable(raw_ref)
+% RAW_REFERENCE_IS_USABLE Validate fixed raw excursion and slope references.
+
+    raw_ref = normalize_raw_reference(raw_ref);
+    tf = isequal(raw_ref.available, true) && ...
+        isscalar(raw_ref.excursion) && isfinite(raw_ref.excursion) && ...
+        raw_ref.excursion > 0 && ...
+        isscalar(raw_ref.slope) && isfinite(raw_ref.slope) && ...
+        raw_ref.slope > 0;
+end
+
+function tf = raw_signal_available(data, channel_idx)
+% RAW_SIGNAL_AVAILABLE Check that a resolved belt column has finite samples.
+
+    tf = isnumeric(data) && ~isempty(data) && ...
+        isscalar(channel_idx) && isfinite(channel_idx) && ...
+        channel_idx == round(channel_idx) && channel_idx >= 1 && ...
+        channel_idx <= size(data, 2) && any(isfinite(data(:, channel_idx)));
 end
 
 function mask = amplitude_apnea_support_mask( ...
@@ -517,60 +595,31 @@ function event = event_from_times(event, start_t, end_t, N, fs)
 end
 
 function [mask, diag] = raw_flat_belt_mask( ...
-    x, session_reference, config, t_grid, raw_cfg)
+    x, raw_ref, fs, t_grid, raw_cfg)
 % RAW_FLAT_BELT_MASK Detect low excursion with low slope or a held plateau.
-% x is one sample-level raw belt signal; session_reference supplies its common
-% baseline interval; config.fs and raw_cfg define trailing/adaptive references
-% and thresholds. mask is on t_grid; diag is one belt entry from
-% init_raw_flat_diag, including grid metrics and native plateau support.
+% x is one sample-level raw belt signal; raw_ref supplies fixed session
+% excursion/slope levels; fs and raw_cfg define trailing/adaptive references
+% and thresholds. mask is on t_grid; diag includes time-varying metrics and
+% native plateau support plus copied fixed-reference provenance.
 
     x = x(:);
-    fs = config.fs;
     N = numel(x);
-    all_diag = init_raw_flat_diag(t_grid, N);
+    all_diag = init_raw_flat_diag(t_grid, N, raw_ref, []);
     diag = all_diag.lungs;
     mask = false(size(t_grid));
 
     if raw_cfg.win_sec <= 0 || N < 3 || numel(t_grid) < 2
         return;
     end
-
-    if ~isstruct(session_reference) || ~isfield(session_reference, 'available') || ...
-            ~session_reference.available
-        diag.reference_quality = 'reference_interval_unavailable';
-        return;
-    end
-    reference_start_idx = session_reference.reference_start_idx;
-    reference_end_idx = session_reference.reference_end_idx;
-    if reference_start_idx < 1 || reference_end_idx > N || ...
-            reference_end_idx < reference_start_idx
-        diag.reference_quality = 'reference_interval_unavailable';
+    if ~raw_reference_is_usable(raw_ref)
         return;
     end
 
-    reference_segment = x(reference_start_idx:reference_end_idx);
-    diag.reference_n_samples = numel(reference_segment);
-    diag.reference_finite_fraction = finite_fraction(reference_segment);
-    session_motion_ref = robust_excursion(reference_segment, raw_cfg);
-    session_slope_ref = raw_slope_level(reference_segment);
-    diag.session_motion_reference = session_motion_ref;
-    diag.session_slope_reference = session_slope_ref;
-
-    if ~isfinite(session_motion_ref) || session_motion_ref <= 0 || ...
-            ~isfinite(session_slope_ref) || session_slope_ref <= 0
-        diag.reference_quality = 'unusable_motion_or_slope_reference';
-        return;
-    end
-
-    motion_mask = false(size(t_grid));
+    session_excursion_ref = raw_ref.excursion;
+    session_slope_ref = raw_ref.slope;
+    excursion_mask = false(size(t_grid));
     slope_mask = false(size(t_grid));
     plateau_mask = false(size(t_grid));
-    diag.reference_available = true;
-    if session_reference.complete
-        diag.reference_quality = 'good';
-    else
-        diag.reference_quality = 'warning_truncated_interval';
-    end
     diag.valid = true;
 
     for i = 1:numel(t_grid)
@@ -590,16 +639,16 @@ function [mask, diag] = raw_flat_belt_mask( ...
             continue;
         end
 
-        [motion_ref, slope_ref, adaptive_reference_used] = raw_reference_at_time( ...
-            x, t, fs, session_motion_ref, session_slope_ref, raw_cfg);
-        diag.motion_reference_used(i) = motion_ref;
+        [excursion_ref, slope_ref, adaptive_reference_used] = raw_reference_at_time( ...
+            x, t, fs, session_excursion_ref, session_slope_ref, raw_cfg);
+        diag.excursion_reference_used(i) = excursion_ref;
         diag.slope_reference_used(i) = slope_ref;
         diag.adaptive_reference_used(i) = adaptive_reference_used;
 
-        motion = robust_excursion(segment, raw_cfg);
-        slope = raw_slope_level(segment);
-        if isfinite(motion) && isfinite(motion_ref) && motion_ref > 0
-            diag.motion_ratio(i) = motion / motion_ref;
+        excursion = robust_resp_excursion(segment);
+        slope = raw_resp_slope_level(segment);
+        if isfinite(excursion) && isfinite(excursion_ref) && excursion_ref > 0
+            diag.excursion_ratio(i) = excursion / excursion_ref;
         end
         if isfinite(slope) && isfinite(slope_ref) && slope_ref > 0
             diag.slope_ratio(i) = slope / slope_ref;
@@ -611,8 +660,9 @@ function [mask, diag] = raw_flat_belt_mask( ...
         diag.hist_peak_frac(i) = hist_peak_frac;
         diag.plateau_run_sec(i) = plateau_run_sec;
 
-        if isfinite(diag.motion_ratio(i)) && diag.motion_ratio(i) <= raw_cfg.motion_ratio_thr
-            motion_mask(mark_time_range_on_grid(t_grid, lb, t)) = true;
+        if isfinite(diag.excursion_ratio(i)) && ...
+                diag.excursion_ratio(i) <= raw_cfg.excursion_ratio_thr
+            excursion_mask(mark_time_range_on_grid(t_grid, lb, t)) = true;
         end
 
         if isfinite(diag.slope_ratio(i)) && diag.slope_ratio(i) <= raw_cfg.slope_ratio_thr
@@ -631,21 +681,21 @@ function [mask, diag] = raw_flat_belt_mask( ...
         end
     end
 
-    mask = motion_mask & (slope_mask | plateau_mask);
+    mask = excursion_mask & (slope_mask | plateau_mask);
     diag.mask = mask;
-    diag.motion_mask = motion_mask;
+    diag.excursion_mask = excursion_mask;
     diag.slope_mask = slope_mask;
     diag.plateau_mask = plateau_mask;
 end
 
-function [motion_ref, slope_ref, adaptive_reference_used] = raw_reference_at_time( ...
-    x, t, fs, session_motion_ref, session_slope_ref, raw_cfg)
+function [excursion_ref, slope_ref, adaptive_reference_used] = raw_reference_at_time( ...
+    x, t, fs, session_excursion_ref, session_slope_ref, raw_cfg)
 % RAW_REFERENCE_AT_TIME Choose lagged local or session raw-belt references.
 % x is sampled at fs; t is the analysis endpoint in seconds. Local robust
 % excursion and median absolute slope are used only with sufficient finite
 % history and are floored relative to the session reference.
 
-    motion_ref = session_motion_ref;
+    excursion_ref = session_excursion_ref;
     slope_ref = session_slope_ref;
     adaptive_reference_used = false;
 
@@ -668,11 +718,11 @@ function [motion_ref, slope_ref, adaptive_reference_used] = raw_reference_at_tim
         return;
     end
 
-    candidate_motion = robust_excursion(segment, raw_cfg);
-    candidate_slope = raw_slope_level(segment);
+    candidate_excursion = robust_resp_excursion(segment);
+    candidate_slope = raw_resp_slope_level(segment);
 
-    if isfinite(candidate_motion) && candidate_motion > 0
-        motion_ref = candidate_motion;
+    if isfinite(candidate_excursion) && candidate_excursion > 0
+        excursion_ref = candidate_excursion;
         adaptive_reference_used = true;
     end
     if isfinite(candidate_slope) && candidate_slope > 0
@@ -681,7 +731,8 @@ function [motion_ref, slope_ref, adaptive_reference_used] = raw_reference_at_tim
     end
 
     if isfinite(raw_cfg.ref_floor_ratio) && raw_cfg.ref_floor_ratio > 0
-        motion_ref = max(motion_ref, raw_cfg.ref_floor_ratio * session_motion_ref);
+        excursion_ref = max(excursion_ref, ...
+            raw_cfg.ref_floor_ratio * session_excursion_ref);
         slope_ref = max(slope_ref, raw_cfg.ref_floor_ratio * session_slope_ref);
     end
 end
@@ -724,7 +775,7 @@ function [peak_frac, run_start_t, run_end_t, run_dur_sec] = strongest_histogram_
         [peak_count, peak_bin] = max(counts);
         peak_frac = peak_count / numel(finite_x);
 
-        band_pad = raw_cfg.hist_band_pad_frac * robust_excursion(finite_x, raw_cfg);
+        band_pad = raw_cfg.hist_band_pad_frac * robust_resp_excursion(finite_x);
         if ~isfinite(band_pad) || band_pad <= 0
             band_pad = span / hist_bins;
         end
@@ -739,29 +790,6 @@ function [peak_frac, run_start_t, run_end_t, run_dur_sec] = strongest_histogram_
         run_start_t = sample_t(run_start_idx);
         run_end_t = sample_t(run_end_idx);
     end
-end
-
-function r = robust_excursion(x, raw_cfg)
-% ROBUST_EXCURSION Measure finite-sample range between configured percentiles.
-
-    x = x(isfinite(x));
-    if numel(x) < 3
-        r = NaN;
-        return;
-    end
-    r = prctile(x, raw_cfg.prctile_high) - prctile(x, raw_cfg.prctile_low);
-end
-
-function s = raw_slope_level(x)
-% RAW_SLOPE_LEVEL Return median absolute first difference of finite belt samples.
-
-    x = x(:);
-    x = x(isfinite(x));
-    if numel(x) < 3
-        s = NaN;
-        return;
-    end
-    s = median(abs(diff(x)), 'omitnan');
 end
 
 function f = finite_fraction(x)

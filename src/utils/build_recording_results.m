@@ -7,7 +7,7 @@ function results = build_recording_results( ...
 %   config            - Final pipeline config with subject, measure, input_config,
 %                       fs, and HDF5 provenance settings.
 %   resp_cycles       - Extracted lung/diaphragm breath-cycle and provenance struct.
-%   resp_ref          - Per-belt session/global amplitude references and QC.
+%   resp_ref          - Per-belt breath-amplitude and raw-signal references with QC.
 %   session_reference - Protocol reference interval and half-open sample/time bounds.
 %   resp_features     - Respiratory evidence on breath and analysis-grid levels.
 %   label_results     - Final automatic/reviewed annotation products and summaries.

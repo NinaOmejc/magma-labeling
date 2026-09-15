@@ -216,7 +216,7 @@ function testIndependentDetectorsAndOverlappingMask(testCase)
     slow = detect_slow_breathing(data, phys_feat, config);
     rapid = detect_rapid_breathing(data, phys_feat, config);
     session_reference = get_session_reference_interval(size(data,1), config);
-    apnea = detect_apnea(data, phys_feat, session_reference, config);
+    apnea = detect_apnea(data, phys_feat, unavailable_raw_resp_ref(), config);
     data(:, config.channels.spo2_idx) = 97;
     data(31:101, config.channels.spo2_idx) = 85;
     spo2_session_reference = session_reference;
@@ -518,7 +518,6 @@ function [data, phys_feat, config] = detector_fixture()
     config = make_test_config();
     config.fs = 1;
     config.grid_step_sec = 1;
-    config.apnea.raw_flat_enabled = false;
     N = 141;
     data = zeros(N, 6);
     t_grid = (0:N-1)';
@@ -558,6 +557,16 @@ function [data, phys_feat, config] = detector_fixture()
         'dominance_state_mask', state, 'dominance_mask', state);
     phys_feat = struct('time_sec', t_grid, 'lungs', lungs, ...
         'diaph', diaph, 'thoracoabdominal_balance', balance);
+end
+
+function resp_ref = unavailable_raw_resp_ref()
+% UNAVAILABLE_RAW_RESP_REF Provide canonical unavailable detector references.
+
+    raw = struct('available', false, 'quality', 'test_unavailable', ...
+        'n_samples', 0, 'finite_fraction', NaN, ...
+        'excursion', NaN, 'slope', NaN);
+    resp_ref = struct('lungs', struct('raw', raw), ...
+        'diaph', struct('raw', raw));
 end
 
 function values = replace_where(values, mask, replacement)

@@ -157,7 +157,8 @@ function testDiagnosticPlotUsesRepositorySaveConvention(testCase)
     resp_feat = make_resp_feat(t, amp, t, 0.8*amp);
     data = zeros(round(400 * config.fs), numel(config.data_columns));
     session_reference = get_session_reference_interval(size(data, 1), config);
-    resp_ref = compute_respiratory_reference(resp_feat, session_reference, config);
+    resp_ref = compute_respiratory_reference( ...
+        data, resp_feat, session_reference, config);
 
     plot_session_reference( ...
         data, resp_feat, resp_ref, session_reference, config);
@@ -178,8 +179,9 @@ end
 
 function resp_ref = compute_test_reference(resp_feat, config)
     session_reference = make_session_interval(config);
+    data = zeros(round(1501 * config.fs), numel(config.data_columns));
     resp_ref = compute_respiratory_reference( ...
-        resp_feat, session_reference, config);
+        data, resp_feat, session_reference, config);
 end
 
 function session_reference = make_session_interval(config)

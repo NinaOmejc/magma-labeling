@@ -1,8 +1,10 @@
-function resp_ref = compute_respiratory_reference(resp_cycles, session_reference, config)
-% COMPUTE_RESPIRATORY_REFERENCE Estimate session/global amplitude references per belt.
-% resp_cycles supplies breath times and amplitudes; session_reference defines
-% the common reference interval; config controls breath counts and change
-% diagnostics. resp_ref fields are:
+function resp_ref = compute_respiratory_reference( ...
+    data, resp_cycles, session_reference, config)
+% COMPUTE_RESPIRATORY_REFERENCE Estimate breath-based and raw references per belt.
+% data is the Nsample-by-Nchannel raw recording; resp_cycles supplies breath
+% times and amplitudes; session_reference defines the common reference interval;
+% config controls channel resolution, breath counts, and change diagnostics.
+% resp_ref fields are:
 %   lungs/diaph - Belt reference structs described by empty_belt_reference.
 %   default_warning_action - Pipeline action associated with reference warnings.
 %   change_pattern - none, one-belt, or two-belt change classification.
@@ -11,9 +13,13 @@ function resp_ref = compute_respiratory_reference(resp_cycles, session_reference
 
     cfg = respiratory_reference_config(config);
     validate_session_reference(session_reference);
+    if ~isfield(config, 'channels')
+        config = resolve_signal_channels(config);
+    end
 
     lungs = get_belt_features(resp_cycles, 'lungs');
-    if is_lung_belt_ignored(config)
+    lungs_ignored = is_lung_belt_ignored(config);
+    if lungs_ignored
         lungs = [];
     end
 
@@ -23,7 +29,93 @@ function resp_ref = compute_respiratory_reference(resp_cycles, session_reference
     resp_ref.default_warning_action = 'retain_data_no_correction';
     resp_ref.lungs = analyze_belt(lungs, cfg, session_reference);
     resp_ref.diaph = analyze_belt(diaph, cfg, session_reference);
+    resp_ref.lungs.raw = analyze_raw_belt( ...
+        data, config.channels.lungs_idx, session_reference, lungs_ignored);
+    resp_ref.diaph.raw = analyze_raw_belt( ...
+        data, config.channels.diaph_idx, session_reference, false);
     resp_ref = add_belt_agreement(resp_ref, cfg);
+end
+
+function raw = analyze_raw_belt(data, channel_idx, session_reference, ignored)
+% ANALYZE_RAW_BELT Estimate fixed raw excursion and slope on the common interval.
+% data is the raw recording, channel_idx selects one belt, and ignored marks an
+% excluded lung belt. raw fields are availability/quality, sample count, finite
+% fraction, P95-P5 excursion, and median absolute sample-to-sample difference.
+
+    raw = empty_raw_reference();
+    if ignored
+        raw.quality = 'belt_ignored';
+        return;
+    end
+    if isempty(channel_idx) || ~isscalar(channel_idx) || ...
+            ~isfinite(channel_idx) || channel_idx ~= round(channel_idx) || ...
+            channel_idx < 1 || channel_idx > size(data, 2)
+        raw.quality = 'channel_missing';
+        return;
+    end
+    if ~session_reference.available
+        raw.quality = 'reference_interval_unavailable';
+        return;
+    end
+
+    start_idx = session_reference.reference_start_idx;
+    end_idx = session_reference.reference_end_idx;
+    if ~isscalar(start_idx) || ~isscalar(end_idx) || ...
+            ~isfinite(start_idx) || ~isfinite(end_idx) || ...
+            start_idx < 1 || end_idx > size(data, 1) || ...
+            start_idx ~= round(start_idx) || end_idx ~= round(end_idx) || ...
+            end_idx < start_idx
+        raw.quality = 'reference_interval_unavailable';
+        return;
+    end
+
+    segment = data(start_idx:end_idx, channel_idx);
+    raw.n_samples = numel(segment);
+    raw.finite_fraction = finite_fraction(segment);
+    raw.excursion = robust_resp_excursion(segment);
+    raw.slope = raw_resp_slope_level(segment);
+
+    if raw.finite_fraction < 0.8
+        raw.quality = 'insufficient_finite_coverage';
+        return;
+    end
+    if ~isfinite(raw.excursion) || raw.excursion <= 0
+        raw.quality = 'invalid_excursion';
+        return;
+    end
+    if ~isfinite(raw.slope) || raw.slope <= 0
+        raw.quality = 'invalid_slope';
+        return;
+    end
+
+    raw.available = true;
+    if session_reference.complete
+        raw.quality = 'good';
+    else
+        raw.quality = 'warning_truncated_interval';
+    end
+end
+
+function fraction = finite_fraction(x)
+% FINITE_FRACTION Return the fraction of array elements that are finite.
+
+    if isempty(x)
+        fraction = 0;
+    else
+        fraction = nnz(isfinite(x)) / numel(x);
+    end
+end
+
+function raw = empty_raw_reference()
+% EMPTY_RAW_REFERENCE Return the canonical unavailable fixed raw-belt reference.
+
+    raw = struct( ...
+        'available', false, ...
+        'quality', 'not_evaluated', ...
+        'n_samples', 0, ...
+        'finite_fraction', NaN, ...
+        'excursion', NaN, ...
+        'slope', NaN);
 end
 
 function belt = analyze_belt(breaths, cfg, session_reference)
@@ -362,6 +454,8 @@ function belt = empty_belt_reference()
 %   available - At least one positive breath amplitude was supplied.
 %   session/global - value, contributing n_breaths, and availability; session
 %                    also carries its quality state.
+%   raw - Independent fixed raw-signal reference: available, quality,
+%         n_samples, finite_fraction, excursion, and slope.
 %   global_to_session_ratio - Ratio of global and session medians.
 %   reference_quality/reference_action - Downstream usability state and action.
 %   mode/quality - Change-analysis mode and diagnostic result.
@@ -384,6 +478,7 @@ function belt = empty_belt_reference()
             'value', NaN, ...
             'n_breaths', 0, ...
             'available', false), ...
+        'raw', empty_raw_reference(), ...
         'global_to_session_ratio', NaN, ...
         'reference_quality', 'belt_unavailable', ...
         'reference_action', 'retain_data_no_correction', ...

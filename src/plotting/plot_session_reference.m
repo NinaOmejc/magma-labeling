@@ -5,7 +5,8 @@ function fig = plot_session_reference( ...
 % Inputs:
 %   data              - Nsample x Nchannel physiological signal matrix.
 %   resp_cycles       - Extracted lung and diaphragm breath structures.
-%   resp_ref          - Per-belt session/global amplitude references and QC.
+%   resp_ref          - Per-belt breath-amplitude and raw-signal references;
+%                       this figure displays the breath-amplitude references.
 %   session_reference - Common reference interval with boundaries in seconds.
 %   config            - Channel, recording identity, and plot-output settings.
 %

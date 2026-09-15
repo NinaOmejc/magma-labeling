@@ -38,9 +38,10 @@ function testRespiratoryReferenceUsesReviewedBreathsInsideHalfOpenInterval(testC
     lungs_amp(t == 360) = 99;
     diaph_amp(t == 360) = 88;
 
-    reference = get_session_reference_interval(601 * config.fs, config);
+    data = zeros(601 * config.fs, numel(config.data_columns));
+    reference = get_session_reference_interval(size(data, 1), config);
     resp_ref = compute_respiratory_reference( ...
-        make_resp_feat(t, lungs_amp, t, diaph_amp), reference, config);
+        data, make_resp_feat(t, lungs_amp, t, diaph_amp), reference, config);
 
     verifyEqual(testCase, resp_ref.lungs.session.value, 2, 'AbsTol', eps);
     verifyEqual(testCase, resp_ref.diaph.session.value, 4, 'AbsTol', eps);
@@ -54,9 +55,10 @@ end
 function testRespiratoryReferencesRemainIndependent(testCase)
     config = session_test_config(1, 10);
     t = (180:3:357)';
-    reference = get_session_reference_interval(400 * config.fs, config);
+    data = zeros(400 * config.fs, numel(config.data_columns));
+    reference = get_session_reference_interval(size(data, 1), config);
     resp_ref = compute_respiratory_reference( ...
-        make_resp_feat(t, 3 * ones(size(t)), t, 1.2 * ones(size(t))), ...
+        data, make_resp_feat(t, 3 * ones(size(t)), t, 1.2 * ones(size(t))), ...
         reference, config);
 
     verifyTrue(testCase, resp_ref.lungs.session.available);
@@ -68,9 +70,10 @@ end
 function testRespiratoryReferenceNeverFallsBackToWholeRecord(testCase)
     config = session_test_config(1, 10);
     t = (0:3:120)';
-    reference = get_session_reference_interval(400 * config.fs, config);
+    data = zeros(400 * config.fs, numel(config.data_columns));
+    reference = get_session_reference_interval(size(data, 1), config);
     resp_ref = compute_respiratory_reference( ...
-        make_resp_feat(t, ones(size(t)), [], []), reference, config);
+        data, make_resp_feat(t, ones(size(t)), [], []), reference, config);
 
     verifyTrue(testCase, resp_ref.lungs.global.available);
     verifyFalse(testCase, resp_ref.lungs.session.available);
@@ -105,7 +108,7 @@ function testUnavailableSpO2DoesNotInvalidateRespiratoryReference(testCase)
     t = (180:3:357)';
     reference = get_session_reference_interval(size(data, 1), config);
     resp_ref = compute_respiratory_reference( ...
-        make_resp_feat(t, 2 * ones(size(t)), [], []), reference, config);
+        data, make_resp_feat(t, 2 * ones(size(t)), [], []), reference, config);
     [~, diagnostics_desat] = detect_desaturation(data, reference, config);
     spo2_ref = diagnostics_desat.spo2_ref;
 
@@ -194,22 +197,205 @@ function testRawApneaReferenceUsesCommonInterval(testCase)
         0.7 * sin(2*pi*0.2*t(in_reference) + 0.1);
     reference = get_session_reference_interval(N, config);
     phys = raw_only_phys_fixture(N, config);
+    resp_ref = compute_respiratory_reference( ...
+        data, make_resp_feat([], [], [], []), reference, config);
 
-    [~, diagnostics] = detect_apnea(data, phys, reference, config);
+    [~, diagnostics] = detect_apnea(data, phys, resp_ref, config);
     x_lungs = data(reference.reference_start_idx:reference.reference_end_idx, ...
         config.channels.lungs_idx);
-    expected_motion = prctile(x_lungs, 95) - prctile(x_lungs, 5);
+    expected_excursion = prctile(x_lungs, 95) - prctile(x_lungs, 5);
     expected_slope = median(abs(diff(x_lungs)), 'omitnan');
 
     verifyTrue(testCase, diagnostics.raw_flat.lungs.reference_available);
+    verifyEqual(testCase, fieldnames(resp_ref.lungs.raw), ...
+        {'available'; 'quality'; 'n_samples'; 'finite_fraction'; ...
+         'excursion'; 'slope'});
+    verifyTrue(testCase, isfield(resp_ref.diaph, 'raw'));
+    verifyFalse(testCase, resp_ref.lungs.session.available);
+    verifyTrue(testCase, resp_ref.lungs.raw.available);
     verifyEqual(testCase, ...
-        diagnostics.raw_flat.lungs.session_motion_reference, ...
-        expected_motion, 'AbsTol', 1e-12);
+        resp_ref.lungs.raw.excursion, expected_excursion, 'AbsTol', 1e-12);
+    verifyEqual(testCase, resp_ref.lungs.raw.slope, ...
+        expected_slope, 'AbsTol', 1e-12);
+    verifyEqual(testCase, resp_ref.lungs.raw.n_samples, numel(x_lungs));
+    verifyEqual(testCase, resp_ref.lungs.raw.finite_fraction, 1);
+    verifyEqual(testCase, ...
+        diagnostics.raw_flat.lungs.session_excursion_reference, ...
+        resp_ref.lungs.raw.excursion, 'AbsTol', 1e-12);
     verifyEqual(testCase, ...
         diagnostics.raw_flat.lungs.session_slope_reference, ...
         expected_slope, 'AbsTol', 1e-12);
     verifyEqual(testCase, diagnostics.raw_flat.lungs.reference_source, ...
         'common_session_reference_interval');
+end
+
+function testRawReferenceRejectsLowFiniteCoverage(testCase)
+    config = session_test_config(1, 10);
+    N = 400 * config.fs;
+    t = (0:N-1)' / config.fs;
+    data = zeros(N, numel(config.data_columns));
+    data(:, config.channels.lungs_idx) = sin(2*pi*0.2*t);
+    reference = get_session_reference_interval(N, config);
+    interval_idx = reference.reference_start_idx:reference.reference_end_idx;
+    data(interval_idx(1:ceil(0.21*numel(interval_idx))), ...
+        config.channels.lungs_idx) = NaN;
+
+    resp_ref = compute_respiratory_reference( ...
+        data, make_resp_feat([], [], [], []), reference, config);
+
+    verifyLessThan(testCase, resp_ref.lungs.raw.finite_fraction, 0.8);
+    verifyFalse(testCase, resp_ref.lungs.raw.available);
+    verifyEqual(testCase, resp_ref.lungs.raw.quality, ...
+        'insufficient_finite_coverage');
+end
+
+function testRawReferenceMarksIgnoredAndMissingBeltsUnavailable(testCase)
+    config = session_test_config(1, 10);
+    config.problems.missing_lung_belt = [config.subject config.measure];
+    N = 400 * config.fs;
+    t = (0:N-1)' / config.fs;
+    data = zeros(N, numel(config.data_columns));
+    data(:, config.channels.lungs_idx) = sin(2*pi*0.2*t);
+    data(:, config.channels.diaph_idx) = sin(2*pi*0.2*t + 0.1);
+    reference = get_session_reference_interval(N, config);
+
+    ignored = compute_respiratory_reference( ...
+        data, make_resp_feat([], [], [], []), reference, config);
+    verifyFalse(testCase, ignored.lungs.raw.available);
+    verifyEqual(testCase, ignored.lungs.raw.quality, 'belt_ignored');
+    verifyTrue(testCase, ignored.diaph.raw.available);
+
+    config.problems.missing_lung_belt = zeros(0, 2);
+    config.channels.diaph_idx = [];
+    missing = compute_respiratory_reference( ...
+        data, make_resp_feat([], [], [], []), reference, config);
+    verifyFalse(testCase, missing.diaph.raw.available);
+    verifyEqual(testCase, missing.diaph.raw.quality, 'channel_missing');
+end
+
+function testTruncatedRawReferenceRetainsWarning(testCase)
+    config = session_test_config(1, 10);
+    N = 240 * config.fs;
+    t = (0:N-1)' / config.fs;
+    data = zeros(N, numel(config.data_columns));
+    data(:, config.channels.lungs_idx) = sin(2*pi*0.2*t);
+    reference = get_session_reference_interval(N, config);
+
+    resp_ref = compute_respiratory_reference( ...
+        data, make_resp_feat([], [], [], []), reference, config);
+
+    verifyTrue(testCase, resp_ref.lungs.raw.available);
+    verifyEqual(testCase, resp_ref.lungs.raw.quality, ...
+        'warning_truncated_interval');
+end
+
+function testApneaNormalizesCurrentRawMetricsByMatchingReferences(testCase)
+    config = session_test_config(1, 10);
+    config.grid_step_sec = 1;
+    config.apnea.do_plot = false;
+    N = 121 * config.fs;
+    t_raw = (0:N-1)' / config.fs;
+    data = zeros(N, numel(config.data_columns));
+    data(:, config.channels.lungs_idx) = t_raw;
+    phys = raw_only_phys_fixture(N, config);
+    resp_ref = explicit_raw_resp_ref(10, 2, NaN, NaN);
+
+    [~, diagnostics] = detect_apnea(data, phys, resp_ref, config);
+    grid_idx = find(phys.time_sec == 10, 1);
+    segment = data(1:10*config.fs+1, config.channels.lungs_idx);
+
+    verifyEqual(testCase, ...
+        diagnostics.raw_flat.lungs.excursion_reference_used(grid_idx), ...
+        10, 'AbsTol', eps);
+    verifyEqual(testCase, diagnostics.raw_flat.lungs.slope_reference_used(grid_idx), ...
+        2, 'AbsTol', eps);
+    verifyEqual(testCase, diagnostics.raw_flat.lungs.excursion_ratio(grid_idx), ...
+        robust_resp_excursion(segment) / 10, 'AbsTol', 1e-12);
+    verifyEqual(testCase, diagnostics.raw_flat.lungs.slope_ratio(grid_idx), ...
+        raw_resp_slope_level(segment) / 2, 'AbsTol', 1e-12);
+end
+
+function testAdaptiveRawReferencesRemainFlooredByFixedReferences(testCase)
+    config = session_test_config(1, 10);
+    config.grid_step_sec = 1;
+    config.apnea.do_plot = false;
+    N = 161 * config.fs;
+    t_raw = (0:N-1)' / config.fs;
+    x = sin(2*pi*0.2*t_raw);
+    prior = t_raw >= 30 & t_raw <= 90;
+    x(prior) = 0.01 * sin(2*pi*0.2*t_raw(prior));
+    data = zeros(N, numel(config.data_columns));
+    data(:, config.channels.lungs_idx) = x;
+    phys = raw_only_phys_fixture(N, config);
+    resp_ref = explicit_raw_resp_ref(8, 1, NaN, NaN);
+
+    [~, diagnostics] = detect_apnea(data, phys, resp_ref, config);
+    grid_idx = find(phys.time_sec == 100, 1);
+
+    verifyTrue(testCase, ...
+        diagnostics.raw_flat.lungs.adaptive_reference_used(grid_idx));
+    verifyEqual(testCase, ...
+        diagnostics.raw_flat.lungs.excursion_reference_used(grid_idx), ...
+        config.apnea.raw_flat_ref_floor_ratio * 8, 'AbsTol', 1e-12);
+    verifyEqual(testCase, ...
+        diagnostics.raw_flat.lungs.slope_reference_used(grid_idx), ...
+        config.apnea.raw_flat_ref_floor_ratio, 'AbsTol', 1e-12);
+end
+
+function testAdaptiveRawReferencesUseLaggedRawMetrics(testCase)
+    config = session_test_config(1, 10);
+    config.grid_step_sec = 1;
+    config.apnea.do_plot = false;
+    N = 161 * config.fs;
+    t_raw = (0:N-1)' / config.fs;
+    x = sin(2*pi*0.2*t_raw);
+    data = zeros(N, numel(config.data_columns));
+    data(:, config.channels.lungs_idx) = x;
+    phys = raw_only_phys_fixture(N, config);
+    resp_ref = explicit_raw_resp_ref(4, 0.1, NaN, NaN);
+
+    [~, diagnostics] = detect_apnea(data, phys, resp_ref, config);
+    grid_idx = find(phys.time_sec == 100, 1);
+    [i1, i2] = reference_window_indices(30, 90, config.fs, N);
+    expected_excursion = robust_resp_excursion(x(i1:i2));
+    expected_slope = raw_resp_slope_level(x(i1:i2));
+
+    verifyTrue(testCase, ...
+        diagnostics.raw_flat.lungs.adaptive_reference_used(grid_idx));
+    verifyEqual(testCase, ...
+        diagnostics.raw_flat.lungs.excursion_reference_used(grid_idx), ...
+        expected_excursion, 'AbsTol', 1e-12);
+    verifyEqual(testCase, ...
+        diagnostics.raw_flat.lungs.slope_reference_used(grid_idx), ...
+        expected_slope, 'AbsTol', 1e-12);
+end
+
+function testRawFlatBeltAvailabilityPreservesBothAndSingleBeltSemantics(testCase)
+    config = session_test_config(1, 10);
+    config.grid_step_sec = 1;
+    config.apnea.do_plot = false;
+    N = 121 * config.fs;
+    t_raw = (0:N-1)' / config.fs;
+    data = zeros(N, numel(config.data_columns));
+    data(:, config.channels.lungs_idx) = sin(2*pi*0.2*t_raw);
+    data(:, config.channels.diaph_idx) = sin(2*pi*0.2*t_raw + 0.1);
+    flat = t_raw >= 50 & t_raw <= 80;
+    data(flat, config.channels.lungs_idx) = 0;
+    data(flat, config.channels.diaph_idx) = 0;
+    phys = raw_only_phys_fixture(N, config);
+    resp_ref = explicit_raw_resp_ref(2, 0.1, 2, 0.1);
+
+    [~, both] = detect_apnea(data, phys, resp_ref, config);
+    verifyEqual(testCase, both.raw_flat_support_belts, 'both');
+    verifyTrue(testCase, any(both.raw_flat.lungs.mask));
+    verifyEqual(testCase, both.raw_flat.combined_candidate, ...
+        both.raw_flat.lungs.mask & both.raw_flat.diaph.mask);
+
+    resp_ref.diaph.raw.available = false;
+    [~, one] = detect_apnea(data, phys, resp_ref, config);
+    verifyEqual(testCase, one.raw_flat_support_belts, 'lungs');
+    verifyEqual(testCase, one.raw_flat.combined_candidate, ...
+        one.raw_flat.lungs.mask);
 end
 
 function testRawApneaReferenceNeverFallsBackWhenIntervalIsUnavailable(testCase)
@@ -224,8 +410,10 @@ function testRawApneaReferenceNeverFallsBackWhenIntervalIsUnavailable(testCase)
         0.7 * sin(2*pi*0.2*t + 0.1);
     reference = get_session_reference_interval(N, config);
     phys = raw_only_phys_fixture(N, config);
+    resp_ref = compute_respiratory_reference( ...
+        data, make_resp_feat([], [], [], []), reference, config);
 
-    [~, diagnostics] = detect_apnea(data, phys, reference, config);
+    [~, diagnostics] = detect_apnea(data, phys, resp_ref, config);
 
     verifyFalse(testCase, reference.available);
     verifyFalse(testCase, diagnostics.raw_flat.lungs.reference_available);
@@ -244,7 +432,9 @@ function testSighKeepsWholeRecordAmplitudeReference(testCase)
     amp(t >= 180 & t < 360) = 1;
     reference = get_session_reference_interval(N, config);
     resp_feat = make_resp_feat(t, amp, [], []);
-    resp_ref = compute_respiratory_reference(resp_feat, reference, config);
+    data = zeros(N, numel(config.data_columns));
+    resp_ref = compute_respiratory_reference( ...
+        data, resp_feat, reference, config);
     phys = compute_respiratory_features( ...
         zeros(N, 6), resp_feat, resp_ref, config);
 
@@ -261,6 +451,7 @@ function testNoObsoleteReferenceConfigurationOrHelperRemains(testCase)
     verifyFalse(testCase, isfield(config, 'baseline_sec'));
     verifyFalse(testCase, isfield(config, 'baseline_location'));
     verifyFalse(testCase, isfield(config, 'resp_ref'));
+    verifyFalse(testCase, isfield(config.apnea, 'raw_flat_enabled'));
 
     repo_root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
     verifyFalse(testCase, isfile(fullfile(repo_root, 'src', 'utils', ...
@@ -273,7 +464,13 @@ function testNoObsoleteReferenceConfigurationOrHelperRemains(testCase)
     verifyEqual(testCase, {interval_helpers.name}, ...
         {'get_session_reference_interval.m'});
 
-    forbidden = {'baseline_sec', 'baseline_location', ...
+    apnea_source = fileread(fullfile(repo_root, 'src', ...
+        'label_detection', 'detect_apnea.m'));
+    verifyFalse(testCase, contains(apnea_source, ...
+        'data, resp_features, session_reference, config'));
+    verifyFalse(testCase, contains(apnea_source, 'reference_segment'));
+
+    forbidden = {'baseline_sec', 'baseline_location', 'raw_flat_enabled', ...
         'get_static_baseline_interval', 'static_baseline', ...
         'resp_ref.session_pre_start_min', 'resp_ref.session_pre_end_min', ...
         'resp_ref.session_post_start_min', 'resp_ref.session_post_end_min'};
@@ -314,4 +511,33 @@ function phys = raw_only_phys_fixture(N, config)
     t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';
     belt = struct('ignored', false, 'session_amplitude_available', false);
     phys = struct('time_sec', t_grid, 'lungs', belt, 'diaph', belt);
+end
+
+function resp_ref = explicit_raw_resp_ref( ...
+    lungs_excursion, lungs_slope, diaph_excursion, diaph_slope)
+% EXPLICIT_RAW_RESP_REF Build fixed raw references for detector-only tests.
+
+    lungs = raw_reference_fixture(lungs_excursion, lungs_slope);
+    diaph = raw_reference_fixture(diaph_excursion, diaph_slope);
+    session = struct('value', 100, 'available', true);
+    resp_ref = struct( ...
+        'lungs', struct('session', session, 'raw', lungs), ...
+        'diaph', struct('session', session, 'raw', diaph));
+end
+
+function raw = raw_reference_fixture(excursion, slope)
+% RAW_REFERENCE_FIXTURE Build one complete fixed raw-reference schema.
+
+    available = isfinite(excursion) && excursion > 0 && ...
+        isfinite(slope) && slope > 0;
+    raw = struct('available', available, 'quality', 'test_reference', ...
+        'n_samples', 100, 'finite_fraction', 1, ...
+        'excursion', excursion, 'slope', slope);
+end
+
+function [i1, i2] = reference_window_indices(t1, t2, fs, N)
+% REFERENCE_WINDOW_INDICES Mirror the detector's clamped time indexing.
+
+    i1 = max(1, floor(t1 * fs) + 1);
+    i2 = min(N, floor(t2 * fs) + 1);
 end
