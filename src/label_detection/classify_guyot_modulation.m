@@ -1,8 +1,8 @@
 function pathological = classify_guyot_modulation( ...
     h, fm_hz, evaluable, h_threshold, fm_band_hz)
-% CLASSIFY_GUYOT_MODULATION Apply the published h and frequency criteria.
+% CLASSIFY_GUYOT_MODULATION Apply configured MAGMA-adapted h/frequency criteria.
 % A window is pathological only when h is strictly above its threshold and
-% modulation frequency lies within the inclusive Guyot band.
+% modulation frequency lies within the inclusive configured band.
 
     h = h(:);
     fm_hz = fm_hz(:);

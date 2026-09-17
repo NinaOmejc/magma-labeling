@@ -49,7 +49,7 @@ function overview = plot_group_diagnostic_overview(config_or_results_path, group
     overview.diagnostic_summary_csv = write_metric_summary_by_measure(group_table, ...
         diagnostic_summary_cols, fullfile(out_dir, 'group_diagnostic_descriptive_summary.csv'));
 
-    fprintf('Saved group diagnostic overview: %s\n', out_dir);
+    log_message(config, 1, 'Saved group diagnostic overview: %s', out_dir);
 end
 
 function specs = default_diagnostic_signal_specs()

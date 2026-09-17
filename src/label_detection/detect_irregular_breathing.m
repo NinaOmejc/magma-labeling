@@ -17,7 +17,9 @@ function [irregular_events, candidate_events] = detect_irregular_breathing(data,
     candidate_events = empty_candidate_events();
 
     if ~lungs_valid && ~diaph_valid
-        fprintf('Skipping irregular detection: no valid respiratory belt with usable breath timing.\n');
+        log_message(config, 1, ...
+            ['Skipping irregular detection: no valid respiratory belt with ' ...
+             'usable breath timing.']);
         return;
     end
 

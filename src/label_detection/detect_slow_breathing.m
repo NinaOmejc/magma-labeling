@@ -14,7 +14,9 @@ function [events, candidate_events] = detect_slow_breathing(data, resp_features,
     candidate_events = empty_candidate_events();
 
     if ~lungs.available && ~diaph.available
-        fprintf('Skipping slow detection: no valid respiratory belt with usable breath timing.\n');
+        log_message(config, 1, ...
+            ['Skipping slow detection: no valid respiratory belt with ' ...
+             'usable breath timing.']);
         return;
     end
 

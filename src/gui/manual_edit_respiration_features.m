@@ -80,19 +80,31 @@ function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b
         set(trough_plots, 'HitTest','off', 'PickableParts','none');
     end
 
-    fprintf('\nManual breath control ON.\n');
     if edit_lungs && edit_diaph
-        fprintf('  Editing lungs and diaphragm belts.\n');
+        belt_description = 'lungs + diaphragm';
+        detailed_belt_message = '  Editing lungs and diaphragm belts.';
     elseif edit_lungs
-        fprintf('  Editing lungs belt only.\n');
+        belt_description = 'lungs';
+        detailed_belt_message = '  Editing lungs belt only.';
     else
-        fprintf('  Editing diaphragm belt only.\n');
+        belt_description = 'diaphragm';
+        detailed_belt_message = '  Editing diaphragm belt only.';
     end
-    fprintf('  Left-click a trace to add a red peak.\n');
-    fprintf('  Left-click a red peak to remove it.\n');
-    fprintf('  Blue troughs and amplitudes are recomputed automatically from the edited peaks.\n');
-    fprintf('  Press Reviewed to accept the current respiratory cycles.\n');
-    fprintf('  Closing the window cancels the review and discards this session''s edits.\n\n');
+    log_message(config, 1, ...
+        ['Manual breath review ON (%s): click to add/remove peaks; ' ...
+         'press Reviewed to accept.'], belt_description);
+    log_message(config, 2, '\nManual breath control ON.');
+    log_message(config, 2, detailed_belt_message);
+    log_message(config, 2, '  Left-click a trace to add a red peak.');
+    log_message(config, 2, '  Left-click a red peak to remove it.');
+    log_message(config, 2, ...
+        ['  Blue troughs and amplitudes are recomputed automatically ' ...
+         'from the edited peaks.']);
+    log_message(config, 2, ...
+        '  Press Reviewed to accept the current respiratory cycles.');
+    log_message(config, 2, ...
+        ['  Closing the window cancels the review and discards this ' ...
+         'session''s edits.\n']);
     uiwait(fh);
     if isgraphics(fh)
         delete(fh);

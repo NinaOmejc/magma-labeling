@@ -1,6 +1,6 @@
 function [events, diagnostics, candidate_events] = detect_periodic_breathing( ...
     data, resp_cycles, config)
-% DETECT_PERIODIC_BREATHING Compute eAMI and Guyot literature methods.
+% DETECT_PERIODIC_BREATHING Compute MAGMA-adapted eAMI and Guyot methods.
 % Both methods are always evaluated independently when their inputs support
 % them. config.periodic.primary_method explicitly selects which combined method
 % supplies the canonical periodic events; there is no union, vote, or fallback.
@@ -116,6 +116,7 @@ function compact = compact_guyot(full)
         'reference_doi', full.reference_doi, ...
         'implementation', full.implementation, ...
         'front_end_note', full.front_end_note, ...
+        'temporal_projection', full.temporal_projection, ...
         'lungs', compact_guyot_belt(full.lungs), ...
         'diaph', compact_guyot_belt(full.diaph), ...
         'combined', struct( ...
@@ -150,7 +151,7 @@ function seconds = event_duration(events)
 end
 
 function plot_periodic_method_comparison(data, config, diagnostics)
-% PLOT_PERIODIC_METHOD_COMPARISON Compare raw, eAMI, and Guyot evidence.
+% PLOT_PERIODIC_METHOD_COMPARISON Show final labels and method-specific evidence.
 
     N = size(data, 1);
     t_raw = (0:N - 1)' / config.fs;
@@ -173,12 +174,15 @@ function plot_periodic_method_comparison(data, config, diagnostics)
         ' | Subject: ' num2str(config.subject) ...
         ' | Measurement: ' num2str(config.measure)])
 
-    ax1 = subplot(6, 1, 1); hold on
+    ax1 = subplot(3, 1, 1); hold on
     plot_raw_belts(ax1, t_raw, data, idx_lungs, idx_diaph);
-    title('Raw respiratory effort belts')
+    shade_events_on_axis(ax1, diagnostics.primary_events, ...
+        'final primary periodic events');
+    title('Raw respiratory effort belts + final periodic label')
     xlabel('Time (s)'); ylabel('Raw belt'); grid on; hold off
+    show_legend_if_data(ax1);
 
-    ax2 = subplot(6, 1, 2); hold on
+    ax2 = subplot(3, 1, 2); hold on
     plot_finite_trace(ax2, eami.lungs.t_sec, eami.lungs.eami, ...
         [0.15 0.15 0.15], 'lungs eAMI');
     plot_finite_trace(ax2, eami.diaph.t_sec, eami.diaph.eami, ...
@@ -186,56 +190,22 @@ function plot_periodic_method_comparison(data, config, diagnostics)
     yline(ax2, config.periodic.eami.threshold, 'r--', ...
         'DisplayName', 'eAMI threshold');
     shade_events_on_axis(ax2, eami.combined.events, 'combined eAMI events');
-    title('eAMI literature method')
+    title('eAMI')
     xlabel('Time (s)'); ylabel('eAMI'); grid on
     show_legend_if_data(ax2); hold off
 
-    ax3 = subplot(6, 1, 3); hold on
+    ax3 = subplot(3, 1, 3); hold on
     plot_finite_trace(ax3, guyot.lungs.envelope_t, guyot.lungs.envelope, ...
         [0.15 0.15 0.15], 'lungs envelope');
     plot_finite_trace(ax3, guyot.diaph.envelope_t, guyot.diaph.envelope, ...
         [0.10 0.35 0.90], 'diaphragm envelope');
-    title('Guyot reconstructed ventilation envelope')
+    shade_events_on_axis(ax3, guyot.combined.events, ...
+        'combined Guyot events');
+    title('Guyot canonical breath-amplitude envelope')
     xlabel('Time (s)'); ylabel('Canonical amplitude'); grid on
     show_legend_if_data(ax3); hold off
 
-    ax4 = subplot(6, 1, 4); hold on
-    plot_window_points(ax4, guyot.lungs.window_center_t, guyot.lungs.h, ...
-        [0.15 0.15 0.15], 'lungs h');
-    plot_window_points(ax4, guyot.diaph.window_center_t, guyot.diaph.h, ...
-        [0.10 0.35 0.90], 'diaphragm h');
-    yline(ax4, config.periodic.guyot.h_threshold, 'r--', ...
-        'DisplayName', 'h threshold');
-    shade_events_on_axis(ax4, guyot.combined.events, 'combined Guyot events');
-    title('Guyot modulation depth')
-    xlabel('Time (s)'); ylabel('h'); grid on
-    show_legend_if_data(ax4); hold off
-
-    ax5 = subplot(6, 1, 5); hold on
-    plot_window_points(ax5, guyot.lungs.window_center_t, guyot.lungs.fm_mhz, ...
-        [0.15 0.15 0.15], 'lungs f_m');
-    plot_window_points(ax5, guyot.diaph.window_center_t, guyot.diaph.fm_mhz, ...
-        [0.10 0.35 0.90], 'diaphragm f_m');
-    yline(ax5, 1000 * config.periodic.guyot.fm_band_hz(1), 'r--', ...
-        'DisplayName', 'accepted f_m band');
-    yline(ax5, 1000 * config.periodic.guyot.fm_band_hz(2), 'r--', ...
-        'HandleVisibility', 'off');
-    shade_events_on_axis(ax5, guyot.combined.events, 'combined Guyot events');
-    title('Guyot modulation frequency')
-    xlabel('Time (s)'); ylabel('f_m (mHz)'); grid on
-    show_legend_if_data(ax5); hold off
-
-    ax6 = subplot(6, 1, 6); hold on
-    plot_method_timeline(ax6, eami.combined.t_sec, ...
-        eami.combined.candidate_mask, 2, [0.75 0.10 0.10]);
-    plot_method_timeline(ax6, guyot.combined.t_sec, ...
-        guyot.combined.candidate_mask, 1, [0.10 0.35 0.90]);
-    yticks(ax6, [1 2]); yticklabels(ax6, {'Guyot', 'eAMI'});
-    ylim(ax6, [0.5 2.5]);
-    title(['Final method timelines | primary = ' diagnostics.primary_method])
-    xlabel('Time (s)'); ylabel('Method'); grid on; hold off
-
-    axes_handles = [ax1 ax2 ax3 ax4 ax5 ax6];
+    axes_handles = [ax1 ax2 ax3];
     linkaxes(axes_handles, 'x');
     if recording_end_t > 0
         xlim(ax1, [0 recording_end_t]);
@@ -276,29 +246,6 @@ function plot_finite_trace(ax, t_sec, values, color, display_name)
     values(~isfinite(values)) = NaN;
     plot(ax, t_sec(:), values, '-', 'Color', color, ...
         'LineWidth', 1.1, 'DisplayName', display_name);
-end
-
-function plot_window_points(ax, t_sec, values, color, display_name)
-% PLOT_WINDOW_POINTS Plot center-associated Guyot estimates without joining.
-
-    if isempty(t_sec) || isempty(values)
-        return;
-    end
-    valid = isfinite(t_sec) & isfinite(values);
-    plot(ax, t_sec(valid), values(valid), 'o', 'LineStyle', 'none', ...
-        'Color', color, 'MarkerSize', 4, 'DisplayName', display_name);
-end
-
-function plot_method_timeline(ax, t_sec, candidate_mask, row, color)
-% PLOT_METHOD_TIMELINE Draw retained method support on a compact fixed row.
-
-    plot(ax, [0 max([0; t_sec(:)])], [row row], '-', ...
-        'Color', [0.8 0.8 0.8], 'HandleVisibility', 'off');
-    candidate_mask = logical(candidate_mask(:));
-    state = nan(size(t_sec));
-    state(candidate_mask) = row;
-    plot(ax, t_sec, state, '-', 'Color', color, 'LineWidth', 4, ...
-        'HandleVisibility', 'off');
 end
 
 function show_legend_if_data(ax)

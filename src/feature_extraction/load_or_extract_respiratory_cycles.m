@@ -14,7 +14,8 @@ function resp_cycles = load_or_extract_respiratory_cycles(data, config)
         if is_valid_feature_cache(cached, size(data,1), cache_version, config)
             resp_cycles = cached_resp_cycles(cached);
             resp_cycles.provenance.loaded_from_cache = true;
-            fprintf('Loaded cached respiratory cycle extraction results: %s\n', cache_file);
+            log_message(config, 1, ...
+                'Loaded cached respiratory cycle extraction results: %s', cache_file);
             return;
         end
         if is_amplitude_method_only_cache_mismatch( ...
@@ -28,14 +29,17 @@ function resp_cycles = load_or_extract_respiratory_cycles(data, config)
             feature_cache_meta.amplitude_reselected_on = char(datetime( ...
                 'now', 'Format', 'yyyy-MM-dd HH:mm:ss'));
             save(cache_file, 'resp_cycles', 'feature_cache_meta');
-            fprintf(['Loaded cached respiratory cycles and reselected the ' ...
-                'canonical amplitude: %s\n'], cache_file);
+            log_message(config, 1, ...
+                ['Loaded cached respiratory cycles and reselected the ' ...
+                 'canonical amplitude: %s'], cache_file);
             return;
         end
 
         warning('Feature cache exists but is incomplete or mismatched. Recomputing: %s', cache_file);
     elseif exist(cache_file, 'file') && force_recompute
-        fprintf('Recomputing respiratory features because config.overwrite_features is true: %s\n', cache_file);
+        log_message(config, 1, ...
+            ['Recomputing respiratory features because ' ...
+             'config.overwrite_features is true: %s'], cache_file);
     end
 
     resp_cycles = extract_respiration_features(data, config);
@@ -57,7 +61,8 @@ function resp_cycles = load_or_extract_respiratory_cycles(data, config)
     end
 
     save(cache_file, 'resp_cycles', 'feature_cache_meta');
-    fprintf('Saved respiratory cycle extraction results: %s\n', cache_file);
+    log_message(config, 1, ...
+        'Saved respiratory cycle extraction results: %s', cache_file);
 end
 
 function ok = is_amplitude_method_only_cache_mismatch( ...

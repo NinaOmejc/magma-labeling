@@ -65,7 +65,7 @@ function group_table = build_group_label_table(config_or_results_path)
         fullfile(out_dir, 'cohort_event_durations.csv'));
     writetable(candidate_event_qc, ...
         fullfile(out_dir, 'cohort_candidate_events.csv'));
-    fprintf('Saved group label summary: %s\n', out_csv);
+    log_message(config, 1, 'Saved group label summary: %s', out_csv);
 end
 
 function row = label_file_to_summary_row(label_file, config, canonical_labels)

@@ -9,9 +9,11 @@ function save_recording_results(results, data_raw, data, config)
 % The MAT file stores each results field as a top-level variable; optional
 % HDF5 export uses the validated ML exchange schema.
 
+    log_message(config, 2, 'Saving MAT results...');
     save(fullfile(config.sub_results_path, config.sub_results_filename), ...
         '-struct', 'results');
     if get_config_value(config, 'HDF5', 'enabled', true)
+        log_message(config, 2, 'Saving HDF5 results...');
         hdf5_suffix = get_config_value(config, 'HDF5', ...
             'filename_suffix', '_labels.h5');
         hdf5_filename = fullfile(config.sub_results_path, ...

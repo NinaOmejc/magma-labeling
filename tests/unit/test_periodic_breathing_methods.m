@@ -3,7 +3,7 @@ function tests = test_periodic_breathing_methods
     tests = functiontests(localfunctions);
 end
 
-function testCurrentPeriodicConfigurationContainsOnlyLiteratureMethods(testCase)
+function testCurrentPeriodicConfigurationContainsBothMethods(testCase)
     config = get_config();
     verifyEqual(testCase, fieldnames(config.periodic), ...
         {'primary_method'; 'do_plot'; 'eami'; 'guyot'});
@@ -16,6 +16,10 @@ function testCurrentPeriodicConfigurationContainsOnlyLiteratureMethods(testCase)
     verifyEqual(testCase, fieldnames(config.periodic.guyot), ...
         {'resample_hz'; 'window_sec'; 'overlap_fraction'; ...
          'h_threshold'; 'fm_band_hz'; 'min_zone_sec'; 'gap_factor'});
+    verifyEqual(testCase, config.periodic.eami.threshold, 0.60, ...
+        'AbsTol', eps);
+    verifyEqual(testCase, config.periodic.guyot.fm_band_hz, ...
+        [0.008 0.050], 'AbsTol', eps);
 end
 
 function testPeriodicDetectorComputesBothAndSelectsExplicitPrimary(testCase)
@@ -291,12 +295,56 @@ function testGuyotUsesCanonicalMAGMABreathAmplitude(testCase)
     verifyEqual(testCase, diagnostics.lungs.canonical_breath_amp, expected_amp);
 end
 
-function testGuyotClassificationUsesPublishedThresholds(testCase)
+function testGuyotClassificationUsesConfiguredMAGMAThresholds(testCase)
     h = [0.13; 0.12; 0.50; 0.50; 0.50];
-    fm = [0.015; 0.015; 0.007; 0.031; 0.020];
+    fm = [0.015; 0.015; 0.007; 0.051; 0.050];
     actual = classify_guyot_modulation( ...
-        h, fm, true(size(h)), 0.12, [0.008 0.030]);
+        h, fm, true(size(h)), 0.12, [0.008 0.050]);
     verifyEqual(testCase, actual, [true; false; false; false; true]);
+end
+
+function testGuyotCenterProjectionAndPersistence(testCase)
+    window_sec = 120;
+    overlap_fraction = 0.80;
+    expected_step = window_sec * (1 - overlap_fraction);
+    centers = (60:expected_step:156)';
+    verifyEqual(testCase, diff(centers), ...
+        expected_step * ones(numel(centers) - 1, 1), 'AbsTol', 1e-12);
+
+    t = (0:240)';
+    evaluable = true(size(centers));
+    isolated = logical([0; 0; 1; 0; 0]);
+    two_consecutive = logical([0; 1; 1; 0; 0]);
+    three_consecutive = logical([0; 1; 1; 1; 0]);
+    [evaluable_time, isolated_time] = project_guyot_window_estimates( ...
+        t, centers, evaluable, isolated);
+    [~, two_time] = project_guyot_window_estimates( ...
+        t, centers, evaluable, two_consecutive);
+    [~, three_time] = project_guyot_window_estimates( ...
+        t, centers, evaluable, three_consecutive);
+
+    isolated_support = t(isolated_time);
+    verifyLessThanOrEqual(testCase, ...
+        abs(isolated_support(1) - mean(centers(2:3))), 1);
+    verifyLessThanOrEqual(testCase, ...
+        abs(isolated_support(end) - mean(centers(3:4))), 1);
+
+    unavailable = false(size(t));
+    isolated_combined = combine_periodic_belt_evidence( ...
+        t, evaluable_time, isolated_time, unavailable, unavailable, ...
+        60, numel(t), 1);
+    two_combined = combine_periodic_belt_evidence( ...
+        t, evaluable_time, two_time, unavailable, unavailable, ...
+        60, numel(t), 1);
+    three_combined = combine_periodic_belt_evidence( ...
+        t, evaluable_time, three_time, unavailable, unavailable, ...
+        60, numel(t), 1);
+
+    verifyEmpty(testCase, isolated_combined.events);
+    verifyEmpty(testCase, two_combined.events);
+    verifyNotEmpty(testCase, three_combined.events);
+    verifyGreaterThanOrEqual(testCase, ...
+        three_combined.events(1).duration, 60);
 end
 
 function testGuyotPersistenceRequiresFullMinute(testCase)
@@ -336,7 +384,12 @@ function testGuyotSlidingWindowsDetectSyntheticPathologicalEnvelope(testCase)
     data = zeros(420 * config.fs + 1, numel(config.data_columns));
     diagnostics = compute_guyot_periodic_breathing(data, resp_cycles, config);
 
-    verifyEqual(testCase, diagnostics.step_sec, 24, 'AbsTol', eps);
+    expected_step = config.periodic.guyot.window_sec * ...
+        (1 - config.periodic.guyot.overlap_fraction);
+    verifyEqual(testCase, diagnostics.step_sec, expected_step, 'AbsTol', eps);
+    verifyEqual(testCase, diff(diagnostics.lungs.window_center_t), ...
+        expected_step * ones(numel(diagnostics.lungs.window_center_t) - 1, 1), ...
+        'AbsTol', 1 / config.periodic.guyot.resample_hz);
     verifyTrue(testCase, any(diagnostics.lungs.pathological_window_mask));
     verifyNotEmpty(testCase, diagnostics.combined.events);
 end
@@ -347,12 +400,19 @@ function testMethodMetadataAndComparisonPlotArePresent(testCase)
         'label_detection', 'detect_periodic_breathing.m'));
     required = {'compute_eami_periodic_breathing', ...
         'compute_guyot_periodic_breathing', 'primary_method', ...
-        'subplot(6, 1, 6)', 'eAMI literature method', ...
-        'Guyot reconstructed ventilation envelope', ...
-        'Guyot modulation depth', 'Guyot modulation frequency', ...
-        'Final method timelines'};
+        'diagnostics.primary_events', ...
+        'Raw respiratory effort belts + final periodic label', ...
+        'title(''eAMI'')', ...
+        'Guyot canonical breath-amplitude envelope', ...
+        'eami.combined.events', 'guyot.combined.events'};
     for i = 1:numel(required)
         verifyTrue(testCase, contains(detector, required{i}));
+    end
+    verifyEqual(testCase, count(detector, 'subplot(3, 1'), 3);
+    removed = {'subplot(6, 1', 'Guyot modulation depth', ...
+        'Guyot modulation frequency', 'Final method timelines'};
+    for i = 1:numel(removed)
+        verifyFalse(testCase, contains(detector, removed{i}));
     end
 end
 

@@ -13,7 +13,9 @@ function [events, candidate_events] = detect_deep_breathing(data, resp_features,
     candidate_events = empty_candidate_events();
 
     if ~lungs.session_amplitude_available && ~diaph.session_amplitude_available
-        fprintf('Skipping deep detection: no valid respiratory belt with usable breath amplitudes.\n');
+        log_message(config, 1, ...
+            ['Skipping deep detection: no valid respiratory belt with ' ...
+             'usable breath amplitudes.']);
         return;
     end
 

@@ -21,6 +21,7 @@ config.subjects(ismember(config.subjects, config.remove_subjects)) = [];
 % EXECUTION
 config.overwrite_results = true;    % If true, recompute even if "*_labels.h5" output already exists.
 config.overwrite_features = false;  % If true, recompute respiratory features even if "*_features.mat" already exists.
+config.verbosity = 1;               % 1 = concise progress, 2 = detailed progress.
 
 % RESPIRATORY REPRESENTATION
 config.resp.amp_method = 'expiratory';  % Selected breath amplitude: 'expiratory' (peak to following trough), 'inspiratory' (peak to preceding trough), or 'symmetric' (peak to the mean of both troughs)

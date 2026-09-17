@@ -15,7 +15,7 @@ Unless explicitly literature-derived, thresholds below are operational research 
 | `irregular` | IBI variability | 60-s $CV_{IBI} \geq 0.30$ |
 | `apnea` | Very-low respiratory movement | ≤10% reference excursion for ≥10 s |
 | `sigh` | Local breath excursion | Breath ≥2× centered 15-breath median |
-| `periodic` | eAMI | eAMI ≥0.65 with sustained periodic modulation |
+| `periodic` | eAMI | eAMI ≥0.60 with sustained periodic modulation |
 | `thoracic` | Relative thoracic/abdominal excursion | Normalized T/A ≥1.5 for ≥30 s |
 | `async` | Thoracoabdominal phase offset | Reliable absolute phase offset ≥30° for sustained period |
 | `desat` | SpO₂ | <90% or ≥3 percentage-point reference drop for ≥10 s |
@@ -71,7 +71,16 @@ The same canonical belt amplitude selected by `config.resp.amp_method` is used b
 
 The primary detector is the estimated amplitude modulation index (eAMI).
 
-The Guyot demodulation/Matrix Pencil implementation is retained as complementary evidence but does not contribute to the primary label.
+With the default eAMI primary selection, the Guyot demodulation/Matrix Pencil
+implementation is retained as complementary evidence. It can instead supply
+the final label through `config.periodic.primary_method = 'guyot'`.
+
+MAGMA uses an adapted eAMI threshold of `0.60` and a configured Guyot
+modulation-frequency band of `0.008–0.050 Hz`; these are tuned MAGMA settings,
+not exact published thresholds. Guyot centered-window decisions represent the
+nearest-center interval (boundaries halfway between adjacent centers) and are
+never projected across the full 120-second analysis window. Sustained support
+must still meet the configured 60-second minimum.
 
 The output represents periodic or Cheyne–Stokes-like respiratory-effort modulation rather than a clinical diagnosis of Cheyne–Stokes respiration.
 

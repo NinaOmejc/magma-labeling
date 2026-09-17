@@ -39,7 +39,8 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events(data, confi
             review_history = loaded_history;
             active_round_id = loaded_active_round_id;
             edit_info.loaded_schema_version = loaded_schema;
-            fprintf('Loaded manual label review history: %s\n', edit_file);
+            log_message(config, 1, ...
+                'Loaded manual label review history: %s', edit_file);
         end
     end
 
@@ -98,7 +99,8 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events(data, confi
     if cfg.save_edits
         save_manual_event_sets(edit_file, automatic_event_sets, reviewed_event_sets, ...
             review_history, active_round_id, label_defs, config, N, fs);
-        fprintf('Saved manual label review round: %s\n', edit_file);
+        log_message(config, 1, ...
+            'Saved manual label review round: %s', edit_file);
     end
     edit_info = apply_active_round_info(edit_info, review_history, ...
         active_round_id, label_defs, N);
@@ -788,12 +790,19 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
     set(fh, 'WindowButtonUpFcn', @(~,~) finish_drag());
     set(fh, 'CloseRequestFcn', @(~,~) finish_editing());
 
-    fprintf('\nManual label event editor ON.\n');
-    fprintf('  Choose a label from the dropdown.\n');
-    fprintf('  Drag on a non-shaded area to add an interval for that label.\n');
-    fprintf('  Click a shaded interval to remove it for the selected label.\n');
-    fprintf('  Reset restores the configured starting annotations (%s).\n', cfg.start_from);
-    fprintf('  Close or press Done when finished.\n\n');
+    log_message(config, 1, ...
+        ['Manual label review ON: choose a label, drag to add or click ' ...
+         'to remove intervals; press Done when finished.']);
+    log_message(config, 2, '\nManual label event editor ON.');
+    log_message(config, 2, '  Choose a label from the dropdown.');
+    log_message(config, 2, ...
+        '  Drag on a non-shaded area to add an interval for that label.');
+    log_message(config, 2, ...
+        '  Click a shaded interval to remove it for the selected label.');
+    log_message(config, 2, ...
+        '  Reset restores the configured starting annotations (%s).', ...
+        cfg.start_from);
+    log_message(config, 2, '  Close or press Done when finished.\n');
 
     refresh_event_patches();
     mark_current_view_reviewed();

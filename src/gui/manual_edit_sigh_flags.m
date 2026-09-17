@@ -66,10 +66,13 @@ function [flags_lungs, flags_diaph, review_mask] = manual_edit_sigh_flags( ...
         'ButtonDownFcn', @(~,evt) edit_flag(evt, ax1, 'lungs', 'marker'));
     set(m2, 'HitTest','on', 'PickableParts','visible', ...
         'ButtonDownFcn', @(~,evt) edit_flag(evt, ax2, 'diaph', 'marker'));
-    fprintf('\nManual sigh control ON.\n');
-    fprintf('  Left-click a trace to add a marker.\n');
-    fprintf('  Left-click a red marker to remove it.\n');
-    fprintf('  Close the figure when done.\n\n');
+    log_message(config, 1, ...
+        ['Manual sigh review ON: click to add/remove markers; ' ...
+         'close the figure when done.']);
+    log_message(config, 2, '\nManual sigh control ON.');
+    log_message(config, 2, '  Left-click a trace to add a marker.');
+    log_message(config, 2, '  Left-click a red marker to remove it.');
+    log_message(config, 2, '  Close the figure when done.\n');
     uiwait(fh);
 
     function set_xlim(x0)

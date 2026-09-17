@@ -9,7 +9,9 @@ function [events, candidate_events] = detect_thoracic_dominant_breathing(data, r
     evidence = resp_features.thoracoabdominal_balance;
     candidate_events = empty_candidate_events();
     if ~evidence.available
-        fprintf('Skipping thoracic detection: both session-normalized respiratory belts are required.\n');
+        log_message(config, 1, ...
+            ['Skipping thoracic detection: both session-normalized ' ...
+             'respiratory belts are required.']);
         return;
     end
 

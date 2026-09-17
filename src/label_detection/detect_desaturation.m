@@ -22,7 +22,8 @@ function [events_desat, diagnostics_desat, spo2_ref] = detect_desaturation( ...
     if isempty(idx_spo2)
         diagnostics_desat.detection_mode = 'unavailable';
         diagnostics_desat.availability_reason = 'missing_spo2_channel';
-        fprintf('Skipping desat detection: SpO2 signal is unavailable.\n');
+        log_message(config, 1, ...
+            'Skipping desat detection: SpO2 signal is unavailable.');
         return;
     end
 
@@ -43,7 +44,9 @@ function [events_desat, diagnostics_desat, spo2_ref] = detect_desaturation( ...
         diagnostics_desat.availability_reason = 'available';
     else
         diagnostics_desat.availability_reason = 'insufficient_finite_spo2';
-        fprintf('Skipping desat detection: usable SpO2 samples are unavailable.\n');
+        log_message(config, 1, ...
+            ['Skipping desat detection: usable SpO2 samples are ' ...
+             'unavailable.']);
         return;
     end
 

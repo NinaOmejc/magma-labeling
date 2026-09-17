@@ -26,9 +26,14 @@ config.input_filename_pattern
 config.overwrite_results
 config.overwrite_features
 config.make_figs_visible
+config.verbosity
 ```
 
 Individual detector plots can additionally be controlled with the corresponding `do_plot` field.
+
+`config.verbosity = 1` prints concise progress, including important skip and
+signal-availability messages. Set it to `2` for detailed pipeline-stage and
+detector progress. Warnings and errors are always shown.
 
 ## Respiratory-cycle extraction
 
@@ -111,6 +116,18 @@ config.periodic.primary_method = 'eami';
 ```
 
 The Guyot method is retained as a secondary comparison.
+
+The tuned periodic settings are MAGMA adaptations rather than exact published
+thresholds:
+
+```matlab
+config.periodic.eami.threshold = 0.60;
+config.periodic.guyot.fm_band_hz = [0.008 0.050];
+```
+
+Guyot uses centered 120-second windows with 80% overlap. Each classification
+represents its nearest-center interval (about 24 seconds per center step), not
+the full analysis window, before the 60-second persistence rule is applied.
 
 ### Respiratory asynchrony
 

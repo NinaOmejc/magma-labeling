@@ -31,6 +31,7 @@ function config = get_config_defaults()
     config.make_figs_visible = 'on';                                      % create figures hidden during batch runs, so they dont pop up (for faster run)
     config.overwrite_results = true;                                      % *** Recompute even if label output already exists
     config.overwrite_features = false;                                     % *** Recompute respiratory features even if "*_features.mat" exists
+    config.verbosity = 1;                                                   % 1 = concise progress, 2 = detailed progress
     
     % FIRST CHECK: plot [X1, X2] seconds of raw data
     config.plot_raw_data = false;                               % save an overview plot of raw signals
@@ -159,9 +160,9 @@ function config = get_config_defaults()
     config.periodic.do_plot = true;              % save the two-method comparison figure
 
     % Fernandez Tellez et al., Sleep 2015 (DOI 10.5665/sleep.4494).
-    % The filter bands/orders, 1-Hz rate, and threshold follow the published
-    % eAMI method. The 60-s energy window is a MAGMA comparison default; the
-    % paper reports relative insensitivity once this window exceeds about 40 s.
+    % The signal-processing structure follows the eAMI method. The 0.60
+    % threshold and 60-s energy window are MAGMA-adapted settings; the paper
+    % reports relative insensitivity once the window exceeds about 40 s.
     config.periodic.eami = struct();
     config.periodic.eami.resp_band_hz = [0.125 0.40];
     config.periodic.eami.bandpass_order = 12;
@@ -172,10 +173,10 @@ function config = get_config_defaults()
     config.periodic.eami.threshold = 0.60;
 
     % Guyot et al., PLOS ONE 2020 (DOI 10.1371/journal.pone.0221191).
-    % Window, overlap, h/fm criteria, one-minute zone, and three-IBI gap rule
-    % follow the publication. MAGMA uses a 1-Hz reconstruction and reviewed
-    % canonical MAGMA breath amplitudes instead of the paper's change-point
-    % breath front-end.
+    % The centered window/overlap and Matrix Pencil structure follow the paper.
+    % The configured [0.008 0.050]-Hz f_m band is MAGMA-adapted. MAGMA also
+    % uses a 1-Hz reconstruction and reviewed canonical breath amplitudes
+    % instead of the paper's change-point breath front-end.
     config.periodic.guyot = struct();
     config.periodic.guyot.resample_hz = 1;
     config.periodic.guyot.window_sec = 120;

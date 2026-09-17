@@ -18,18 +18,24 @@ function [data, config, do_analysis] = load_raw_data(config)
     if isfolder(config.sub_results_path) && exist([config.sub_results_path filesep config.sub_results_filename] , 'file')
         if config.overwrite_results
             do_analysis = true;
-            disp(['Overwritting analysis for: Sub ' num2str(config.subject) ' | Measurement: ' num2str(config.measure) ])
+            log_message(config, 1, ...
+                'Overwritting analysis for: Sub %d | Measurement: %d', ...
+                config.subject, config.measure);
         else
             do_analysis = false;
             data = [];
-            disp(['Skipping analysis, as results already exist: Sub ' num2str(config.subject) ' | Measurement: ' num2str(config.measure) ])
+            log_message(config, 1, ...
+                'Skipping analysis, as results already exist: Sub %d | Measurement: %d', ...
+                config.subject, config.measure);
             return
         end
     else
         if ~isfolder(config.sub_results_path)
             mkdir(config.sub_results_path);
         end
-        disp(['Successfully loaded data: Sub ' num2str(config.subject) ' | Measurement: ' num2str(config.measure) ])
+        log_message(config, 1, ...
+            'Successfully loaded data: Sub %d | Measurement: %d', ...
+            config.subject, config.measure);
     end
 
     % LOAD DATA
@@ -45,7 +51,7 @@ function [data, config, do_analysis] = load_raw_data(config)
     end
 
     data = reshape_loaded_data(data, numel(config.data_columns), full_fname);
-    print_input_configuration(input_config);
+    print_input_configuration(input_config, config);
 
     % CHECK PROBLEMS
     if is_lung_belt_ignored(config)
@@ -109,8 +115,9 @@ function data = reshape_loaded_data(raw_data, n_cols, filename)
         filename, n_cols, size(raw_data, 1), size(raw_data, 2));
 end
 
-function print_input_configuration(input_config)
+function print_input_configuration(input_config, config)
 % PRINT_INPUT_CONFIGURATION Report the resolved signal-availability description.
 
-    fprintf('Detected input configuration: %s\n', input_config.description);
+    log_message(config, 1, 'Detected input configuration: %s', ...
+        input_config.description);
 end
