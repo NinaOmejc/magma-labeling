@@ -1,20 +1,13 @@
 
 %---- SETTINGS ----
-base_config = get_config();
-if ~isfolder(base_config.path_results_out)
-    mkdir(base_config.path_results_out);
-end
-config = base_config;
-save(fullfile(base_config.path_results_out, ...
-    'analysis_configuration.mat'), 'config');
+config = get_config();
 
 %---- MEASUREMENT AND SUBJECT LOOPS
-for isub = 1:length(base_config.subjects)
-    for imeasure = 1:length(base_config.measurements)
+for isub = 1:length(config.subjects)
+    for imeasure = 1:length(config.measurements)
 
-        config = base_config;
-        config.subject = base_config.subjects(isub);
-        config.measure = base_config.measurements(imeasure);
+        config.subject = config.subjects(isub);
+        config.measure = config.measurements(imeasure);
         
         % LOAD DATA
         [data_raw, config, do_analysis] = load_raw_data(config);

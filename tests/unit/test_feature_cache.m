@@ -51,23 +51,78 @@ function testCompatibleMasterRateCacheIsReused(testCase)
     verifyTrue(testCase, actual.provenance.loaded_from_cache);
 end
 
-function testAmplitudeMethodChangeInvalidatesCache(testCase)
+function testAmplitudeMethodChangeReselectsWithoutLosingReviewedBreaths(testCase)
     output_dir = tempname;
     mkdir(output_dir);
     cleanup_dir = onCleanup(@() rmdir(output_dir, 's'));
-    config = make_test_config(output_dir);
-    data = make_synthetic_master_data(10001, config.fs);
+    n_samples = 40;
+    data = zeros(n_samples, 2);
+    config = struct( ...
+        'subject', 999, ...
+        'measure', 1, ...
+        'fs', 10, ...
+        'data_columns', {{'Resp-Lungs', 'Resp-Diaphragm'}}, ...
+        'sub_results_path', output_dir, ...
+        'sub_features_filename', 'test_features.mat', ...
+        'path_results_out', output_dir, ...
+        'overwrite_features', false, ...
+        'resp', struct('amp_method', 'expiratory'));
+    reviewed_belt = reviewed_cache_belt(n_samples);
+    resp_cycles = struct( ...
+        'lungs', reviewed_belt, ...
+        'diaph', reviewed_belt, ...
+        'provenance', struct( ...
+            'review_status', 'manual_reviewed_edited', ...
+            'manual_review_performed', true, ...
+            'manual_edits_made', true, ...
+            'loaded_from_cache', false));
+    feature_cache_meta = struct( ...
+        'cache_version', 8, ...
+        'subject', config.subject, ...
+        'measurement', config.measure, ...
+        'fs', config.fs, ...
+        'n_samples', n_samples, ...
+        'data_columns', {config.data_columns}, ...
+        'amp_method', 'expiratory');
+    reviewed = resp_cycles;
+    cache_file = fullfile(output_dir, config.sub_features_filename);
+    save(cache_file, 'resp_cycles', 'feature_cache_meta');
 
-    expiratory = load_or_extract_respiratory_cycles(data, config);
     config.resp.amp_method = 'inspiratory';
     inspiratory = load_or_extract_respiratory_cycles(data, config);
-    saved = load(fullfile(output_dir, config.sub_features_filename), ...
-        'feature_cache_meta');
+    saved = load(cache_file, 'feature_cache_meta');
 
-    verifyFalse(testCase, expiratory.provenance.loaded_from_cache);
-    verifyFalse(testCase, inspiratory.provenance.loaded_from_cache);
+    verifyTrue(testCase, inspiratory.provenance.loaded_from_cache);
+    verifyEqual(testCase, inspiratory.provenance.review_status, ...
+        'manual_reviewed_edited');
+    verifyTrue(testCase, inspiratory.provenance.manual_review_performed);
+    verifyTrue(testCase, inspiratory.provenance.manual_edits_made);
+    verifyEqual(testCase, inspiratory.lungs.peak_idx, reviewed.lungs.peak_idx);
+    verifyEqual(testCase, inspiratory.lungs.trough_idx, reviewed.lungs.trough_idx);
     verifyEqual(testCase, inspiratory.lungs.amp, inspiratory.lungs.amp_insp);
+    verifyEqual(testCase, inspiratory.lungs.amp_exp, reviewed.lungs.amp_exp);
+    verifyEqual(testCase, inspiratory.lungs.amp_sym, reviewed.lungs.amp_sym);
     verifyEqual(testCase, saved.feature_cache_meta.amp_method, 'inspiratory');
+    verifyTrue(testCase, isfield(saved.feature_cache_meta, ...
+        'amplitude_reselected_on'));
+end
+
+function b = reviewed_cache_belt(n_samples)
+    b = empty_respiration_feature('reviewed');
+    b.x0 = zeros(n_samples, 1);
+    b.peak_idx = [5; 15; 25; 35];
+    b.peak_t = (b.peak_idx - 1) / 10;
+    b.peak_val = [2; 3; 4; 5];
+    b.trough_idx = [10; 20; 30];
+    b.trough_t = (b.trough_idx - 1) / 10;
+    b.trough_val = [0.5; 1; 1.5];
+    b.amp_exp = [1.5; 2; 2.5; NaN];
+    b.amp_insp = [NaN; 2.5; 3; 3.5];
+    b.amp_sym = [NaN; 2.25; 2.75; NaN];
+    b.amp = b.amp_exp;
+    b.ibi = diff(b.peak_idx) / 10;
+    b.rr_bpm = 60 ./ b.ibi;
+    b.ok = true;
 end
 
 function resp_feat = sentinel_resp_feat(n_samples)

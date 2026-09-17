@@ -39,10 +39,13 @@ function [label_available, reason] = compute_label_availability( ...
                 [label_available(i), reason{i}] = respiratory_feature_availability( ...
                     rate_rapid, any_resp);
             case 'async'
-                label_available(i) = isstruct(rea) && ...
-                    isfield(rea, 'valid_analysis') && logical(rea.valid_analysis);
+                label_available(i) = async_primary_available(rea);
                 if label_available(i)
                     reason{i} = 'available';
+                elseif async_one_belt_unavailable(rea)
+                    reason{i} = 'one_belt_only';
+                elseif isstruct(rea) && isfield(rea, 'primary_availability_reason')
+                    reason{i} = char(string(rea.primary_availability_reason));
                 elseif isstruct(rea) && isfield(rea, 'skip_code') && ...
                         ismember(rea.skip_code, [1 2])
                     reason{i} = 'one_belt_only';
@@ -101,6 +104,38 @@ function [label_available, reason] = compute_label_availability( ...
                     reason{i} = 'insufficient_thoracoabdominal_evidence';
                 end
         end
+    end
+end
+
+function tf = async_one_belt_unavailable(rea)
+% ASYNC_ONE_BELT_UNAVAILABLE Preserve the canonical one-belt reason.
+
+    tf = false;
+    if ~isstruct(rea)
+        return;
+    end
+    if isfield(rea, 'primary_method') && ...
+            strcmp(char(string(rea.primary_method)), 'wavelet_phase_offset') && ...
+            isfield(rea, 'primary_availability_reason')
+        tf = ismember(char(string(rea.primary_availability_reason)), ...
+            {'missing_respiratory_belt_channel', ...
+             'lung_belt_marked_missing', ...
+             'invalid_lungs_breath_timing', ...
+             'invalid_diaphragm_breath_timing'});
+    elseif isfield(rea, 'skip_code')
+        tf = ismember(rea.skip_code, [1 2]);
+    end
+end
+
+function tf = async_primary_available(rea)
+% ASYNC_PRIMARY_AVAILABLE Prefer explicit selected-method availability.
+
+    if isstruct(rea) && isfield(rea, 'primary_available') && ...
+            isscalar(rea.primary_available)
+        tf = logical(rea.primary_available);
+    else
+        tf = isstruct(rea) && isfield(rea, 'valid_analysis') && ...
+            isscalar(rea.valid_analysis) && logical(rea.valid_analysis);
     end
 end
 

@@ -17,6 +17,21 @@ function resp_cycles = load_or_extract_respiratory_cycles(data, config)
             fprintf('Loaded cached respiratory cycle extraction results: %s\n', cache_file);
             return;
         end
+        if is_amplitude_method_only_cache_mismatch( ...
+                cached, size(data,1), cache_version, config)
+            resp_cycles = select_cached_canonical_amplitude( ...
+                cached_resp_cycles(cached), config);
+            resp_cycles.provenance.loaded_from_cache = true;
+            feature_cache_meta = cached.feature_cache_meta;
+            feature_cache_meta.amp_method = ...
+                resolve_respiration_amplitude_method(config);
+            feature_cache_meta.amplitude_reselected_on = char(datetime( ...
+                'now', 'Format', 'yyyy-MM-dd HH:mm:ss'));
+            save(cache_file, 'resp_cycles', 'feature_cache_meta');
+            fprintf(['Loaded cached respiratory cycles and reselected the ' ...
+                'canonical amplitude: %s\n'], cache_file);
+            return;
+        end
 
         warning('Feature cache exists but is incomplete or mismatched. Recomputing: %s', cache_file);
     elseif exist(cache_file, 'file') && force_recompute
@@ -43,6 +58,73 @@ function resp_cycles = load_or_extract_respiratory_cycles(data, config)
 
     save(cache_file, 'resp_cycles', 'feature_cache_meta');
     fprintf('Saved respiratory cycle extraction results: %s\n', cache_file);
+end
+
+function ok = is_amplitude_method_only_cache_mismatch( ...
+    cached, n_samples, cache_version, config)
+% IS_AMPLITUDE_METHOD_ONLY_CACHE_MISMATCH Permit safe amplitude reselection.
+% All extraction-defining metadata and the full multi-amplitude cycle schema
+% must match. Only the selected canonical amplitude method may differ.
+
+    required_meta = {'cache_version', 'subject', 'measurement', 'fs', ...
+        'n_samples', 'data_columns', 'amp_method'};
+    ok = isfield(cached, 'feature_cache_meta') && ...
+        isstruct(cached.feature_cache_meta) && ...
+        all(isfield(cached.feature_cache_meta, required_meta)) && ...
+        isfield(cached, 'resp_cycles') && ...
+        is_valid_resp_cycles(cached.resp_cycles, n_samples);
+    if ~ok
+        return;
+    end
+
+    meta = cached.feature_cache_meta;
+    requested_method = resolve_respiration_amplitude_method(config);
+    ok = isequal(meta.cache_version, cache_version) && ...
+        isequal(meta.subject, config.subject) && ...
+        isequal(meta.measurement, config.measure) && ...
+        isequal(meta.fs, config.fs) && ...
+        isequal(meta.n_samples, n_samples) && ...
+        isequal(cellstr(string(meta.data_columns)), ...
+            cellstr(string(config.data_columns))) && ...
+        ~strcmp(char(string(meta.amp_method)), requested_method);
+end
+
+function resp_cycles = select_cached_canonical_amplitude(resp_cycles, config)
+% SELECT_CACHED_CANONICAL_AMPLITUDE Select .amp without moving breath markers.
+
+    method = resolve_respiration_amplitude_method(config);
+    source_field = ['amp_' amplitude_method_suffix(method)];
+    belt_names = {'lungs', 'diaph'};
+    for i = 1:numel(belt_names)
+        name = belt_names{i};
+        belt = resp_cycles.(name);
+        if ~isfield(belt, source_field) || ...
+                numel(belt.(source_field)) ~= numel(belt.peak_idx)
+            error('MAGMA:Respiration:InvalidAmplitudeCache', ...
+                ['Cached %s.%s must contain one value per peak before ' ...
+                 'the canonical amplitude can be reselected.'], ...
+                name, source_field);
+        end
+        selected_amplitude = belt.(source_field);
+        belt.amp = selected_amplitude(:);
+        resp_cycles.(name) = belt;
+    end
+end
+
+function suffix = amplitude_method_suffix(method)
+% AMPLITUDE_METHOD_SUFFIX Map public method names to stored field suffixes.
+
+    switch method
+        case 'expiratory'
+            suffix = 'exp';
+        case 'inspiratory'
+            suffix = 'insp';
+        case 'symmetric'
+            suffix = 'sym';
+        otherwise
+            error('MAGMA:Respiration:InvalidAmplitudeMethod', ...
+                'Unsupported respiratory amplitude method: %s.', method);
+    end
 end
 
 function cache_file = feature_cache_file(config)
@@ -117,6 +199,8 @@ function ok = is_valid_resp_cycles(resp_cycles, n_samples)
          isfield(resp_cycles.diaph, 'peak_idx') && isfield(resp_cycles.diaph, 'trough_idx') && ...
          all(isfield(resp_cycles.lungs, amplitude_fields)) && ...
          all(isfield(resp_cycles.diaph, amplitude_fields)) && ...
+         has_aligned_cycle_amplitudes(resp_cycles.lungs, amplitude_fields) && ...
+         has_aligned_cycle_amplitudes(resp_cycles.diaph, amplitude_fields) && ...
          is_valid_cycle_provenance(resp_cycles.provenance);
     if ~ok
         return;
@@ -132,6 +216,17 @@ function ok = is_valid_resp_cycles(resp_cycles, n_samples)
             numel(resp_cycles.diaph.x0) ~= n_samples
         ok = false;
         return;
+    end
+end
+
+function ok = has_aligned_cycle_amplitudes(belt, amplitude_fields)
+% HAS_ALIGNED_CYCLE_AMPLITUDES Require one value per saved peak.
+
+    n_peaks = numel(belt.peak_idx);
+    ok = all(cellfun(@(field) numel(belt.(field)) == n_peaks, ...
+        amplitude_fields));
+    if ok && isfield(belt, 'peak_t')
+        ok = numel(belt.peak_t) == n_peaks;
     end
 end
 

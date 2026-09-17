@@ -134,9 +134,9 @@ function config = get_config()
     %---- LABEL 7 - sigh - DETECTION SETTINGS
     config.sigh = struct();                      % sigh detection settings
     config.sigh.method = 'rolling_median_2x';    % options: 'rolling_median_2x' (default), 'global_ratio_outlier', or 'legacy_60s'
-    config.sigh.rolling_window_breaths = 15;     % centered local-median window: 7 previous, current, and 7 subsequent breaths
-    config.sigh.rolling_min_valid_breaths = 3;   % minimum finite positive inspiratory amplitudes required for a local baseline
-    config.sigh.rolling_ratio_threshold = 2.0;   % sigh inspiration must be at least twice its local rolling median
+    config.sigh.rolling_window_breaths = 15;     % complete centered window; first/last complete baselines extend unchanged to the edges
+    config.sigh.rolling_min_valid_breaths = 3;   % minimum finite positive canonical amplitudes within the full window
+    config.sigh.rolling_ratio_threshold = 2.0;   % selected breath amplitude must be at least twice its local rolling median
     config.sigh.compare_methods = false;         % report/plot rolling_median_2x versus global_ratio_outlier diagnostics
     config.sigh.ratio_prctile = 98;              % top 2% normalized breaths are sigh candidates
     config.sigh.min_abs_ratio = 2.0;             % minimum amplitude/reference ratio for sigh candidates
@@ -196,6 +196,8 @@ function config = get_config()
 
     %---- LABEL 10 - async - DETECTION SETTINGS
     config.async = struct();                  % respiratory asynchrony settings
+    config.async.primary_method = 'wavelet_coherence_drop'; % canonical async label source: 'wavelet_coherence_drop' or 'wavelet_phase_offset'
+    config.async.compare_methods = true;      % store complementary method evidence; never combines or replaces the selected primary method
     config.async.analysis_fs = 20;            % local anti-aliased analysis rate; master data and indices remain at config.fs
     config.async.f0 = 1;                      % wavelet resolution parameter from Tomislav's script
     config.async.fmin = 0.052;                % lower WT frequency bound from Tomislav's script
@@ -209,6 +211,14 @@ function config = get_config()
     config.async.min_deviating_bins = 1;      % number of frequency bins that must deviate
     config.async.plot_step_sec = 5;           % display coherence as held medians at this step (in seconds)
     config.async.do_plot          = true;     % save respiratory asynchrony diagnostic plot
+    config.async.phase_offset = struct();
+    config.async.phase_offset.angle_threshold_deg = 30;    % operational research cutoff; not a validated clinical threshold
+    config.async.phase_offset.summary_cycles = 5;          % centered circular-summary support in respiratory cycles
+    config.async.phase_offset.min_resultant_length = 0.80; % minimum circular consistency for an assessable phase mean
+    config.async.phase_offset.min_valid_fraction = 0.80;   % minimum valid coefficient fraction within the full summary window
+    config.async.phase_offset.min_magnitude_fraction = 0.05; % per-belt wavelet-magnitude floor relative to recording median
+    config.async.phase_offset.frequency_min_hz = config.async.low_mid_cut_hz;  % shared respiratory-frequency search lower bound
+    config.async.phase_offset.frequency_max_hz = config.async.mid_high_cut_hz; % shared respiratory-frequency search upper bound
 
     %---- LABEL 11 - desat - DETECTION SETTINGS
     config.desat = struct();
@@ -217,6 +227,12 @@ function config = get_config()
     config.desat.min_dur_sec = 10;            % minimum desaturation duration in seconds
     config.desat.association_delay_sec = 5;   % downstream pulse-ox association allowance in seconds; never modifies respiratory labels
     config.desat.do_plot = true;              % save desaturation diagnostic plot
+    config.desat.metrics = struct();
+    config.desat.metrics.pre_event_lookback_sec = 30;    % descriptive local baseline only; does not affect event detection
+    config.desat.metrics.min_pre_event_valid_sec = 10;   % contiguous usable non-event support required for a local baseline
+    config.desat.metrics.recovery_tolerance_pp = 1;      % recovery target is local baseline minus this many percentage points
+    config.desat.metrics.recovery_hold_sec = 5;          % continuous target support required for observed recovery
+    config.desat.metrics.max_recovery_search_sec = 120;  % descriptive recovery-search censoring horizon
 
     % HOW TO REPRESENT RESULTS
     config.LabelMask = struct();                 % label-mask heatmap figure
@@ -254,5 +270,11 @@ function config = get_config()
     if ~isempty(src_root)
         addpath(genpath(src_root));
     end
+
+    % save configs
+    if ~isfolder(config.path_results_out)
+        mkdir(config.path_results_out);
+    end
+    save(fullfile(base_config.path_results_out, 'analysis_configuration.mat'), 'config');
 
 end

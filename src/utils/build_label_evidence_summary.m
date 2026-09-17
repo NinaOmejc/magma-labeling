@@ -10,7 +10,7 @@ function summary = build_label_evidence_summary( ...
 % specific counts; unavailable statistics remain NaN.
 
     label_names = cellstr(string(label_names));
-    summary = struct('version', 'detector_specific_evidence_summary_v2', ...
+    summary = struct('version', 'detector_specific_evidence_summary_v3', ...
         'kind', 'descriptive_detector_evidence');
     for i = 1:numel(label_names)
         summary.(label_names{i}) = struct( ...
@@ -88,6 +88,17 @@ function summary = build_label_evidence_summary( ...
 
     rea = detector_diagnostics.async;
     summary.async.analysis_valid = logical(rea.valid_analysis);
+    if isfield(rea, 'primary_method')
+        summary.async.primary_method = rea.primary_method;
+        summary.async.primary_available = rea.primary_available;
+        summary.async.primary_availability_reason = ...
+            rea.primary_availability_reason;
+        summary.async.comparison = rea.comparison;
+    else
+        summary.async.primary_method = 'wavelet_coherence_drop';
+        summary.async.primary_available = logical(rea.valid_analysis);
+        summary.async.primary_availability_reason = '';
+    end
     summary.async.reference_coherence = rea.references;
     summary.async.thresholds = rea.thresholds;
     summary.async.median_observed_coherence = struct( ...
@@ -95,6 +106,17 @@ function summary = build_label_evidence_summary( ...
         'mid', finite_median(rea.phase_coherence_mid), ...
         'low', finite_median(rea.phase_coherence_low));
     summary.async.maximum_deviating_bins = finite_max(rea.deviation_bin_count);
+    if isfield(rea, 'methods') && ...
+            isfield(rea.methods, 'wavelet_phase_offset')
+        phase = rea.methods.wavelet_phase_offset;
+        summary.async.phase_offset_available = phase.available;
+        summary.async.median_absolute_phase_deg = ...
+            finite_median(phase.absolute_mean_phase_deg);
+        summary.async.median_resultant_length = ...
+            finite_median(phase.resultant_length);
+        summary.async.median_selected_resp_frequency_hz = ...
+            finite_median(phase.selected_resp_frequency_hz);
+    end
 
     spo2 = recording_spo2(data, config);
     summary.desat.median_spo2_percent = finite_median(spo2);
@@ -108,6 +130,18 @@ function summary = build_label_evidence_summary( ...
     end
     summary.desat.duration_sec = label_burden.by_label.desat.duration_sec;
     summary.desat.supporting_signal = 'SpO2';
+    if isfield(detector_diagnostics, 'desat')
+        desat = detector_diagnostics.desat;
+        summary.desat.detection_mode = optional_field( ...
+            desat, 'detection_mode', 'legacy');
+        summary.desat.absolute_available = optional_field( ...
+            desat, 'absolute_available', false);
+        summary.desat.relative_available = optional_field( ...
+            desat, 'relative_available', false);
+        summary.desat = add_desaturation_metric_summary( ...
+            summary.desat, optional_field( ...
+                desat, 'event_metrics_automatic', struct([])));
+    end
 
     apnea = detector_diagnostics.apnea;
     summary.apnea.amplitude_path_available = apnea.amplitude_path_available;
@@ -156,6 +190,44 @@ function summary = build_label_evidence_summary( ...
     summary.periodic.guyot_max_h = finite_max(guyot_h);
     summary.periodic.guyot_median_h = finite_median(guyot_h);
     summary.periodic.guyot_median_fm_mhz = finite_median(guyot_fm);
+end
+
+function summary = add_desaturation_metric_summary(summary, metrics)
+% ADD_DESATURATION_METRIC_SUMMARY Aggregate event descriptors for the recording.
+% The event-level authoritative copy remains in detector diagnostics.
+
+    summary.event_metric_count = numel(metrics);
+    summary.minimum_event_nadir_spo2_percent = NaN;
+    summary.median_event_session_drop_pp = NaN;
+    summary.median_event_local_drop_pp = NaN;
+    summary.recovery_observed_count = 0;
+    summary.absolute_supported_event_count = 0;
+    summary.relative_supported_event_count = 0;
+    if isempty(metrics)
+        return;
+    end
+
+    summary.minimum_event_nadir_spo2_percent = ...
+        finite_min([metrics.nadir_spo2_percent]);
+    summary.median_event_session_drop_pp = ...
+        finite_median([metrics.session_drop_pp]);
+    summary.median_event_local_drop_pp = ...
+        finite_median([metrics.local_drop_pp]);
+    summary.recovery_observed_count = nnz([metrics.recovery_observed]);
+    summary.absolute_supported_event_count = nnz( ...
+        [metrics.absolute_support_fraction] > 0);
+    relative_support = [metrics.relative_support_fraction];
+    summary.relative_supported_event_count = nnz( ...
+        isfinite(relative_support) & relative_support > 0);
+end
+
+function value = optional_field(source, name, default_value)
+% OPTIONAL_FIELD Return a diagnostic field when present.
+
+    value = default_value;
+    if isstruct(source) && isfield(source, name)
+        value = source.(name);
+    end
 end
 
 function spo2 = recording_spo2(data, config)

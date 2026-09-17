@@ -551,7 +551,7 @@ function testCompleteAndPartialAssessability(testCase)
     verifyFalse(testCase, mask(4, strcmp(names,'desat')));
     verifyFalse(testCase, mask(1, strcmp(names,'async')));
     verifyTrue(testCase, all(mask(:, strcmp(names,'rapid'))));
-    verifyEqual(testCase, info.version, 'label_assessability_v1');
+    verifyEqual(testCase, info.version, 'label_assessability_v2');
 
     unavailable = true(1,11); unavailable(strcmp(names,'thoracic')) = false;
     complete = compute_label_assessable_mask( ...
@@ -730,7 +730,7 @@ function testHdf5RoundTripPreservesOrderMasksNaNsAndRespiration(testCase)
     verifyFalse(testCase, hdf5_path_exists(filename, ...
         '/resp_features/diagnostic_signals'));
     verifyEqual(testCase, read_hdf5_text(filename, ...
-        '/meta/export_schema_version'), {'magma_ml_hdf5_v8'});
+        '/meta/export_schema_version'), {'magma_ml_hdf5_v9'});
     verifyEqual(testCase, h5read(filename, '/review/history/number_of_rounds'), 1);
     verifyEqual(testCase, read_hdf5_text(filename, ...
         '/review/history/round_000001/reviewer_role'), {'researcher'});

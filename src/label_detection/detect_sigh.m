@@ -2,8 +2,9 @@ function [events, diagnostics, review_info] = detect_sigh( ...
     data, resp_features, resp_cycles, config)
 % DETECT_SIGH Identify isolated high-amplitude breaths and optionally review them.
 % data/resp_cycles supply sample signals and breath markers; resp_features
-% supplies global-normalized amplitudes; config selects the centered rolling-
-% median, global-outlier, or legacy criterion plus plotting and review.
+% supplies the selected canonical amplitude plus global-normalized evidence;
+% config selects the centered rolling-median, global-outlier, or legacy
+% criterion plus plotting and review.
 % events are midpoint-bounded breath events. diagnostics stores compact per-belt
 % breath amplitude/baseline/ratio evidence and decision thresholds.
 % review_info records review scope/status,
@@ -16,8 +17,7 @@ function [events, diagnostics, review_info] = detect_sigh( ...
 
     lungs = resp_features.lungs;
     diaph = resp_features.diaph;
-    cycles_lungs = respiration_cycle_belt(resp_cycles, 'lungs');
-    cycles_diaph = respiration_cycle_belt(resp_cycles, 'diaph');
+    amplitude_method = resolve_respiration_amplitude_method(config);
 
     method = 'rolling_median_2x';
     rolling_window_breaths = 15;
@@ -69,8 +69,9 @@ function [events, diagnostics, review_info] = detect_sigh( ...
     diagnostics = struct( ...
         'available', false, ...
         'sigh_method', method, ...
-        'lungs', empty_sigh_belt_diagnostics(lungs, method), ...
-        'diaph', empty_sigh_belt_diagnostics(diaph, method), ...
+        'amplitude_method', amplitude_method, ...
+        'lungs', empty_sigh_belt_diagnostics(lungs, method, amplitude_method), ...
+        'diaph', empty_sigh_belt_diagnostics(diaph, method, amplitude_method), ...
         'comparison', empty_sigh_comparison());
     review_info = struct( ...
         'reviewed', false, ...
@@ -88,55 +89,75 @@ function [events, diagnostics, review_info] = detect_sigh( ...
     sigh_diaph = false(size(diaph.peak_t(:)));
     switch method
         case 'rolling_median_2x'
-            [sigh_lungs, baseline, ratio, threshold, amplitude, available] = ...
-                sigh_flags_rolling_median_2x(lungs, cycles_lungs, ...
+            [sigh_lungs, baseline, ratio, threshold, amplitude, available, ...
+                evaluable, boundary_mask, status] = ...
+                sigh_flags_rolling_median_2x(lungs, ...
                     rolling_window_breaths, rolling_min_valid_breaths, ...
                     rolling_ratio_threshold);
             diagnostics.lungs = set_sigh_belt_diagnostics( ...
                 diagnostics.lungs, available, sigh_lungs, amplitude, ...
-                baseline, ratio, threshold);
-            [sigh_diaph, baseline, ratio, threshold, amplitude, available] = ...
-                sigh_flags_rolling_median_2x(diaph, cycles_diaph, ...
+                baseline, ratio, threshold, evaluable, boundary_mask, status);
+            [sigh_diaph, baseline, ratio, threshold, amplitude, available, ...
+                evaluable, boundary_mask, status] = ...
+                sigh_flags_rolling_median_2x(diaph, ...
                     rolling_window_breaths, rolling_min_valid_breaths, ...
                     rolling_ratio_threshold);
             diagnostics.diaph = set_sigh_belt_diagnostics( ...
                 diagnostics.diaph, available, sigh_diaph, amplitude, ...
-                baseline, ratio, threshold);
+                baseline, ratio, threshold, evaluable, boundary_mask, status);
 
         case 'legacy_60s'
-            if global_lungs_valid
-                sigh_lungs = sigh_flags_legacy_60s(lungs, legacy_prev_win_sec, legacy_amp_ratio_thr, legacy_min_prev_breaths);
-                [amplitude, baseline, ratio] = aligned_global_sigh_evidence(lungs, numel(sigh_lungs));
+            if canonical_sigh_inputs_available(lungs)
+                [sigh_lungs, baseline, ratio, evaluable] = ...
+                    sigh_flags_legacy_60s(lungs, legacy_prev_win_sec, ...
+                        legacy_amp_ratio_thr, legacy_min_prev_breaths);
+                amplitude = canonical_sigh_amplitude(lungs);
+                [available, status] = sigh_method_availability( ...
+                    evaluable, 'insufficient_prior_breath_history');
                 diagnostics.lungs = set_sigh_belt_diagnostics( ...
-                    diagnostics.lungs, true, sigh_lungs, amplitude, ...
-                    baseline, ratio, legacy_amp_ratio_thr);
+                    diagnostics.lungs, available, sigh_lungs, amplitude, ...
+                    baseline, ratio, legacy_amp_ratio_thr, evaluable, ...
+                    false(size(evaluable)), status);
             end
-            if global_diaph_valid
-                sigh_diaph = sigh_flags_legacy_60s(diaph, legacy_prev_win_sec, legacy_amp_ratio_thr, legacy_min_prev_breaths);
-                [amplitude, baseline, ratio] = aligned_global_sigh_evidence(diaph, numel(sigh_diaph));
+            if canonical_sigh_inputs_available(diaph)
+                [sigh_diaph, baseline, ratio, evaluable] = ...
+                    sigh_flags_legacy_60s(diaph, legacy_prev_win_sec, ...
+                        legacy_amp_ratio_thr, legacy_min_prev_breaths);
+                amplitude = canonical_sigh_amplitude(diaph);
+                [available, status] = sigh_method_availability( ...
+                    evaluable, 'insufficient_prior_breath_history');
                 diagnostics.diaph = set_sigh_belt_diagnostics( ...
-                    diagnostics.diaph, true, sigh_diaph, amplitude, ...
-                    baseline, ratio, legacy_amp_ratio_thr);
+                    diagnostics.diaph, available, sigh_diaph, amplitude, ...
+                    baseline, ratio, legacy_amp_ratio_thr, evaluable, ...
+                    false(size(evaluable)), status);
             end
 
         case 'global_ratio_outlier'
             if global_lungs_valid
-                [sigh_lungs, baseline, ratio, threshold] = sigh_flags_global_ratio_outlier( ...
+                [sigh_lungs, baseline, ratio, threshold, evaluable] = ...
+                    sigh_flags_global_ratio_outlier( ...
                     lungs, ratio_prctile, ...
                     min_abs_ratio, iqr_k, min_gap_sec);
-                amplitude = aligned_sigh_amplitude(lungs, numel(sigh_lungs));
+                amplitude = canonical_sigh_amplitude(lungs);
+                [available, status] = sigh_method_availability( ...
+                    evaluable, 'insufficient_global_amplitudes');
                 diagnostics.lungs = set_sigh_belt_diagnostics( ...
-                    diagnostics.lungs, true, sigh_lungs, amplitude, ...
-                    baseline, ratio, threshold);
+                    diagnostics.lungs, available, sigh_lungs, amplitude, ...
+                    baseline, ratio, threshold, evaluable, ...
+                    false(size(evaluable)), status);
             end
             if global_diaph_valid
-                [sigh_diaph, baseline, ratio, threshold] = sigh_flags_global_ratio_outlier( ...
+                [sigh_diaph, baseline, ratio, threshold, evaluable] = ...
+                    sigh_flags_global_ratio_outlier( ...
                     diaph, ratio_prctile, ...
                     min_abs_ratio, iqr_k, min_gap_sec);
-                amplitude = aligned_sigh_amplitude(diaph, numel(sigh_diaph));
+                amplitude = canonical_sigh_amplitude(diaph);
+                [available, status] = sigh_method_availability( ...
+                    evaluable, 'insufficient_global_amplitudes');
                 diagnostics.diaph = set_sigh_belt_diagnostics( ...
-                    diagnostics.diaph, true, sigh_diaph, amplitude, ...
-                    baseline, ratio, threshold);
+                    diagnostics.diaph, available, sigh_diaph, amplitude, ...
+                    baseline, ratio, threshold, evaluable, ...
+                    false(size(evaluable)), status);
             end
 
         otherwise
@@ -151,12 +172,12 @@ function [events, diagnostics, review_info] = detect_sigh( ...
     comparison_details = empty_sigh_comparison_details();
     if compare_methods
         [diagnostics.comparison.lungs, comparison_details.lungs] = ...
-            compare_sigh_methods(lungs, cycles_lungs, ...
+            compare_sigh_methods(lungs, ...
                 rolling_window_breaths, rolling_min_valid_breaths, ...
                 rolling_ratio_threshold, ratio_prctile, min_abs_ratio, ...
                 iqr_k, min_gap_sec);
         [diagnostics.comparison.diaph, comparison_details.diaph] = ...
-            compare_sigh_methods(diaph, cycles_diaph, ...
+            compare_sigh_methods(diaph, ...
                 rolling_window_breaths, rolling_min_valid_breaths, ...
                 rolling_ratio_threshold, ratio_prctile, min_abs_ratio, ...
                 iqr_k, min_gap_sec);
@@ -285,9 +306,9 @@ function plot_sigh_ratio_evidence( ...
 
     ratio = belt_diagnostics.sigh_ratio(:);
     selected_mask = logical(selected_mask(:));
-    n_breaths = min([numel(belt.peak_t), numel(ratio), numel(selected_mask)]);
-    ratio = ratio(1:n_breaths);
-    selected_mask = selected_mask(1:n_breaths);
+    n_breaths = numel(belt.peak_t);
+    assert_sigh_vector_length(ratio, n_breaths, 'diagnostic ratio vector');
+    assert_sigh_vector_length(selected_mask, n_breaths, 'selected-breath mask');
     breath_index = (1:n_breaths)';
     valid = isfinite(ratio) & ratio > 0;
 
@@ -363,7 +384,7 @@ function set_breath_index_xlim(ax, n_breaths)
     xlim(ax, limits);
 end
 
-function diagnostics = empty_sigh_belt_diagnostics(belt, method)
+function diagnostics = empty_sigh_belt_diagnostics(belt, method, amplitude_method)
 % EMPTY_SIGH_BELT_DIAGNOSTICS Initialize breath-level sigh evidence for one belt.
 % Evidence vectors are aligned with belt.peak_t.
 
@@ -376,21 +397,27 @@ function diagnostics = empty_sigh_belt_diagnostics(belt, method)
         'available', false, ...
         'reference_quality', reference_quality, ...
         'method', method, ...
+        'amplitude_method', amplitude_method, ...
+        'amplitude_source', 'resp_features.<belt>.amp', ...
+        'boundary_convention', sigh_boundary_convention(method), ...
+        'status', 'belt_unavailable', ...
         'sigh_flags', false(n_breaths, 1), ...
         'sigh_amplitude', nan(n_breaths, 1), ...
         'sigh_baseline', nan(n_breaths, 1), ...
         'sigh_ratio', nan(n_breaths, 1), ...
+        'evaluable_mask', false(n_breaths, 1), ...
+        'boundary_extrapolation_mask', false(n_breaths, 1), ...
         'sigh_threshold', NaN, ...
         'decision_threshold', NaN);
 end
 
-function belt = respiration_cycle_belt(resp_cycles, name)
-% RESPIRATION_CYCLE_BELT Return one saved breath-cycle belt or an empty struct.
+function convention = sigh_boundary_convention(method)
+% SIGH_BOUNDARY_CONVENTION Describe how method evidence treats boundaries.
 
-    belt = struct();
-    if isstruct(resp_cycles) && isfield(resp_cycles, name) && ...
-            isstruct(resp_cycles.(name))
-        belt = resp_cycles.(name);
+    if strcmp(method, 'rolling_median_2x')
+        convention = 'complete_centered_windows_constant_edge_extension';
+    else
+        convention = 'not_applicable';
     end
 end
 
@@ -424,92 +451,173 @@ function tf = global_sigh_inputs_available(belt)
 end
 
 function diagnostics = set_sigh_belt_diagnostics( ...
-    diagnostics, available, flags, amplitude, baseline, ratio, threshold)
+    diagnostics, available, flags, amplitude, baseline, ratio, threshold, ...
+    evaluable, boundary_mask, status)
 % SET_SIGH_BELT_DIAGNOSTICS Store method-neutral breath-level sigh evidence.
 
+    n_breaths = numel(diagnostics.sigh_flags);
+    assert_sigh_vector_length(flags, n_breaths, 'flags');
+    assert_sigh_vector_length(amplitude, n_breaths, 'amplitude');
+    assert_sigh_vector_length(baseline, n_breaths, 'baseline');
+    assert_sigh_vector_length(ratio, n_breaths, 'ratio');
+    assert_sigh_vector_length(evaluable, n_breaths, 'evaluable mask');
+    assert_sigh_vector_length(boundary_mask, n_breaths, ...
+        'boundary-extrapolation mask');
     diagnostics.available = logical(available);
+    diagnostics.status = status;
     diagnostics.sigh_flags = logical(flags(:));
     diagnostics.sigh_amplitude = amplitude(:);
     diagnostics.sigh_baseline = baseline(:);
     diagnostics.sigh_ratio = ratio(:);
+    diagnostics.evaluable_mask = logical(evaluable(:));
+    diagnostics.boundary_extrapolation_mask = logical(boundary_mask(:));
     diagnostics.sigh_threshold = threshold;
     diagnostics.decision_threshold = threshold;
 end
 
-function amplitude = aligned_sigh_amplitude(belt, n_breaths)
-% ALIGNED_SIGH_AMPLITUDE Copy the existing selected amplitude without changing it.
+function [available, status] = sigh_method_availability(evaluable, unavailable_status)
+% SIGH_METHOD_AVAILABILITY Distinguish unevaluable evidence from negatives.
 
-    amplitude = nan(n_breaths, 1);
-    if ~isstruct(belt) || ~isfield(belt, 'amp')
+    available = any(logical(evaluable(:)));
+    if available
+        status = 'available';
+    else
+        status = unavailable_status;
+    end
+end
+
+function tf = canonical_sigh_inputs_available(belt)
+% CANONICAL_SIGH_INPUTS_AVAILABLE Check availability without changing amplitude.
+
+    tf = isstruct(belt) && isfield(belt, 'peak_t') && isfield(belt, 'amp');
+    if ~tf
         return;
     end
-    source = belt.amp(:);
-    n_copy = min(n_breaths, numel(source));
-    amplitude(1:n_copy) = source(1:n_copy);
+    [~, amplitude] = canonical_sigh_vectors(belt);
+    if isfield(belt, 'ignored') && isscalar(belt.ignored) && logical(belt.ignored)
+        tf = false;
+        return;
+    end
+    if isfield(belt, 'available') && isscalar(belt.available) && ...
+            ~logical(belt.available)
+        tf = false;
+        return;
+    end
+    tf = ~isempty(amplitude) && any(isfinite(amplitude) & amplitude > 0);
 end
 
-function [amplitude, baseline, ratio] = aligned_global_sigh_evidence(belt, n_breaths)
-% ALIGNED_GLOBAL_SIGH_EVIDENCE Reproduce the previously plotted global evidence.
+function amplitude = canonical_sigh_amplitude(belt)
+% CANONICAL_SIGH_AMPLITUDE Return the selected upstream amplitude definition.
 
-    amplitude = aligned_sigh_amplitude(belt, n_breaths);
-    baseline = nan(n_breaths, 1);
-    ratio = nan(n_breaths, 1);
-    if isfield(belt, 'global_reference_value') && ...
-            isscalar(belt.global_reference_value)
-        baseline(:) = belt.global_reference_value;
+    [~, amplitude] = canonical_sigh_vectors(belt);
+end
+
+function [peak_t, amplitude] = canonical_sigh_vectors(belt)
+% CANONICAL_SIGH_VECTORS Require one canonical amplitude per breath peak.
+
+    if ~isstruct(belt) || ~isfield(belt, 'peak_t') || ~isfield(belt, 'amp')
+        error('MAGMA:Sigh:MissingCanonicalAmplitude', ...
+            'Sigh detection requires aligned resp_features.<belt>.peak_t and .amp vectors.');
     end
-    if isfield(belt, 'amp_ratio_global')
-        source = belt.amp_ratio_global(:);
-        n_copy = min(n_breaths, numel(source));
-        ratio(1:n_copy) = source(1:n_copy);
+    peak_t = belt.peak_t(:);
+    amplitude = belt.amp(:);
+    if numel(peak_t) ~= numel(amplitude)
+        error('MAGMA:Sigh:BreathAlignmentMismatch', ...
+            ['resp_features.<belt>.peak_t and the canonical .amp field must ' ...
+             'align one-to-one for sigh detection.']);
     end
 end
 
-function [sigh_flags, baseline, ratio, ratio_threshold, amplitude, available] = ...
+function assert_sigh_vector_length(values, expected_length, description)
+% ASSERT_SIGH_VECTOR_LENGTH Reject silent truncation of breath evidence.
+
+    if numel(values) ~= expected_length
+        error('MAGMA:Sigh:BreathAlignmentMismatch', ...
+            'Sigh %s must contain one value per breath peak.', description);
+    end
+end
+
+function [baseline, ratio] = validated_global_sigh_evidence(belt)
+% VALIDATED_GLOBAL_SIGH_EVIDENCE Validate stored normalization against .amp.
+
+    [~, amplitude] = canonical_sigh_vectors(belt);
+    n_breaths = numel(amplitude);
+    if ~isfield(belt, 'global_reference_value') || ...
+            ~isscalar(belt.global_reference_value)
+        error('MAGMA:Sigh:MissingGlobalReference', ...
+            'Global sigh detection requires a scalar global_reference_value.');
+    end
+    if ~isfield(belt, 'amp_ratio_global')
+        error('MAGMA:Sigh:MissingGlobalRatio', ...
+            'Global sigh detection requires amp_ratio_global aligned with canonical .amp.');
+    end
+    ratio = belt.amp_ratio_global(:);
+    assert_sigh_vector_length(ratio, n_breaths, 'global amplitude-ratio vector');
+    baseline = repmat(belt.global_reference_value, n_breaths, 1);
+
+    expected = nan(size(amplitude));
+    valid_amplitude = isfinite(amplitude) & amplitude > 0 & ...
+        isfinite(baseline) & baseline > 0;
+    expected(valid_amplitude) = ...
+        amplitude(valid_amplitude) ./ baseline(valid_amplitude);
+    comparable = isfinite(expected) & isfinite(ratio);
+    tolerance = 0;
+    if any(comparable)
+        tolerance = 100 * eps(max(1, max(abs(expected(comparable)))));
+    end
+    same_nan = isnan(expected) & isnan(ratio);
+    same_inf = isinf(expected) & isinf(ratio) & ...
+        (sign(expected) == sign(ratio));
+    nonfinite_mismatch = ~comparable & ~same_nan & ~same_inf;
+    if any(nonfinite_mismatch) || ...
+            any(abs(expected(comparable) - ratio(comparable)) > tolerance)
+        error('MAGMA:Sigh:StaleGlobalRatio', ...
+            ['resp_features.<belt>.amp_ratio_global does not match the ' ...
+             'selected canonical .amp and global_reference_value.']);
+    end
+end
+
+function [sigh_flags, baseline, ratio, ratio_threshold, amplitude, available, ...
+        evaluable, boundary_mask, status] = ...
     sigh_flags_rolling_median_2x( ...
-        feature_belt, cycle_belt, window_breaths, min_valid, ratio_threshold)
-% SIGH_FLAGS_ROLLING_MEDIAN_2X Compare inspiration with a local median.
-% cycle_belt.amp_insp(i) is peak i minus the immediately preceding trough.
-% Each centered odd window is shortened at recording boundaries; only finite
-% positive amplitudes contribute, and at least min_valid are required.
+        feature_belt, window_breaths, min_valid, ratio_threshold)
+% SIGH_FLAGS_ROLLING_MEDIAN_2X Compare canonical amplitude with a local median.
+% Baselines use only complete centered windows. The first and last complete
+% baselines are extended unchanged to the boundary breath positions.
 
-    peak_t = feature_belt.peak_t(:);
+    [peak_t, amplitude] = canonical_sigh_vectors(feature_belt);
     L = numel(peak_t);
     sigh_flags = false(L, 1);
-    amplitude = nan(L, 1);
     baseline = nan(L, 1);
     ratio = nan(L, 1);
+    evaluable = false(L, 1);
+    boundary_mask = false(L, 1);
     available = false;
 
-    if L == 0 || ~isstruct(cycle_belt) || ...
-            ~isfield(cycle_belt, 'peak_t') || ...
-            ~isfield(cycle_belt, 'amp_insp')
+    if L == 0
+        status = 'no_breaths';
         return;
     end
     if isfield(feature_belt, 'ignored') && logical(feature_belt.ignored)
+        status = 'belt_ignored';
         return;
     end
     if isfield(feature_belt, 'available') && ...
             ~logical(feature_belt.available)
+        status = 'belt_unavailable';
+        return;
+    end
+    if L < window_breaths
+        status = 'insufficient_breath_positions';
         return;
     end
 
-    cycle_peak_t = cycle_belt.peak_t(:);
-    inspiratory_amplitude = cycle_belt.amp_insp(:);
-    if numel(cycle_peak_t) ~= L || numel(inspiratory_amplitude) ~= L || ...
-            ~isequaln(cycle_peak_t, peak_t)
-        error('MAGMA:Sigh:BreathAlignmentMismatch', ...
-            ['resp_features and resp_cycles peak times plus amp_insp must ' ...
-             'align one-to-one for rolling_median_2x.']);
-    end
-    amplitude = inspiratory_amplitude;
-
     half_window = floor(window_breaths / 2);
     valid_amplitude = isfinite(amplitude) & amplitude > 0;
-    for i = 1:L
-        first = max(1, i - half_window);
-        last = min(L, i + half_window);
-        window_values = amplitude(first:last);
+    first_center = half_window + 1;
+    last_center = L - half_window;
+    for i = first_center:last_center
+        window_values = amplitude((i - half_window):(i + half_window));
         window_values = window_values(isfinite(window_values) & window_values > 0);
         if numel(window_values) < min_valid
             continue;
@@ -519,14 +627,22 @@ function [sigh_flags, baseline, ratio, ratio_threshold, amplitude, available] = 
             continue;
         end
         baseline(i) = local_median;
-        if valid_amplitude(i)
-            ratio(i) = amplitude(i) / local_median;
-        end
     end
-    evaluable = valid_amplitude & isfinite(baseline) & baseline > 0 & ...
-        isfinite(ratio);
+
+    baseline(1:half_window) = baseline(first_center);
+    baseline((last_center + 1):L) = baseline(last_center);
+    boundary_mask(1:half_window) = true;
+    boundary_mask((last_center + 1):L) = true;
+
+    evaluable = valid_amplitude & isfinite(baseline) & baseline > 0;
+    ratio(evaluable) = amplitude(evaluable) ./ baseline(evaluable);
     sigh_flags(evaluable) = ratio(evaluable) >= ratio_threshold;
     available = any(evaluable);
+    if available
+        status = 'available';
+    else
+        status = 'insufficient_valid_amplitudes';
+    end
 end
 
 function comparison = empty_sigh_comparison()
@@ -580,32 +696,39 @@ function detail = empty_sigh_comparison_detail()
 end
 
 function [summary, detail] = compare_sigh_methods( ...
-    feature_belt, cycle_belt, window_breaths, min_valid, ...
+    feature_belt, window_breaths, min_valid, ...
     rolling_threshold, ratio_prctile, min_abs_ratio, iqr_k, min_gap_sec)
 % COMPARE_SIGH_METHODS Compare rolling and unchanged global detector outputs.
 
     summary = empty_sigh_comparison_summary();
     detail = empty_sigh_comparison_detail();
-    [rolling_flags, ~, rolling_ratio, rolling_threshold, ~, rolling_available] = ...
-        sigh_flags_rolling_median_2x(feature_belt, cycle_belt, ...
+    [rolling_flags, ~, rolling_ratio, rolling_threshold, ~, ...
+        rolling_available, rolling_evaluable] = ...
+        sigh_flags_rolling_median_2x(feature_belt, ...
             window_breaths, min_valid, rolling_threshold);
     if global_sigh_inputs_available(feature_belt)
-        [global_flags, ~, global_ratio, global_threshold] = ...
+        [global_flags, ~, global_ratio, global_threshold, global_evaluable] = ...
             sigh_flags_global_ratio_outlier(feature_belt, ratio_prctile, ...
                 min_abs_ratio, iqr_k, min_gap_sec);
     else
         global_flags = false(size(rolling_flags));
         global_ratio = nan(size(rolling_ratio));
         global_threshold = NaN;
+        global_evaluable = false(size(rolling_evaluable));
     end
 
-    n = min([numel(rolling_flags), numel(rolling_ratio), ...
-        numel(global_flags), numel(global_ratio)]);
-    rolling_flags = logical(rolling_flags(1:n));
-    rolling_ratio = rolling_ratio(1:n);
-    global_flags = logical(global_flags(1:n));
-    global_ratio = global_ratio(1:n);
-    valid = isfinite(rolling_ratio) & isfinite(global_ratio);
+    n = numel(feature_belt.peak_t);
+    assert_sigh_vector_length(rolling_flags, n, 'rolling flags');
+    assert_sigh_vector_length(rolling_ratio, n, 'rolling ratios');
+    assert_sigh_vector_length(rolling_evaluable, n, 'rolling evaluable mask');
+    assert_sigh_vector_length(global_flags, n, 'global flags');
+    assert_sigh_vector_length(global_ratio, n, 'global ratios');
+    assert_sigh_vector_length(global_evaluable, n, 'global evaluable mask');
+    rolling_flags = logical(rolling_flags(:));
+    rolling_ratio = rolling_ratio(:);
+    global_flags = logical(global_flags(:));
+    global_ratio = global_ratio(:);
+    valid = logical(rolling_evaluable(:)) & logical(global_evaluable(:));
 
     detail.available = rolling_available && isfinite(global_threshold) && any(valid);
     detail.rolling_ratio = rolling_ratio;
@@ -730,9 +853,12 @@ function [ratio, flags, threshold, name] = ...
         otherwise
             return;
     end
-    n_copy = min([n_breaths, numel(source_ratio), numel(source_flags)]);
-    ratio(1:n_copy) = source_ratio(1:n_copy);
-    flags(1:n_copy) = logical(source_flags(1:n_copy));
+    assert_sigh_vector_length(source_ratio, n_breaths, ...
+        'comparison ratio vector');
+    assert_sigh_vector_length(source_flags, n_breaths, ...
+        'comparison flag vector');
+    ratio = source_ratio(:);
+    flags = logical(source_flags(:));
 end
 
 function tf = event_sets_equal(a, b)
@@ -752,7 +878,7 @@ function tf = event_sets_equal(a, b)
         isequal(a.end_idx, b.end_idx);
 end
 
-function [sigh_flags, local_ref, ratio, ratio_thr] = sigh_flags_global_ratio_outlier( ...
+function [sigh_flags, local_ref, ratio, ratio_thr, evaluable] = sigh_flags_global_ratio_outlier( ...
     b, ratio_prctile, min_abs_ratio, iqr_k, min_gap_sec)
 % SIGH_FLAGS_GLOBAL_RATIO_OUTLIER Flag globally normalized amplitude outliers.
 % b supplies aligned peak_t, amp, amp_ratio_global, and global reference.
@@ -760,29 +886,23 @@ function [sigh_flags, local_ref, ratio, ratio_thr] = sigh_flags_global_ratio_out
 % and min_abs_ratio. sigh_flags is breath-level and retains only the strongest
 % candidate within min_gap_sec; local_ref repeats the global belt amplitude.
 
-    peak_t = b.peak_t(:);
-    amp = b.amp(:);
-
-    L = min(numel(peak_t), numel(amp));
-    peak_t = peak_t(1:L);
-    amp = amp(1:L);
+    [peak_t, amp] = canonical_sigh_vectors(b);
+    L = numel(peak_t);
     sigh_flags = false(L,1);
     ratio_thr = NaN;
+    evaluable = false(L,1);
+    [local_ref, ratio] = validated_global_sigh_evidence(b);
 
     if L < 10
-        local_ref = nan(L,1);
-        ratio = nan(L,1);
         return;
     end
 
-    ratio = b.amp_ratio_global(:);
-    ratio = ratio(1:L);
-    local_ref = b.global_reference_value * ones(L, 1);
     valid = isfinite(ratio) & ratio > 0 & isfinite(amp) & amp > 0 & isfinite(local_ref) & local_ref > 0;
 
     if sum(valid) < 10
         return;
     end
+    evaluable = valid;
 
     rv = ratio(valid);
     
@@ -801,17 +921,18 @@ function [sigh_flags, local_ref, ratio, ratio_thr] = sigh_flags_global_ratio_out
 end
 
 
-function sigh_flags = sigh_flags_legacy_60s(b, prev_win_sec, amp_ratio_thr, min_prev_breaths)
+function [sigh_flags, baseline, ratio, evaluable] = sigh_flags_legacy_60s( ...
+    b, prev_win_sec, amp_ratio_thr, min_prev_breaths)
 % SIGH_FLAGS_LEGACY_60S Compare each breath with the preceding amplitude median.
 % b supplies peak_t (s) and amp; a breath is flagged when it is at least
 % amp_ratio_thr times the median of min_prev_breaths in the prior window.
 
-    peak_t = b.peak_t(:);
-    amp = b.amp(:);
-    L = min(numel(peak_t), numel(amp));
-    peak_t = peak_t(1:L);
-    amp = amp(1:L);
+    [peak_t, amp] = canonical_sigh_vectors(b);
+    L = numel(peak_t);
     sigh_flags = false(L,1);
+    baseline = nan(L,1);
+    ratio = nan(L,1);
+    evaluable = false(L,1);
 
     for i = 1:L
         t = peak_t(i);
@@ -821,6 +942,9 @@ function sigh_flags = sigh_flags_legacy_60s(b, prev_win_sec, amp_ratio_thr, min_
         if numel(prev_idx) < min_prev_breaths, continue; end
         med_prev = median(amp(prev_idx), 'omitnan');
         if ~isfinite(med_prev) || med_prev <= 0 || ~isfinite(amp(i)), continue; end
+        baseline(i) = med_prev;
+        ratio(i) = amp(i) / med_prev;
+        evaluable(i) = true;
         if amp(i) >= amp_ratio_thr * med_prev
             sigh_flags(i) = true;
         end
@@ -837,9 +961,11 @@ function events = sigh_flags_to_events(peak_t, flags, N, fs, belt)
     events = empty_events();
     peak_t = peak_t(:);
     flags  = logical(flags(:));
-    L = min(numel(peak_t), numel(flags));
-    peak_t = peak_t(1:L);
-    flags  = flags(1:L);
+    if numel(peak_t) ~= numel(flags)
+        error('MAGMA:Sigh:BreathAlignmentMismatch', ...
+            'Sigh event flags must align one-to-one with breath peak times.');
+    end
+    L = numel(peak_t);
 
     n_events = sum(flags);
     if n_events == 0
@@ -905,6 +1031,12 @@ function flags_out = enforce_min_gap_by_strength(flags_in, peak_t, strength, min
     flags_in = logical(flags_in(:));
     peak_t = peak_t(:);
     strength = strength(:);
+    if numel(peak_t) ~= numel(flags_in) || ...
+            numel(strength) ~= numel(flags_in)
+        error('MAGMA:Sigh:BreathAlignmentMismatch', ...
+            ['Sigh candidate flags, peak times, and decision strengths ' ...
+             'must align one-to-one.']);
+    end
 
     flags_out = false(size(flags_in));
 

@@ -131,7 +131,10 @@ function testSpO2ReferenceNeverFallsBackOutsideInterval(testCase)
     verifyFalse(testCase, spo2_ref.available);
     verifyEqual(testCase, spo2_ref.quality, 'insufficient_valid_samples');
     verifyFalse(testCase, diagnostics_desat.reference_available);
-    verifyFalse(testCase, diagnostics_desat.detection_available);
+    verifyTrue(testCase, diagnostics_desat.absolute_available);
+    verifyFalse(testCase, diagnostics_desat.relative_available);
+    verifyTrue(testCase, diagnostics_desat.detection_available);
+    verifyEqual(testCase, diagnostics_desat.detection_mode, 'absolute_only');
 end
 
 function testShortRecordingsAreExplicitlyTruncatedOrUnavailable(testCase)
