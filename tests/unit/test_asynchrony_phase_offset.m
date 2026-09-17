@@ -46,7 +46,8 @@ function testStableOppositionIsDetectedWithoutAutomaticInversion(testCase)
         180, 'AbsTol', 2);
     verifyGreaterThan(testCase, median(phase.resultant_length, 'omitnan'), 0.98);
     verifyEqual(testCase, phase.polarity_convention, ...
-        'recorded_channel_polarity_thoracic_minus_abdominal_no_inversion');
+        ['configured_fixed_multipliers_thoracic_minus_abdominal_' ...
+         'no_automatic_optimization']);
     verifyEqual(testCase, phase.reference_normalization, 'none');
     verifyEqual(testCase, phase.provenance.polarity_convention, ...
         phase.polarity_convention);
@@ -179,6 +180,205 @@ function testLegacyCoherencePayloadAndEventsRemainUnchanged(testCase)
         'wavelet_coherence_drop');
 end
 
+function testBreathGuidedFrequencyTracksKnownFundamentals(testCase)
+    frequencies = [0.10 0.15 0.25 0.40];
+    for frequency = frequencies
+        duration_sec = max(180, 18 / frequency);
+        [data, config] = frequency_fixture(frequency, 45, duration_sec);
+        cycles = reviewed_cycles(frequency, duration_sec, true, true);
+        metrics = compute_respiratory_phase_offset_metrics( ...
+            data, cycles, config);
+        valid = metrics.valid_phase_mask;
+
+        verifyTrue(testCase, metrics.available, metrics.availability_reason);
+        verifyEqual(testCase, metrics.frequency_min_hz, 0.052);
+        verifyEqual(testCase, median( ...
+            metrics.expected_resp_frequency_hz(valid), 'omitnan'), ...
+            frequency, 'AbsTol', 1e-12);
+        verifyEqual(testCase, median( ...
+            metrics.selected_resp_frequency_hz(valid), 'omitnan'), ...
+            frequency, 'AbsTol', 0.02);
+        modes = metrics.frequency_selection_mode(valid);
+        verifyGreaterThan(testCase, mean(strcmp( ...
+            modes, 'breath_timing_guided')), 0.75);
+        verifyTrue(testCase, all( ...
+            metrics.frequency_consistent_with_breath_timing(valid) == 1));
+    end
+end
+
+function testBreathGuidanceRejectsStrongerSecondHarmonic(testCase)
+    frequency = 0.20;
+    duration_sec = 200;
+    [~, config, time_sec] = frequency_fixture( ...
+        frequency, 0, duration_sec);
+    waveform = sin(2 * pi * frequency * time_sec) + ...
+        2.5 * sin(2 * pi * 2 * frequency * time_sec);
+    data = [waveform waveform];
+    cycles = reviewed_cycles(frequency, duration_sec, true, true);
+
+    guided = compute_respiratory_phase_offset_metrics(data, cycles, config);
+    fallback = compute_respiratory_phase_offset_metrics(data, [], config);
+    guided_valid = guided.valid_phase_mask;
+    fallback_valid = fallback.valid_phase_mask;
+
+    verifyEqual(testCase, median( ...
+        guided.selected_resp_frequency_hz(guided_valid), 'omitnan'), ...
+        frequency, 'AbsTol', 0.03);
+    verifyGreaterThan(testCase, mean(strcmp( ...
+        guided.frequency_selection_mode(guided_valid), ...
+        'breath_timing_guided')), 0.75);
+    verifyEqual(testCase, median( ...
+        fallback.selected_resp_frequency_hz(fallback_valid), 'omitnan'), ...
+        2 * frequency, 'AbsTol', 0.04);
+    verifyTrue(testCase, all(strcmp( ...
+        fallback.frequency_selection_mode(fallback_valid), ...
+        'joint_wavelet_magnitude_fallback')));
+    verifyTrue(testCase, all(isnan( ...
+        fallback.expected_resp_frequency_hz(fallback_valid))));
+end
+
+function testSingleBeltTimingCanGuideTwoUsableRawBelts(testCase)
+    frequency = 0.15;
+    duration_sec = 180;
+    [data, config] = frequency_fixture(frequency, 30, duration_sec);
+    cycles = reviewed_cycles(frequency, duration_sec, true, false);
+    metrics = compute_respiratory_phase_offset_metrics(data, cycles, config);
+    valid = metrics.valid_phase_mask;
+
+    verifyTrue(testCase, metrics.available);
+    verifyTrue(testCase, metrics.breath_timing_available_lungs);
+    verifyFalse(testCase, metrics.breath_timing_available_diaph);
+    verifyEqual(testCase, median( ...
+        metrics.expected_resp_frequency_hz(valid), 'omitnan'), ...
+        frequency, 'AbsTol', 1e-12);
+    verifyGreaterThan(testCase, mean(strcmp( ...
+        metrics.frequency_selection_mode(valid), ...
+        'breath_timing_guided')), 0.75);
+end
+
+function testFixedPolarityMultipliersAreAppliedWithoutOptimization(testCase)
+    [data, config] = frequency_fixture(0.25, 0, 160);
+    recorded = compute_respiratory_phase_offset_metrics(data, [], config);
+    config.async.phase_offset.diaph_polarity_multiplier = -1;
+    corrected = compute_respiratory_phase_offset_metrics(data, [], config);
+
+    verifyLessThan(testCase, median( ...
+        recorded.absolute_mean_phase_deg, 'omitnan'), 2);
+    verifyEqual(testCase, recorded.lungs_polarity_multiplier, 1);
+    verifyEqual(testCase, recorded.diaph_polarity_multiplier, 1);
+    verifyEqual(testCase, recorded.polarity_source, ...
+        'recorded_channel_polarity');
+    verifyEqual(testCase, median( ...
+        corrected.absolute_mean_phase_deg, 'omitnan'), 180, 'AbsTol', 2);
+    verifyEqual(testCase, corrected.lungs_polarity_multiplier, 1);
+    verifyEqual(testCase, corrected.diaph_polarity_multiplier, -1);
+    verifyEqual(testCase, corrected.provenance.diaph_polarity_multiplier, -1);
+    verifyEqual(testCase, corrected.polarity_source, ...
+        'user_configured_fixed_hardware_correction');
+    verifyEqual(testCase, config.async.phase_offset.diaph_polarity_multiplier, -1);
+    verifyGreaterThan(testCase, ...
+        corrected.cohort_qc.fraction_reliable_near_180deg, 0.95);
+end
+
+function testInvalidPolarityMultiplierIsRejected(testCase)
+    [data, config] = frequency_fixture(0.25, 0, 120);
+    config.async.phase_offset.diaph_polarity_multiplier = 0;
+
+    verifyError(testCase, @() compute_respiratory_phase_offset_metrics( ...
+        data, [], config), 'MAGMA:RespiratoryPhaseOffset:InvalidSetting');
+end
+
+function testCentralGapExcludesEdgesAndSeparatesEvents(testCase)
+    duration_sec = 300;
+    frequency = 0.25;
+    [data, config, time_sec] = frequency_fixture( ...
+        frequency, 90, duration_sec);
+    gap = time_sec >= 135 & time_sec < 165;
+    data(gap, :) = NaN;
+    cycles = reviewed_cycles(frequency, duration_sec, true, true);
+
+    metrics = compute_respiratory_phase_offset_metrics(data, cycles, config);
+    gap_grid = metrics.time_sec >= 135 & metrics.time_sec < 165;
+    gap_adjacent = metrics.time_sec >= 125 & metrics.time_sec <= 175;
+    far_from_gap = (metrics.time_sec >= 60 & metrics.time_sec <= 90) | ...
+        (metrics.time_sec >= 210 & metrics.time_sec <= 240);
+
+    verifyFalse(testCase, any(metrics.valid_phase_mask(gap_grid)));
+    verifyFalse(testCase, any(metrics.valid_phase_mask(gap_adjacent)));
+    verifyTrue(testCase, all(isnan( ...
+        metrics.selected_resp_frequency_hz(gap_grid))));
+    verifyTrue(testCase, any(metrics.valid_phase_mask(far_from_gap)));
+    verifyEqual(testCase, median( ...
+        metrics.absolute_mean_phase_deg(far_from_gap), 'omitnan'), ...
+        90, 'AbsTol', 2);
+    verifyEqual(testCase, metrics.valid_block_count, 2);
+
+    [events, diagnostics] = detect_respiratory_asynchrony( ...
+        data, struct('available', false), cycles, config);
+    verifyEqual(testCase, numel(events), 2);
+    verifyLessThan(testCase, events(1).end_t, 135);
+    verifyGreaterThan(testCase, events(2).start_t, 165);
+    verifyFalse(testCase, any( ...
+        diagnostics.primary_valid_evidence_mask(gap_grid)));
+end
+
+function testShortBlocksAndMultipleBoundaryGapsRemainUnevaluable(testCase)
+    duration_sec = 300;
+    frequency = 0.25;
+    [data, config, time_sec] = frequency_fixture( ...
+        frequency, 60, duration_sec);
+    gaps = time_sec < 10 | ...
+        (time_sec >= 90 & time_sec < 105) | ...
+        (time_sec >= 112 & time_sec < 127) | ...
+        time_sec >= 285;
+    data(gaps, :) = NaN;
+    cycles = reviewed_cycles(frequency, duration_sec, true, true);
+
+    metrics = compute_respiratory_phase_offset_metrics(data, cycles, config);
+    gap_grid = metrics.time_sec < 10 | ...
+        (metrics.time_sec >= 90 & metrics.time_sec < 105) | ...
+        (metrics.time_sec >= 112 & metrics.time_sec < 127) | ...
+        metrics.time_sec >= 285;
+    short_grid = metrics.time_sec >= 105 & metrics.time_sec < 112;
+    far = (metrics.time_sec >= 40 & metrics.time_sec <= 60) | ...
+        (metrics.time_sec >= 200 & metrics.time_sec <= 240);
+
+    verifyGreaterThanOrEqual(testCase, metrics.short_block_count, 1);
+    verifyEqual(testCase, metrics.valid_block_count, 2);
+    verifyFalse(testCase, any(metrics.valid_phase_mask(gap_grid)));
+    verifyFalse(testCase, any(metrics.valid_phase_mask(short_grid)));
+    verifyTrue(testCase, all(isnan(metrics.valid_block_id(short_grid))));
+    verifyTrue(testCase, any(metrics.valid_phase_mask(far)));
+    verifyTrue(testCase, all(isnan( ...
+        metrics.absolute_mean_phase_deg(gap_grid))));
+end
+
+function [data, config, time_sec] = frequency_fixture( ...
+    frequency_hz, angle_deg, duration_sec)
+% FREQUENCY_FIXTURE Build two clean equal-frequency respiratory belts.
+
+    [~, config] = phase_fixture(angle_deg, 1);
+    time_sec = (0:1/config.fs:(duration_sec - 1/config.fs))';
+    data = [ ...
+        sin(2 * pi * frequency_hz * time_sec), ...
+        sin(2 * pi * frequency_hz * time_sec + deg2rad(angle_deg))];
+end
+
+function cycles = reviewed_cycles(frequency_hz, duration_sec, lungs_ok, diaph_ok)
+% REVIEWED_CYCLES Build canonical peak timing without redetecting raw breaths.
+
+    peak_t = (0:1/frequency_hz:(duration_sec - 1/frequency_hz))';
+    lungs = struct('ok', logical(lungs_ok), 'peak_t', peak_t);
+    diaph = struct('ok', logical(diaph_ok), 'peak_t', peak_t);
+    if ~lungs_ok
+        lungs.peak_t = [];
+    end
+    if ~diaph_ok
+        diaph.peak_t = [];
+    end
+    cycles = struct('lungs', lungs, 'diaph', diaph);
+end
+
 function [data, config, time_sec] = phase_fixture(angle_deg, amplitude)
     fs = 20;
     time_sec = (0:1/fs:(120 - 1/fs))';
@@ -217,8 +417,13 @@ function [data, config, time_sec] = phase_fixture(angle_deg, amplitude)
             'min_resultant_length', 0.80, ...
             'min_valid_fraction', 0.80, ...
             'min_magnitude_fraction', 0.05, ...
-            'frequency_min_hz', 0.145, ...
-            'frequency_max_hz', 0.6));
+            'frequency_min_hz', 0.052, ...
+            'frequency_max_hz', 0.6, ...
+            'frequency_tolerance_fraction', 0.30, ...
+            'frequency_ratio_qc_range', [0.5 1.5], ...
+            'lungs_polarity_multiplier', 1, ...
+            'diaph_polarity_multiplier', 1, ...
+            'edge_exclusion_cycles', 1));
 end
 
 function features = minimal_resp_features()

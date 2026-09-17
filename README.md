@@ -44,6 +44,29 @@ In MATLAB:
 addpath(genpath(fullfile(pwd, 'src')));
 ```
 
+## Quick demo
+
+The repository includes example physiological recordings. In MATLAB:
+
+```matlab
+run('example/demo.m')
+```
+
+The demo runs Subject 42, Measurement 1 using the standard MAGMA analysis
+with interactive review disabled. Results are written to:
+
+```text
+example/output/Sub42_M1/
+```
+
+To process both bundled example measurements, set:
+
+```matlab
+config.measurements = [1 2];
+```
+
+in `example/demo.m`.
+
 ## Run Single-Subject Analysis
 
 Edit `src/get_config.m`, then run:
@@ -52,11 +75,14 @@ Edit `src/get_config.m`, then run:
 run('src/main_single.m')
 ```
 
-`main_single.m` processes the selected subjects and measurements, extracts/reuses reviewed respiratory breaths, computes physiological features, detects automatic labels, optionally performs manual review, and saves subject-level outputs.
+`main_single.m` loads the user configuration and calls the shared `run_magma`
+runner, which processes every selected subject and measurement.
 
 ## Configuration
 
-Key settings are defined in `src/get_config.m`:
+Routine user settings are defined in the short `src/get_config.m`. The complete
+authoritative scientific and processing defaults are defined once in
+`src/get_config_defaults.m`; see `docs/CONFIGURATION.md`.
 
 - `config.path_data_in` — input `.dat` directory
 - `config.path_results_out` — output directory
@@ -68,19 +94,14 @@ Key settings are defined in `src/get_config.m`:
 - `config.overwrite_results` — recompute existing label results
 - `config.overwrite_features` — recompute existing respiratory features
 - `config.make_figs_visible` — show/hide figures during batch processing
-- `config.detrend.*` — respiratory-belt detrending settings
-- `config.resp.*` — respiratory peak/trough extraction and breath-review settings
-- `config.reference.*` — common session physiological-reference interval and modality-specific reference/QC settings
-- `config.shallow` / `config.deep` — shallow/deep settings
-- `config.slow` / `config.rapid` — slow/rapid settings
-- `config.irregular` — irregularity settings
-- `config.apnea` — apnea-like pause settings
-- `config.sigh` — sigh settings
-- `config.periodic` — periodic-breathing settings
-- `config.thoracic` — thoracic-dominance settings
-- `config.async` — respiratory-asynchrony settings
-- `config.desat` — SpO2/desaturation settings
-- `config.LabelEdit.*` — final manual label-review settings
+- `config.detrend.method` — optional respiratory-belt detrending
+- `config.resp.amp_method` / `manual_control` — breath representation and review
+- `config.sigh.method`, `config.periodic.primary_method`, and
+  `config.async.primary_method` — explicit detector-method choices
+- `config.LabelEdit.*` — optional final manual label review
+
+Detector thresholds and other advanced settings remain in
+`get_config_defaults.m` and normally should not be changed.
 
 The same reviewed respiratory peaks, troughs, amplitudes, inter-breath intervals, and respiratory rates are reused across detectors; individual labels do not redetect breaths.
 
@@ -119,7 +140,7 @@ The thresholds below are operational research criteria and should not be interpr
 
 - **`thoracic`** — thoracic dominance is assessed from independently normalized thoracic and abdominal excursion. The operational condition is a 30-s thoracic-to-abdominal ratio `T/A >= 1.5`. Both belts are required. Pre-duration candidates retain the analysis-window uncertainty.
 
-- **`async`** — `config.async.primary_method` selects exactly one canonical method. The default `wavelet_coherence_drop` is the unchanged session-reference-relative time-localized wavelet phase-coherence detector. The complementary `wavelet_phase_offset` method evaluates both recorded-polarity belts at one shared respiratory frequency and uses circular means to distinguish phase displacement from consistency: a stable 180-degree relationship has a large offset and a high resultant length. It does not invert or time-shift a belt and does not normalize phase to the session reference. Its 30-degree angle, five-cycle summary, 0.80 resultant-length, and 0.80 valid-fraction defaults are MAGMA operational research settings, not validated clinical cutoffs. Method agreement is calculated only over jointly assessable time and is not an accuracy estimate.
+- **`async`** — `config.async.primary_method` selects exactly one canonical method. `wavelet_coherence_drop` is the unchanged session-reference-relative time-localized wavelet phase-coherence detector. The complementary `wavelet_phase_offset` method evaluates both belts at one shared respiratory frequency over 0.052–0.60 Hz, including slow respiratory fundamentals. Reviewed canonical peak timing supplies a piecewise local `1/IBI` fundamental when an IBI does not cross missing data; joint thoracic/abdominal wavelet magnitude selects within ±30% of that frequency. Joint magnitude over the full phase-offset band is used only as an explicitly saved fallback when timing or a usable guided bin is unavailable. Selected/expected frequency ratios and a descriptive QC flag expose possible harmonic selection without creating events. Fixed `+1`/`-1` belt multipliers support documented hardware polarity correction, but polarity is never optimized per recording. Contiguous finite two-belt blocks are transformed independently; gaps are never zero-filled into a transform, and `wtI` edge invalidity plus a conservative one-cycle edge margin prevent five-cycle summaries from crossing gap or transform boundaries. Circular means distinguish displacement from consistency: a stable 180-degree relationship has a large offset and high resultant length. The method does not time-shift a belt or normalize phase to the session reference. Its 30-degree angle, five-cycle summary, 0.80 resultant-length, and 0.80 valid-fraction settings remain operational MAGMA research criteria, not validated clinical cutoffs. Method agreement is calculated only over jointly assessable time and is not an accuracy estimate.
 
 - **`desat`** — SpO2 is `< 90%` or decreases by at least 3 percentage points from the valid session reference for at least 10 s. The absolute and relative branches are evaluated independently before their sample masks are combined. A missing session reference therefore yields explicit `absolute_only` ascertainment rather than disabling the label. Event-level diagnostics store the first tied nadir, session-reference and local pre-event depth, criterion-support fractions, and censored/observed recovery; these descriptors never alter event boundaries or acceptance. Recording-level SpO2 summaries remain separate from these event-specific measurements.
 

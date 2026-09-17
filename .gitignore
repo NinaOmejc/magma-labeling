@@ -17,3 +17,6 @@ data/
 results/
 test_data/*.dat
 test_data/*.csv
+!example/data/
+!example/data/*.dat
+example/output/

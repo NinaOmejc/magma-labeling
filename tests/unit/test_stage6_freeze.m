@@ -792,19 +792,70 @@ function testRecordingResultUsesDeduplicatedOutputSchema(testCase)
         'resolved test input');
 end
 
-function testMainSavesBaseConfigurationBeforeRecordingMutation(testCase)
+function testSharedRunnerSavesBaseConfigurationBeforeRecordingMutation(testCase)
     repo_root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
-    source = fileread(fullfile(repo_root, 'src', 'main_single.m'));
-    base_pos = strfind(source, 'base_config = get_config()');
-    save_pos = strfind(source, '''analysis_configuration.mat''');
-    loop_pos = strfind(source, 'for isub = 1:length(base_config.subjects)');
-    mutation_pos = strfind(source, 'config.subject = base_config.subjects(isub)');
-    verifyNotEmpty(testCase, base_pos);
+    main_source = fileread(fullfile(repo_root, 'src', 'main_single.m'));
+    runner_source = fileread(fullfile(repo_root, 'src', 'run_magma.m'));
+    save_pos = strfind(runner_source, '''analysis_configuration.mat''');
+    loop_pos = strfind(runner_source, ...
+        'for isub = 1:length(base_config.subjects)');
+    copy_pos = strfind(runner_source, 'config = base_config;');
+    mutation_pos = strfind(runner_source, ...
+        'config.subject = base_config.subjects(isub)');
+    verifyTrue(testCase, contains(main_source, 'config = get_config();'));
+    verifyTrue(testCase, contains(main_source, 'run_magma(config);'));
     verifyNotEmpty(testCase, save_pos);
     verifyNotEmpty(testCase, loop_pos);
+    verifyGreaterThanOrEqual(testCase, numel(copy_pos), 2);
     verifyNotEmpty(testCase, mutation_pos);
     verifyLessThan(testCase, save_pos(1), loop_pos(1));
-    verifyLessThan(testCase, loop_pos(1), mutation_pos(1));
+    verifyLessThan(testCase, loop_pos(1), copy_pos(2));
+    verifyLessThan(testCase, copy_pos(2), mutation_pos(1));
+end
+
+function testConfigurationLayersAndDemoUseSharedRunner(testCase)
+    repo_root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
+    simple = get_config();
+    defaults = get_config_defaults();
+
+    verifyEqual(testCase, simple.shallow, defaults.shallow);
+    verifyEqual(testCase, simple.deep, defaults.deep);
+    verifyEqual(testCase, simple.reference, defaults.reference);
+    verifyEqual(testCase, simple.async.phase_offset, defaults.async.phase_offset);
+    verifyEqual(testCase, simple.HDF5, defaults.HDF5);
+
+    simple_source = fileread(fullfile(repo_root, 'src', 'get_config.m'));
+    defaults_source = fileread(fullfile( ...
+        repo_root, 'src', 'get_config_defaults.m'));
+    verifyFalse(testCase, contains(simple_source, 'mkdir('));
+    verifyFalse(testCase, contains(simple_source, 'save('));
+    verifyFalse(testCase, contains(simple_source, 'addpath('));
+    verifyFalse(testCase, contains(defaults_source, 'mkdir('));
+    verifyFalse(testCase, contains(defaults_source, 'save('));
+    verifyFalse(testCase, contains(defaults_source, 'addpath('));
+
+    demo_file = fullfile(repo_root, 'example', 'demo.m');
+    demo_source = fileread(demo_file);
+    verifyTrue(testCase, isfile(demo_file));
+    verifyTrue(testCase, isfile(fullfile(repo_root, 'example', 'data', ...
+        'ECG1_ECG2_SpO2_RespL_BP_RespD_fs200_Sub42_Pom1_DeTr_Norm.dat')));
+    verifyTrue(testCase, contains(demo_source, ...
+        "fullfile(example_root, 'data')"));
+    verifyTrue(testCase, contains(demo_source, ...
+        "fullfile(example_root, 'output')"));
+    verifyTrue(testCase, contains(demo_source, 'config.subjects = 42;'));
+    verifyTrue(testCase, contains(demo_source, 'config.measurements = 1;'));
+    verifyTrue(testCase, contains(demo_source, ...
+        'config.resp.manual_control = false;'));
+    verifyTrue(testCase, contains(demo_source, ...
+        'config.sigh.manual_control = false;'));
+    verifyTrue(testCase, contains(demo_source, ...
+        'config.LabelEdit.manual_control = false;'));
+    verifyTrue(testCase, contains(demo_source, ...
+        'config.LabelEdit.apply_saved_edits = false;'));
+    verifyTrue(testCase, contains(demo_source, 'run_magma(config);'));
+    verifyFalse(testCase, contains(demo_source, 'min_dur_sec'));
+    verifyFalse(testCase, contains(demo_source, 'threshold'));
 end
 
 function testExternalClinicalPhenotypeValuesRemainUnknown(testCase)
@@ -857,6 +908,14 @@ function testCohortQcSummarizesAutomaticReviewedAndBeltAvailability(testCase)
     T.respiratory_belt_availability = {'single_belt';'two_belts'};
     T.lungs_reference_quality = {'belt_unavailable';'warning_edge_change'};
     T.diaph_reference_quality = {'good';'good'};
+    T.evidence_automatic_async_phase_offset_qc_median_abs_phase_deg = [5;175];
+    T.evidence_automatic_async_phase_offset_qc_median_signed_phase_deg = [5;175];
+    T.evidence_automatic_async_phase_offset_qc_median_resultant_length = [0.95;0.90];
+    T.evidence_automatic_async_phase_offset_qc_fraction_reliable_near_0deg = [0.9;0.1];
+    T.evidence_automatic_async_phase_offset_qc_fraction_reliable_near_180deg = [0.1;0.8];
+    T.evidence_automatic_async_phase_offset_qc_fraction_frequency_consistent_with_breath_timing = [1;0.75];
+    T.evidence_automatic_async_lungs_polarity_multiplier = [1;1];
+    T.evidence_automatic_async_diaph_polarity_multiplier = [1;-1];
     candidate_qc = table([1;1], [1;1], ["rapid";"rapid"], ...
         [28;20], [false;false], ["too_short";"too_short"], ...
         'VariableNames', {'subject','measurement','label', ...
@@ -868,6 +927,10 @@ function testCohortQcSummarizesAutomaticReviewedAndBeltAvailability(testCase)
     verifyEqual(testCase,qc.belt_availability.single_belt,1);
     verifyEqual(testCase,qc.belt_availability.two_belts,1);
     verifyEqual(testCase,qc.reference_quality_warning_recordings,1);
+    verifyEqual(testCase,qc.version,'cohort_label_qc_v3');
+    verifyEqual(testCase,qc.phase_offset.n_recordings_with_reliable_phase,2);
+    verifyEqual(testCase,qc.phase_offset.median_recording_abs_phase_deg,90);
+    verifyEqual(testCase,qc.phase_offset.fixed_polarity_correction_recordings,1);
     rapid_row = strcmp(qc.by_label.label, 'rapid');
     verifyEqual(testCase,qc.by_label.rejected_candidate_count(rapid_row),2);
     verifyEqual(testCase,qc.by_label.rejected_candidate_duration_max_sec(rapid_row),28);

@@ -47,8 +47,9 @@ function testGetLabelsFormatsAndConfiguration(testCase)
     verifyFalse(testCase, isfield(config.apnea, 'mark_desat'));
 
     repo_root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
-    main_source = fileread(fullfile(repo_root, 'src', 'main_single.m'));
-    verifyTrue(testCase, contains(main_source, 'results.label_available'));
+    result_source = fileread(fullfile( ...
+        repo_root, 'src', 'utils', 'build_recording_results.m'));
+    verifyTrue(testCase, contains(result_source, 'results.label_available'));
 end
 
 function testDeepThresholdHasNoUpperCutoffAndUsesSessionReference(testCase)

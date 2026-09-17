@@ -9,11 +9,13 @@ function qc = build_cohort_qc_summary( ...
 %   candidate_event_qc   - Optional one-row-per-candidate-event QC table.
 %
 % Outputs:
-%   qc - Scalar cohort_label_qc_v2 struct. Fields: version; n_recordings;
+%   qc - Scalar cohort_label_qc_v3 struct. Fields: version; n_recordings;
 %        by_label table of assessability, event counts/fractions, review coverage,
 %        disagreement, event-duration and rejected-candidate statistics;
 %        original event_durations and candidate_events tables;
 %        belt_availability counts; and reference_quality_warning_recordings.
+%        phase_offset contains compact cohort summaries of the per-recording
+%        descriptive polarity/phase QC exported through the group table.
 
     label_names = cellstr(string(label_names));
     if nargin < 3
@@ -23,13 +25,14 @@ function qc = build_cohort_qc_summary( ...
         candidate_event_qc = table();
     end
     qc = struct();
-    qc.version = 'cohort_label_qc_v2';
+    qc.version = 'cohort_label_qc_v3';
     qc.n_recordings = height(group_table);
     qc.by_label = table();
     qc.event_durations = event_duration_table;
     qc.candidate_events = candidate_event_qc;
     qc.belt_availability = struct('two_belts', 0, 'single_belt', 0, 'no_belt', 0);
     qc.reference_quality_warning_recordings = 0;
+    qc.phase_offset = empty_phase_offset_cohort_qc();
     if isempty(group_table)
         return;
     end
@@ -112,6 +115,53 @@ function qc = build_cohort_qc_summary( ...
         end
     end
     qc.reference_quality_warning_recordings = nnz(warning_mask);
+    qc.phase_offset = summarize_phase_offset_qc(group_table);
+end
+
+function summary = summarize_phase_offset_qc(group_table)
+% SUMMARIZE_PHASE_OFFSET_QC Aggregate recording-level phase/polarity QC.
+
+    summary = empty_phase_offset_cohort_qc();
+    prefix = 'evidence_automatic_async_phase_offset_qc_';
+    absolute = numeric_column(group_table, [prefix 'median_abs_phase_deg']);
+    signed = numeric_column(group_table, [prefix 'median_signed_phase_deg']);
+    resultant = numeric_column(group_table, [prefix 'median_resultant_length']);
+    near_zero = numeric_column(group_table, ...
+        [prefix 'fraction_reliable_near_0deg']);
+    near_180 = numeric_column(group_table, ...
+        [prefix 'fraction_reliable_near_180deg']);
+    frequency_consistent = numeric_column(group_table, ...
+        [prefix 'fraction_frequency_consistent_with_breath_timing']);
+    lungs_multiplier = numeric_column(group_table, ...
+        'evidence_automatic_async_lungs_polarity_multiplier');
+    diaph_multiplier = numeric_column(group_table, ...
+        'evidence_automatic_async_diaph_polarity_multiplier');
+
+    summary.n_recordings_with_reliable_phase = nnz(isfinite(absolute));
+    summary.median_recording_abs_phase_deg = finite_median(absolute);
+    summary.median_recording_signed_phase_deg = finite_median(signed);
+    summary.median_recording_resultant_length = finite_median(resultant);
+    summary.median_fraction_reliable_near_0deg = finite_median(near_zero);
+    summary.median_fraction_reliable_near_180deg = finite_median(near_180);
+    summary.median_fraction_frequency_consistent_with_breath_timing = ...
+        finite_median(frequency_consistent);
+    configured = isfinite(lungs_multiplier) & isfinite(diaph_multiplier);
+    summary.fixed_polarity_correction_recordings = nnz(configured & ...
+        (lungs_multiplier ~= 1 | diaph_multiplier ~= 1));
+end
+
+function summary = empty_phase_offset_cohort_qc()
+% EMPTY_PHASE_OFFSET_COHORT_QC Return stable compact cohort-QC fields.
+
+    summary = struct( ...
+        'n_recordings_with_reliable_phase', 0, ...
+        'median_recording_abs_phase_deg', NaN, ...
+        'median_recording_signed_phase_deg', NaN, ...
+        'median_recording_resultant_length', NaN, ...
+        'median_fraction_reliable_near_0deg', NaN, ...
+        'median_fraction_reliable_near_180deg', NaN, ...
+        'median_fraction_frequency_consistent_with_breath_timing', NaN, ...
+        'fixed_polarity_correction_recordings', 0);
 end
 
 function durations = rejected_candidate_durations(T, label_name)
