@@ -9,7 +9,7 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
 %   signals_raw          - Nsample x Nchannel raw physiological signal matrix.
 %   signals_preprocessed - Nsample x Nchannel processed signal matrix.
 %
-% The v7 file stores sample signals/time under /signals and /time;
+% The v8 file stores sample signals/time under /signals and /time;
 % reviewed breath cycles under /resp_cycles, canonical feature traces under
 % /resp_features, and compact detector evidence under /detector_diagnostics;
 % common-interval metadata under /session_reference, per-belt
@@ -23,7 +23,7 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
 
     filename = char(string(filename));
     validate_export_inputs(filename, results, signals_raw, signals_preprocessed);
-    export_schema_version = 'magma_ml_hdf5_v7';
+    export_schema_version = 'magma_ml_hdf5_v8';
     out_dir = fileparts(filename);
     if ~isempty(out_dir) && ~isfolder(out_dir)
         mkdir(out_dir);

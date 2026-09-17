@@ -1,9 +1,10 @@
 function diagnostics = compute_eami_periodic_breathing(data, config)
 % COMPUTE_EAMI_PERIODIC_BREATHING Compute eAMI from each usable raw belt.
 % Implements Fernandez Tellez et al., Sleep 2015, using zero-phase filtering,
-% 1-Hz finite-region resampling, locally mean-removed moving-window energies,
-% and the published 0.65 threshold. MAGMA combines belts dynamically and uses
-% twice the energy-window duration as the sustained event requirement.
+% configurable finite-region resampling (1 Hz by default), locally mean-removed
+% moving-window energies, and the published 0.65 threshold. MAGMA combines
+% belts dynamically and uses twice the energy-window duration as the sustained
+% event requirement.
 
     cfg = validate_eami_config(config.periodic.eami, config.fs);
     N = size(data, 1);

@@ -10,7 +10,7 @@ function summary = build_label_evidence_summary( ...
 % specific counts; unavailable statistics remain NaN.
 
     label_names = cellstr(string(label_names));
-    summary = struct('version', 'detector_specific_evidence_summary_v1', ...
+    summary = struct('version', 'detector_specific_evidence_summary_v2', ...
         'kind', 'descriptive_detector_evidence');
     for i = 1:numel(label_names)
         summary.(label_names{i}) = struct( ...
@@ -128,8 +128,6 @@ function summary = build_label_evidence_summary( ...
     summary.sigh.method = config.sigh.method;
     summary.sigh.ratio_threshold_lungs = sigh.lungs.decision_threshold;
     summary.sigh.ratio_threshold_diaph = sigh.diaph.decision_threshold;
-    summary.sigh.global_reference_quality_lungs = sigh.lungs.reference_quality;
-    summary.sigh.global_reference_quality_diaph = sigh.diaph.reference_quality;
     summary.sigh.sigh_count = label_burden.sigh_count;
     summary.sigh.sighs_per_15_min = label_burden.sighs_per_15_min;
     summary.sigh.supporting_belts = belt_support( ...
@@ -140,8 +138,8 @@ function summary = build_label_evidence_summary( ...
     summary.periodic.eami_available = periodic.eami.available;
     summary.periodic.eami_supporting_belts = belt_support( ...
         periodic.eami.lungs.available, periodic.eami.diaph.available);
-    summary.periodic.eami_candidate_event_count = periodic.eami.event_count;
-    summary.periodic.eami_candidate_duration_sec = periodic.eami.event_duration_sec;
+    summary.periodic.eami_event_count = periodic.eami.event_count;
+    summary.periodic.eami_event_duration_sec = periodic.eami.event_duration_sec;
     eami_values = [periodic.eami.lungs.index(:); ...
         periodic.eami.diaph.index(:)];
     summary.periodic.eami_max = finite_max(eami_values);
@@ -150,8 +148,8 @@ function summary = build_label_evidence_summary( ...
     summary.periodic.guyot_available = periodic.guyot.available;
     summary.periodic.guyot_supporting_belts = belt_support( ...
         periodic.guyot.lungs.available, periodic.guyot.diaph.available);
-    summary.periodic.guyot_candidate_event_count = periodic.guyot.event_count;
-    summary.periodic.guyot_candidate_duration_sec = periodic.guyot.event_duration_sec;
+    summary.periodic.guyot_event_count = periodic.guyot.event_count;
+    summary.periodic.guyot_event_duration_sec = periodic.guyot.event_duration_sec;
     guyot_h = [periodic.guyot.lungs.h(:); periodic.guyot.diaph.h(:)];
     guyot_fm = 1000 * [periodic.guyot.lungs.fm_hz(:); ...
         periodic.guyot.diaph.fm_hz(:)];
