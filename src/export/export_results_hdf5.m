@@ -34,30 +34,43 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
 
     fs = results.config.fs;
     N = size(signals_preprocessed, 1);
-    write_numeric(filename, '/signals/raw', signals_raw);
-    write_numeric(filename, '/signals/preprocessed', signals_preprocessed);
-    write_numeric(filename, '/time', (0:N-1)' / fs);
+    options = hdf5_export_options(results.config);
+    if options.include_raw_signals
+        write_numeric(filename, '/signals/raw', ...
+            cast_export_signal(signals_raw, options.signal_datatype), options);
+    end
+    if options.include_preprocessed_signals
+        write_numeric(filename, '/signals/preprocessed', ...
+            cast_export_signal(signals_preprocessed, options.signal_datatype), ...
+            options);
+    end
+    write_numeric(filename, '/time', (0:N-1)' / fs, options);
 
-    write_value(filename, '/resp_cycles', results.resp_cycles);
-    write_value(filename, '/session_reference', results.session_reference);
-    write_value(filename, '/resp_reference/lungs', results.resp_ref.lungs);
-    write_value(filename, '/resp_reference/diaph', results.resp_ref.diaph);
-    write_value(filename, '/spo2_reference', results.spo2_ref);
-    write_value(filename, '/resp_features', results.resp_features);
-    write_value(filename, '/detector_diagnostics', results.detector_diagnostics);
+    write_value(filename, '/resp_cycles', results.resp_cycles, options);
+    write_value(filename, '/session_reference', results.session_reference, options);
+    write_value(filename, '/resp_reference/lungs', results.resp_ref.lungs, options);
+    write_value(filename, '/resp_reference/diaph', results.resp_ref.diaph, options);
+    write_value(filename, '/spo2_reference', results.spo2_ref, options);
+    write_value(filename, '/resp_features', results.resp_features, options);
+    write_value(filename, '/detector_diagnostics', ...
+        results.detector_diagnostics, options);
 
     write_text(filename, '/labels/names', results.label_names);
-    write_numeric(filename, '/labels/available', uint8(results.label_available(:)'));
+    write_numeric(filename, '/labels/available', ...
+        uint8(results.label_available(:)'), options);
     write_text(filename, '/labels/availability_reason', results.label_availability_reason);
-    write_numeric(filename, '/labels/assessable_mask', uint8(results.label_assessable_mask));
-    write_numeric(filename, '/labels/automatic_mask', uint8(results.mask_automatic));
-    write_numeric(filename, '/labels/reviewed_mask', uint8(results.mask_reviewed));
+    write_numeric(filename, '/labels/assessable_mask', ...
+        uint8(results.label_assessable_mask), options);
+    write_numeric(filename, '/labels/automatic_mask', ...
+        uint8(results.mask_automatic), options);
+    write_numeric(filename, '/labels/reviewed_mask', ...
+        uint8(results.mask_reviewed), options);
     write_numeric(filename, '/labels/review_coverage_mask', ...
-        uint8(results.review_coverage_mask));
+        uint8(results.review_coverage_mask), options);
     write_text(filename, '/labels/review_status', results.review_status);
     if isfield(results, 'label_reviewed_available')
         write_numeric(filename, '/labels/reviewed_available', ...
-            uint8(results.label_reviewed_available(:)'));
+            uint8(results.label_reviewed_available(:)'), options);
     end
     if isfield(results, 'label_reviewed_availability_reason')
         write_text(filename, '/labels/reviewed_availability_reason', ...
@@ -65,31 +78,37 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
     end
     if isfield(results, 'label_reviewed_assessable_mask')
         write_numeric(filename, '/labels/reviewed_assessable_mask', ...
-            uint8(results.label_reviewed_assessable_mask));
+            uint8(results.label_reviewed_assessable_mask), options);
     end
 
-    write_events(filename, '/events/automatic', results.events_automatic);
-    write_events(filename, '/events/reviewed', results.events_reviewed);
+    write_events(filename, '/events/automatic', results.events_automatic, options);
+    write_events(filename, '/events/reviewed', results.events_reviewed, options);
     write_candidate_event_sets(filename, '/events/candidate', ...
-        results.candidate_events, results.label_names);
-    write_value(filename, '/review/provenance', results.review_provenance);
-    write_review_history(filename, '/review/history', results.review_history);
-    write_value(filename, '/review/scope', results.review_scope);
+        results.candidate_events, results.label_names, options);
+    write_value(filename, '/review/provenance', results.review_provenance, options);
+    write_review_history(filename, '/review/history', ...
+        results.review_history, options);
+    write_value(filename, '/review/scope', results.review_scope, options);
 
-    write_value(filename, '/burden/automatic', results.label_burden_automatic);
-    write_value(filename, '/burden/reviewed', results.label_burden_reviewed);
-    write_value(filename, '/overlap/automatic', results.label_overlap_summary_automatic);
-    write_value(filename, '/overlap/reviewed', results.label_overlap_summary_reviewed);
+    write_value(filename, '/burden/automatic', ...
+        results.label_burden_automatic, options);
+    write_value(filename, '/burden/reviewed', ...
+        results.label_burden_reviewed, options);
+    write_value(filename, '/overlap/automatic', ...
+        results.label_overlap_summary_automatic, options);
+    write_value(filename, '/overlap/reviewed', ...
+        results.label_overlap_summary_reviewed, options);
     write_value(filename, '/evidence_summary/automatic', ...
-        results.label_evidence_summary_automatic);
+        results.label_evidence_summary_automatic, options);
     write_value(filename, '/evidence_summary/reviewed', ...
-        results.label_evidence_summary_reviewed);
-    write_value(filename, '/phenotype_evidence', results.db_phenotype_evidence);
-    write_value(filename, '/config', results.config);
+        results.label_evidence_summary_reviewed, options);
+    write_value(filename, '/phenotype_evidence', ...
+        results.db_phenotype_evidence, options);
+    write_value(filename, '/config', results.config, options);
 
-    write_numeric(filename, '/meta/subject', results.subject);
-    write_numeric(filename, '/meta/measurement', results.measure);
-    write_numeric(filename, '/meta/fs', fs);
+    write_numeric(filename, '/meta/subject', results.subject, options);
+    write_numeric(filename, '/meta/measurement', results.measure, options);
+    write_numeric(filename, '/meta/fs', fs, options);
     write_text(filename, '/meta/export_schema_version', export_schema_version);
     write_text(filename, '/meta/upstream_input_preprocessing', ...
         results.upstream_input_preprocessing);
@@ -306,72 +325,79 @@ function validate_canonical_events(events, fs, labels)
     end
 end
 
-function write_events(filename, path, events)
+function write_events(filename, path, events, options)
 % WRITE_EVENTS Export a canonical event array as parallel HDF5 datasets.
 % Index fields are samples, time/duration fields are seconds, and type/belt
 % are UTF-8 text columns below path.
 
     write_text(filename, [path '/type'], event_field(events, 'type', 'text'));
-    write_numeric(filename, [path '/start_idx'], event_field(events, 'start_idx', 'numeric'));
-    write_numeric(filename, [path '/end_idx'], event_field(events, 'end_idx', 'numeric'));
-    write_numeric(filename, [path '/start_t'], event_field(events, 'start_t', 'numeric'));
-    write_numeric(filename, [path '/end_t'], event_field(events, 'end_t', 'numeric'));
-    write_numeric(filename, [path '/duration'], event_field(events, 'duration', 'numeric'));
+    write_numeric(filename, [path '/start_idx'], ...
+        event_field(events, 'start_idx', 'numeric'), options);
+    write_numeric(filename, [path '/end_idx'], ...
+        event_field(events, 'end_idx', 'numeric'), options);
+    write_numeric(filename, [path '/start_t'], ...
+        event_field(events, 'start_t', 'numeric'), options);
+    write_numeric(filename, [path '/end_t'], ...
+        event_field(events, 'end_t', 'numeric'), options);
+    write_numeric(filename, [path '/duration'], ...
+        event_field(events, 'duration', 'numeric'), options);
     write_text(filename, [path '/belt'], event_field(events, 'belt', 'text'));
 end
 
-function write_candidate_event_sets(filename, path, sets, labels)
+function write_candidate_event_sets(filename, path, sets, labels, options)
 % WRITE_CANDIDATE_EVENT_SETS Export compact candidates by containing label.
 
     labels = cellstr(string(labels));
     for i = 1:numel(labels)
         write_candidate_events(filename, [path '/' labels{i}], ...
-            sets.(labels{i}));
+            sets.(labels{i}), options);
     end
 end
 
-function write_candidate_events(filename, path, candidates)
+function write_candidate_events(filename, path, candidates, options)
 % WRITE_CANDIDATE_EVENTS Export the frozen nine fields as parallel datasets.
 
     write_numeric(filename, [path '/start_idx'], ...
-        event_field(candidates, 'start_idx', 'numeric'));
+        event_field(candidates, 'start_idx', 'numeric'), options);
     write_numeric(filename, [path '/end_idx'], ...
-        event_field(candidates, 'end_idx', 'numeric'));
+        event_field(candidates, 'end_idx', 'numeric'), options);
     write_numeric(filename, [path '/start_t'], ...
-        event_field(candidates, 'start_t', 'numeric'));
+        event_field(candidates, 'start_t', 'numeric'), options);
     write_numeric(filename, [path '/end_t'], ...
-        event_field(candidates, 'end_t', 'numeric'));
+        event_field(candidates, 'end_t', 'numeric'), options);
     write_numeric(filename, [path '/duration'], ...
-        event_field(candidates, 'duration', 'numeric'));
+        event_field(candidates, 'duration', 'numeric'), options);
     write_text(filename, [path '/belt'], ...
         event_field(candidates, 'belt', 'text'));
     write_numeric(filename, [path '/accepted'], logical( ...
-        event_field(candidates, 'accepted', 'numeric')));
+        event_field(candidates, 'accepted', 'numeric')), options);
     write_text(filename, [path '/rejection_reason'], ...
         event_field(candidates, 'rejection_reason', 'text'));
     write_numeric(filename, [path '/uncertainty_sec'], ...
-        event_field(candidates, 'uncertainty_sec', 'numeric'));
+        event_field(candidates, 'uncertainty_sec', 'numeric'), options);
 end
 
-function write_review_history(filename, path, history)
+function write_review_history(filename, path, history, options)
 % WRITE_REVIEW_HISTORY Export each immutable manual-review round.
 % history is a struct array whose round_<id> groups contain provenance,
 % canonical events, sample x label masks, coverage/status, and optional
 % reviewer identity, notes, schema version, and active-round flag.
 
-    write_numeric(filename, [path '/number_of_rounds'], numel(history));
+    write_numeric(filename, [path '/number_of_rounds'], numel(history), options);
     for i = 1:numel(history)
         round_path = sprintf('%s/round_%06d', path, history(i).round_id);
-        write_numeric(filename, [round_path '/round_id'], history(i).round_id);
+        write_numeric(filename, [round_path '/round_id'], ...
+            history(i).round_id, options);
         write_text(filename, [round_path '/timestamp'], history(i).timestamp);
         write_text(filename, [round_path '/reviewer_role'], history(i).reviewer_role);
         write_text(filename, [round_path '/start_from'], history(i).start_from);
         write_numeric(filename, [round_path '/source_review_round'], ...
-            history(i).source_review_round);
-        write_events(filename, [round_path '/events'], history(i).events);
-        write_numeric(filename, [round_path '/mask'], uint8(history(i).mask));
+            history(i).source_review_round, options);
+        write_events(filename, [round_path '/events'], history(i).events, options);
+        write_numeric(filename, [round_path '/mask'], ...
+            uint8(history(i).mask), options);
         write_numeric(filename, [round_path '/review_mask'], ...
-            uint8(history(i).review_mask));
+            uint8(history(i).review_mask), options);
         write_text(filename, [round_path '/review_status'], ...
             history(i).review_status);
         write_text(filename, [round_path '/changed_labels'], ...
@@ -388,7 +414,7 @@ function write_review_history(filename, path, history)
         end
         if isfield(history, 'accepted_as_active')
             write_numeric(filename, [round_path '/accepted_as_active'], ...
-                uint8(history(i).accepted_as_active));
+                uint8(history(i).accepted_as_active), options);
         end
     end
 end
@@ -406,7 +432,7 @@ function values = event_field(events, name, kind)
     end
 end
 
-function write_value(filename, path, value)
+function write_value(filename, path, value, options)
 % WRITE_VALUE Recursively serialize a supported MATLAB value below an HDF5 path.
 % Structs, cells, text, numeric/logical values, and empty values are encoded
 % by type-specific writers; unsupported classes raise an export error.
@@ -417,43 +443,45 @@ function write_value(filename, path, value)
         elseif isscalar(value)
             names = fieldnames(value);
             for i = 1:numel(names)
-                write_value(filename, [path '/' safe_name(names{i})], value.(names{i}));
+                write_value(filename, [path '/' safe_name(names{i})], ...
+                    value.(names{i}), options);
             end
         else
-            write_struct_array(filename, path, value);
+            write_struct_array(filename, path, value, options);
         end
     elseif isnumeric(value) || islogical(value)
-        write_numeric(filename, path, value);
+        write_numeric(filename, path, value, options);
     elseif ischar(value) || isstring(value)
         write_text(filename, path, value);
     elseif iscell(value)
-        write_cell(filename, path, value);
+        write_cell(filename, path, value, options);
     else
         error('MAGMA:HDF5:UnsupportedType', ...
             'Unsupported value at %s (%s).', path, class(value));
     end
 end
 
-function write_struct_array(filename, path, values)
+function write_struct_array(filename, path, values, options)
 % WRITE_STRUCT_ARRAY Recursively write scalar fields or indexed struct groups.
 
     names = fieldnames(values);
     for i = 1:numel(names)
         parts = {values.(names{i})};
         if all(cellfun(@(x) isnumeric(x) && isscalar(x), parts))
-            write_numeric(filename, [path '/' safe_name(names{i})], cell2mat(parts(:)));
+            write_numeric(filename, [path '/' safe_name(names{i})], ...
+                cell2mat(parts(:)), options);
         elseif all(cellfun(@(x) ischar(x) || (isstring(x) && isscalar(x)), parts))
             write_text(filename, [path '/' safe_name(names{i})], parts);
         else
             for j = 1:numel(values)
                 item_path = sprintf('%s/item_%06d/%s', path, j, safe_name(names{i}));
-                write_value(filename, item_path, values(j).(names{i}));
+                write_value(filename, item_path, values(j).(names{i}), options);
             end
         end
     end
 end
 
-function write_cell(filename, path, values)
+function write_cell(filename, path, values, options)
 % WRITE_CELL Encode a homogeneous cell array or recursively index mixed cells.
 % All-text cells share one byte matrix; scalar numeric/logical cells share a
 % numeric array; other contents are written below item_<index> groups.
@@ -463,15 +491,103 @@ function write_cell(filename, path, values)
     elseif all(cellfun(@(x) ischar(x) || (isstring(x) && isscalar(x)), values(:)))
         write_text(filename, path, values);
     elseif all(cellfun(@(x) isnumeric(x) && isscalar(x), values(:)))
-        write_numeric(filename, path, cell2mat(values(:)));
+        write_numeric(filename, path, cell2mat(values(:)), options);
     else
         for i = 1:numel(values)
-            write_value(filename, sprintf('%s/item_%06d', path, i), values{i});
+            write_value(filename, sprintf('%s/item_%06d', path, i), ...
+                values{i}, options);
         end
     end
 end
 
-function write_numeric(filename, path, value)
+function options = hdf5_export_options(config)
+% HDF5_EXPORT_OPTIONS Resolve and validate export-only storage settings.
+
+    options = struct( ...
+        'include_raw_signals', get_config_value( ...
+            config, 'HDF5', 'include_raw_signals', false), ...
+        'include_preprocessed_signals', get_config_value( ...
+            config, 'HDF5', 'include_preprocessed_signals', true), ...
+        'signal_datatype', lower(char(string(get_config_value( ...
+            config, 'HDF5', 'signal_datatype', 'single')))), ...
+        'compression_level', get_config_value( ...
+            config, 'HDF5', 'compression_level', 4));
+    logical_fields = {'include_raw_signals', 'include_preprocessed_signals'};
+    for i = 1:numel(logical_fields)
+        value = options.(logical_fields{i});
+        if ~(islogical(value) || isnumeric(value)) || ~isscalar(value) || ...
+                ~isfinite(double(value)) || ~ismember(double(value), [0 1])
+            error('MAGMA:HDF5:InvalidExportSetting', ...
+                'config.HDF5.%s must be a scalar logical value.', ...
+                logical_fields{i});
+        end
+        options.(logical_fields{i}) = logical(value);
+    end
+    if ~ismember(options.signal_datatype, {'single', 'double', 'native'})
+        error('MAGMA:HDF5:InvalidExportSetting', ...
+            ['config.HDF5.signal_datatype must be ''single'', ' ...
+             '''double'', or ''native''.']);
+    end
+    level = options.compression_level;
+    if ~isnumeric(level) || ~isscalar(level) || ~isfinite(level) || ...
+            level < 0 || level > 9 || level ~= round(level)
+        error('MAGMA:HDF5:InvalidExportSetting', ...
+            'config.HDF5.compression_level must be an integer from 0 to 9.');
+    end
+    options.compression_level = double(level);
+end
+
+function signal = cast_export_signal(signal, datatype)
+% CAST_EXPORT_SIGNAL Cast only the HDF5 signal payload, never analysis data.
+
+    switch datatype
+        case 'single'
+            signal = single(signal);
+        case 'double'
+            signal = double(signal);
+        case 'native'
+            % Preserve the caller's numeric class.
+    end
+end
+
+function tf = should_compress_numeric(path, value, options)
+% SHOULD_COMPRESS_NUMERIC Compress sizable arrays and all signal/label arrays.
+
+    byte_count = numel(value) * numeric_class_bytes(class(value));
+    priority_path = startsWith(path, '/signals/') || ...
+        startsWith(path, '/labels/');
+    tf = options.compression_level > 0 && numel(value) > 1 && ...
+        (byte_count >= 1024 || priority_path);
+end
+
+function chunk_size = numeric_chunk_size(value)
+% NUMERIC_CHUNK_SIZE Limit chunks to approximately one MiB.
+
+    chunk_size = size(value);
+    max_elements = max(1, floor(1024^2 / ...
+        numeric_class_bytes(class(value))));
+    while prod(chunk_size) > max_elements
+        [~, dimension] = max(chunk_size);
+        chunk_size(dimension) = ceil(chunk_size(dimension) / 2);
+    end
+end
+
+function bytes = numeric_class_bytes(class_name)
+% NUMERIC_CLASS_BYTES Return storage width for supported numeric classes.
+
+    switch class_name
+        case {'double', 'uint64', 'int64'}
+            bytes = 8;
+        case {'single', 'uint32', 'int32'}
+            bytes = 4;
+        case {'uint16', 'int16'}
+            bytes = 2;
+        otherwise
+            bytes = 1;
+    end
+end
+
+function write_numeric(filename, path, value, options)
 % WRITE_NUMERIC Create one numeric HDF5 dataset, preserving MATLAB dimensions.
 % Logical values are converted to uint8; empty values use the shared empty marker.
 
@@ -489,7 +605,13 @@ function write_numeric(filename, path, value)
         error('MAGMA:HDF5:ComplexUnsupported', ...
             'Complex values are not exported (%s).', path);
     end
-    h5create(filename, path, size(value), 'Datatype', class(value));
+    create_args = {'Datatype', class(value)};
+    if should_compress_numeric(path, value, options)
+        create_args = [create_args, ...
+            {'ChunkSize', numeric_chunk_size(value), ...
+             'Deflate', options.compression_level}];
+    end
+    h5create(filename, path, size(value), create_args{:});
     h5write(filename, path, value);
     if logical_value
         h5writeatt(filename, path, 'logical', uint8(1));

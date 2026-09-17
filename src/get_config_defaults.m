@@ -266,6 +266,10 @@ function config = get_config_defaults()
     config.HDF5 = struct();
     config.HDF5.enabled = true;
     config.HDF5.filename_suffix = '_labels.h5';
+    config.HDF5.include_raw_signals = false;
+    config.HDF5.include_preprocessed_signals = true;
+    config.HDF5.signal_datatype = 'single';
+    config.HDF5.compression_level = 4;
     config.HDF5.upstream_input_preprocessing = ...
         'external / not fully documented';
 

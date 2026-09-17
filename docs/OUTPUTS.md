@@ -108,8 +108,8 @@ unavailable physiological evidence != negative
 Important high-level groups include:
 
 ```text
-/signals/raw
 /signals/preprocessed
+/signals/raw                 (optional)
 
 /resp_cycles
 /resp_features
@@ -132,6 +132,15 @@ Important high-level groups include:
 
 /config
 ```
+
+By default, HDF5 export omits `/signals/raw`, includes
+`/signals/preprocessed`, and stores exported signal matrices as compressed
+single-precision values. `config.HDF5.include_raw_signals`,
+`include_preprocessed_signals`, `signal_datatype`, and `compression_level`
+control these export-only storage choices. They do not modify the in-memory
+signals, MAT output, features, or labels. Numeric arrays and label masks use
+chunked HDF5 compression where appropriate; label masks remain exact `uint8`
+datasets.
 
 Asynchrony method evidence is stored below:
 

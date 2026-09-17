@@ -674,6 +674,10 @@ end
 
 function testHdf5RoundTripPreservesOrderMasksNaNsAndRespiration(testCase)
     config = stage6_config();
+    verifyFalse(testCase, config.HDF5.include_raw_signals);
+    verifyTrue(testCase, config.HDF5.include_preprocessed_signals);
+    verifyEqual(testCase, config.HDF5.signal_datatype, 'single');
+    verifyEqual(testCase, config.HDF5.compression_level, 4);
     N = 20;
     results = export_fixture(config, N);
     filename = [tempname '.h5'];
@@ -682,12 +686,19 @@ function testHdf5RoundTripPreservesOrderMasksNaNsAndRespiration(testCase)
     preprocessed = raw / 10;
     export_results_hdf5(filename, results, raw, preprocessed);
 
-    verifySize(testCase, h5read(filename, '/signals/raw'), [N 6]);
+    verifyFalse(testCase, hdf5_path_exists(filename, '/signals/raw'));
+    verifyTrue(testCase, hdf5_path_exists(filename, '/signals/preprocessed'));
+    stored_preprocessed = h5read(filename, '/signals/preprocessed');
+    verifyClass(testCase, stored_preprocessed, 'single');
+    verifyEqual(testCase, stored_preprocessed, single(preprocessed));
+    verifyClass(testCase, raw, 'double');
+    verifyClass(testCase, preprocessed, 'double');
     verifyEqual(testCase, h5read(filename, '/meta/fs'), config.fs);
     verifyEqual(testCase, read_hdf5_text(filename, '/labels/names'), ...
         {config.labels.short});
-    verifyEqual(testCase, logical(h5read(filename, '/labels/automatic_mask')), ...
-        results.mask_automatic);
+    stored_automatic_mask = h5read(filename, '/labels/automatic_mask');
+    verifyClass(testCase, stored_automatic_mask, 'uint8');
+    verifyEqual(testCase, logical(stored_automatic_mask), results.mask_automatic);
     verifyEqual(testCase, logical(h5read(filename, '/labels/reviewed_mask')), ...
         results.mask_reviewed);
     verifyEqual(testCase, logical(h5read(filename, ...
