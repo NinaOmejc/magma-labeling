@@ -166,6 +166,15 @@ function plot_periodic_method_comparison(data, config, diagnostics)
     end
     eami = diagnostics.eami;
     guyot = diagnostics.guyot;
+    eami_support = periodic_analysis_support_intervals( ...
+        eami.combined.events, eami.combined.t_sec, ...
+        eami.combined.evaluable_mask & eami.combined.threshold_mask, ...
+        config.periodic.eami.energy_win_sec, recording_end_t);
+    [guyot_center_t, guyot_contributing] = ...
+        guyot_contributing_window_centers(guyot);
+    guyot_support = periodic_analysis_support_intervals( ...
+        guyot.combined.events, guyot_center_t, guyot_contributing, ...
+        config.periodic.guyot.window_sec, recording_end_t);
 
     figure('Units', 'pixels', 'Position', near_fullscreen_figure_position(), ...
         'Visible', config.make_figs_visible);
@@ -177,7 +186,7 @@ function plot_periodic_method_comparison(data, config, diagnostics)
     ax1 = subplot(3, 1, 1); hold on
     plot_raw_belts(ax1, t_raw, data, idx_lungs, idx_diaph);
     shade_events_on_axis(ax1, diagnostics.primary_events, ...
-        'final primary periodic events');
+        'final periodic event');
     title('Raw respiratory effort belts + final periodic label')
     xlabel('Time (s)'); ylabel('Raw belt'); grid on; hold off
     show_legend_if_data(ax1);
@@ -189,7 +198,8 @@ function plot_periodic_method_comparison(data, config, diagnostics)
         [0.10 0.35 0.90], 'diaphragm eAMI');
     yline(ax2, config.periodic.eami.threshold, 'r--', ...
         'DisplayName', 'eAMI threshold');
-    shade_events_on_axis(ax2, eami.combined.events, 'combined eAMI events');
+    shade_events_on_axis(ax2, eami.combined.events, 'final periodic event');
+    shade_periodic_analysis_support(ax2, eami_support);
     title('eAMI')
     xlabel('Time (s)'); ylabel('eAMI'); grid on
     show_legend_if_data(ax2); hold off
@@ -199,8 +209,8 @@ function plot_periodic_method_comparison(data, config, diagnostics)
         [0.15 0.15 0.15], 'lungs envelope');
     plot_finite_trace(ax3, guyot.diaph.envelope_t, guyot.diaph.envelope, ...
         [0.10 0.35 0.90], 'diaphragm envelope');
-    shade_events_on_axis(ax3, guyot.combined.events, ...
-        'combined Guyot events');
+    shade_events_on_axis(ax3, guyot.combined.events, 'final periodic event');
+    shade_periodic_analysis_support(ax3, guyot_support);
     title('Guyot canonical breath-amplitude envelope')
     xlabel('Time (s)'); ylabel('Canonical amplitude'); grid on
     show_legend_if_data(ax3); hold off
@@ -212,6 +222,61 @@ function plot_periodic_method_comparison(data, config, diagnostics)
     end
     align_axes_x_widths(axes_handles);
     save_figure(config, 'periodic_breathing');
+end
+
+function [center_t, contributing] = guyot_contributing_window_centers(guyot)
+% GUYOT_CONTRIBUTING_WINDOW_CENTERS Recover combined positive window centers.
+
+    center_t = unique([ ...
+        evaluable_window_centers(guyot.lungs); ...
+        evaluable_window_centers(guyot.diaph)]);
+    contributing = false(size(center_t));
+    if isempty(center_t) || isempty(guyot.combined.t_sec)
+        return;
+    end
+    sample_index = interp1(guyot.combined.t_sec(:), ...
+        (1:numel(guyot.combined.t_sec))', center_t, 'nearest', NaN);
+    valid = isfinite(sample_index);
+    sample_index = sample_index(valid);
+    contributing(valid) = guyot.combined.evaluable_mask(sample_index) & ...
+        guyot.combined.pathological_mask(sample_index);
+end
+
+function centers = evaluable_window_centers(belt)
+% EVALUABLE_WINDOW_CENTERS Return actual centers with valid h/f_m estimates.
+
+    centers = zeros(0, 1);
+    if isempty(belt.window_center_t) || isempty(belt.evaluable_window_mask)
+        return;
+    end
+    valid = logical(belt.evaluable_window_mask(:)) & ...
+        isfinite(belt.window_center_t(:));
+    centers = belt.window_center_t(valid);
+end
+
+function shade_periodic_analysis_support(ax, intervals)
+% SHADE_PERIODIC_ANALYSIS_SUPPORT Draw one pale patch per disjoint union span.
+
+    y_limits = ylim(ax);
+    for i = 1:size(intervals, 1)
+        display_name = '';
+        handle_visibility = 'off';
+        if i == 1
+            display_name = 'analysis support for retained event';
+            handle_visibility = 'on';
+        end
+        h = patch(ax, ...
+            [intervals(i, 1) intervals(i, 2) intervals(i, 2) intervals(i, 1)], ...
+            [y_limits(1) y_limits(1) y_limits(2) y_limits(2)], ...
+            [1.00 0.86 0.88], ...
+            'EdgeColor', 'none', 'FaceAlpha', 0.16, ...
+            'DisplayName', display_name, ...
+            'HandleVisibility', handle_visibility);
+        try
+            uistack(h, 'bottom');
+        catch
+        end
+    end
 end
 
 function plot_raw_belts(ax, t_raw, data, idx_lungs, idx_diaph)

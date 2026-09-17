@@ -347,6 +347,28 @@ function testGuyotCenterProjectionAndPersistence(testCase)
         three_combined.events(1).duration, 60);
 end
 
+function testPeriodicPlotSupportUsesCenteredClippedWindows(testCase)
+    config = get_config_defaults();
+    window_sec = config.periodic.guyot.window_sec;
+    retained = struct('start_t', 0, 'end_t', 400);
+    centers = [5; 200; 395];
+    intervals = periodic_analysis_support_intervals( ...
+        retained, centers, true(size(centers)), window_sec, 400);
+    verifyEqual(testCase, intervals, [0 65; 140 260; 335 400], ...
+        'AbsTol', eps);
+
+    overlapping_centers = [100; 124; 148];
+    intervals = periodic_analysis_support_intervals( ...
+        retained, overlapping_centers, true(size(overlapping_centers)), ...
+        window_sec, 400);
+    verifyEqual(testCase, intervals, [40 208], 'AbsTol', eps);
+
+    retained = struct('start_t', 195, 'end_t', 205);
+    intervals = periodic_analysis_support_intervals( ...
+        retained, centers, true(size(centers)), window_sec, 400);
+    verifyEqual(testCase, intervals, [140 260], 'AbsTol', eps);
+end
+
 function testGuyotPersistenceRequiresFullMinute(testCase)
     t = (10:108)';
     short = false(size(t)); short(1:59) = true;
@@ -404,7 +426,10 @@ function testMethodMetadataAndComparisonPlotArePresent(testCase)
         'Raw respiratory effort belts + final periodic label', ...
         'title(''eAMI'')', ...
         'Guyot canonical breath-amplitude envelope', ...
-        'eami.combined.events', 'guyot.combined.events'};
+        'eami.combined.events', 'guyot.combined.events', ...
+        'periodic_analysis_support_intervals', ...
+        'final periodic event', ...
+        'analysis support for retained event'};
     for i = 1:numel(required)
         verifyTrue(testCase, contains(detector, required{i}));
     end

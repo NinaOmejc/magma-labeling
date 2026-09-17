@@ -23,6 +23,7 @@ function fig = plot_label_mask(label_mask, label_names, config)
     if n_samples == 0 || n_labels == 0
         return;
     end
+    label_names = validate_canonical_label_order(label_names, n_labels);
 
     t_sec = (0:n_samples-1) / config.fs;
     row_labels = resolve_row_labels(label_names, config, n_labels);
@@ -36,7 +37,6 @@ function fig = plot_label_mask(label_mask, label_names, config)
 
     ax = axes('Parent', fig);
     imagesc(ax, t_sec, 1:n_labels, double(label_mask'));
-    axis(ax, 'xy');
     if t_sec(end) > 0
         xlim(ax, [0 t_sec(end)]);
     else
@@ -46,6 +46,7 @@ function fig = plot_label_mask(label_mask, label_names, config)
     set(ax, ...
         'YTick', 1:n_labels, ...
         'YTickLabel', row_labels, ...
+        'YDir', 'reverse', ...
         'TickDir', 'out', ...
         'Layer', 'top', ...
         'Box', 'off', ...
@@ -78,6 +79,22 @@ function fig = plot_label_mask(label_mask, label_names, config)
 
     save_figure(config, 'label_mask');
     fig = [];
+end
+
+function label_names = validate_canonical_label_order(label_names, n_labels)
+% VALIDATE_CANONICAL_LABEL_ORDER Keep mask columns and displayed rows aligned.
+
+    label_names = cellstr(string(label_names));
+    label_names = label_names(:)';
+    canonical_names = get_labels('short');
+    if ~isequal(label_names, canonical_names)
+        error('MAGMA:LabelMask:LabelOrder', ...
+            'label_names must match get_labels(''short'') in canonical order.');
+    end
+    if n_labels ~= numel(label_names)
+        error('MAGMA:LabelMask:MaskAlignment', ...
+            'size(label_mask,2) must equal numel(label_names).');
+    end
 end
 
 function cmap = build_label_mask_colormap(config)

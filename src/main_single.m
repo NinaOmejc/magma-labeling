@@ -15,27 +15,27 @@ config.path_results_out = 'D:\Projects\MAGMA\data_analysis\statistical_labeling'
 config.fs = 200;
 config.subjects = [31];
 config.remove_subjects = [3 30 91];
-config.measurements = [1 2];
+config.measurements = [2];
 config.subjects(ismember(config.subjects, config.remove_subjects)) = [];
 
 % EXECUTION
 config.overwrite_results = true;    % If true, recompute even if "*_labels.h5" output already exists.
 config.overwrite_features = false;  % If true, recompute respiratory features even if "*_features.mat" already exists.
-config.verbosity = 1;               % 1 = concise progress, 2 = detailed progress.
+config.verbosity = 2;               % 1 = concise progress, 2 = detailed progress.
 
 % RESPIRATORY REPRESENTATION
-config.resp.amp_method = 'expiratory';  % Selected breath amplitude: 'expiratory' (peak to following trough), 'inspiratory' (peak to preceding trough), or 'symmetric' (peak to the mean of both troughs)
+config.resp.amp_method = 'inspiratory';  % Selected breath amplitude: 'expiratory' (peak to following trough), 'inspiratory' (peak to preceding trough), or 'symmetric' (peak to the mean of both troughs)
 config.resp.plot_amp_method_comparison = true; % save an optional comparison of all three breath-amplitude definitions
 config.resp.manual_control = true;
 
 % PRIMARY METHODS
 config.sigh.method = 'rolling_median_2x';
-config.periodic.primary_method = 'eami';
+config.periodic.primary_method = 'guyot';
 config.async.primary_method = 'wavelet_phase_offset';
 config.async.compare_methods = true;
 
 % PLOTTING
-config.make_figs_visible = 'off';                           % If 'off' plots are only saved, and not shown, which increases the speed.
+config.make_figs_visible = 'on';                           % If 'off' plots are only saved, and not shown, which increases the speed.
 config.plot_raw_data = false;                               % save an overview plot of raw signals
 config.reference.do_plot = true;                            % save respiratory-reference QC figure
 config.shallow.do_plot = true;                              % save shallow breathing diagnostic plot

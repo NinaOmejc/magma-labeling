@@ -166,11 +166,11 @@ function config = get_config_defaults()
     config.periodic.eami = struct();
     config.periodic.eami.resp_band_hz = [0.125 0.40];
     config.periodic.eami.bandpass_order = 12;
-    config.periodic.eami.resample_hz = 1;
+    config.periodic.eami.resample_hz = 10;
     config.periodic.eami.envelope_lowpass_hz = 0.125;
     config.periodic.eami.envelope_lowpass_order = 6;
     config.periodic.eami.energy_win_sec = 60;
-    config.periodic.eami.threshold = 0.60;
+    config.periodic.eami.threshold = 0.40;
 
     % Guyot et al., PLOS ONE 2020 (DOI 10.1371/journal.pone.0221191).
     % The centered window/overlap and Matrix Pencil structure follow the paper.
@@ -180,9 +180,9 @@ function config = get_config_defaults()
     config.periodic.guyot = struct();
     config.periodic.guyot.resample_hz = 1;
     config.periodic.guyot.window_sec = 120;
-    config.periodic.guyot.overlap_fraction = 0.80;
-    config.periodic.guyot.h_threshold = 0.12;
-    config.periodic.guyot.fm_band_hz = [0.008 0.050];
+    config.periodic.guyot.overlap_fraction = 0.90;
+    config.periodic.guyot.h_threshold = 0.5;
+    config.periodic.guyot.fm_band_hz = [0.01 0.1];
     config.periodic.guyot.min_zone_sec = 60;
     config.periodic.guyot.gap_factor = 3;
 
