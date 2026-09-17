@@ -5,7 +5,7 @@ end
 
 function testGetLabelsFormatsAndConfiguration(testCase)
     expected_short = {'shallow', 'deep', 'slow', 'rapid', 'irregular', ...
-        'apnea', 'sigh', 'csr', 'thoracic', 'async', 'desat'};
+        'apnea', 'sigh', 'periodic', 'thoracic', 'async', 'desat'};
     expected_long = {'ShallowBreathing', 'DeepBreathing', 'SlowBreathing', ...
         'RapidBreathing', 'IrregularBreathing', 'Apnea', 'Sigh', ...
         'PeriodicBreathingCheyneStokesLike', 'ThoracicDominantBreathing', ...
@@ -21,6 +21,11 @@ function testGetLabelsFormatsAndConfiguration(testCase)
     verifyEqual(testCase, get_labels("SHORT"), expected_short);
     verifyEqual(testCase, get_labels('long'), expected_long);
     verifyEqual(testCase, get_labels("IDX"), 1:11);
+    verifyFalse(testCase, any(strcmp(get_labels('short'), 'csr')));
+    aliases = canonicalize_label_names( ...
+        {'periodic', 'csr', 'CSR', 'csb', 'cheyne_stokes', ...
+         'periodic_breathing', 'periodicbreathing'});
+    verifyEqual(testCase, aliases, repmat({'periodic'}, size(aliases)));
     verifyError(testCase, @() get_labels('unknown'), ...
         'MAGMA:GetLabels:InvalidFormat');
 
@@ -449,9 +454,11 @@ function testRespiratoryAmplitudeDocumentationMatchesAlignment(testCase)
     repo_root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
     source = fileread(fullfile(repo_root, 'src', 'feature_extraction', ...
         'extract_respiration_feature.m'));
-    verifyFalse(testCase, contains(source, ['n_peaks' '-1']));
-    verifyTrue(testCase, contains(source, 'length n_peaks'));
-    verifyTrue(testCase, contains(source, 'final entry is'));
+    verifyTrue(testCase, contains(source, 'amp_exp'));
+    verifyTrue(testCase, contains(source, 'amp_insp'));
+    verifyTrue(testCase, contains(source, 'amp_sym'));
+    verifyTrue(testCase, contains(source, 'config.resp.amp_method'));
+    verifyTrue(testCase, contains(source, 'first/final values are NaN'));
 end
 
 function [data, resp_feat, resp_ref, diagnostics_desat, config] = amplitude_fixture( ...

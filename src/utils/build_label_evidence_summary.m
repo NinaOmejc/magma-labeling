@@ -135,28 +135,29 @@ function summary = build_label_evidence_summary( ...
     summary.sigh.supporting_belts = belt_support( ...
         sigh.lungs.available, sigh.diaph.available);
 
-    csr = detector_diagnostics.csr;
-    summary.csr.primary_method = csr.primary_method;
-    summary.csr.eami_available = csr.eami.available;
-    summary.csr.eami_supporting_belts = belt_support( ...
-        csr.eami.lungs.available, csr.eami.diaph.available);
-    summary.csr.eami_candidate_event_count = csr.eami.event_count;
-    summary.csr.eami_candidate_duration_sec = csr.eami.event_duration_sec;
-    eami_values = [csr.eami.lungs.eami(:); csr.eami.diaph.eami(:)];
-    summary.csr.eami_max = finite_max(eami_values);
-    summary.csr.eami_median = finite_median(eami_values);
+    periodic = detector_diagnostics.periodic;
+    summary.periodic.primary_method = periodic.primary_method;
+    summary.periodic.eami_available = periodic.eami.available;
+    summary.periodic.eami_supporting_belts = belt_support( ...
+        periodic.eami.lungs.available, periodic.eami.diaph.available);
+    summary.periodic.eami_candidate_event_count = periodic.eami.event_count;
+    summary.periodic.eami_candidate_duration_sec = periodic.eami.event_duration_sec;
+    eami_values = [periodic.eami.lungs.index(:); ...
+        periodic.eami.diaph.index(:)];
+    summary.periodic.eami_max = finite_max(eami_values);
+    summary.periodic.eami_median = finite_median(eami_values);
 
-    summary.csr.guyot_available = csr.guyot.available;
-    summary.csr.guyot_supporting_belts = belt_support( ...
-        csr.guyot.lungs.available, csr.guyot.diaph.available);
-    summary.csr.guyot_candidate_event_count = csr.guyot.event_count;
-    summary.csr.guyot_candidate_duration_sec = csr.guyot.event_duration_sec;
-    guyot_h = [csr.guyot.lungs.h(:); csr.guyot.diaph.h(:)];
-    guyot_fm = 1000 * [csr.guyot.lungs.fm_hz(:); ...
-        csr.guyot.diaph.fm_hz(:)];
-    summary.csr.guyot_max_h = finite_max(guyot_h);
-    summary.csr.guyot_median_h = finite_median(guyot_h);
-    summary.csr.guyot_median_fm_mhz = finite_median(guyot_fm);
+    summary.periodic.guyot_available = periodic.guyot.available;
+    summary.periodic.guyot_supporting_belts = belt_support( ...
+        periodic.guyot.lungs.available, periodic.guyot.diaph.available);
+    summary.periodic.guyot_candidate_event_count = periodic.guyot.event_count;
+    summary.periodic.guyot_candidate_duration_sec = periodic.guyot.event_duration_sec;
+    guyot_h = [periodic.guyot.lungs.h(:); periodic.guyot.diaph.h(:)];
+    guyot_fm = 1000 * [periodic.guyot.lungs.fm_hz(:); ...
+        periodic.guyot.diaph.fm_hz(:)];
+    summary.periodic.guyot_max_h = finite_max(guyot_h);
+    summary.periodic.guyot_median_h = finite_median(guyot_h);
+    summary.periodic.guyot_median_fm_mhz = finite_median(guyot_fm);
 end
 
 function spo2 = recording_spo2(data, config)

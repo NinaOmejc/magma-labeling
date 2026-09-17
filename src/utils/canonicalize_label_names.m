@@ -21,8 +21,11 @@ function canonical = canonicalize_label_names(names)
                 canonical{i} = 'apnea';
             case 'sigh'
                 canonical{i} = 'sigh';
-            case {'CSR', 'csr'}
-                canonical{i} = 'csr';
+            case {'periodic', 'CSR', 'csr', 'CSB', 'csb', ...
+                    'cheyne_stokes', 'periodic_breathing', ...
+                    'periodicbreathing', 'PeriodicBreathingCheyneStokesLike', ...
+                    'periodicbreathingcheynestokeslike'}
+                canonical{i} = 'periodic';
             case {'thorDomB', 'thoracic'}
                 canonical{i} = 'thoracic';
             case {'asyncB', 'async'}

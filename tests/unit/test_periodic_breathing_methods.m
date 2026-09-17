@@ -1,18 +1,19 @@
 function tests = test_periodic_breathing_methods
-% Synthetic regression coverage for the two literature-based CSR methods.
+% Synthetic regression coverage for the two periodic-breathing methods.
     tests = functiontests(localfunctions);
 end
 
-function testCurrentCSRConfigurationContainsOnlyLiteratureMethods(testCase)
+function testCurrentPeriodicConfigurationContainsOnlyLiteratureMethods(testCase)
     config = get_config();
-    verifyEqual(testCase, fieldnames(config.csr), ...
+    verifyEqual(testCase, fieldnames(config.periodic), ...
         {'primary_method'; 'do_plot'; 'eami'; 'guyot'});
-    verifyEqual(testCase, config.csr.primary_method, 'eami');
-    verifyEqual(testCase, fieldnames(config.csr.eami), ...
+    verifyFalse(testCase, isfield(config, 'csr'));
+    verifyEqual(testCase, config.periodic.primary_method, 'eami');
+    verifyEqual(testCase, fieldnames(config.periodic.eami), ...
         {'resp_band_hz'; 'bandpass_order'; 'resample_hz'; ...
          'envelope_lowpass_hz'; 'envelope_lowpass_order'; ...
          'energy_win_sec'; 'threshold'});
-    verifyEqual(testCase, fieldnames(config.csr.guyot), ...
+    verifyEqual(testCase, fieldnames(config.periodic.guyot), ...
         {'resample_hz'; 'window_sec'; 'overlap_fraction'; ...
          'h_threshold'; 'fm_band_hz'; 'min_zone_sec'; 'gap_factor'});
 end
@@ -28,10 +29,10 @@ function testPeriodicDetectorComputesBothAndSelectsExplicitPrimary(testCase)
     expected_guyot = compute_guyot_periodic_breathing( ...
         data, resp_cycles, config);
 
-    config.csr.primary_method = 'eami';
+    config.periodic.primary_method = 'eami';
     [events_eami, eami_primary, candidates_eami] = detect_periodic_breathing( ...
         data, resp_cycles, config);
-    config.csr.primary_method = 'guyot';
+    config.periodic.primary_method = 'guyot';
     [events_guyot, guyot_primary, candidates_guyot] = detect_periodic_breathing( ...
         data, resp_cycles, config);
 
@@ -49,21 +50,31 @@ function testPeriodicDetectorComputesBothAndSelectsExplicitPrimary(testCase)
     verifyEqual(testCase, guyot_primary.primary_method, 'guyot');
     verifyFalse(testCase, isfield(eami_primary, 'primary_events'));
     verifyFalse(testCase, isfield(eami_primary.eami.lungs, 't_sec'));
+    verifyEqual(testCase, eami_primary.eami.time_sec, ...
+        expected_eami.combined.t_sec);
+    verifyEqual(testCase, eami_primary.eami.lungs.index, ...
+        expected_eami.lungs.eami);
+    verifyEqual(testCase, eami_primary.eami.diaph.index, ...
+        expected_eami.diaph.eami);
+    verifyFalse(testCase, isfield(eami_primary.eami.lungs, 'eami'));
+    verifyFalse(testCase, isfield(eami_primary.eami.diaph, 'eami'));
+    verifyFalse(testCase, isfield(eami_primary.eami, 'method_name'));
+    verifyFalse(testCase, isfield(eami_primary.guyot, 'method_name'));
 end
 
 function testInvalidPrimaryMethodErrorsClearly(testCase)
     config = periodic_config(10);
-    config.csr.primary_method = 'automatic';
+    config.periodic.primary_method = 'automatic';
     data = zeros(100, numel(config.data_columns));
     resp_cycles = empty_belts();
     verifyError(testCase, ...
         @() detect_periodic_breathing(data, resp_cycles, config), ...
-        'MAGMA:CSR:InvalidPrimaryMethod');
+        'MAGMA:Periodic:InvalidPrimaryMethod');
 end
 
 function testUnavailablePrimaryDoesNotFallBackToAlternative(testCase)
     config = periodic_config(10);
-    config.csr.primary_method = 'guyot';
+    config.periodic.primary_method = 'guyot';
     t = (0:1 / config.fs:420)';
     data = belt_data(strong_modulated_carrier(t), nan(size(t)), config);
     [events, diagnostics] = detect_periodic_breathing( ...
@@ -86,7 +97,7 @@ function testConstantAmplitudeRespirationHasLowEAMI(testCase)
 
     verifyNotEmpty(testCase, values);
     verifyLessThan(testCase, median(values, 'omitnan'), ...
-        config.csr.eami.threshold);
+        config.periodic.eami.threshold);
     verifyEmpty(testCase, diagnostics.combined.events);
 end
 
@@ -98,7 +109,7 @@ function testStrongAmplitudeModulationCanExceedEAMIThreshold(testCase)
         belt_data(signal, nan(size(signal)), config), config);
 
     verifyGreaterThan(testCase, max(diagnostics.lungs.eami, [], 'omitnan'), ...
-        config.csr.eami.threshold);
+        config.periodic.eami.threshold);
     verifyTrue(testCase, any(diagnostics.lungs.threshold_mask));
 end
 
@@ -110,7 +121,7 @@ function testEAMIEnergyUsesLocalMeanRemoval(testCase)
         belt_data(signal, nan(size(signal)), config), config);
     belt = diagnostics.lungs;
     center = find(belt.evaluable_mask, 1, 'first');
-    half_window = round(config.csr.eami.energy_win_sec / 2);
+    half_window = round(config.periodic.eami.energy_win_sec / 2);
     idx = center - half_window:center + half_window;
     resp = belt.resp_filtered(idx);
     am = belt.amplitude_envelope(idx);
@@ -133,7 +144,7 @@ function testShortModulationDoesNotMeetDerivedEAMIDuration(testCase)
         belt_data(signal, nan(size(signal)), config), config);
 
     verifyEqual(testCase, diagnostics.min_event_duration_sec, ...
-        2 * config.csr.eami.energy_win_sec);
+        2 * config.periodic.eami.energy_win_sec);
     verifyEmpty(testCase, diagnostics.combined.events);
 end
 
@@ -362,10 +373,12 @@ function testEvidenceConsumersUseBothLiteratureMethods(testCase)
         verifyTrue(testCase, contains(summary_source, required_summary{i}));
     end
     verifyTrue(testCase, contains(group_source, ...
-        '''detector_diagnostics'', ''csr.eami.lungs.eami'''));
+        '''detector_diagnostics'', ''periodic.eami.lungs.index'''));
     verifyTrue(testCase, contains(group_source, '''trace_eami_lungs'''));
     verifyTrue(testCase, contains(plot_source, ...
         '''detector_diagnostics'', ...'));
+    verifyTrue(testCase, contains(plot_source, ...
+        '''periodic.eami.time_sec'''));
     verifyTrue(testCase, contains(plot_source, '''trace_eami_lungs'''));
     verifyFalse(testCase, isfile(fullfile(repo_root, 'src', 'utils', ...
         'compute_label_diagnostic_signals.m')));
@@ -376,7 +389,7 @@ function config = periodic_config(fs)
 
     config = make_test_config();
     config.fs = fs;
-    config.csr.do_plot = false;
+    config.periodic.do_plot = false;
     config.problems.missing_lung_belt = zeros(0, 2);
     config = resolve_signal_channels(config);
 end

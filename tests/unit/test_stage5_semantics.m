@@ -181,12 +181,12 @@ function testTenSecondApneaWindowDoesNotRequireTwentySeconds(testCase)
 end
 
 function testEvidenceAwareAvailabilityAndReasonOrder(testCase)
-    [names, phys, spo2, rea, apnea, sigh, csr] = availability_fixture();
+    [names, phys, spo2, rea, apnea, sigh, periodic] = availability_fixture();
     rea.valid_analysis = false;
     rea.skip_code = 5;
     spo2.detection_available = false;
     [available, reasons] = compute_label_availability( ...
-        names, phys, spo2, rea, apnea, sigh, csr);
+        names, phys, spo2, rea, apnea, sigh, periodic);
     verifySize(testCase, available, [1 11]);
     verifySize(testCase, reasons, [1 11]);
     verifyFalse(testCase, available(strcmp(names, 'async')));
@@ -198,14 +198,14 @@ function testEvidenceAwareAvailabilityAndReasonOrder(testCase)
 end
 
 function testKnownOneBeltCaseMakesThoracicAndAsynchronyUnavailable(testCase)
-    [names, phys, spo2, rea, apnea, sigh, csr] = availability_fixture();
+    [names, phys, spo2, rea, apnea, sigh, periodic] = availability_fixture();
     phys.lungs.available = false;
     phys.lungs.session_amplitude_available = false;
     phys.thoracoabdominal_balance.available = false;
     rea.valid_analysis = false;
     rea.skip_code = 2;
     [available, reasons] = compute_label_availability( ...
-        names, phys, spo2, rea, apnea, sigh, csr);
+        names, phys, spo2, rea, apnea, sigh, periodic);
     verifyFalse(testCase, available(strcmp(names, 'thoracic')));
     verifyEqual(testCase, reasons{strcmp(names, 'thoracic')}, 'one_belt_only');
     verifyFalse(testCase, available(strcmp(names, 'async')));
@@ -347,7 +347,7 @@ function [data, resp_feat, resp_ref, diagnostics_desat, config] = physiological_
         'events', empty_events());
 end
 
-function [names, phys, spo2, rea, apnea, sigh, csr] = availability_fixture()
+function [names, phys, spo2, rea, apnea, sigh, periodic] = availability_fixture()
     config = stage_config();
     names = {config.labels.short};
     t = (0:100)';
@@ -366,7 +366,7 @@ function [names, phys, spo2, rea, apnea, sigh, csr] = availability_fixture()
     rea = struct('valid_analysis', true, 'skip_code', 0);
     apnea = struct('available', true);
     sigh = struct('available', true);
-    csr = struct('available', true);
+    periodic = struct('available', true);
 end
 
 function [burden, overlaps, evidence] = phenotype_fixture()

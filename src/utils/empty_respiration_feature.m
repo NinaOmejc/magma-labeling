@@ -1,7 +1,8 @@
 function b = empty_respiration_feature(basename)
 % EMPTY_RESPIRATION_FEATURE Return the canonical unavailable belt-cycle struct.
 % basename identifies the belt. b has ok=false; empty signal, peak, trough,
-% amplitude, IBI, and RR vectors; and NaN recording-level RR summaries.
+% selected/alternative amplitude, IBI, and RR vectors; and NaN recording-level
+% RR summaries.
 
     if nargin < 1
         basename = '';
@@ -18,6 +19,9 @@ function b = empty_respiration_feature(basename)
     b.trough_t = [];
     b.trough_val = [];
     b.amp = [];
+    b.amp_exp = [];
+    b.amp_insp = [];
+    b.amp_sym = [];
     b.ibi = [];
     b.rr_bpm = [];
     b.rr_mean_bpm = NaN;

@@ -491,6 +491,7 @@ end
 
 function testAutomaticSighCandidatesSurviveWithoutReview(testCase)
     config = stage6_config();
+    config.sigh.method = 'global_ratio_outlier';
     config.sigh.manual_control = false;
     config.sigh.do_plot = false;
     peak_t = (0:4:96)';
@@ -729,7 +730,7 @@ function testHdf5RoundTripPreservesOrderMasksNaNsAndRespiration(testCase)
     verifyFalse(testCase, hdf5_path_exists(filename, ...
         '/resp_features/diagnostic_signals'));
     verifyEqual(testCase, read_hdf5_text(filename, ...
-        '/meta/export_schema_version'), {'magma_ml_hdf5_v6'});
+        '/meta/export_schema_version'), {'magma_ml_hdf5_v7'});
     verifyEqual(testCase, h5read(filename, '/review/history/number_of_rounds'), 1);
     verifyEqual(testCase, read_hdf5_text(filename, ...
         '/review/history/round_000001/reviewer_role'), {'researcher'});

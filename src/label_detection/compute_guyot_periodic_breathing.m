@@ -5,7 +5,7 @@ function diagnostics = compute_guyot_periodic_breathing( ...
 % published h/fm decisions are retained, while the paper's breath front-end is
 % replaced by reviewed MAGMA peak_t and canonical amp values.
 
-    cfg = validate_guyot_config(config.csr.guyot);
+    cfg = validate_guyot_config(config.periodic.guyot);
     N = size(data, 1);
     recording_end_t = max(0, (N - 1) / config.fs);
     lungs_ignored = is_lung_belt_ignored(config);
@@ -193,26 +193,26 @@ function cfg = validate_guyot_config(cfg)
     required = {'resample_hz', 'window_sec', 'overlap_fraction', ...
         'h_threshold', 'fm_band_hz', 'min_zone_sec', 'gap_factor'};
     if ~isstruct(cfg) || ~all(isfield(cfg, required))
-        error('MAGMA:CSR:InvalidGuyotConfig', ...
-            'config.csr.guyot is incomplete.');
+        error('MAGMA:Periodic:InvalidGuyotConfig', ...
+            'config.periodic.guyot is incomplete.');
     end
     positive_scalars = {'resample_hz', 'window_sec', 'min_zone_sec'};
     for i = 1:numel(positive_scalars)
         value = cfg.(positive_scalars{i});
         if ~isscalar(value) || ~isfinite(value) || value <= 0
-            error('MAGMA:CSR:InvalidGuyotConfig', ...
-                'config.csr.guyot.%s must be positive.', positive_scalars{i});
+            error('MAGMA:Periodic:InvalidGuyotConfig', ...
+                'config.periodic.guyot.%s must be positive.', positive_scalars{i});
         end
     end
     if ~isscalar(cfg.overlap_fraction) || ~isfinite(cfg.overlap_fraction) || ...
             cfg.overlap_fraction < 0 || cfg.overlap_fraction >= 1
-        error('MAGMA:CSR:InvalidGuyotConfig', ...
-            'config.csr.guyot.overlap_fraction must be in [0,1).');
+        error('MAGMA:Periodic:InvalidGuyotConfig', ...
+            'config.periodic.guyot.overlap_fraction must be in [0,1).');
     end
     if ~isscalar(cfg.gap_factor) || ~isfinite(cfg.gap_factor) || ...
             cfg.gap_factor <= 1
-        error('MAGMA:CSR:InvalidGuyotConfig', ...
-            'config.csr.guyot.gap_factor must exceed one.');
+        error('MAGMA:Periodic:InvalidGuyotConfig', ...
+            'config.periodic.guyot.gap_factor must exceed one.');
     end
     cfg.fm_band_hz = cfg.fm_band_hz(:)';
     classify_guyot_modulation([], [], false(0, 1), ...

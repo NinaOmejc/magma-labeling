@@ -51,9 +51,9 @@ function belt = build_belt_evidence(source, reference, ignored, t_grid, cfg, con
         return;
     end
 
-    % Preserve cycle alignment from resp_cycles: amp(i) belongs to peak i
-    % (the final amplitude may be NaN), trough i lies between peaks i and
-    % i+1, and ibi(i)/rr_bpm(i) span peak i to peak i+1.
+    % Preserve cycle alignment from resp_cycles: selected amp(i) belongs to
+    % peak i, with method-specific NaNs at undefined boundaries; trough i lies
+    % between peaks i and i+1, and ibi(i)/rr_bpm(i) span those same peaks.
     belt.peak_idx = get_field(source, 'peak_idx', []);
     belt.peak_t = get_field(source, 'peak_t', []);
     belt.trough_idx = get_field(source, 'trough_idx', []);

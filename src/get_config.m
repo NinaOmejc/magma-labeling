@@ -10,7 +10,7 @@ function config = get_config()
 %            overview plots. Nested problems records known data exclusions;
 %            detrend controls preprocessing; resp controls breath extraction/review;
 %            reference controls session/global baseline estimation. shallow, deep,
-%            slow, rapid, irregular, apnea, sigh, csr, thoracic, async, and desat
+%            slow, rapid, irregular, apnea, sigh, periodic, thoracic, async, and desat
 %            contain detector thresholds/windows; grid_step_sec defines their common
 %            analysis grid. LabelEdit controls manual interval review and HDF5
 %            controls export. Durations are seconds and respiratory rates are
@@ -54,6 +54,8 @@ function config = get_config()
     config.resp.smooth_sec       = 0.25;    % Pre-processing; light smoothing (seconds); set to 0 to disable
     config.resp.trough_method = 'min';      % Trough selection; 'prctile' or 'min' (default)
     config.resp.trough_prct   = 5;          % Trough selection; 5th percentile trough
+    config.resp.amp_method = 'expiratory';  % Selected breath amplitude: 'expiratory' (peak to following trough), 'inspiratory' (peak to preceding trough), or 'symmetric' (peak to the mean of both troughs)
+    config.resp.plot_amp_method_comparison = false; % save an optional comparison of all three breath-amplitude definitions
     config.resp.do_plot         = true;     % save breath extraction diagnostic plots
 
     % qc - conservative removal of likely duplicate/split automatic peaks
@@ -131,7 +133,11 @@ function config = get_config()
 
     %---- LABEL 7 - sigh - DETECTION SETTINGS
     config.sigh = struct();                      % sigh detection settings
-    config.sigh.method = 'global_ratio_outlier'; % options: 'global_ratio_outlier' or 'legacy_60s'
+    config.sigh.method = 'rolling_median_2x';    % options: 'rolling_median_2x' (default), 'global_ratio_outlier', or 'legacy_60s'
+    config.sigh.rolling_window_breaths = 15;     % centered local-median window: 7 previous, current, and 7 subsequent breaths
+    config.sigh.rolling_min_valid_breaths = 3;   % minimum finite positive inspiratory amplitudes required for a local baseline
+    config.sigh.rolling_ratio_threshold = 2.0;   % sigh inspiration must be at least twice its local rolling median
+    config.sigh.compare_methods = false;         % report/plot rolling_median_2x versus global_ratio_outlier diagnostics
     config.sigh.ratio_prctile = 98;              % top 2% normalized breaths are sigh candidates
     config.sigh.min_abs_ratio = 2.0;             % minimum amplitude/reference ratio for sigh candidates
     config.sigh.iqr_k = 3.5;                     % IQR multiplier for outlier-based sigh detection
@@ -145,37 +151,37 @@ function config = get_config()
     config.sigh.legacy_amp_ratio_thr = 1.5;      % amplitude ratio threshold for legacy sigh method
     config.sigh.legacy_min_prev_breaths = 3;     % minimum previous breaths for legacy sigh method
 
-    %---- LABEL 8 - csr (periodic breathing / Cheyne-Stokes-like effort pattern)
-    config.csr = struct();
-    config.csr.primary_method = 'eami';          % explicit source of the canonical csr event set: 'eami' or 'guyot'
-    config.csr.do_plot = true;                   % save the two-method comparison figure
+    %---- LABEL 8 - periodic (periodic breathing / Cheyne-Stokes-like effort pattern)
+    config.periodic = struct();
+    config.periodic.primary_method = 'eami';     % explicit source of the canonical periodic event set: 'eami' or 'guyot'
+    config.periodic.do_plot = true;              % save the two-method comparison figure
 
     % Fernandez Tellez et al., Sleep 2015 (DOI 10.5665/sleep.4494).
     % The filter bands/orders, 1-Hz rate, and threshold follow the published
     % eAMI method. The 60-s energy window is a MAGMA comparison default; the
     % paper reports relative insensitivity once this window exceeds about 40 s.
-    config.csr.eami = struct();
-    config.csr.eami.resp_band_hz = [0.125 0.40];
-    config.csr.eami.bandpass_order = 12;
-    config.csr.eami.resample_hz = 1;
-    config.csr.eami.envelope_lowpass_hz = 0.125;
-    config.csr.eami.envelope_lowpass_order = 6;
-    config.csr.eami.energy_win_sec = 60;
-    config.csr.eami.threshold = 0.65;
+    config.periodic.eami = struct();
+    config.periodic.eami.resp_band_hz = [0.125 0.40];
+    config.periodic.eami.bandpass_order = 12;
+    config.periodic.eami.resample_hz = 1;
+    config.periodic.eami.envelope_lowpass_hz = 0.125;
+    config.periodic.eami.envelope_lowpass_order = 6;
+    config.periodic.eami.energy_win_sec = 60;
+    config.periodic.eami.threshold = 0.65;
 
     % Guyot et al., PLOS ONE 2020 (DOI 10.1371/journal.pone.0221191).
     % Window, overlap, h/fm criteria, one-minute zone, and three-IBI gap rule
     % follow the publication. MAGMA uses a 1-Hz reconstruction and reviewed
     % canonical MAGMA breath amplitudes instead of the paper's change-point
     % breath front-end.
-    config.csr.guyot = struct();
-    config.csr.guyot.resample_hz = 1;
-    config.csr.guyot.window_sec = 120;
-    config.csr.guyot.overlap_fraction = 0.80;
-    config.csr.guyot.h_threshold = 0.12;
-    config.csr.guyot.fm_band_hz = [0.008 0.030];
-    config.csr.guyot.min_zone_sec = 60;
-    config.csr.guyot.gap_factor = 3;
+    config.periodic.guyot = struct();
+    config.periodic.guyot.resample_hz = 1;
+    config.periodic.guyot.window_sec = 120;
+    config.periodic.guyot.overlap_fraction = 0.80;
+    config.periodic.guyot.h_threshold = 0.12;
+    config.periodic.guyot.fm_band_hz = [0.008 0.030];
+    config.periodic.guyot.min_zone_sec = 60;
+    config.periodic.guyot.gap_factor = 3;
 
     %---- LABEL 9 - thoracic - DETECTION SETTINGS
     % Relative thoracoabdominal excursion dominance after normalizing each

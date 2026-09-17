@@ -76,7 +76,7 @@ Key settings are defined in `src/get_config.m`:
 - `config.irregular` — irregularity settings
 - `config.apnea` — apnea-like pause settings
 - `config.sigh` — sigh settings
-- `config.csr` — periodic-breathing settings
+- `config.periodic` — periodic-breathing settings
 - `config.thoracic` — thoracic-dominance settings
 - `config.async` — respiratory-asynchrony settings
 - `config.desat` — SpO2/desaturation settings
@@ -101,7 +101,7 @@ For each usable belt, the fixed breath-amplitude reference is the median of fini
 
 The thresholds below are operational research criteria and should not be interpreted as universal clinical diagnostic cutoffs.
 
-- **`shallow`** — all eligible breaths in a trailing 30-s candidate window have session-normalized excursion between 0.65 and 0.80. Final boundaries are localized from qualifying respiratory cycles, and the localized state must last at least 30 s.
+- **`shallow`** — all eligible breaths in a trailing 30-s candidate window have session-normalized excursion between 0.10 and 0.80. Final boundaries are localized from qualifying respiratory cycles, and the localized state must last at least 30 s.
 
 - **`deep`** — all eligible breaths in a trailing 30-s candidate window have session-normalized excursion `>= 1.20`. Final boundaries are localized from qualifying respiratory cycles, and the localized state must last at least 30 s.
 
@@ -113,9 +113,9 @@ The thresholds below are operational research criteria and should not be interpr
 
 - **`apnea`** — apnea uses a 10-s defining duration (`config.apnea.min_dur_sec`). For each belt and complete 10-s window, breath evidence is preferred: when at least one valid breath amplitude is available, every valid amplitude must be `<= 10%` of that belt's fixed session breath-amplitude reference. Only when breath evidence is not evaluable is the raw excursion fallback used, requiring the window's raw P95-P5 excursion to be `<= 10%` of the fixed session raw-excursion reference. If both belts are evaluable, both must support apnea; if only one is evaluable, that belt is used. Final combined support must persist for at least 10 s. This label represents respiratory pause/low-motion evidence, not confirmed airflow cessation or central/obstructive apnea.
 
-- **`sigh`** — isolated unusually large breaths are detected as whole-record amplitude outliers. The default rule combines the 98th percentile, an IQR-based outlier threshold, and a minimum amplitude ratio of 2.0. Sighs are discrete breath events.
+- **`sigh`** — isolated unusually large inspirations are detected breath by breath. The default `rolling_median_2x` method uses the inspiratory excursion from the preceding trough to the peak and flags amplitudes at least twice a centered 15-breath rolling median, with shortened edge windows and at least three valid amplitudes. The previous `global_ratio_outlier` and `legacy_60s` methods remain selectable. Set `config.sigh.compare_methods = true` to report and plot rolling/global agreement. Sighs are discrete breath events.
 
-- **`csr`** — periodic breathing / Cheyne-Stokes-like respiratory-effort evidence is computed with both eAMI and a MAGMA adaptation of the Guyot demodulation / Matrix Pencil method. `config.csr.primary_method` explicitly selects which method supplies the automatic `csr` event set; both method results remain in detector diagnostics.
+- **`periodic`** — periodic breathing / Cheyne-Stokes-like respiratory-effort evidence is computed with both eAMI and a MAGMA adaptation of the Guyot demodulation / Matrix Pencil method. `config.periodic.primary_method` explicitly selects which method supplies the automatic `periodic` event set; both method results remain in detector diagnostics.
 
 - **`thoracic`** — thoracic dominance is assessed from independently normalized thoracic and abdominal excursion. The operational condition is a 30-s thoracic-to-abdominal ratio `T/A >= 1.5`. Both belts are required. Pre-duration candidates retain the analysis-window uncertainty.
 
@@ -125,11 +125,11 @@ The thresholds below are operational research criteria and should not be interpr
 
 ### Periodic-Breathing Literature Methods
 
-MAGMA computes two literature-based methods independently for every supported recording. The first is **eAMI**, following Fernandez Tellez et al. 2015 ([DOI 10.5665/sleep.4494](https://doi.org/10.5665/sleep.4494)). Each usable raw respiratory belt is band-pass filtered to isolate the respiratory carrier, downsampled to 1 Hz, rectified, and low-pass filtered to obtain its amplitude envelope. Locally mean-removed carrier and envelope energies are compared with `eAMI = 1 - 0.5*log(E_resp/E_am)`. Evidence at or above 0.65 must persist after dynamic belt combination for twice `config.csr.eami.energy_win_sec`; the 60-s default therefore yields a 120-s event requirement. The 60-s window is a MAGMA comparison choice, not a published optimum; the paper reports relatively stable behavior for windows above approximately 40 s.
+MAGMA computes two literature-based methods independently for every supported recording. The first is **eAMI**, following Fernandez Tellez et al. 2015 ([DOI 10.5665/sleep.4494](https://doi.org/10.5665/sleep.4494)). Each usable raw respiratory belt is band-pass filtered to isolate the respiratory carrier, resampled at `config.periodic.eami.resample_hz` (1 Hz by default), rectified, and low-pass filtered to obtain its amplitude envelope. Locally mean-removed carrier and envelope energies are compared with `eAMI = 1 - 0.5*log(E_resp/E_am)`. Evidence at or above 0.65 must persist after dynamic belt combination for twice `config.periodic.eami.energy_win_sec`; the 60-s default therefore yields a 120-s event requirement. The 60-s window is a MAGMA comparison choice, not a published optimum; the paper reports relatively stable behavior for windows above approximately 40 s.
 
 The second method estimates modulation depth and frequency following Guyot et al. 2020 ([DOI 10.1371/journal.pone.0221191](https://doi.org/10.1371/journal.pone.0221191)). This is explicitly a **MAGMA adaptation**: reviewed `resp_cycles.<belt>.peak_t` and canonical `resp_cycles.<belt>.amp` replace the publication's change-point breath detector. Canonical breath amplitudes are linearly reconstructed on a 1-Hz ventilation envelope; interruptions longer than three median inter-breath intervals are set to zero, with no extrapolation outside the first and final valid breaths. An order-three Matrix Pencil model estimates DC plus a conjugate modulation pair in 120-s windows with 80% overlap. A window is pathological when `h > 0.12` and modulation frequency is within 8–30 mHz; combined evidence must persist for at least 60 s.
 
-For each method, both evaluable belts must agree at a given time; a single evaluable belt is used when the other is unavailable. This dynamic belt rule is a MAGMA design choice rather than part of either publication. `config.csr.primary_method` accepts `eami` or `guyot` and never unions, votes, or automatically switches methods. These outputs describe a periodic breathing / Cheyne-Stokes-like respiratory-effort pattern; without direct airflow they do not establish central sleep apnea or confirmed Cheyne-Stokes respiration.
+For each method, both evaluable belts must agree at a given time; a single evaluable belt is used when the other is unavailable. This dynamic belt rule is a MAGMA design choice rather than part of either publication. `config.periodic.primary_method` accepts `eami` or `guyot` and never unions, votes, or automatically switches methods. These outputs describe a periodic breathing / Cheyne-Stokes-like respiratory-effort pattern; without direct airflow they do not establish central sleep apnea or confirmed Cheyne-Stokes respiration.
 
 Amplitude-dependent sustained labels use participant/session-relative respiratory excursion rather than absolute tidal volume. Respiratory belts are uncalibrated, so raw amplitudes should not be compared directly across subjects.
 
@@ -152,7 +152,7 @@ Saved indices are authoritative when legacy manual annotations are migrated. A o
 The 11 automatic labels are elementary physiological patterns, not 11 clinical DB phenotypes. The repository also stores evidence relevant to five prespecified candidate DB phenotypes:
 
 - **Hyperventilation syndrome** — rapid/deep breathing can provide supportive respiratory-pattern evidence, but clinical assessment requires additional information such as ETCO2/capnography, ventilation relative to metabolic demand, exercise testing, symptoms, and questionnaire data.
-- **Periodic deep sighing** — characterized using sigh frequency together with respiratory irregularity and other respiratory features; it is distinct from `csr`.
+- **Periodic deep sighing** — characterized using sigh frequency together with respiratory irregularity and other respiratory features; it is distinct from the `periodic` label.
 - **Thoracic-dominant breathing** — supported by the `thoracic` label and continuous thoracoabdominal-balance measures; the belt-derived measure is relative and uncalibrated.
 - **Forced abdominal expiration** — not reliably identifiable from respiratory belts alone because belt motion does not establish active expiratory abdominal-muscle recruitment.
 - **Thoracoabdominal asynchrony** — supported by the `async` label and continuous coherence-based evidence.
@@ -213,7 +213,7 @@ The most important result fields include:
 
 `results.events_automatic` contains final accepted automatic events. `results.candidate_events` is not a copy of those events: it stores a distinct pre-final stage only where the detector has one. `results.detector_diagnostics` retains compact, recording-specific evidence that is not already present in respiratory features, raw signals, configuration, or final events. A separate `diagnostic_signals` copy is not persisted; time-resolved evidence remains available from `results.resp_features` and compact detector diagnostics, while recording-level evidence summaries remain available for group analysis and ML. Raw and preprocessed physiological matrices remain in their authoritative HDF5 locations `/signals/raw` and `/signals/preprocessed`, not inside detector diagnostics.
 
-The HDF5 export schema is `magma_ml_hdf5_v6`. Automatic annotations are stored under `/labels/automatic_mask`, `/events/automatic`, `/burden/automatic`, and `/overlap/automatic`; reviewed annotations retain their corresponding `/reviewed` paths, with coverage under `/labels/review_coverage_mask`. Candidate intervals are under `/events/candidate`, while `/review/provenance`, `/review/history`, and `/review/scope` preserve review metadata. Reviewed breath cycles, derived respiratory evidence, and unique detector evidence have one authoritative copy each under `/resp_cycles`, `/resp_features`, and `/detector_diagnostics`; references remain under `/session_reference`, `/resp_reference`, and `/spo2_reference`. Evidence summaries are under `/evidence_summary`, and the resolved recording configuration is under `/config`.
+The HDF5 export schema is `magma_ml_hdf5_v7`. Automatic annotations are stored under `/labels/automatic_mask`, `/events/automatic`, `/burden/automatic`, and `/overlap/automatic`; reviewed annotations retain their corresponding `/reviewed` paths, with coverage under `/labels/review_coverage_mask`. Candidate intervals are under `/events/candidate`, while `/review/provenance`, `/review/history`, and `/review/scope` preserve review metadata. Reviewed breath cycles, derived respiratory evidence, and unique detector evidence have one authoritative copy each under `/resp_cycles`, `/resp_features`, and `/detector_diagnostics`; periodic-breathing evidence is stored below `/detector_diagnostics/periodic`, with the eAMI grid and lung index at `/detector_diagnostics/periodic/eami/time_sec` and `/detector_diagnostics/periodic/eami/lungs/index`. References remain under `/session_reference`, `/resp_reference`, and `/spo2_reference`. Evidence summaries are under `/evidence_summary`, and the resolved recording configuration is under `/config`.
 
 The immutable base analysis configuration is saved once as `analysis_configuration.mat` in `config.path_results_out` before recording-specific channel resolution or subject/measurement mutation. Each recording still carries its fully resolved `results.config`.
 

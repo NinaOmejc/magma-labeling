@@ -1,5 +1,5 @@
 function [label_available, reason] = compute_label_availability( ...
-    label_names, resp_features, diagnostics_desat, rea, apnea, sigh, csr)
+    label_names, resp_features, diagnostics_desat, rea, apnea, sigh, periodic)
 % COMPUTE_LABEL_AVAILABILITY Explain whether each detector could assess a recording.
 % label_names sets output order. Respiratory feature/reference availability and
 % detector diagnostics for SpO2, asynchrony, apnea, sigh, and periodic breathing
@@ -78,8 +78,8 @@ function [label_available, reason] = compute_label_availability( ...
                 else
                     reason{i} = 'insufficient_resp_features';
                 end
-            case 'csr'
-                label_available(i) = diagnostic_available(csr);
+            case 'periodic'
+                label_available(i) = diagnostic_available(periodic);
                 if label_available(i)
                     reason{i} = 'available';
                 elseif ~any_resp

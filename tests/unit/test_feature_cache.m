@@ -25,10 +25,11 @@ function testOldTwentyHertzCacheIsRejected(testCase)
     saved = load(cache_file, 'feature_cache_meta');
 
     verifyNotEqual(testCase, actual.lungs.peak_idx, resp_feat.lungs.peak_idx);
-    verifyEqual(testCase, saved.feature_cache_meta.cache_version, 7);
+    verifyEqual(testCase, saved.feature_cache_meta.cache_version, 8);
     verifyEqual(testCase, saved.feature_cache_meta.fs, 200);
     verifyEqual(testCase, saved.feature_cache_meta.measurement, config.measure);
     verifyEqual(testCase, saved.feature_cache_meta.n_samples, size(data,1));
+    verifyEqual(testCase, saved.feature_cache_meta.amp_method, 'expiratory');
 end
 
 function testCompatibleMasterRateCacheIsReused(testCase)
@@ -50,6 +51,25 @@ function testCompatibleMasterRateCacheIsReused(testCase)
     verifyTrue(testCase, actual.provenance.loaded_from_cache);
 end
 
+function testAmplitudeMethodChangeInvalidatesCache(testCase)
+    output_dir = tempname;
+    mkdir(output_dir);
+    cleanup_dir = onCleanup(@() rmdir(output_dir, 's'));
+    config = make_test_config(output_dir);
+    data = make_synthetic_master_data(10001, config.fs);
+
+    expiratory = load_or_extract_respiratory_cycles(data, config);
+    config.resp.amp_method = 'inspiratory';
+    inspiratory = load_or_extract_respiratory_cycles(data, config);
+    saved = load(fullfile(output_dir, config.sub_features_filename), ...
+        'feature_cache_meta');
+
+    verifyFalse(testCase, expiratory.provenance.loaded_from_cache);
+    verifyFalse(testCase, inspiratory.provenance.loaded_from_cache);
+    verifyEqual(testCase, inspiratory.lungs.amp, inspiratory.lungs.amp_insp);
+    verifyEqual(testCase, saved.feature_cache_meta.amp_method, 'inspiratory');
+end
+
 function resp_feat = sentinel_resp_feat(n_samples)
     b = empty_respiration_feature('sentinel');
     b.ok = true;
@@ -61,6 +81,9 @@ function resp_feat = sentinel_resp_feat(n_samples)
     b.trough_t = [0; 0.05];
     b.trough_val = zeros(2, 1);
     b.amp = [1; 1; NaN];
+    b.amp_exp = [1; 1; NaN];
+    b.amp_insp = [NaN; 1; 1];
+    b.amp_sym = [NaN; 1; NaN];
     b.ibi = [0.05; 0.05];
     b.rr_bpm = [1200; 1200];
     resp_feat = struct('lungs', b, 'diaph', b);

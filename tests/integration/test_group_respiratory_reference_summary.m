@@ -29,8 +29,9 @@ function testSavedRespiratoryReferenceIsSummarized(testCase)
             'thoracic_relative_fraction', [0.5; 0.6; 0.7]));
     detector_diagnostics = struct( ...
         'async', struct('phase_coherence_mid', [0.7; 0.8; 0.9]), ...
-        'csr', struct('eami', struct('lungs', ...
-            struct('eami', [0.4; 0.6; 0.8]))));
+        'periodic', struct('eami', struct( ...
+            'time_sec', [0; 0.5; 1], ...
+            'lungs', struct('index', [0.4; 0.6; 0.8]))));
     label_evidence_summary_automatic = struct( ...
         'version', 'test', 'deep', struct( ...
             'available', true, 'median_ratio_lungs', 1.4));
@@ -105,13 +106,73 @@ function testGroupDiagnosticOverviewUsesAuthoritativeNestedPaths(testCase)
         'thoracoabdominal_balance.thoracic_to_abdominal_ratio', ...
         'thoracoabdominal_balance.thoracic_dominance_log_ratio', ...
         'thoracoabdominal_balance.thoracic_relative_fraction', ...
-        'csr.eami.lungs.eami', ...
+        'periodic.eami.lungs.index', ...
+        'periodic.eami.time_sec', ...
         'trace_breathing_rate_slow_window_bpm_diaph', ...
         'trace_eami_lungs'};
     for i = 1:numel(required)
         verifyTrue(testCase, contains(source, required{i}));
     end
     verifyFalse(testCase, contains(source, ['diagnostic_' 'signals']));
+end
+
+function testGroupTraceUsesEAMIGridAndRejectsMismatch(testCase)
+    label_file = [tempname '.mat'];
+    cleanup_file = onCleanup(@() delete_if_present(label_file));
+    resp_features = struct('time_sec', [0; 10; 20]);
+    detector_diagnostics = struct('periodic', struct('eami', struct( ...
+        'time_sec', [0; 0.5; 1], ...
+        'lungs', struct('index', [0.4; 0.6; 0.8]))));
+    save(label_file, 'resp_features', 'detector_diagnostics');
+    spec = struct( ...
+        'source', 'detector_diagnostics', ...
+        'field_path', 'periodic.eami.lungs.index', ...
+        'time_source', 'detector_diagnostics', ...
+        'time_path', 'periodic.eami.time_sec');
+
+    [t, y] = load_group_diagnostic_trace(label_file, spec);
+    verifyEqual(testCase, t, [0; 0.5; 1]);
+    verifyEqual(testCase, y, [0.4; 0.6; 0.8]);
+
+    detector_diagnostics.periodic.eami.lungs.index = [0.4; 0.6];
+    save(label_file, 'resp_features', 'detector_diagnostics');
+    verifyWarning(testCase, ...
+        @() load_group_diagnostic_trace(label_file, spec), ...
+        'MAGMA:Group:TraceLengthMismatch');
+    [t, y] = load_group_diagnostic_trace(label_file, spec);
+    verifyEmpty(testCase, t);
+    verifyEmpty(testCase, y);
+end
+
+function testHistoricalPeriodicNamesMapToCanonicalGroupOutputs(testCase)
+    results_root = tempname;
+    subject_dir = fullfile(results_root, 'Sub9_M1');
+    mkdir(subject_dir);
+    cleanup_dir = onCleanup(@() rmdir(results_root, 's'));
+    current = get_config();
+    subject = 9;
+    measure = 1;
+    label_names = {current.labels.short};
+    label_available = true(1, 11);
+    mask_automatic = false(20, 11);
+    config = struct('fs', 10);
+    events_automatic = struct('type', 'csr', 'start_idx', 1, 'end_idx', 10, ...
+        'start_t', 0, 'end_t', 1, 'duration', 1);
+    record = struct('start_idx', 1, 'end_idx', 10, ...
+        'start_t', 0, 'end_t', 1, 'duration', 1, 'belt', 'both', ...
+        'accepted', true, 'rejection_reason', '', 'uncertainty_sec', 0);
+    candidate_events = struct('csr', record);
+    save(fullfile(subject_dir, 'Sub9_M1_labels.mat'), 'subject', 'measure', ...
+        'label_names', 'label_available', 'mask_automatic', ...
+        'events_automatic', 'candidate_events', 'config');
+
+    build_group_label_table(results_root);
+    event_table = readtable(fullfile(results_root, 'group_analysis', ...
+        'cohort_event_durations.csv'), 'TextType', 'string');
+    candidate_table = readtable(fullfile(results_root, 'group_analysis', ...
+        'cohort_candidate_events.csv'), 'TextType', 'string');
+    verifyEqual(testCase, event_table.label, "periodic");
+    verifyEqual(testCase, candidate_table.label, "periodic");
 end
 
 function testAssessedZeroLabelsRemainDistinctFromUnavailable(testCase)
@@ -210,4 +271,12 @@ function resp_ref = synthetic_saved_reference()
         'quality', 'good');
     resp_ref = struct('lungs', lungs, 'diaph', diaph, ...
         'change_pattern', 'both_similar');
+end
+
+function delete_if_present(filename)
+% DELETE_IF_PRESENT Remove a temporary fixture file.
+
+    if isfile(filename)
+        delete(filename);
+    end
 end

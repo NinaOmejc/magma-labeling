@@ -101,7 +101,8 @@ function specs = default_diagnostic_signal_specs()
         'thoracic_relative_fraction');
 
     specs(end+1) = make_signal_spec('detector_diagnostics', ...
-        'csr.eami.lungs.eami', 'resp_features', 'time_sec', ...
+        'periodic.eami.lungs.index', 'detector_diagnostics', ...
+        'periodic.eami.time_sec', ...
         'trace_eami_lungs', 'eAMI, lungs', 'eAMI', 'eami_lungs');
 end
 
@@ -241,49 +242,10 @@ end
 
 function [t, y] = load_record_signal(label_file, spec)
 % LOAD_RECORD_SIGNAL Read one finite, time-aligned authoritative trace.
-% t contains unique stable analysis times in seconds and y the specified
-% feature/diagnostic values; unmatched trailing entries are ignored for display.
+% Delegates path resolution and strict time/value alignment to the reusable
+% group trace reader.
 
-    t = [];
-    y = [];
-
-    requested = unique({spec.source, spec.time_source}, 'stable');
-    loaded = load(label_file, requested{:});
-    if ~isfield(loaded, spec.source) || ~isfield(loaded, spec.time_source)
-        return;
-    end
-    t = nested_value(loaded.(spec.time_source), spec.time_path);
-    y = nested_value(loaded.(spec.source), spec.field_path);
-    if ~(isnumeric(t) || islogical(t)) || ~(isnumeric(y) || islogical(y))
-        t = [];
-        y = [];
-        return;
-    end
-    t = double(t(:));
-    y = double(y(:));
-
-    n = min(numel(t), numel(y));
-    t = t(1:n);
-    y = y(1:n);
-    valid = isfinite(t) & isfinite(y);
-    t = t(valid);
-    y = y(valid);
-    [t, idx] = unique(t, 'stable');
-    y = y(idx);
-end
-
-function value = nested_value(source, path)
-% NESTED_VALUE Resolve a dot-separated path through scalar structs.
-
-    value = [];
-    parts = strsplit(path, '.');
-    for i = 1:numel(parts)
-        if ~isstruct(source) || ~isscalar(source) || ~isfield(source, parts{i})
-            return;
-        end
-        source = source.(parts{i});
-    end
-    value = source;
+    [t, y] = load_group_diagnostic_trace(label_file, spec);
 end
 
 function [t_plot, y_plot] = thin_trace(t, y, step_sec)

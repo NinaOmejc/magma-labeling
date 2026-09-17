@@ -7,7 +7,10 @@ function b = extract_respiration_feature(x, config, basename)
 %   peak_idx/peak_t    - Breath-peak sample indices and times in seconds.
 %   peak_val           - Signal value at each retained peak.
 %   trough_idx/trough_t/trough_val - Inter-peak trough locations and values.
-%   amp                - Peak-to-following-trough amplitude per peak; final value is NaN.
+%   amp_exp            - Peak-to-following-trough excursion; final value is NaN.
+%   amp_insp           - Peak-to-preceding-trough excursion; first value is NaN.
+%   amp_sym            - Peak-to-adjacent-trough mean; first/final values are NaN.
+%   amp                - One of the above, selected by config.resp.amp_method.
 %   ibi/rr_bpm         - Inter-breath intervals (s) and rates (breaths/min), Npeak-1 long.
 %   rr_mean_bpm/rr_std_bpm - Recording-level rate summaries.
 %   auto_peak_*        - Pre-QC peak locations, values, widths, and prominences.
@@ -16,6 +19,7 @@ function b = extract_respiration_feature(x, config, basename)
     if nargin < 3 || isempty(basename)
         basename = '';
     end
+    resolve_respiration_amplitude_method(config);
     min_num_peaks = 3;
 
     b = struct();
@@ -33,6 +37,9 @@ function b = extract_respiration_feature(x, config, basename)
         b.trough_t = [];
         b.trough_val = [];
         b.amp = NaN;
+        b.amp_exp = NaN;
+        b.amp_insp = NaN;
+        b.amp_sym = NaN;
         b.ibi = NaN;
         b.rr_bpm = NaN;
         b.rr_mean_bpm = NaN;

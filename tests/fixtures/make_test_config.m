@@ -28,7 +28,7 @@ function config = make_test_config(output_dir)
     config.LabelEdit.apply_saved_edits = false;
     config.LabelEdit.save_edits = false;
 
-    detector_fields = {'shallow', 'deep', 'thoracic', 'irregular', 'slow', 'rapid', 'async', 'desat', 'apnea', 'csr'};
+    detector_fields = {'shallow', 'deep', 'thoracic', 'irregular', 'slow', 'rapid', 'async', 'desat', 'apnea', 'periodic'};
     for i = 1:numel(detector_fields)
         config.(detector_fields{i}).do_plot = false;
     end
