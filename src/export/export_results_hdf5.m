@@ -23,7 +23,7 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
 
     filename = char(string(filename));
     validate_export_inputs(filename, results, signals_raw, signals_preprocessed);
-    export_schema_version = 'magma_ml_hdf5_v9';
+    export_schema_version = 'magma_ml_hdf5_v10';
     out_dir = fileparts(filename);
     if ~isempty(out_dir) && ~isfolder(out_dir)
         mkdir(out_dir);

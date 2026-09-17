@@ -81,7 +81,7 @@ function input_config = build_input_config(channels, config)
 % exclusion flag; and resolved lungs/diaph/SpO2 names.
 
     if ~isfield(config, 'labels') || ~isfield(config.labels, 'short')
-        current_config = get_config();
+        current_config = get_config_defaults();
         all_labels = {current_config.labels.short};
     else
         all_labels = {config.labels.short};

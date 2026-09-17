@@ -56,7 +56,7 @@ function config = get_config_defaults()
     config.resp.smooth_sec       = 0.25;    % Pre-processing; light smoothing (seconds); set to 0 to disable
     config.resp.trough_method = 'min';      % Trough selection; 'prctile' or 'min' (default)
     config.resp.trough_prct   = 5;          % Trough selection; 5th percentile trough
-    config.resp.amp_method = 'expiratory';  % Selected breath amplitude: 'expiratory' (peak to following trough), 'inspiratory' (peak to preceding trough), or 'symmetric' (peak to the mean of both troughs)
+    config.resp.amp_method = 'inspiratory';  % Selected breath amplitude: 'expiratory' (peak to following trough), 'inspiratory' (peak to preceding trough), or 'symmetric' (peak to the mean of both troughs)
     config.resp.plot_amp_method_comparison = false; % save an optional comparison of all three breath-amplitude definitions
     config.resp.do_plot         = true;     % save breath extraction diagnostic plots
 
@@ -169,7 +169,7 @@ function config = get_config_defaults()
     config.periodic.eami.envelope_lowpass_hz = 0.125;
     config.periodic.eami.envelope_lowpass_order = 6;
     config.periodic.eami.energy_win_sec = 60;
-    config.periodic.eami.threshold = 0.65;
+    config.periodic.eami.threshold = 0.60;
 
     % Guyot et al., PLOS ONE 2020 (DOI 10.1371/journal.pone.0221191).
     % Window, overlap, h/fm criteria, one-minute zone, and three-IBI gap rule
@@ -181,7 +181,7 @@ function config = get_config_defaults()
     config.periodic.guyot.window_sec = 120;
     config.periodic.guyot.overlap_fraction = 0.80;
     config.periodic.guyot.h_threshold = 0.12;
-    config.periodic.guyot.fm_band_hz = [0.008 0.030];
+    config.periodic.guyot.fm_band_hz = [0.008 0.050];
     config.periodic.guyot.min_zone_sec = 60;
     config.periodic.guyot.gap_factor = 3;
 
