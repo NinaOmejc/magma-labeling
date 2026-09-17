@@ -22,30 +22,17 @@ function b = extract_respiration_feature(x, config, basename)
     resolve_respiration_amplitude_method(config);
     min_num_peaks = 3;
 
-    b = struct();
-    b.basename = basename;
-    b.ok = false;
-
     x = x(:);
 
     if isempty(x) || all(isnan(x)) || ~any(x)
+        b = empty_respiration_feature(basename);
         b.x0 = x;
-        b.peak_idx = [];
-        b.peak_t = [];
-        b.peak_val = [];
-        b.trough_idx = [];
-        b.trough_t = [];
-        b.trough_val = [];
-        b.amp = NaN;
-        b.amp_exp = NaN;
-        b.amp_insp = NaN;
-        b.amp_sym = NaN;
-        b.ibi = NaN;
-        b.rr_bpm = NaN;
-        b.rr_mean_bpm = NaN;
-        b.rr_std_bpm = NaN;
         return;
     end
+
+    b = struct();
+    b.basename = basename;
+    b.ok = false;
 
     if config.resp.smooth_sec > 0
         x = smoothdata(x, 'movmean', max(1, round(config.resp.smooth_sec*config.fs)));

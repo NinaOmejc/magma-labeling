@@ -141,6 +141,66 @@ function testShortEmptyAndUnusableSequencesAreUnavailable(testCase)
     verifyTrue(testCase, all(isnan(diagnostics.lungs.sigh_baseline)));
 end
 
+function testMissingOrZeroBeltUsesAlignedCanonicalEmptyVectors(testCase)
+    config = minimal_sigh_config();
+    zero_signal = zeros(100, 1);
+    missing_signal = nan(100, 1);
+
+    zero_belt = extract_respiration_feature( ...
+        zero_signal, config, 'Resp-Lungs');
+    missing_belt = extract_respiration_feature( ...
+        missing_signal, config, 'Resp-Lungs');
+
+    verifyEqual(testCase, zero_belt.x0, zero_signal);
+    verifyEqual(testCase, missing_belt.x0, missing_signal);
+    verifyEmpty(testCase, zero_belt.peak_t);
+    verifyEmpty(testCase, zero_belt.amp);
+    verifyEmpty(testCase, missing_belt.peak_t);
+    verifyEmpty(testCase, missing_belt.amp);
+end
+
+function testMissingLungsUsesValidDiaphragmWithoutAlignmentError(testCase)
+    amplitude = ones(25, 1);
+    amplitude(13) = 4;
+    [data, features, cycles, config] = sigh_fixture(amplitude);
+    features.diaph = features.lungs;
+    features.lungs = struct( ...
+        'available', false, ...
+        'ignored', true, ...
+        'peak_t', zeros(0, 1), ...
+        'amp', NaN, ...
+        'global_amplitude_available', false, ...
+        'reference_quality', 'belt_unavailable');
+
+    [events, diagnostics, review] = detect_sigh( ...
+        data, features, cycles, config);
+
+    verifyEqual(testCase, diagnostics.lungs.status, 'belt_ignored');
+    verifyFalse(testCase, diagnostics.lungs.available);
+    verifyEmpty(testCase, diagnostics.lungs.sigh_flags);
+    verifyTrue(testCase, diagnostics.diaph.available);
+    verifyTrue(testCase, review.automatic_flags_diaph(13));
+    verifyNotEmpty(testCase, events);
+end
+
+function testPlotLegendAcceptsConstantLineThreshold(testCase)
+    output_dir = tempname;
+    mkdir(output_dir);
+    cleanup_dir = onCleanup(@() rmdir(output_dir, 's'));
+    amplitude = ones(25, 1);
+    amplitude(13) = 4;
+    [data, features, cycles, config] = sigh_fixture(amplitude);
+    config.sigh.do_plot = true;
+    config.channels = struct( ...
+        'lungs_idx', 4, 'diaph_idx', 6, 'spo2_idx', 3);
+    config.sub_results_path = output_dir;
+
+    detect_sigh(data, features, cycles, config);
+
+    verifyTrue(testCase, isfile(fullfile(output_dir, ...
+        'Sub999_M1_sigh.png')));
+end
+
 function testInternalUndefinedBaselinesAreNotFilled(testCase)
     amplitude = ones(45, 1);
     amplitude(23) = NaN;

@@ -5,20 +5,15 @@ function config = get_config()
 
     % INPUT / OUTPUT
     config.path_data_in = 'D:\Projects\MAGMA\raw_data';
-    config.path_results_out = ...
-        'D:\Projects\MAGMA\data_analysis\statistical_labeling';
+    config.path_results_out = 'D:\Projects\MAGMA\data_analysis\statistical_labeling';
     config.fs = 200;
-    config.data_columns = { ...
-        'ECG1', 'ECG2', 'SpO₂', 'Resp-Lungs', ...
-        'Blood Pressure', 'Resp-Diaphragm'};
-    config.input_filename_pattern = ...
-        ['ECG1_ECG2_SpO2_RespL_BP_RespD_fs200_' ...
-         'Sub{subject}_Pom{measure}_DeTr_Norm.dat'];
+    config.data_columns = {'ECG1', 'ECG2', 'SpO₂', 'Resp-Lungs', 'Blood Pressure', 'Resp-Diaphragm'};
+    config.input_filename_pattern = 'ECG1_ECG2_SpO2_RespL_BP_RespD_fs200_Sub{subject}_Pom{measure}_DeTr_Norm.dat';
 
     % RECORDINGS
     config.subjects = 1;
     config.remove_subjects = [3 30 91];
-    config.measurements = 1;
+    config.measurements = [1 2];
     config.subjects(ismember(config.subjects, config.remove_subjects)) = [];
 
     % EXECUTION
@@ -47,6 +42,5 @@ function config = get_config()
     config.LabelEdit.start_from = 'automatic';
     config.LabelEdit.reviewer_role = 'researcher';
 
-    % Advanced scientific thresholds and processing defaults are defined in
-    % get_config_defaults.m and normally should not be changed.
+    % Advanced scientific thresholds and processing defaults are defined in get_config_defaults.m.
 end

@@ -64,6 +64,9 @@ function [events, diagnostics, review_info] = detect_sigh( ...
             rolling_min_valid_breaths, rolling_ratio_threshold);
     end
 
+    validate_sigh_alignment_if_usable(lungs);
+    validate_sigh_alignment_if_usable(diaph);
+
     global_lungs_valid = global_sigh_inputs_available(lungs);
     global_diaph_valid = global_sigh_inputs_available(diaph);
     diagnostics = struct( ...
@@ -393,6 +396,10 @@ function diagnostics = empty_sigh_belt_diagnostics(belt, method, amplitude_metho
     if isfield(belt, 'reference_quality')
         reference_quality = belt.reference_quality;
     end
+    [unavailable, unavailable_status] = sigh_belt_unavailable(belt);
+    if ~unavailable
+        unavailable_status = 'belt_unavailable';
+    end
     diagnostics = struct( ...
         'available', false, ...
         'reference_quality', reference_quality, ...
@@ -400,7 +407,7 @@ function diagnostics = empty_sigh_belt_diagnostics(belt, method, amplitude_metho
         'amplitude_method', amplitude_method, ...
         'amplitude_source', 'resp_features.<belt>.amp', ...
         'boundary_convention', sigh_boundary_convention(method), ...
-        'status', 'belt_unavailable', ...
+        'status', unavailable_status, ...
         'sigh_flags', false(n_breaths, 1), ...
         'sigh_amplitude', nan(n_breaths, 1), ...
         'sigh_baseline', nan(n_breaths, 1), ...
@@ -445,6 +452,11 @@ end
 function tf = global_sigh_inputs_available(belt)
 % GLOBAL_SIGH_INPUTS_AVAILABLE Preserve the existing global-method gate.
 
+    [unavailable, ~] = sigh_belt_unavailable(belt);
+    if unavailable
+        tf = false;
+        return;
+    end
     tf = isstruct(belt) && isfield(belt, 'global_amplitude_available') && ...
         isscalar(belt.global_amplitude_available) && ...
         logical(belt.global_amplitude_available);
@@ -489,21 +501,42 @@ end
 function tf = canonical_sigh_inputs_available(belt)
 % CANONICAL_SIGH_INPUTS_AVAILABLE Check availability without changing amplitude.
 
+    [unavailable, ~] = sigh_belt_unavailable(belt);
+    if unavailable
+        tf = false;
+        return;
+    end
     tf = isstruct(belt) && isfield(belt, 'peak_t') && isfield(belt, 'amp');
     if ~tf
         return;
     end
     [~, amplitude] = canonical_sigh_vectors(belt);
-    if isfield(belt, 'ignored') && isscalar(belt.ignored) && logical(belt.ignored)
-        tf = false;
-        return;
-    end
-    if isfield(belt, 'available') && isscalar(belt.available) && ...
-            ~logical(belt.available)
-        tf = false;
-        return;
-    end
     tf = ~isempty(amplitude) && any(isfinite(amplitude) & amplitude > 0);
+end
+
+function validate_sigh_alignment_if_usable(belt)
+% VALIDATE_SIGH_ALIGNMENT_IF_USABLE Keep strict checks for usable belts only.
+
+    [unavailable, ~] = sigh_belt_unavailable(belt);
+    if ~unavailable
+        canonical_sigh_vectors(belt);
+    end
+end
+
+function [unavailable, status] = sigh_belt_unavailable(belt)
+% SIGH_BELT_UNAVAILABLE Resolve explicit belt availability before vectors.
+
+    unavailable = false;
+    status = '';
+    if isstruct(belt) && isfield(belt, 'ignored') && ...
+            isscalar(belt.ignored) && logical(belt.ignored)
+        unavailable = true;
+        status = 'belt_ignored';
+    elseif isstruct(belt) && isfield(belt, 'available') && ...
+            isscalar(belt.available) && ~logical(belt.available)
+        unavailable = true;
+        status = 'belt_unavailable';
+    end
 end
 
 function amplitude = canonical_sigh_amplitude(belt)
@@ -585,6 +618,23 @@ function [sigh_flags, baseline, ratio, ratio_threshold, amplitude, available, ..
 % Baselines use only complete centered windows. The first and last complete
 % baselines are extended unchanged to the boundary breath positions.
 
+    [unavailable, status] = sigh_belt_unavailable(feature_belt);
+    if unavailable
+        if isstruct(feature_belt) && isfield(feature_belt, 'peak_t')
+            L = numel(feature_belt.peak_t);
+        else
+            L = 0;
+        end
+        sigh_flags = false(L, 1);
+        amplitude = nan(L, 1);
+        baseline = nan(L, 1);
+        ratio = nan(L, 1);
+        evaluable = false(L, 1);
+        boundary_mask = false(L, 1);
+        available = false;
+        return;
+    end
+
     [peak_t, amplitude] = canonical_sigh_vectors(feature_belt);
     L = numel(peak_t);
     sigh_flags = false(L, 1);
@@ -596,15 +646,6 @@ function [sigh_flags, baseline, ratio, ratio_threshold, amplitude, available, ..
 
     if L == 0
         status = 'no_breaths';
-        return;
-    end
-    if isfield(feature_belt, 'ignored') && logical(feature_belt.ignored)
-        status = 'belt_ignored';
-        return;
-    end
-    if isfield(feature_belt, 'available') && ...
-            ~logical(feature_belt.available)
-        status = 'belt_unavailable';
         return;
     end
     if L < window_breaths
@@ -1071,7 +1112,7 @@ function flags_out = enforce_min_gap_by_strength(flags_in, peak_t, strength, min
 end
 
 function add_axis_legend(ax, handles, labels)
-% ADD_AXIS_LEGEND Show entries only for valid graphics with plotted X data.
+% ADD_AXIS_LEGEND Keep valid plotted data and non-XData graphics aligned.
 
     keep = false(size(handles));
     for i = 1:numel(handles)
@@ -1079,10 +1120,13 @@ function add_axis_legend(ax, handles, labels)
         if ~isgraphics(h)
             continue;
         end
-        xdata = get(h, 'XData');
-        if ~isempty(xdata)
-            keep(i) = true;
+        if isprop(h, 'XData')
+            xdata = get(h, 'XData');
+            if isempty(xdata)
+                continue;
+            end
         end
+        keep(i) = true;
     end
 
     handles = handles(keep);
