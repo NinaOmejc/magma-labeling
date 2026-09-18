@@ -20,6 +20,7 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events(data, confi
     fs = config.fs;
     automatic_event_sets = ensure_event_sets(automatic_event_sets, label_defs, fs, N);
     cfg = label_edit_config(config);
+    do_manual_review = manual_review_enabled(config);
     edit_file = manual_edit_file(config, cfg);
     edit_info = init_edit_info(edit_file);
     reviewed_event_sets = automatic_event_sets;
@@ -28,7 +29,7 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events(data, confi
     active_round_id = NaN;
 
     should_load = exist(edit_file, 'file') && ...
-        (cfg.manual_control || cfg.apply_saved_edits || ...
+        (do_manual_review || cfg.apply_saved_edits || ...
          strcmp(cfg.start_from, 'latest_reviewed'));
     if should_load
         [loaded, ~, loaded_schema, ~, loaded_history, ...
@@ -44,7 +45,7 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events(data, confi
         end
     end
 
-    if ~cfg.manual_control
+    if ~do_manual_review
         if cfg.apply_saved_edits && ~isempty(loaded_event_sets)
             reviewed_event_sets = loaded_event_sets;
             edit_info.applied_saved_edits = true;
@@ -110,11 +111,11 @@ end
 
 function cfg = label_edit_config(config)
 % LABEL_EDIT_CONFIG Resolve and validate manual-event editor policy.
-% cfg contains manual_control, apply/save/replace flags, window_sec,
-% min_interval_sec, filename_suffix, start_from, reviewer_role/id, and notes.
+% cfg contains apply/save/replace flags, window_sec, min_interval_sec,
+% filename_suffix, start_from, reviewer_role/id, and notes. GUI opening is
+% derived only from config.execution.mode by manual_review_enabled.
 
     cfg = struct();
-    cfg.manual_control = false;
     cfg.apply_saved_edits = true;
     cfg.save_edits = true;
     cfg.window_sec = 300;
@@ -136,7 +137,6 @@ function cfg = label_edit_config(config)
         end
     end
 
-    cfg.manual_control = logical(cfg.manual_control);
     cfg.apply_saved_edits = logical(cfg.apply_saved_edits);
     cfg.save_edits = logical(cfg.save_edits);
     cfg.replace_reviewed = logical(cfg.replace_reviewed);

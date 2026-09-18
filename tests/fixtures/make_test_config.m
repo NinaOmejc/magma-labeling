@@ -23,8 +23,7 @@ function config = make_test_config(output_dir)
     config.reference.do_plot = false;
     config.normality.do_plot = false;
     config.sigh.do_plot = false;
-    config.sigh.manual_control = false;
-    config.LabelEdit.manual_control = false;
+    config.execution.mode = 'analyze_only';
     config.LabelEdit.apply_saved_edits = false;
     config.LabelEdit.save_edits = false;
 

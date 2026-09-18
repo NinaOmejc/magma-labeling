@@ -190,7 +190,7 @@ function testLatestReviewedRequiresAnExistingReview(testCase)
     config = review_config();
     config.path_results_out = output_dir;
     config.sub_results_path = output_dir;
-    config.LabelEdit.manual_control = true;
+    config.execution.mode = 'analyze_and_review';
     config.LabelEdit.start_from = 'latest_reviewed';
     defs = manual_label_definitions();
     verifyError(testCase, @() manual_edit_label_events( ...

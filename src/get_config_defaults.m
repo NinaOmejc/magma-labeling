@@ -32,6 +32,8 @@ function config = get_config_defaults()
     config.overwrite_results = true;                                      % *** Recompute even if label output already exists
     config.overwrite_features = false;                                     % *** Recompute respiratory features even if "*_features.mat" exists
     config.verbosity = 1;                                                   % 1 = concise progress, 2 = detailed progress
+    config.execution = struct();
+    config.execution.mode = 'analyze_only';                                % 'analyze_only', 'analyze_and_review', or 'review_only'; the latter two open manual review
     
     % FIRST CHECK: plot [X1, X2] seconds of raw data
     config.plot_raw_data = false;                               % save an overview plot of raw signals
@@ -145,7 +147,6 @@ function config = get_config_defaults()
     config.sigh.min_abs_ratio = 2.0;             % minimum amplitude/reference ratio for sigh candidates
     config.sigh.iqr_k = 3.5;                     % IQR multiplier for outlier-based sigh detection
     config.sigh.min_gap_sec = 2;                 % minimum time between separate sigh events (check if this condition actually makes sense)
-    config.sigh.manual_control = false;           % allow click-to-add/remove sigh markers in GUI - GUI will appear where sighs can be edited!)
     config.sigh.manual_window_sec = 1200;        % visible time span for manual GUI scrolling
     config.sigh.do_plot = true;                  % save sigh diagnostic plot
         
@@ -250,7 +251,6 @@ function config = get_config_defaults()
     
     %---- MANUAL LABEL EVENT EDITING
     config.LabelEdit = struct();
-    config.LabelEdit.manual_control = false;      % *** open final event-interval editor before saving labels
     config.LabelEdit.apply_saved_edits = false;  % reuse saved manual event edits on rerun, even when GUI is off
     config.LabelEdit.save_edits = true;          % persist edited event intervals in the subject results folder
     config.LabelEdit.start_from = 'automatic';   % 'automatic' or 'latest_reviewed' GUI starting annotations

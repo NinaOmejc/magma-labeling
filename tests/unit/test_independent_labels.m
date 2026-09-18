@@ -333,7 +333,7 @@ function testManualEditVersionOneMigrationUsesFieldIdentity(testCase)
     config = make_test_config(output_dir);
     config.fs = 10;
     config.LabelEdit.apply_saved_edits = true;
-    config.LabelEdit.manual_control = false;
+    config.execution.mode = 'analyze_only';
     N = 1000;
     data = zeros(N, numel(config.data_columns));
 

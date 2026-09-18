@@ -27,6 +27,7 @@ config.overwrite_results
 config.overwrite_features
 config.make_figs_visible
 config.verbosity
+config.execution.mode
 ```
 
 Individual detector plots can additionally be controlled with the corresponding `do_plot` field.
@@ -34,6 +35,14 @@ Individual detector plots can additionally be controlled with the corresponding 
 `config.verbosity = 1` prints concise progress, including important skip and
 signal-availability messages. Set it to `2` for detailed pipeline-stage and
 detector progress. Warnings and errors are always shown.
+
+`config.execution.mode` is the sole switch for opening manual review:
+
+```matlab
+config.execution.mode = 'analyze_only';       % do not open manual review
+config.execution.mode = 'analyze_and_review'; % analyze, then review
+config.execution.mode = 'review_only';        % open review in review-only runs
+```
 
 ## Respiratory-cycle extraction
 
@@ -163,26 +172,23 @@ Missing-data blocks are not bridged during phase analysis.
 
 ## Manual review
 
-Respiratory-cycle review:
+The manual sigh and final interval review GUIs are enabled only when:
 
 ```matlab
-config.resp.manual_control
+ismember(config.execution.mode, {'analyze_and_review', 'review_only'})
 ```
 
-Sigh review:
+There are no separate `config.sigh.manual_control` or
+`config.LabelEdit.manual_control` switches. Other final-review settings remain:
 
 ```matlab
-config.sigh.manual_control
-```
-
-Final interval review:
-
-```matlab
-config.LabelEdit.manual_control
 config.LabelEdit.apply_saved_edits
 config.LabelEdit.save_edits
 config.LabelEdit.start_from
 config.LabelEdit.reviewer_role
 ```
+
+Respiratory-cycle peak review is a distinct upstream feature-extraction GUI
+and remains controlled by `config.resp.manual_control`.
 
 Automatic and manually reviewed annotations remain separate.

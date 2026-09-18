@@ -19,19 +19,14 @@ config.measurements = [1 2];
 config.subjects(ismember(config.subjects, config.remove_subjects)) = [];
 
 % EXECUTION
-config.overwrite_results = true;    % If true, recompute even if "*_labels.h5" output already exists.
-config.overwrite_features = false;  % If true, recompute respiratory features even if "*_features.mat" already exists.
-config.verbosity = 2;               % 1 = concise progress, 2 = detailed progress.
+config.overwrite_results = false;       % If true, recompute even if "*_labels.h5" output already exists.
+config.overwrite_features = false;      % If true, recompute respiratory features even if "*_features.mat" already exists.
+config.verbosity = 2;                   % 1 = concise progress, 2 = detailed progress.
+config.execution.mode = 'analyze_only'; % 'analyze_only', 'analyze_and_review', or 'review_only'.
 
 % RESPIRATORY REPRESENTATION
 config.resp.amp_method = 'symmetric';  % Selected breath amplitude: 'expiratory' (peak to following trough), 'inspiratory' (peak to preceding trough), or 'symmetric' (peak to the mean of both troughs)
 config.resp.plot_amp_method_comparison = true; % save an optional comparison of all three breath-amplitude definitions
-
-% PRIMARY METHODS
-config.sigh.method = 'rolling_median_2x';
-config.periodic.primary_method = 'eami';
-config.async.primary_method = 'wavelet_phase_offset';
-config.async.compare_methods = true;
 
 % PLOTTING
 config.make_figs_visible = 'off';                           % If 'off' plots are only saved, and not shown, which increases the speed.
@@ -52,9 +47,7 @@ config.desat.do_plot = true;                                % save desaturation 
 config.LabelMask.do_plot = true;                            % generate a label-mask summary figure
 
 % MANUAL REVIEW
-config.resp.manual_control = true;
-config.sigh.manual_control = false;
-config.LabelEdit.manual_control = false;
+config.resp.manual_control = true;                          % this review is the base of the analysis (checking peaks and troughts of breaths), should be done carefully and always. Its done only once, then its saved and reloaded.
 config.LabelEdit.apply_saved_edits = false;
 config.LabelEdit.save_edits = true;
 config.LabelEdit.start_from = 'automatic';

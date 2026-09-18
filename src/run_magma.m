@@ -21,7 +21,6 @@ for isub = 1:length(base_config.subjects)
         config.measure = base_config.measurements(imeasure);
         
         % LOAD DATA
-        log_message(config, 2, 'Loading data...');
         [data_raw, config, do_analysis] = load_raw_data(config);
         if ~do_analysis
             continue;

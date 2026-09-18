@@ -32,7 +32,6 @@ function [events, diagnostics, review_info] = detect_sigh( ...
     min_gap_sec = 20;
 
     do_plot = false;
-    manual_control = true;
     manual_window_sec = 1000;
 
     % Existing legacy criteria.
@@ -48,7 +47,6 @@ function [events, diagnostics, review_info] = detect_sigh( ...
         if isfield(config.sigh,'compare_methods'), compare_methods = logical(config.sigh.compare_methods); end
         if isfield(config.sigh,'ratio_prctile'), ratio_prctile = config.sigh.ratio_prctile; end
         if isfield(config.sigh,'do_plot'), do_plot = config.sigh.do_plot; end
-        if isfield(config.sigh,'manual_control'), manual_control = logical(config.sigh.manual_control); end
         if isfield(config.sigh,'manual_window_sec'), manual_window_sec = config.sigh.manual_window_sec; end
         if isfield(config.sigh,'min_abs_ratio'), min_abs_ratio = config.sigh.min_abs_ratio; end
         if isfield(config.sigh,'iqr_k'), iqr_k = config.sigh.iqr_k; end
@@ -58,6 +56,7 @@ function [events, diagnostics, review_info] = detect_sigh( ...
         if isfield(config.sigh,'legacy_amp_ratio_thr'), legacy_amp_ratio_thr = config.sigh.legacy_amp_ratio_thr; end
         if isfield(config.sigh,'legacy_min_prev_breaths'), legacy_min_prev_breaths = config.sigh.legacy_min_prev_breaths; end
     end
+    do_manual_review = manual_review_enabled(config);
     method = lower(char(string(method)));
     if strcmp(method, 'rolling_median_2x') || compare_methods
         validate_rolling_sigh_config(rolling_window_breaths, ...
@@ -205,14 +204,14 @@ function [events, diagnostics, review_info] = detect_sigh( ...
     review_info.automatic_flags_lungs = automatic_sigh_lungs;
     review_info.automatic_flags_diaph = automatic_sigh_diaph;
 
-    if manual_control && diagnostics.lungs.available && diagnostics.diaph.available
+    if do_manual_review && diagnostics.lungs.available && diagnostics.diaph.available
         [sigh_lungs, sigh_diaph, sigh_review_mask] = manual_edit_sigh_flags( ...
             data, resp_cycles.lungs, resp_cycles.diaph, sigh_lungs, sigh_diaph, ...
             config, manual_window_sec);
         review_info.reviewed = true;
         review_info.review_scope = 'explicitly_viewed_regions_sigh_breaths_both_belts';
         review_info.review_mask = sigh_review_mask;
-    elseif manual_control
+    elseif do_manual_review
         warning('MAGMA:Sigh:ManualSkipped', ...
             'Manual sigh editing requires two valid respiratory belts and was skipped for this input configuration.');
     end

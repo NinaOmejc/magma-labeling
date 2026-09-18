@@ -453,7 +453,7 @@ function testManualV3CoverageMigratesByLabelIdentity(testCase)
     config.sub_results_path = output_dir;
     config.path_results_out = output_dir;
     config.LabelEdit.apply_saved_edits = true;
-    config.LabelEdit.manual_control = false;
+    config.execution.mode = 'analyze_only';
     defs = manual_label_definitions();
     automatic = empty_event_sets(defs);
     automatic.deep = make_event_fixture('deep_breathing_lungs',10,20,config.fs);
@@ -492,7 +492,7 @@ end
 function testAutomaticSighCandidatesSurviveWithoutReview(testCase)
     config = stage6_config();
     config.sigh.method = 'global_ratio_outlier';
-    config.sigh.manual_control = false;
+    config.execution.mode = 'analyze_only';
     config.sigh.do_plot = false;
     peak_t = (0:4:96)';
     amp = ones(size(peak_t)); amp(12) = 4; amp(end) = NaN;
@@ -834,6 +834,7 @@ function testConfigurationLayersAndDemoUseSharedRunner(testCase)
     verifyEqual(testCase, simple.reference, defaults.reference);
     verifyEqual(testCase, simple.async.phase_offset, defaults.async.phase_offset);
     verifyEqual(testCase, simple.HDF5, defaults.HDF5);
+    verifyEqual(testCase, simple.execution, defaults.execution);
 
     simple_source = fileread(fullfile(repo_root, 'src', 'get_config.m'));
     defaults_source = fileread(fullfile( ...
@@ -859,9 +860,9 @@ function testConfigurationLayersAndDemoUseSharedRunner(testCase)
     verifyTrue(testCase, contains(demo_source, ...
         'config.resp.manual_control = false;'));
     verifyTrue(testCase, contains(demo_source, ...
-        'config.sigh.manual_control = false;'));
-    verifyTrue(testCase, contains(demo_source, ...
-        'config.LabelEdit.manual_control = false;'));
+        'config.execution.mode = ''analyze_only'';'));
+    verifyFalse(testCase, contains(demo_source, 'config.sigh.manual_control'));
+    verifyFalse(testCase, contains(demo_source, 'config.LabelEdit.manual_control'));
     verifyTrue(testCase, contains(demo_source, ...
         'config.LabelEdit.apply_saved_edits = false;'));
     verifyTrue(testCase, contains(demo_source, 'run_magma(config);'));
