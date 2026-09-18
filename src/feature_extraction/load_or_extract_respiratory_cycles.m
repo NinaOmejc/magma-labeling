@@ -52,7 +52,8 @@ function resp_cycles = load_or_extract_respiratory_cycles(data, config)
         'n_samples', size(data,1), ...
         'data_columns', {config.data_columns}, ...
         'amp_method', resolve_respiration_amplitude_method(config), ...
-        'created_on', char(datetime('now', 'Format', 'yyyy-MM-dd HH:mm:ss')));
+        'created_on', char(datetime('now', 'Format', 'yyyy-MM-dd HH:mm:ss')), ...
+        'manual_resp_control', isfield(config.resp, 'manual_control') && config.resp.manual_control);
 
     cache_dir = fileparts(cache_file);
     if ~isfolder(cache_dir)
@@ -261,5 +262,5 @@ end
 function v = current_feature_cache_version()
 % CURRENT_FEATURE_CACHE_VERSION Return the schema version required for cycle caches.
 
-    v = 9;
+    v = 8;
 end

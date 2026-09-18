@@ -260,24 +260,61 @@ function testPrespecifiedOverlapsDoNotCreateMaskColumns(testCase)
     verifyEqual(testCase, overlaps.apnea_desaturation.fraction_of_a_overlapped_by_b, 0.5);
 end
 
-function testFivePhenotypesAreEvidenceNotNewDiagnoses(testCase)
+function testPhenotypeEvidenceUsesGroupedNonDiagnosticSchema(testCase)
     [burden, overlaps, label_evidence] = phenotype_fixture();
     evidence = build_db_phenotype_evidence(burden, overlaps, label_evidence);
     verifyEqual(testCase, evidence.levels.level_1, ...
         'elementary physiological labels and evidence');
-    phenotype_names = setdiff(fieldnames(evidence), ...
-        {'version'; 'levels'; 'source_provenance'; 'external_clinical_data'});
-    verifyEqual(testCase, numel(phenotype_names), 5);
-    verifyFalse(testCase, evidence.hyperventilation_syndrome.assessable_from_current_signals);
-    verifyFalse(testCase, isfield(evidence.hyperventilation_syndrome, 'diagnosis'));
-    verifyFalse(testCase, evidence.forced_abdominal_expiration.assessable_from_current_signals);
-    verifyFalse(testCase, evidence.forced_abdominal_expiration.evidence_available);
-    verifyTrue(testCase, evidence.periodic_deep_sighing.evidence_available);
-    verifyFalse(testCase, isfield( ...
-        evidence.periodic_deep_sighing.signal_derived_measures, 'CSR'));
+    verifyEqual(testCase, numel(fieldnames(evidence.prespecified_db)), 5);
+    expected_patterns = {'apneic_breathing', 'periodic_breathing', ...
+        'shallow_breathing', 'deep_breathing', 'slow_breathing', ...
+        'rapid_breathing', 'irregular_breathing', 'sighing', ...
+        'desaturation'};
+    verifyTrue(testCase, all(isfield( ...
+        evidence.respiratory_patterns, expected_patterns)));
     verifyEqual(testCase, ...
-        evidence.thoracic_dominant_breathing.signal_derived_measures.median_thoracic_to_abdominal_ratio, 1.7);
-    verifyTrue(testCase, evidence.thoracoabdominal_asynchrony.signal_derived_measures.analysis_valid);
+        numel(fieldnames(evidence.respiratory_patterns)), ...
+        numel(expected_patterns));
+
+    group_names = {'prespecified_db', 'respiratory_patterns'};
+    forbidden = {'diagnosis', 'present', 'phenotype_present'};
+    for g = 1:numel(group_names)
+        group = evidence.(group_names{g});
+        profiles = fieldnames(group);
+        for p = 1:numel(profiles)
+            verifyFalse(testCase, any(isfield(group.(profiles{p}), forbidden)));
+        end
+    end
+
+    verifyFalse(testCase, ...
+        evidence.prespecified_db.hyperventilation_like.assessable_from_current_signals);
+    verifyFalse(testCase, ...
+        evidence.prespecified_db.forced_abdominal_expiration.assessable_from_current_signals);
+    verifyFalse(testCase, ...
+        evidence.prespecified_db.forced_abdominal_expiration.evidence_available);
+    verifyTrue(testCase, ...
+        evidence.prespecified_db.periodic_deep_sighing.evidence_available);
+    unavailable_irregular = burden;
+    unavailable_irregular.by_label.irregular.available = false;
+    without_irregular = build_db_phenotype_evidence( ...
+        unavailable_irregular, overlaps, label_evidence);
+    verifyFalse(testCase, ...
+        without_irregular.prespecified_db.periodic_deep_sighing.evidence_available);
+    verifyFalse(testCase, isfield( ...
+        evidence.prespecified_db.periodic_deep_sighing.signal_derived_measures, 'CSR'));
+    verifyEqual(testCase, ...
+        evidence.prespecified_db.thoracic_dominant_breathing.signal_derived_measures.median_thoracic_to_abdominal_ratio, 1.7);
+    verifyTrue(testCase, ...
+        evidence.prespecified_db.thoracoabdominal_asynchrony.signal_derived_measures.analysis_valid);
+
+    bundle = build_db_phenotype_evidence_bundle( ...
+        burden, overlaps, label_evidence, burden, overlaps, label_evidence);
+    verifyEqual(testCase, bundle.version, ...
+        'magma_db_phenotype_evidence_bundle_v2');
+    verifyTrue(testCase, isfield(bundle, 'automatic'));
+    verifyTrue(testCase, isfield(bundle, 'reviewed'));
+    verifyTrue(testCase, isfield(bundle.automatic, 'prespecified_db'));
+    verifyTrue(testCase, isfield(bundle.reviewed, 'respiratory_patterns'));
 end
 
 function testEvidenceSummaryDoesNotInventConfidence(testCase)

@@ -76,7 +76,7 @@ function testExampleRecordingRunsAtMasterRate(testCase)
         mask, label_names, label_available, config.fs);
     evidence = build_label_evidence_summary( ...
         label_names, label_available, reasons, data, resp_features, ...
-        spo2_ref, detector_diagnostics, burden, config);
+        spo2_ref, detector_diagnostics, burden, config, mask, events);
     phenotypes = build_db_phenotype_evidence(burden, overlaps, evidence);
 
     detections.events = struct( ...
@@ -147,7 +147,7 @@ function testExampleRecordingRunsAtMasterRate(testCase)
     verifyFalse(testCase, isfield(export_results, 'event_boundary_info'));
     verifyFalse(testCase, isfield(export_results, 'diagnostic_signals'));
     verifyEqual(testCase, numel(reasons), 11);
-    verifyEqual(testCase, phenotypes.version, 'magma_db_phenotype_evidence_v1');
+    verifyEqual(testCase, phenotypes.version, 'magma_db_phenotype_evidence_v2');
     verifyEqual(testCase, label_results.events_automatic, events);
     verifyEqual(testCase, label_results.mask_automatic, mask);
     verifyFalse(testCase, any(label_results.review_coverage_mask(:)));

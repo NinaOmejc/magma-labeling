@@ -885,7 +885,7 @@ function testPhenotypeBundleDistinguishesAnnotationAndDetectorScope(testCase)
     verifyEqual(testCase,bundle.reviewed.annotation_scope, ...
         'explicitly_reviewed_and_assessable_regions');
     verifyEqual(testCase,bundle.reviewed.detector_evidence_scope, ...
-        'full_record_descriptive_evidence_not_manual_confidence');
+        'reviewed_annotation_event_evidence_with_shared_detector_qc');
 end
 
 function testNoCompoundLabelColumns(testCase)

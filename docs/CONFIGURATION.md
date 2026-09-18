@@ -36,7 +36,7 @@ Individual detector plots can additionally be controlled with the corresponding 
 signal-availability messages. Set it to `2` for detailed pipeline-stage and
 detector progress. Warnings and errors are always shown.
 
-`config.execution.mode` is the sole switch for opening manual review:
+`config.execution.mode` is the sole switch for opening the unified final-label review:
 
 ```matlab
 config.execution.mode = 'analyze';            % automatic analysis only
@@ -51,6 +51,8 @@ extraction or detectors.
 ## Respiratory-cycle extraction
 
 ```matlab
+config.resp.manual_control
+config.resp.manual_window_sec
 config.resp.min_peak_dist_sec
 config.resp.min_peak_prom
 config.resp.min_peak_height
@@ -74,6 +76,10 @@ config.resp.amp_method = 'expiratory';
 ```
 
 Respiratory peaks are detected once and reused by all downstream labels.
+
+Respiratory-cycle peak/trough review is a distinct upstream step controlled by
+`config.resp.manual_control`, independent of `config.execution.mode`. Confirmed
+cycles and their review provenance are saved in the respiratory-feature cache.
 
 ## Session reference
 
@@ -183,7 +189,8 @@ ismember(config.execution.mode, {'analyze_and_review', 'review_only'})
 ```
 
 Sighs are edited in the same reviewer and snap to respiratory breaths. There
-are no separate manual-control, apply-saved, or save-review switches. Review
+are no separate sigh/final-label manual-control, apply-saved, or save-review
+switches. Review
 rounds are always appended to the persistent history file and record the
 automatic `source_analysis_id` they derive from. Settings that remain:
 

@@ -10,7 +10,7 @@ function config = get_config_defaults()
 %            overwrite_results/overwrite_features and make_figs_visible control
 %            execution; plot_raw_data/plot_raw_data_xrange and LabelMask control
 %            overview plots. Nested problems records known data exclusions;
-%            detrend controls preprocessing; resp controls breath extraction;
+%            detrend controls preprocessing; resp controls breath extraction/review;
 %            reference controls session/global baseline estimation. shallow, deep,
 %            slow, rapid, irregular, apnea, sigh, periodic, thoracic, async, and desat
 %            contain detector thresholds/windows; grid_step_sec defines their common
@@ -68,6 +68,10 @@ function config = get_config_defaults()
     config.resp.qc.short_ibi_ratio = 0.65;      % flag intervals that are abnormally short relative to local rhythm
     config.resp.qc.rhythm_merge_tol = 0.35;     % tolerance for removal restoring the expected local rhythm
     config.resp.qc.min_prom_ratio = 0.35;       % unusually low prominence relative to neighboring peaks
+
+    % manual control of respiratory cycles (independent of execution.mode)
+    config.resp.manual_control = true;          % allow click-to-add/remove breath peaks before label detection
+    config.resp.manual_window_sec = 300;        % visible time span for manual breath GUI scrolling
     
     %---- SESSION PHYSIOLOGICAL REFERENCE ----
     config.reference.pre_start_min = 3;          % M1/M3 common reference start ( in minutes! )
@@ -166,7 +170,7 @@ function config = get_config_defaults()
     config.periodic.eami.envelope_lowpass_hz = 0.125;
     config.periodic.eami.envelope_lowpass_order = 6;
     config.periodic.eami.energy_win_sec = 60;
-    config.periodic.eami.threshold = 0.30;
+    config.periodic.eami.threshold = 0.60;
 
     % Guyot et al., PLOS ONE 2020 (DOI 10.1371/journal.pone.0221191).
     % The centered window/overlap and Matrix Pencil structure follow the paper.
@@ -178,7 +182,7 @@ function config = get_config_defaults()
     config.periodic.guyot.window_sec = 120;
     config.periodic.guyot.overlap_fraction = 0.90;
     config.periodic.guyot.h_threshold = 0.5;
-    config.periodic.guyot.fm_band_hz = [0.01 0.1];
+    config.periodic.guyot.fm_band_hz = [0.008 0.050];
     config.periodic.guyot.min_zone_sec = 60;
     config.periodic.guyot.gap_factor = 3;
 

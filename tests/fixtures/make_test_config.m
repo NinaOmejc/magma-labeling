@@ -18,6 +18,7 @@ function config = make_test_config(output_dir)
 
     config.detrend.do_plot = false;
     config.resp.do_plot = false;
+    config.resp.manual_control = false;
     config.resp.qc.enabled = false;
     config.reference.do_plot = false;
     config.normality.do_plot = false;
