@@ -99,14 +99,10 @@ function result = estimate_matrix_pencil_modulation(envelope, fs)
     for component = 1:model_order
         vandermonde(:, component) = poles(component) .^ sample_index;
     end
-    try
-        amplitudes = vandermonde \ x;
-    catch
-        result.failure_reason = 'amplitude_fit_failed';
-        return;
-    end
-    if any(~isfinite(amplitudes))
-        result.failure_reason = 'amplitude_fit_failed';
+    [amplitudes, amplitude_failure] = fit_matrix_pencil_amplitudes( ...
+        vandermonde, x, model_order);
+    if ~isempty(amplitude_failure)
+        result.failure_reason = amplitude_failure;
         return;
     end
 

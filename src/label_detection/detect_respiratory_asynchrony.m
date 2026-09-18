@@ -272,46 +272,36 @@ function plot_respiratory_asynchrony( ...
     t_grid = legacy_full.time_sec;
     primary_mask = events_to_grid_mask(primary_events, t_grid);
     t_raw = (0:size(data, 1) - 1) / config.fs;
+    panels = respiratory_asynchrony_plot_panels(config);
     fig = figure('Units', 'pixels', 'Position', ...
         near_fullscreen_figure_position(), 'Visible', config.make_figs_visible);
-    tl = tiledlayout(7, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
+    tl = tiledlayout(numel(panels), 1, ...
+        'TileSpacing', 'compact', 'Padding', 'compact');
     title(tl, sprintf(['RESPIRATORY ASYNCHRONY | primary: %s\n' ...
         'Subject: %g | Measurement: %g'], primary_method, ...
         config.subject, config.measure), 'Interpreter', 'none');
 
-    ax(1) = nexttile(tl);
-    plot_raw_panel(ax(1), t_raw, data, config.channels.lungs_idx, ...
-        t_grid, primary_mask, 'Resp-Lungs with canonical async events', ...
-        'Resp-Lungs');
-    ax(2) = nexttile(tl);
-    plot_raw_panel(ax(2), t_raw, data, config.channels.diaph_idx, ...
-        t_grid, primary_mask, 'Resp-Diaphragm with canonical async events', ...
-        'Resp-Diaphragm');
-
-    names = {'high', 'mid', 'low'};
-    titles = { ...
-        sprintf('Legacy high-frequency coherence (> %.3g Hz)', ...
-            legacy_full.mid_high_cut_hz), ...
-        sprintf('Legacy respiratory-band coherence (%.3g-%.3g Hz)', ...
-            legacy_full.low_mid_cut_hz, legacy_full.mid_high_cut_hz), ...
-        sprintf('Legacy low-frequency coherence (< %.3g Hz)', ...
-            legacy_full.low_mid_cut_hz)};
-    for i = 1:3
-        ax(i + 2) = nexttile(tl);
-        name = names{i};
-        plot_coherence_panel(ax(i + 2), t_grid, ...
-            legacy_full.(['phase_coherence_' name]), ...
-            legacy_full.thresholds.(name), legacy_full.references.(name), ...
-            legacy_full.reference_mask, legacy_method.event_mask, ...
-            titles{i}, legacy_full.plot_step_sec);
+    ax = gobjects(1, numel(panels));
+    phase_reliability_ax = gobjects(0);
+    for i = 1:numel(panels)
+        ax(i) = nexttile(tl);
+        switch panels{i}
+            case 'belts'
+                plot_combined_raw_panel(ax(i), t_raw, data, ...
+                    config.channels.lungs_idx, config.channels.diaph_idx, ...
+                    t_grid, primary_mask);
+            case 'phase_offset'
+                plot_phase_offset_panel(ax(i), phase_method);
+            case 'phase_consistency'
+                plot_phase_reliability_panel(ax(i), phase_method);
+                phase_reliability_ax = ax(i);
+            case 'legacy_coherence'
+                plot_legacy_coherence_panel( ...
+                    ax(i), t_grid, legacy_full, legacy_method);
+        end
     end
-
-    ax(6) = nexttile(tl);
-    plot_phase_offset_panel(ax(6), phase_method);
-    ax(7) = nexttile(tl);
-    plot_phase_reliability_panel(ax(7), phase_method);
     if ~any(primary_evaluable)
-        text(ax(7), 0.01, 0.05, 'Primary method unavailable', ...
+        text(phase_reliability_ax, 0.01, 0.05, 'Primary method unavailable', ...
             'Units', 'normalized', 'Color', [0.75 0 0]);
     end
     linkaxes(ax, 'x');
@@ -321,6 +311,21 @@ function plot_respiratory_asynchrony( ...
     align_axes_x_widths(ax);
     set(fig, 'Visible', config.make_figs_visible);
     save_figure(config, 'respiratory_asynchrony');
+end
+
+function plot_legacy_coherence_panel(ax, t_grid, legacy_full, legacy_method)
+% PLOT_LEGACY_COHERENCE_PANEL Show the representative mid-band comparison.
+
+    mid_title = sprintf('Legacy respiratory-band coherence (%.3g-%.3g Hz)', ...
+        legacy_full.low_mid_cut_hz, legacy_full.mid_high_cut_hz);
+    plot_coherence_panel(ax, t_grid, legacy_full.phase_coherence_mid, ...
+        legacy_full.thresholds.mid, legacy_full.references.mid, ...
+        legacy_full.reference_mask, legacy_method.event_mask, ...
+        mid_title, legacy_full.plot_step_sec);
+    text(ax, 0.01, 0.04, ...
+        ['Representative trace; legacy events may also be triggered by ' ...
+         'low/high-frequency coherence bands'], ...
+        'Units', 'normalized', 'FontSize', 8, 'Color', [0.35 0.35 0.35]);
 end
 
 function mask = events_to_grid_mask(events, t_grid)
@@ -333,25 +338,68 @@ function mask = events_to_grid_mask(events, t_grid)
     end
 end
 
-function plot_raw_panel(ax, t_raw, data, idx, t_grid, mask, title_text, y_text)
-% PLOT_RAW_PANEL Plot one recorded belt and selected-primary event shading.
+function plot_combined_raw_panel( ...
+    ax, t_raw, data, lungs_idx, diaph_idx, t_grid, mask)
+% PLOT_COMBINED_RAW_PANEL Overlay independently normalized belts for display.
 
-    if isempty(idx)
-        text(ax, 0.5, 0.5, [y_text ' channel not found'], ...
-            'Units', 'normalized', 'HorizontalAlignment', 'center');
-        title(ax, title_text);
-        return;
-    end
-    signal = data(:, idx);
-    plot(ax, t_raw, signal, 'k');
     hold(ax, 'on');
+    legend_handles = gobjects(0);
+    if valid_plot_channel(lungs_idx, size(data, 2))
+        lungs = robust_normalize_for_plot(data(:, lungs_idx));
+        legend_handles(end + 1) = plot(ax, t_raw, lungs, 'k', ...
+            'DisplayName', 'lungs'); %#ok<AGROW>
+    end
+    if valid_plot_channel(diaph_idx, size(data, 2))
+        diaph = robust_normalize_for_plot(data(:, diaph_idx));
+        legend_handles(end + 1) = plot(ax, t_raw, diaph, ...
+            'Color', [0.10 0.35 0.90], ...
+            'DisplayName', 'diaphragm'); %#ok<AGROW>
+    end
+    if isempty(legend_handles)
+        text(ax, 0.5, 0.5, 'Respiratory belt channels not found', ...
+            'Units', 'normalized', 'HorizontalAlignment', 'center');
+    end
     shade_mask_on_axis(ax, t_grid, mask);
-    plot(ax, t_raw, signal, 'k');
+    event_key = patch(ax, nan(1, 4), nan(1, 4), [1.00 0.65 0.65], ...
+        'EdgeColor', 'none', 'FaceAlpha', 0.45, ...
+        'DisplayName', 'final async event');
+    legend_handles(end + 1) = event_key;
     hold(ax, 'off');
     grid(ax, 'on');
     xlabel(ax, 'Time (s)');
-    ylabel(ax, y_text);
-    title(ax, title_text);
+    ylabel(ax, 'Normalized effort');
+    title(ax, 'Respiratory effort belts + final asynchrony events');
+    legend(ax, legend_handles, 'Location', 'eastoutside', 'Box', 'off');
+end
+
+function normalized = robust_normalize_for_plot(signal)
+% ROBUST_NORMALIZE_FOR_PLOT Median-center and MAD-scale one display trace.
+
+    signal = double(signal(:));
+    normalized = nan(size(signal));
+    finite_mask = isfinite(signal);
+    if ~any(finite_mask)
+        return;
+    end
+    finite_signal = signal(finite_mask);
+    center = median(finite_signal);
+    centered = finite_signal - center;
+    scale = 1.4826 * median(abs(centered));
+    scale_floor = eps(max(1, max(abs(finite_signal))));
+    if ~isfinite(scale) || scale <= scale_floor
+        scale = std(finite_signal, 0);
+    end
+    if ~isfinite(scale) || scale <= scale_floor
+        scale = 1;
+    end
+    normalized(finite_mask) = centered / scale;
+end
+
+function tf = valid_plot_channel(index, n_columns)
+% VALID_PLOT_CHANNEL Check one optional raw-data channel index.
+
+    tf = ~isempty(index) && isscalar(index) && isfinite(index) && ...
+        index == round(index) && index >= 1 && index <= n_columns;
 end
 
 function plot_coherence_panel( ...
@@ -389,9 +437,9 @@ function plot_phase_offset_panel(ax, phase)
     hold(ax, 'on');
     shade_mask_on_axis(ax, phase.time_sec, phase.event_mask);
     plot(ax, phase.time_sec, phase.signed_mean_phase_deg, 'Color', [0.2 0.4 0.8], ...
-        'DisplayName', 'signed circular mean');
+        'LineWidth', 1.0, 'DisplayName', 'signed circular mean');
     plot(ax, phase.time_sec, phase.absolute_mean_phase_deg, 'k', ...
-        'DisplayName', 'absolute phase offset');
+        'LineWidth', 1.0, 'DisplayName', 'absolute phase offset');
     if isfield(phase, 'angle_threshold_deg')
         yline(ax, phase.angle_threshold_deg, 'r--', ...
             'DisplayName', 'absolute-angle threshold');
@@ -409,13 +457,16 @@ function plot_phase_reliability_panel(ax, phase)
 % PLOT_PHASE_RELIABILITY_PANEL Plot circular consistency and selected frequency.
 
     yyaxis(ax, 'left');
-    plot(ax, phase.time_sec, phase.resultant_length, 'Color', [0.1 0.6 0.2]);
+    plot(ax, phase.time_sec, phase.resultant_length, 'Color', [0.1 0.6 0.2], ...
+        'DisplayName', 'phase consistency (resultant length)');
     ylabel(ax, 'Resultant length');
     ylim(ax, [0 1]);
     if isfield(phase, 'min_resultant_length')
-        yline(ax, phase.min_resultant_length, 'r--');
+        yline(ax, phase.min_resultant_length, 'r--', ...
+            'DisplayName', 'reliability threshold');
     end
     yyaxis(ax, 'right');
+    ax.YAxis(2).Color = [0.6 0.2 0.6];
     plot(ax, phase.time_sec, phase.selected_resp_frequency_hz, ...
         'Color', [0.6 0.2 0.6], 'DisplayName', 'selected shared frequency');
     if isfield(phase, 'expected_resp_frequency_hz')

@@ -43,6 +43,6 @@ function [events, candidate_events] = detect_deep_breathing(data, resp_features,
             'localized_mask_diaph', localized_diaph, ...
             'output_name', 'deep_breathing');
         plot_amplitude_state_diagnostic( ...
-            resp_features, events_lungs, events_diaph, config, opts);
+            data, resp_features, events_lungs, events_diaph, config, opts);
     end
 end

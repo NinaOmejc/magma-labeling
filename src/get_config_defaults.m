@@ -123,7 +123,7 @@ function config = get_config_defaults()
     %---- LABEL 5 - irregular - DETECTION SETTINGS
     config.irregular = struct();              % irregular breathing settings
     config.irregular.analysis_win_sec = 60;   % trailing IBI-variability analysis window (history used to estimate CoV)
-    config.irregular.cov_thr   = 0.3;         % CoV threshold for irregularity
+    config.irregular.cov_thr   = 0.4;         % CoV threshold for irregularity
     config.irregular.plot_cov_step_sec = 1;   % display CoV as held values over "step_sec" windows (just for display)
     config.irregular.do_plot       = true;    % save irregular breathing diagnostic plot
 
@@ -166,11 +166,11 @@ function config = get_config_defaults()
     config.periodic.eami = struct();
     config.periodic.eami.resp_band_hz = [0.125 0.40];
     config.periodic.eami.bandpass_order = 12;
-    config.periodic.eami.resample_hz = 10;
+    config.periodic.eami.resample_hz = 5;
     config.periodic.eami.envelope_lowpass_hz = 0.125;
     config.periodic.eami.envelope_lowpass_order = 6;
     config.periodic.eami.energy_win_sec = 60;
-    config.periodic.eami.threshold = 0.40;
+    config.periodic.eami.threshold = 0.30;
 
     % Guyot et al., PLOS ONE 2020 (DOI 10.1371/journal.pone.0221191).
     % The centered window/overlap and Matrix Pencil structure follow the paper.
@@ -214,6 +214,7 @@ function config = get_config_defaults()
     config.async.min_deviating_bins = 1;      % number of frequency bins that must deviate
     config.async.plot_step_sec = 5;           % display coherence as held medians at this step (in seconds)
     config.async.do_plot          = true;     % save respiratory asynchrony diagnostic plot
+    config.async.plot_legacy_coherence = false; % add the legacy mid-band coherence comparison as the bottom plot panel
     config.async.phase_offset = struct();
     config.async.phase_offset.angle_threshold_deg = 30;    % operational research cutoff; not a validated clinical threshold
     config.async.phase_offset.summary_cycles = 5;          % centered circular-summary support in respiratory cycles

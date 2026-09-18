@@ -1,7 +1,9 @@
-function plot_amplitude_state_diagnostic(resp_features, events_lungs, events_diaph, config, opts)
-% PLOT_AMPLITUDE_STATE_DIAGNOSTIC Plot session-normalized breath excursion by belt.
+function plot_amplitude_state_diagnostic( ...
+    data, resp_features, events_lungs, events_diaph, config, opts)
+% PLOT_AMPLITUDE_STATE_DIAGNOSTIC Pair raw belts with amplitude evidence.
 %
 % Inputs:
+%   data          - Nsample x Nchannel raw physiological signals.
 %   resp_features - Respiratory evidence; uses top-level time_sec and each belt's
 %                   breath-level amp_ratio_session and reference status.
 %   events_lungs  - Final lung-belt events with boundaries in seconds.
@@ -12,10 +14,16 @@ function plot_amplitude_state_diagnostic(resp_features, events_lungs, events_dia
 
     lungs = resp_features.lungs;
     diaph = resp_features.diaph;
+    if ~isfield(config, 'channels')
+        config = resolve_signal_channels(config);
+    end
+    idx_lungs = config.channels.lungs_idx;
+    idx_diaph = config.channels.diaph_idx;
+    t_raw = (0:size(data, 1) - 1) / config.fs;
 
     fig = figure('Units', 'pixels', 'Position', near_fullscreen_figure_position(), ...
         'Visible', config.make_figs_visible, 'Color', 'w');
-    tl = tiledlayout(fig, 2, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
+    tl = tiledlayout(fig, 4, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
     title(tl, [opts.figure_title newline ...
         'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)])
 
@@ -24,22 +32,55 @@ function plot_amplitude_state_diagnostic(resp_features, events_lungs, events_dia
     localized_diaph = get_option(opts, 'localized_mask_diaph', []);
     final_lungs = events_to_grid_mask(events_lungs, t_grid);
     final_diaph = events_to_grid_mask(events_diaph, t_grid);
+    final_events = merge_events({events_lungs, events_diaph});
 
     ax1 = nexttile(tl);
-    plot_belt_amplitude(ax1, lungs, opts, 'Lungs', t_grid, ...
-        localized_lungs, final_lungs);
+    plot_raw_belt(ax1, t_raw, data, idx_lungs, 'Resp-Lungs', ...
+        opts.event_name, final_events);
     ax2 = nexttile(tl);
-    plot_belt_amplitude(ax2, diaph, opts, 'Diaphragm', t_grid, ...
+    plot_belt_amplitude(ax2, lungs, opts, 'Lungs', t_grid, ...
+        localized_lungs, final_lungs);
+    ax3 = nexttile(tl);
+    plot_raw_belt(ax3, t_raw, data, idx_diaph, 'Resp-Diaphragm', ...
+        opts.event_name, final_events);
+    ax4 = nexttile(tl);
+    plot_belt_amplitude(ax4, diaph, opts, 'Diaphragm', t_grid, ...
         localized_diaph, final_diaph);
 
-    ax = [ax1 ax2];
+    ax = [ax1 ax2 ax3 ax4];
     linkaxes(ax, 'x');
-    if ~isempty(resp_features.time_sec)
-        xlim(ax1, [0 resp_features.time_sec(end)]);
+    if ~isempty(t_raw)
+        xlim(ax1, [0 t_raw(end)]);
     end
     align_axes_x_widths(ax);
     set(fig, 'Visible', config.make_figs_visible);
     save_figure(config, opts.output_name);
+end
+
+function plot_raw_belt(ax, t_raw, data, channel_index, signal_name, ...
+    event_name, final_events)
+% PLOT_RAW_BELT Show one raw belt with the merged final label events.
+
+    hold(ax, 'on');
+    has_trace = isscalar(channel_index) && isfinite(channel_index) && ...
+        channel_index >= 1 && channel_index <= size(data, 2);
+    if has_trace
+        plot(ax, t_raw, data(:, channel_index), 'k', ...
+            'DisplayName', signal_name);
+    else
+        text(ax, 0.5, 0.5, [signal_name ' channel not found'], ...
+            'Units', 'normalized', 'HorizontalAlignment', 'center');
+    end
+    shade_events_on_axis(ax, final_events, ['final ' lower(event_name) ' label']);
+    if has_trace || ~isempty(final_events)
+        legend(ax, 'show', 'Location', 'eastoutside', 'Box', 'off');
+    end
+    hold(ax, 'off');
+    title(ax, sprintf('%s final label over raw %s signal', ...
+        event_name, lower(strrep(signal_name, 'Resp-', ''))));
+    xlabel(ax, 'Time (s)');
+    ylabel(ax, signal_name);
+    grid(ax, 'on');
 end
 
 function plot_belt_amplitude(ax, belt, opts, belt_name, t_grid, ...

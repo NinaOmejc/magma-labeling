@@ -249,7 +249,7 @@ function [events, diagnostics, review_info] = detect_sigh( ...
         ax1 = subplot(4,1,1); hold on
         h_lungs_trace = gobjects(0);
         if ~isempty(idx_lungs), h_lungs_trace = plot(t_raw, data(:,idx_lungs), 'k', 'DisplayName', 'Resp-Lungs'); end
-        shade_events_on_axis(gca, events_L, 'sigh lungs');
+        h_lungs_events = shade_events_on_axis(gca, events, 'final sigh event');
         if ~isempty(idx_lungs)
             y_lungs_mark = interp1(t_raw, data(:,idx_lungs), lungs.peak_t(sigh_lungs), 'linear', 'extrap');
         else
@@ -257,14 +257,21 @@ function [events, diagnostics, review_info] = detect_sigh( ...
         end
         h_lungs_sigh = plot(lungs.peak_t(sigh_lungs), y_lungs_mark, 'ro', 'MarkerFaceColor','r', ...
             'DisplayName', 'Sigh breaths');
-        title('Sigh detection (lungs): red dots = sigh breaths')
-        add_axis_legend(gca, [h_lungs_trace; h_lungs_sigh], {'Resp-Lungs', 'Sigh breaths'});
+        title('Raw lungs effort + final sigh events')
+        [raw_handles, raw_labels] = raw_sigh_legend_entries( ...
+            h_lungs_trace, h_lungs_events, h_lungs_sigh, 'Resp-Lungs');
+        add_axis_legend(gca, raw_handles, raw_labels);
         xlabel('Time (s)'); ylabel('Resp-Lungs'); grid on; hold off
 
-        ax2 = subplot(4,1,2); hold on
+        ax2 = subplot(4,1,2);
+        plot_sigh_ratio_evidence( ...
+            ax2, lungs, diagnostics.lungs, sigh_lungs, 'lungs', ...
+            comparison_details.lungs);
+
+        ax3 = subplot(4,1,3); hold on
         h_diaph_trace = gobjects(0);
         if ~isempty(idx_diaph), h_diaph_trace = plot(t_raw, data(:,idx_diaph), 'k', 'DisplayName', 'Resp-Diaphragm'); end
-        shade_events_on_axis(gca, events_D, 'sigh diaphragm');
+        h_diaph_events = shade_events_on_axis(gca, events, 'final sigh event');
         if ~isempty(idx_diaph)
             y_diaph_mark = interp1(t_raw, data(:,idx_diaph), diaph.peak_t(sigh_diaph), 'linear', 'extrap');
         else
@@ -272,21 +279,18 @@ function [events, diagnostics, review_info] = detect_sigh( ...
         end
         h_diaph_sigh = plot(diaph.peak_t(sigh_diaph), y_diaph_mark, 'ro', 'MarkerFaceColor','r', ...
             'DisplayName', 'Sigh breaths');
-        title('Sigh detection (diaphragm): red dots = sigh breaths')
-        add_axis_legend(gca, [h_diaph_trace; h_diaph_sigh], {'Resp-Diaphragm', 'Sigh breaths'});
+        title('Raw diaphragm effort + final sigh events')
+        [raw_handles, raw_labels] = raw_sigh_legend_entries( ...
+            h_diaph_trace, h_diaph_events, h_diaph_sigh, 'Resp-Diaphragm');
+        add_axis_legend(gca, raw_handles, raw_labels);
         xlabel('Time (s)'); ylabel('Resp-Diaphragm'); grid on; hold off
-
-        ax3 = subplot(4,1,3);
-        plot_sigh_ratio_evidence( ...
-            ax3, lungs, diagnostics.lungs, sigh_lungs, 'lungs', ...
-            comparison_details.lungs);
 
         ax4 = subplot(4,1,4);
         plot_sigh_ratio_evidence( ...
             ax4, diaph, diagnostics.diaph, sigh_diaph, 'diaphragm', ...
             comparison_details.diaph);
 
-        linkaxes([ax1 ax2], 'x');
+        linkaxes([ax1 ax3], 'x');
         recording_end_t = (N - 1) / fs;
         if recording_end_t > 0
             xlim(ax1, [0 recording_end_t]);
@@ -295,6 +299,23 @@ function [events, diagnostics, review_info] = detect_sigh( ...
 
         save_figure(config, 'sigh');
     end
+end
+
+function [handles, labels] = raw_sigh_legend_entries( ...
+    trace_handle, event_handles, sigh_handle, trace_label)
+% RAW_SIGH_LEGEND_ENTRIES Build a stable raw-panel legend in display order.
+
+    handles = trace_handle;
+    labels = {trace_label};
+    if isempty(trace_handle)
+        labels = cell(0, 1);
+    end
+    if ~isempty(event_handles)
+        handles(end + 1, 1) = event_handles(1);
+        labels{end + 1} = 'final sigh event';
+    end
+    handles(end + 1, 1) = sigh_handle;
+    labels{end + 1} = 'Sigh breaths';
 end
 
 function plot_sigh_ratio_evidence( ...
@@ -335,17 +356,19 @@ function plot_sigh_ratio_evidence( ...
             'LineWidth', 1.2, 'DisplayName', 'primary threshold');
     end
     sigh_mask = valid & selected_mask;
-    h_sighs = plot(ax, breath_index(sigh_mask), ratio(sigh_mask), 'ro', ...
-        'LineStyle', 'none', 'MarkerFaceColor', 'r', 'MarkerSize', 6, ...
-        'DisplayName', 'primary sigh breaths');
     handles = h_ratios;
     labels = {'primary breath ratios'};
     if ~isempty(h_threshold) && isgraphics(h_threshold)
         handles(end + 1, 1) = h_threshold;
         labels{end + 1} = 'primary threshold';
     end
-    handles(end + 1, 1) = h_sighs;
-    labels{end + 1} = 'primary sigh breaths';
+    if any(sigh_mask)
+        h_sighs = plot(ax, breath_index(sigh_mask), ratio(sigh_mask), 'ro', ...
+            'LineStyle', 'none', 'MarkerFaceColor', 'r', 'MarkerSize', 6, ...
+            'DisplayName', 'primary sigh breaths');
+        handles(end + 1, 1) = h_sighs;
+        labels{end + 1} = 'primary sigh breaths';
+    end
 
     [other_ratio, other_flags, other_threshold, other_name] = ...
         comparison_overlay(comparison, belt_diagnostics.method, n_breaths);
@@ -364,12 +387,14 @@ function plot_sigh_ratio_evidence( ...
             labels{end + 1} = [other_name ' threshold'];
         end
         other_sighs = other_valid & other_flags;
-        h_other_sighs = plot(ax, breath_index(other_sighs), ...
-            other_ratio(other_sighs), 'x', 'LineStyle', 'none', ...
-            'Color', [0.10 0.35 0.90], 'MarkerSize', 7, 'LineWidth', 1.2, ...
-            'DisplayName', [other_name ' sigh breaths']);
-        handles(end + 1, 1) = h_other_sighs;
-        labels{end + 1} = [other_name ' sigh breaths'];
+        if any(other_sighs)
+            h_other_sighs = plot(ax, breath_index(other_sighs), ...
+                other_ratio(other_sighs), 'x', 'LineStyle', 'none', ...
+                'Color', [0.10 0.35 0.90], 'MarkerSize', 7, 'LineWidth', 1.2, ...
+                'DisplayName', [other_name ' sigh breaths']);
+            handles(end + 1, 1) = h_other_sighs;
+            labels{end + 1} = [other_name ' sigh breaths'];
+        end
     end
     add_axis_legend(ax, handles, labels);
     hold(ax, 'off');

@@ -255,6 +255,22 @@ function testMatrixPencilReturnsUnavailableForUnidentifiableInputs(testCase)
     verifyFalse(testCase, no_pair.evaluable);
 end
 
+function testMatrixPencilRejectsRankDeficientAmplitudeFitWithoutWarning(testCase)
+    t = (0:120)';
+    degenerate_envelope = 1 + 0.01 * t + 0.001 * t .^ 2;
+    repeated_poles = ones(3, 1);
+    vandermonde = repeated_poles' .^ t;
+
+    lastwarn('');
+    [amplitudes, failure_reason] = fit_matrix_pencil_amplitudes( ...
+        vandermonde, degenerate_envelope, 3);
+    [warning_message, ~] = lastwarn;
+
+    verifyEmpty(testCase, amplitudes);
+    verifyEqual(testCase, failure_reason, 'rank_deficient_amplitude_fit');
+    verifyEmpty(testCase, warning_message);
+end
+
 function testGuyotEnvelopeInterpolatesOrdinaryBreaths(testCase)
     result = reconstruct_guyot_envelope( ...
         [1; 3; 5], [2; 4; 2], 8, 1, 3);

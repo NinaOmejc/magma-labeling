@@ -270,6 +270,28 @@ function testStaleGlobalRatioRaisesClearError(testCase)
         'MAGMA:Sigh:StaleGlobalRatio');
 end
 
+function testRatioPlotHandlesValidEvidenceWithZeroDetectedSighs(testCase)
+    [data, features, cycles, config] = sigh_fixture(ones(25, 1));
+    config.sigh.do_plot = true;
+    config.sigh.compare_methods = true;
+    config.channels = struct( ...
+        'lungs_idx', 1, 'diaph_idx', [], 'spo2_idx', []);
+    existing_figures = findall(groot, 'Type', 'figure');
+    cleanup = onCleanup(@() close_new_figures(existing_figures)); %#ok<NASGU>
+
+    [events, diagnostics, review] = detect_sigh( ...
+        data, features, cycles, config);
+
+    verifyTrue(testCase, diagnostics.lungs.available);
+    verifyTrue(testCase, any(isfinite(diagnostics.lungs.sigh_ratio)));
+    verifyFalse(testCase, any(review.automatic_flags_lungs));
+    verifyEqual(testCase, ...
+        diagnostics.comparison.lungs.rolling_median_2x_count, 0);
+    verifyEqual(testCase, ...
+        diagnostics.comparison.lungs.global_ratio_outlier_count, 0);
+    verifyEmpty(testCase, events);
+end
+
 function testGlobalRatioOutlierMatchesFrozenPreviousImplementation(testCase)
     amplitude = ones(25, 1);
     amplitude(13) = 4;
@@ -373,6 +395,17 @@ function config = minimal_sigh_config()
         'legacy_prev_win_sec', 60, ...
         'legacy_amp_ratio_thr', 1.5, ...
         'legacy_min_prev_breaths', 3);
+end
+
+function close_new_figures(existing_figures)
+% CLOSE_NEW_FIGURES Clean up figures created by plotting regression tests.
+
+    current_figures = findall(groot, 'Type', 'figure');
+    for i = 1:numel(current_figures)
+        if ~any(current_figures(i) == existing_figures)
+            close(current_figures(i));
+        end
+    end
 end
 
 function [signal, peak_idx] = synthetic_reviewed_breaths(n_breaths)

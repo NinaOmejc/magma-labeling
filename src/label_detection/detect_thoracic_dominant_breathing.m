@@ -41,6 +41,6 @@ function [events, candidate_events] = detect_thoracic_dominant_breathing(data, r
 
     if config.thoracic.do_plot
         plot_thoracic_dominance_diagnostic( ...
-            resp_features.time_sec, evidence, dominance_mask, events, config);
+            data, resp_features.time_sec, evidence, dominance_mask, events, config);
     end
 end

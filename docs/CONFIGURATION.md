@@ -136,9 +136,12 @@ For the final analysis:
 ```matlab
 config.async.primary_method = 'wavelet_phase_offset';
 config.async.compare_methods = true;
+config.async.plot_legacy_coherence = false;
 ```
 
 The older wavelet-coherence method remains available as complementary evidence.
+Its respiratory-band comparison subplot is hidden by default and can be added
+at the bottom of the diagnostic figure independently of `compare_methods`.
 
 Important phase-offset settings include:
 
