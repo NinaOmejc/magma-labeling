@@ -5,7 +5,8 @@ function summary = compute_label_overlap_summary( ...
 % label_available aligns with label_names and fs is hertz. summary contains a
 % version plus rapid_deep, sigh_irregular, apnea_desaturation, and
 % thoracic_dominance_asynchrony entries. Each entry stores label names,
-% availability, overlap duration (s), and both directional overlap fractions.
+% availability, overlap duration (s), directional fractions, and contiguous
+% overlap-event count/duration summaries.
 
     if ~(isnumeric(mask) || islogical(mask)) || ~ismatrix(mask) || ~isreal(mask)
         error('MAGMA:Overlap:InvalidMaskType', ...
@@ -73,7 +74,7 @@ function summary = compute_label_overlap_summary( ...
     assessable_mask = logical(assessable_mask);
 
     summary = struct();
-    summary.version = 'prespecified_elementary_label_overlaps_v1';
+    summary.version = 'prespecified_elementary_label_overlaps_v2';
     summary.rapid_deep = pair_summary('rapid', 'deep');
     summary.sigh_irregular = pair_summary('sigh', 'irregular');
     summary.apnea_desaturation = pair_summary('apnea', 'desat');
@@ -87,7 +88,10 @@ function summary = compute_label_overlap_summary( ...
         out = struct('label_a', a_name, 'label_b', b_name, ...
             'available', false, 'overlap_duration_sec', NaN, ...
             'fraction_of_a_overlapped_by_b', NaN, ...
-            'fraction_of_b_overlapped_by_a', NaN);
+            'fraction_of_b_overlapped_by_a', NaN, ...
+            'overlap_event_count', NaN, ...
+            'median_overlap_event_duration_sec', NaN, ...
+            'max_overlap_event_duration_sec', NaN);
         if isempty(ia) || isempty(ib) || ~label_available(ia) || ...
                 ~label_available(ib)
             return;
@@ -103,6 +107,12 @@ function summary = compute_label_overlap_summary( ...
         out.overlap_duration_sec = nnz(overlap) / fs;
         out.fraction_of_a_overlapped_by_b = directional_fraction(overlap, a);
         out.fraction_of_b_overlapped_by_a = directional_fraction(overlap, b);
+        overlap_durations = run_durations_sec(overlap, fs);
+        out.overlap_event_count = numel(overlap_durations);
+        if ~isempty(overlap_durations)
+            out.median_overlap_event_duration_sec = median(overlap_durations);
+            out.max_overlap_event_duration_sec = max(overlap_durations);
+        end
     end
 end
 
@@ -116,4 +126,14 @@ function value = directional_fraction(overlap, reference)
     else
         value = nnz(overlap) / denominator;
     end
+end
+
+function durations = run_durations_sec(mask, fs)
+% RUN_DURATIONS_SEC Return durations of contiguous true runs.
+
+    padded = [false; logical(mask(:)); false];
+    transitions = diff(padded);
+    starts = find(transitions == 1);
+    stops = find(transitions == -1) - 1;
+    durations = (stops - starts + 1) / fs;
 end

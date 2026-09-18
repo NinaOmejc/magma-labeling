@@ -1,8 +1,8 @@
 function annotations = assemble_annotation_layers( ...
-    automatic_event_sets, reviewed_event_sets, manual_edit_info, sigh_review, N, config)
+    automatic_event_sets, reviewed_event_sets, manual_edit_info, N, config)
 % ASSEMBLE_ANNOTATION_LAYERS Keep automatic and explicitly reviewed labels separate.
-% *_event_sets contain detector events by manual-label field; manual_edit_info
-% and sigh_review provide reviewed events and sample coverage; N/config define
+% *_event_sets contain detector events for all 11 labels; manual_edit_info
+% provides reviewed events and sample coverage; N/config define
 % the canonical Nsample-by-11-label masks. annotations fields are label_names;
 % automatic/reviewed canonical event arrays and masks; review_coverage_mask;
 % per-label review_status; review_scope; review_history; and review_provenance
@@ -12,11 +12,10 @@ function annotations = assemble_annotation_layers( ...
     label_names = {config.labels.short};
     validate_label_order(label_names);
 
-    automatic_parts = cell(1, numel(defs) + 1);
+    automatic_parts = cell(1, numel(defs));
     for i = 1:numel(defs)
         automatic_parts{i} = field_events(automatic_event_sets, defs(i).field);
     end
-    automatic_parts{end} = field_events(sigh_review, 'automatic_events');
     events_automatic = normalize_event_types_and_meta(merge_events(automatic_parts), config.fs);
     [mask_automatic, mask_names] = events_to_time_mask(events_automatic, N, config);
     if ~isequal(mask_names, label_names)
@@ -35,8 +34,6 @@ function annotations = assemble_annotation_layers( ...
         has_generic_review = has_generic_review || ...
             isfinite(manual_edit_info.review_provenance.latest_round_id);
     end
-    has_sigh_review = isstruct(sigh_review) && ...
-        isfield(sigh_review, 'reviewed') && sigh_review.reviewed;
     reviewed_parts = {};
     review_coverage_mask = false(N, numel(label_names));
     review_status = repmat({'unreviewed'}, 1, numel(label_names));
@@ -56,20 +53,6 @@ function annotations = assemble_annotation_layers( ...
                     manual_edit_info.status_by_label.(defs(i).field);
             else
                 review_status{label_index} = 'reviewed_edited';
-            end
-        end
-    end
-
-    sigh_index = find(strcmp(label_names, 'sigh'), 1);
-    if has_sigh_review
-        reviewed_parts{end+1} = field_events(sigh_review, 'reviewed_events');
-        coverage = sigh_review_coverage(sigh_review, N);
-        review_coverage_mask(:, sigh_index) = coverage;
-        if any(coverage)
-            if isfield(sigh_review, 'status')
-                review_status{sigh_index} = char(string(sigh_review.status));
-            else
-                review_status{sigh_index} = 'reviewed_edited';
             end
         end
     end
@@ -102,6 +85,7 @@ function annotations = assemble_annotation_layers( ...
             'latest_reviewer_role', 'none', ...
             'start_from', 'none', ...
             'source_review_round', NaN, ...
+            'latest_source_analysis_id', '', ...
             'number_of_rounds', 0, ...
             'most_recent_round_id', NaN);
     end
@@ -119,18 +103,6 @@ function coverage = generic_review_coverage(info, index, N, n_labels)
     elseif isfield(info, 'review_scope') && ...
             strcmp(char(string(info.review_scope)), ...
                 'full_record_per_explicitly_reviewed_label')
-        coverage(:) = true;
-    end
-end
-
-function coverage = sigh_review_coverage(info, N)
-% SIGH_REVIEW_COVERAGE Resolve the Nsample region explicitly reviewed for sighs.
-
-    coverage = false(N,1);
-    if isfield(info, 'review_mask') && numel(info.review_mask) == N
-        coverage = logical(info.review_mask(:));
-    elseif isfield(info, 'review_scope') && startsWith( ...
-            char(string(info.review_scope)), 'full_record')
         coverage(:) = true;
     end
 end

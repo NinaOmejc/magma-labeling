@@ -1,14 +1,13 @@
-function [events, diagnostics, review_info] = detect_sigh( ...
-    data, resp_features, resp_cycles, config)
-% DETECT_SIGH Identify isolated high-amplitude breaths and optionally review them.
-% data/resp_cycles supply sample signals and breath markers; resp_features
-% supplies the selected canonical amplitude plus global-normalized evidence;
+function [events, diagnostics] = detect_sigh( ...
+    data, resp_features, ~, config)
+% DETECT_SIGH Automatically identify isolated high-amplitude breaths.
+% data supplies sample signals; resp_features supplies breath markers, the
+% selected canonical amplitude, and global-normalized evidence;
 % config selects the centered rolling-median, global-outlier, or legacy
-% criterion plus plotting and review.
+% criterion plus plotting.
 % events are midpoint-bounded breath events. diagnostics stores compact per-belt
 % breath amplitude/baseline/ratio evidence and decision thresholds.
-% review_info records review scope/status,
-% sample review_mask, automatic/reviewed events, and per-belt breath flags.
+% Manual editing is handled only by the unified label-review GUI.
 
     events = empty_events();
 
@@ -32,8 +31,6 @@ function [events, diagnostics, review_info] = detect_sigh( ...
     min_gap_sec = 20;
 
     do_plot = false;
-    manual_window_sec = 1000;
-
     % Existing legacy criteria.
     legacy_prev_win_sec = 60;
     legacy_amp_ratio_thr = 1.5;
@@ -47,7 +44,6 @@ function [events, diagnostics, review_info] = detect_sigh( ...
         if isfield(config.sigh,'compare_methods'), compare_methods = logical(config.sigh.compare_methods); end
         if isfield(config.sigh,'ratio_prctile'), ratio_prctile = config.sigh.ratio_prctile; end
         if isfield(config.sigh,'do_plot'), do_plot = config.sigh.do_plot; end
-        if isfield(config.sigh,'manual_window_sec'), manual_window_sec = config.sigh.manual_window_sec; end
         if isfield(config.sigh,'min_abs_ratio'), min_abs_ratio = config.sigh.min_abs_ratio; end
         if isfield(config.sigh,'iqr_k'), iqr_k = config.sigh.iqr_k; end
         if isfield(config.sigh,'min_gap_sec'), min_gap_sec = config.sigh.min_gap_sec; end
@@ -56,7 +52,6 @@ function [events, diagnostics, review_info] = detect_sigh( ...
         if isfield(config.sigh,'legacy_amp_ratio_thr'), legacy_amp_ratio_thr = config.sigh.legacy_amp_ratio_thr; end
         if isfield(config.sigh,'legacy_min_prev_breaths'), legacy_min_prev_breaths = config.sigh.legacy_min_prev_breaths; end
     end
-    do_manual_review = manual_review_enabled(config);
     method = lower(char(string(method)));
     if strcmp(method, 'rolling_median_2x') || compare_methods
         validate_rolling_sigh_config(rolling_window_breaths, ...
@@ -75,18 +70,6 @@ function [events, diagnostics, review_info] = detect_sigh( ...
         'lungs', empty_sigh_belt_diagnostics(lungs, method, amplitude_method), ...
         'diaph', empty_sigh_belt_diagnostics(diaph, method, amplitude_method), ...
         'comparison', empty_sigh_comparison());
-    review_info = struct( ...
-        'reviewed', false, ...
-        'review_scope', 'unreviewed', ...
-        'review_mask', false(N,1), ...
-        'status', 'unreviewed', ...
-        'automatic_events', empty_events(), ...
-        'reviewed_events', empty_events(), ...
-        'automatic_flags_lungs', false(size(lungs.peak_t(:))), ...
-        'automatic_flags_diaph', false(size(diaph.peak_t(:))), ...
-        'reviewed_flags_lungs', false(size(lungs.peak_t(:))), ...
-        'reviewed_flags_diaph', false(size(diaph.peak_t(:))));
-
     sigh_lungs = false(size(lungs.peak_t(:)));
     sigh_diaph = false(size(diaph.peak_t(:)));
     switch method
@@ -195,42 +178,9 @@ function [events, diagnostics, review_info] = detect_sigh( ...
              'respiratory belt with usable breath amplitudes.'], method);
         return;
     end
-    automatic_sigh_lungs = sigh_lungs;
-    automatic_sigh_diaph = sigh_diaph;
-    automatic_events_L = sigh_flags_to_events(lungs.peak_t, automatic_sigh_lungs, N, fs, 'lungs');
-    automatic_events_D = sigh_flags_to_events(diaph.peak_t, automatic_sigh_diaph, N, fs, 'diaph');
-    automatic_events = merge_events({automatic_events_L, automatic_events_D});
-    review_info.automatic_events = automatic_events;
-    review_info.automatic_flags_lungs = automatic_sigh_lungs;
-    review_info.automatic_flags_diaph = automatic_sigh_diaph;
-
-    if do_manual_review && diagnostics.lungs.available && diagnostics.diaph.available
-        [sigh_lungs, sigh_diaph, sigh_review_mask] = manual_edit_sigh_flags( ...
-            data, resp_cycles.lungs, resp_cycles.diaph, sigh_lungs, sigh_diaph, ...
-            config, manual_window_sec);
-        review_info.reviewed = true;
-        review_info.review_scope = 'explicitly_viewed_regions_sigh_breaths_both_belts';
-        review_info.review_mask = sigh_review_mask;
-    elseif do_manual_review
-        warning('MAGMA:Sigh:ManualSkipped', ...
-            'Manual sigh editing requires two valid respiratory belts and was skipped for this input configuration.');
-    end
-
     events_L = sigh_flags_to_events(lungs.peak_t, sigh_lungs, N, fs, 'lungs');
     events_D = sigh_flags_to_events(diaph.peak_t, sigh_diaph, N, fs, 'diaph');
     events = merge_events({events_L, events_D});
-    review_info.reviewed_events = events;
-    review_info.reviewed_flags_lungs = sigh_lungs;
-    review_info.reviewed_flags_diaph = sigh_diaph;
-    if review_info.reviewed
-        if event_sets_equal(automatic_events, events)
-            review_info.status = 'reviewed_accepted';
-        elseif ~isempty(automatic_events) && isempty(events)
-            review_info.status = 'reviewed_rejected';
-        else
-            review_info.status = 'reviewed_edited';
-        end
-    end
 
     if do_plot
         if ~isfield(config, 'channels')
@@ -249,13 +199,17 @@ function [events, diagnostics, review_info] = detect_sigh( ...
         h_lungs_trace = gobjects(0);
         if ~isempty(idx_lungs), h_lungs_trace = plot(t_raw, data(:,idx_lungs), 'k', 'DisplayName', 'Resp-Lungs'); end
         h_lungs_events = shade_events_on_axis(gca, events, 'final sigh event');
-        if ~isempty(idx_lungs)
-            y_lungs_mark = interp1(t_raw, data(:,idx_lungs), lungs.peak_t(sigh_lungs), 'linear', 'extrap');
-        else
-            y_lungs_mark = nan(sum(sigh_lungs),1);
+        h_lungs_sigh = gobjects(0);
+        if any(sigh_lungs)
+            if ~isempty(idx_lungs)
+                y_lungs_mark = interp1(t_raw, data(:,idx_lungs), ...
+                    lungs.peak_t(sigh_lungs), 'linear', 'extrap');
+            else
+                y_lungs_mark = nan(sum(sigh_lungs),1);
+            end
+            h_lungs_sigh = plot(lungs.peak_t(sigh_lungs), y_lungs_mark, ...
+                'ro', 'MarkerFaceColor', 'r', 'DisplayName', 'Sigh breaths');
         end
-        h_lungs_sigh = plot(lungs.peak_t(sigh_lungs), y_lungs_mark, 'ro', 'MarkerFaceColor','r', ...
-            'DisplayName', 'Sigh breaths');
         title('Raw lungs effort + final sigh events')
         [raw_handles, raw_labels] = raw_sigh_legend_entries( ...
             h_lungs_trace, h_lungs_events, h_lungs_sigh, 'Resp-Lungs');
@@ -271,13 +225,17 @@ function [events, diagnostics, review_info] = detect_sigh( ...
         h_diaph_trace = gobjects(0);
         if ~isempty(idx_diaph), h_diaph_trace = plot(t_raw, data(:,idx_diaph), 'k', 'DisplayName', 'Resp-Diaphragm'); end
         h_diaph_events = shade_events_on_axis(gca, events, 'final sigh event');
-        if ~isempty(idx_diaph)
-            y_diaph_mark = interp1(t_raw, data(:,idx_diaph), diaph.peak_t(sigh_diaph), 'linear', 'extrap');
-        else
-            y_diaph_mark = nan(sum(sigh_diaph),1);
+        h_diaph_sigh = gobjects(0);
+        if any(sigh_diaph)
+            if ~isempty(idx_diaph)
+                y_diaph_mark = interp1(t_raw, data(:,idx_diaph), ...
+                    diaph.peak_t(sigh_diaph), 'linear', 'extrap');
+            else
+                y_diaph_mark = nan(sum(sigh_diaph),1);
+            end
+            h_diaph_sigh = plot(diaph.peak_t(sigh_diaph), y_diaph_mark, ...
+                'ro', 'MarkerFaceColor', 'r', 'DisplayName', 'Sigh breaths');
         end
-        h_diaph_sigh = plot(diaph.peak_t(sigh_diaph), y_diaph_mark, 'ro', 'MarkerFaceColor','r', ...
-            'DisplayName', 'Sigh breaths');
         title('Raw diaphragm effort + final sigh events')
         [raw_handles, raw_labels] = raw_sigh_legend_entries( ...
             h_diaph_trace, h_diaph_events, h_diaph_sigh, 'Resp-Diaphragm');
@@ -304,17 +262,14 @@ function [handles, labels] = raw_sigh_legend_entries( ...
     trace_handle, event_handles, sigh_handle, trace_label)
 % RAW_SIGH_LEGEND_ENTRIES Build a stable raw-panel legend in display order.
 
-    handles = trace_handle;
-    labels = {trace_label};
-    if isempty(trace_handle)
-        labels = cell(0, 1);
-    end
-    if ~isempty(event_handles)
-        handles(end + 1, 1) = event_handles(1);
-        labels{end + 1} = 'final sigh event';
-    end
-    handles(end + 1, 1) = sigh_handle;
-    labels{end + 1} = 'Sigh breaths';
+    handles = gobjects(0);
+    labels = cell(0, 1);
+    [handles, labels] = append_valid_legend_handle( ...
+        handles, labels, trace_handle, trace_label);
+    [handles, labels] = append_valid_legend_handle( ...
+        handles, labels, event_handles, 'final sigh event');
+    [handles, labels] = append_valid_legend_handle( ...
+        handles, labels, sigh_handle, 'Sigh breaths');
 end
 
 function plot_sigh_ratio_evidence( ...
@@ -355,18 +310,18 @@ function plot_sigh_ratio_evidence( ...
             'LineWidth', 1.2, 'DisplayName', 'primary threshold');
     end
     sigh_mask = valid & selected_mask;
-    handles = h_ratios;
-    labels = {'primary breath ratios'};
-    if ~isempty(h_threshold) && isgraphics(h_threshold)
-        handles(end + 1, 1) = h_threshold;
-        labels{end + 1} = 'primary threshold';
-    end
+    handles = gobjects(0);
+    labels = cell(0, 1);
+    [handles, labels] = append_valid_legend_handle( ...
+        handles, labels, h_ratios, 'primary breath ratios');
+    [handles, labels] = append_valid_legend_handle( ...
+        handles, labels, h_threshold, 'primary threshold');
     if any(sigh_mask)
         h_sighs = plot(ax, breath_index(sigh_mask), ratio(sigh_mask), 'ro', ...
             'LineStyle', 'none', 'MarkerFaceColor', 'r', 'MarkerSize', 6, ...
             'DisplayName', 'primary sigh breaths');
-        handles(end + 1, 1) = h_sighs;
-        labels{end + 1} = 'primary sigh breaths';
+        [handles, labels] = append_valid_legend_handle( ...
+            handles, labels, h_sighs, 'primary sigh breaths');
     end
 
     [other_ratio, other_flags, other_threshold, other_name] = ...
@@ -376,14 +331,14 @@ function plot_sigh_ratio_evidence( ...
         h_other = plot(ax, breath_index(other_valid), other_ratio(other_valid), 's', ...
             'LineStyle', 'none', 'Color', [0.10 0.35 0.90], ...
             'MarkerSize', 4, 'DisplayName', [other_name ' ratios']);
-        handles(end + 1, 1) = h_other;
-        labels{end + 1} = [other_name ' ratios'];
+        [handles, labels] = append_valid_legend_handle( ...
+            handles, labels, h_other, [other_name ' ratios']);
         if isfinite(other_threshold)
             h_other_threshold = yline(ax, other_threshold, ':', ...
                 'Color', [0.10 0.35 0.90], 'LineWidth', 1.2, ...
                 'DisplayName', [other_name ' threshold']);
-            handles(end + 1, 1) = h_other_threshold;
-            labels{end + 1} = [other_name ' threshold'];
+            [handles, labels] = append_valid_legend_handle( ...
+                handles, labels, h_other_threshold, [other_name ' threshold']);
         end
         other_sighs = other_valid & other_flags;
         if any(other_sighs)
@@ -391,12 +346,24 @@ function plot_sigh_ratio_evidence( ...
                 other_ratio(other_sighs), 'x', 'LineStyle', 'none', ...
                 'Color', [0.10 0.35 0.90], 'MarkerSize', 7, 'LineWidth', 1.2, ...
                 'DisplayName', [other_name ' sigh breaths']);
-            handles(end + 1, 1) = h_other_sighs;
-            labels{end + 1} = [other_name ' sigh breaths'];
+            [handles, labels] = append_valid_legend_handle( ...
+                handles, labels, h_other_sighs, [other_name ' sigh breaths']);
         end
     end
     add_axis_legend(ax, handles, labels);
     hold(ax, 'off');
+end
+
+function [handles, labels] = append_valid_legend_handle( ...
+    handles, labels, candidate_handles, label)
+% APPEND_VALID_LEGEND_HANDLE Append the first valid optional graphics handle.
+
+    valid_index = find(isgraphics(candidate_handles), 1, 'first');
+    if isempty(valid_index)
+        return;
+    end
+    handles(end + 1, 1) = candidate_handles(valid_index);
+    labels{end + 1, 1} = label;
 end
 
 function set_breath_index_xlim(ax, n_breaths)
@@ -929,23 +896,6 @@ function [ratio, flags, threshold, name] = ...
         'comparison flag vector');
     ratio = source_ratio(:);
     flags = logical(source_flags(:));
-end
-
-function tf = event_sets_equal(a, b)
-% EVENT_SETS_EQUAL Compare event type and sample bounds independent of ordering.
-
-    if numel(a) ~= numel(b)
-        tf = false;
-        return;
-    end
-    if isempty(a)
-        tf = true;
-        return;
-    end
-    a = sortrows(struct2table(a), {'type', 'start_idx', 'end_idx'});
-    b = sortrows(struct2table(b), {'type', 'start_idx', 'end_idx'});
-    tf = isequal(a.type, b.type) && isequal(a.start_idx, b.start_idx) && ...
-        isequal(a.end_idx, b.end_idx);
 end
 
 function [sigh_flags, local_ref, ratio, ratio_thr, evaluable] = sigh_flags_global_ratio_outlier( ...

@@ -10,11 +10,11 @@ function config = get_config_defaults()
 %            overwrite_results/overwrite_features and make_figs_visible control
 %            execution; plot_raw_data/plot_raw_data_xrange and LabelMask control
 %            overview plots. Nested problems records known data exclusions;
-%            detrend controls preprocessing; resp controls breath extraction/review;
+%            detrend controls preprocessing; resp controls breath extraction;
 %            reference controls session/global baseline estimation. shallow, deep,
 %            slow, rapid, irregular, apnea, sigh, periodic, thoracic, async, and desat
 %            contain detector thresholds/windows; grid_step_sec defines their common
-%            analysis grid. LabelEdit controls manual interval review and HDF5
+%            analysis grid. LabelEdit controls unified manual review and HDF5
 %            controls export. Durations are seconds and respiratory rates are
 %            breaths/min unless a field or inline comment states otherwise.
 
@@ -33,7 +33,7 @@ function config = get_config_defaults()
     config.overwrite_features = false;                                     % *** Recompute respiratory features even if "*_features.mat" exists
     config.verbosity = 1;                                                   % 1 = concise progress, 2 = detailed progress
     config.execution = struct();
-    config.execution.mode = 'analyze_only';                                % 'analyze_only', 'analyze_and_review', or 'review_only'; the latter two open manual review
+    config.execution.mode = 'analyze';                                     % 'analyze', 'analyze_and_review', or 'review_only'
     
     % FIRST CHECK: plot [X1, X2] seconds of raw data
     config.plot_raw_data = false;                               % save an overview plot of raw signals
@@ -69,10 +69,6 @@ function config = get_config_defaults()
     config.resp.qc.rhythm_merge_tol = 0.35;     % tolerance for removal restoring the expected local rhythm
     config.resp.qc.min_prom_ratio = 0.35;       % unusually low prominence relative to neighboring peaks
     
-    % manual control of peak detection
-    config.resp.manual_control = true;          % allow click-to-add/remove breath peaks before label detection (it takes time, but important to check the quality of detection, and not blindly follow automatic detection - GUI will appear for editing.)
-    config.resp.manual_window_sec = 300;        % visible time span for manual breath GUI scrolling
-
     %---- SESSION PHYSIOLOGICAL REFERENCE ----
     config.reference.pre_start_min = 3;          % M1/M3 common reference start ( in minutes! )
     config.reference.pre_end_min = 6;            % M1/M3 common reference end
@@ -147,7 +143,6 @@ function config = get_config_defaults()
     config.sigh.min_abs_ratio = 2.0;             % minimum amplitude/reference ratio for sigh candidates
     config.sigh.iqr_k = 3.5;                     % IQR multiplier for outlier-based sigh detection
     config.sigh.min_gap_sec = 2;                 % minimum time between separate sigh events (check if this condition actually makes sense)
-    config.sigh.manual_window_sec = 1200;        % visible time span for manual GUI scrolling
     config.sigh.do_plot = true;                  % save sigh diagnostic plot
         
     % Legacy option: previous 60 s thresholding
@@ -251,10 +246,7 @@ function config = get_config_defaults()
     
     %---- MANUAL LABEL EVENT EDITING
     config.LabelEdit = struct();
-    config.LabelEdit.apply_saved_edits = false;  % reuse saved manual event edits on rerun, even when GUI is off
-    config.LabelEdit.save_edits = true;          % persist edited event intervals in the subject results folder
     config.LabelEdit.start_from = 'automatic';   % 'automatic' or 'latest_reviewed' GUI starting annotations
-    config.LabelEdit.replace_reviewed = true;    % make a completed review round the active reviewed layer
     config.LabelEdit.reviewer_role = 'researcher'; % flexible non-identifying role stored with the review round
     config.LabelEdit.reviewer_id = '';           % optional reviewer identifier; may remain empty
     config.LabelEdit.notes = '';                 % optional free-text review notes

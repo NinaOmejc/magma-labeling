@@ -10,7 +10,7 @@ function summary = build_label_evidence_summary( ...
 % specific counts; unavailable statistics remain NaN.
 
     label_names = cellstr(string(label_names));
-    summary = struct('version', 'detector_specific_evidence_summary_v3', ...
+    summary = struct('version', 'detector_specific_evidence_summary_v4', ...
         'kind', 'descriptive_detector_evidence');
     for i = 1:numel(label_names)
         summary.(label_names{i}) = struct( ...
@@ -23,6 +23,8 @@ function summary = build_label_evidence_summary( ...
     summary.shallow.ratio_band = resp_features.shallow_band_ratio;
     summary.shallow.median_ratio_lungs = finite_median(lungs.amp_ratio_session);
     summary.shallow.median_ratio_diaph = finite_median(diaph.amp_ratio_session);
+    summary.shallow.minimum_ratio_lungs = finite_min(lungs.amp_ratio_session);
+    summary.shallow.minimum_ratio_diaph = finite_min(diaph.amp_ratio_session);
     summary.shallow.reference_quality_lungs = lungs.reference_quality;
     summary.shallow.reference_quality_diaph = diaph.reference_quality;
     summary.shallow.supporting_belts = belt_support( ...
@@ -31,6 +33,8 @@ function summary = build_label_evidence_summary( ...
     summary.deep.ratio_threshold = resp_features.deep_ratio_threshold;
     summary.deep.median_ratio_lungs = finite_median(lungs.amp_ratio_session);
     summary.deep.median_ratio_diaph = finite_median(diaph.amp_ratio_session);
+    summary.deep.maximum_ratio_lungs = finite_max(lungs.amp_ratio_session);
+    summary.deep.maximum_ratio_diaph = finite_max(diaph.amp_ratio_session);
     summary.deep.median_margin_lungs = finite_median( ...
         lungs.amp_ratio_session - resp_features.deep_ratio_threshold);
     summary.deep.median_margin_diaph = finite_median( ...
@@ -43,6 +47,8 @@ function summary = build_label_evidence_summary( ...
     summary.slow.analysis_window_sec = resp_features.rate_windows_sec.slow;
     summary.slow.median_rr_lungs = finite_median(lungs.rate_slow_window_bpm);
     summary.slow.median_rr_diaph = finite_median(diaph.rate_slow_window_bpm);
+    summary.slow.minimum_rr_lungs = finite_min(lungs.rate_slow_window_bpm);
+    summary.slow.minimum_rr_diaph = finite_min(diaph.rate_slow_window_bpm);
     summary.slow.rr_threshold_bpm = config.slow.rr_thr_bpm;
     summary.slow.median_margin_lungs = finite_median( ...
         config.slow.rr_thr_bpm - lungs.rate_slow_window_bpm);
@@ -54,6 +60,8 @@ function summary = build_label_evidence_summary( ...
     summary.rapid.analysis_window_sec = resp_features.rate_windows_sec.rapid;
     summary.rapid.median_rr_lungs = finite_median(lungs.rate_rapid_window_bpm);
     summary.rapid.median_rr_diaph = finite_median(diaph.rate_rapid_window_bpm);
+    summary.rapid.maximum_rr_lungs = finite_max(lungs.rate_rapid_window_bpm);
+    summary.rapid.maximum_rr_diaph = finite_max(diaph.rate_rapid_window_bpm);
     summary.rapid.rr_threshold_bpm = config.rapid.rr_thr_bpm;
     summary.rapid.median_margin_lungs = finite_median( ...
         lungs.rate_rapid_window_bpm - config.rapid.rr_thr_bpm);
@@ -112,6 +120,8 @@ function summary = build_label_evidence_summary( ...
         summary.async.phase_offset_available = phase.available;
         summary.async.median_absolute_phase_deg = ...
             finite_median(phase.absolute_mean_phase_deg);
+        summary.async.maximum_absolute_phase_deg = ...
+            finite_max(phase.absolute_mean_phase_deg);
         summary.async.median_resultant_length = ...
             finite_median(phase.resultant_length);
         summary.async.median_selected_resp_frequency_hz = ...
@@ -169,6 +179,26 @@ function summary = build_label_evidence_summary( ...
         finite_mean(apnea.raw_fallback_state_mask);
     summary.apnea.combined_supported_fraction = ...
         finite_mean(apnea.combined_endpoint_mask);
+    summary.apnea.median_amplitude_ratio_lungs = ...
+        finite_median(lungs.amp_ratio_session);
+    summary.apnea.median_amplitude_ratio_diaph = ...
+        finite_median(diaph.amp_ratio_session);
+    summary.apnea.minimum_amplitude_ratio_lungs = ...
+        finite_min(lungs.amp_ratio_session);
+    summary.apnea.minimum_amplitude_ratio_diaph = ...
+        finite_min(diaph.amp_ratio_session);
+    summary.apnea.median_raw_excursion_ratio_lungs = finite_median( ...
+        evaluable_values(apnea.raw_excursion.lungs.excursion_ratio, ...
+            apnea.raw_excursion.lungs.evaluable_endpoint_mask));
+    summary.apnea.median_raw_excursion_ratio_diaph = finite_median( ...
+        evaluable_values(apnea.raw_excursion.diaph.excursion_ratio, ...
+            apnea.raw_excursion.diaph.evaluable_endpoint_mask));
+    summary.apnea.minimum_raw_excursion_ratio_lungs = finite_min( ...
+        evaluable_values(apnea.raw_excursion.lungs.excursion_ratio, ...
+            apnea.raw_excursion.lungs.evaluable_endpoint_mask));
+    summary.apnea.minimum_raw_excursion_ratio_diaph = finite_min( ...
+        evaluable_values(apnea.raw_excursion.diaph.excursion_ratio, ...
+            apnea.raw_excursion.diaph.evaluable_endpoint_mask));
 
     sigh = detector_diagnostics.sigh;
     summary.sigh.method = config.sigh.method;
@@ -176,6 +206,20 @@ function summary = build_label_evidence_summary( ...
     summary.sigh.ratio_threshold_diaph = sigh.diaph.decision_threshold;
     summary.sigh.sigh_count = label_burden.sigh_count;
     summary.sigh.sighs_per_15_min = label_burden.sighs_per_15_min;
+    summary.sigh.max_sighs_in_any_15_min_window = ...
+        label_burden.max_sighs_in_any_15_min_window;
+    summary.sigh.median_inter_sigh_interval_sec = ...
+        label_burden.median_inter_sigh_interval_sec;
+    summary.sigh.minimum_inter_sigh_interval_sec = ...
+        label_burden.minimum_inter_sigh_interval_sec;
+    summary.sigh.median_amplitude_ratio_lungs = ...
+        finite_median(selected_sigh_ratios(sigh.lungs));
+    summary.sigh.median_amplitude_ratio_diaph = ...
+        finite_median(selected_sigh_ratios(sigh.diaph));
+    summary.sigh.maximum_amplitude_ratio_lungs = ...
+        finite_max(selected_sigh_ratios(sigh.lungs));
+    summary.sigh.maximum_amplitude_ratio_diaph = ...
+        finite_max(selected_sigh_ratios(sigh.diaph));
     summary.sigh.supporting_belts = belt_support( ...
         sigh.lungs.available, sigh.diaph.available);
 
@@ -201,7 +245,37 @@ function summary = build_label_evidence_summary( ...
         periodic.guyot.diaph.fm_hz(:)];
     summary.periodic.guyot_max_h = finite_max(guyot_h);
     summary.periodic.guyot_median_h = finite_median(guyot_h);
+    summary.periodic.guyot_median_fm_hz = finite_median(guyot_fm / 1000);
     summary.periodic.guyot_median_fm_mhz = finite_median(guyot_fm);
+end
+
+function values = evaluable_values(values, evaluable_mask)
+% EVALUABLE_VALUES Select values whose saved evaluability mask is true.
+
+    values = values(:);
+    evaluable_mask = logical(evaluable_mask(:));
+    if numel(values) ~= numel(evaluable_mask)
+        values = zeros(0, 1);
+        return;
+    end
+    values = values(evaluable_mask & isfinite(values));
+end
+
+function values = selected_sigh_ratios(belt)
+% SELECTED_SIGH_RATIOS Return ratios for detected, evaluable sigh breaths only.
+
+    values = zeros(0, 1);
+    required = {'sigh_ratio', 'sigh_flags', 'evaluable_mask'};
+    if ~isstruct(belt) || ~all(isfield(belt, required))
+        return;
+    end
+    ratio = belt.sigh_ratio(:);
+    selected = logical(belt.sigh_flags(:));
+    evaluable = logical(belt.evaluable_mask(:));
+    if numel(ratio) ~= numel(selected) || numel(ratio) ~= numel(evaluable)
+        return;
+    end
+    values = ratio(selected & evaluable & isfinite(ratio));
 end
 
 function summary = add_desaturation_metric_summary(summary, metrics)

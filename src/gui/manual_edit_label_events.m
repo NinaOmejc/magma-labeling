@@ -1,8 +1,10 @@
-function [reviewed_event_sets, edit_info] = manual_edit_label_events(data, config, automatic_event_sets)
+function [reviewed_event_sets, edit_info] = manual_edit_label_events( ...
+    data, resp_cycles, config, automatic_event_sets)
 % MANUAL_EDIT_LABEL_EVENTS Load, create, and persist provenance-aware label reviews.
 %
 % Inputs:
 %   data                 - Nsample x Nchannel preprocessed signal matrix.
+%   resp_cycles          - Saved/current respiratory cycles used for sigh snapping.
 %   config               - Recording, channel, sampling, and LabelEdit settings.
 %   automatic_event_sets - Scalar struct with one canonical event array per
 %                          editable label field from manual_label_definitions.
@@ -28,9 +30,7 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events(data, confi
     review_history = empty_review_history();
     active_round_id = NaN;
 
-    should_load = exist(edit_file, 'file') && ...
-        (do_manual_review || cfg.apply_saved_edits || ...
-         strcmp(cfg.start_from, 'latest_reviewed'));
+    should_load = exist(edit_file, 'file') == 2;
     if should_load
         [loaded, ~, loaded_schema, ~, loaded_history, ...
             loaded_active_round_id] = load_manual_event_sets( ...
@@ -46,7 +46,7 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events(data, confi
     end
 
     if ~do_manual_review
-        if cfg.apply_saved_edits && ~isempty(loaded_event_sets)
+        if ~isempty(loaded_event_sets)
             reviewed_event_sets = loaded_event_sets;
             edit_info.applied_saved_edits = true;
             edit_info = apply_active_round_info(edit_info, review_history, ...
@@ -59,6 +59,7 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events(data, confi
         return;
     end
 
+    source_analysis_id = configured_analysis_id(config);
     source_review_round = NaN;
     start_event_sets = automatic_event_sets;
     if strcmp(cfg.start_from, 'latest_reviewed')
@@ -69,13 +70,18 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events(data, confi
         end
         start_event_sets = loaded_event_sets;
         source_review_round = active_round_id;
+        active_index = find([review_history.round_id] == active_round_id, ...
+            1, 'last');
+        if ~isempty(active_index)
+            source_analysis_id = review_history(active_index).source_analysis_id;
+        end
     end
 
     edited_event_sets = start_event_sets;
     new_coverage = false(N, numel(label_defs));
     [edited_event_sets, ~, new_coverage] = run_editor( ...
-        data, config, edited_event_sets, automatic_event_sets, start_event_sets, ...
-        label_defs, cfg, {}, new_coverage);
+        data, resp_cycles, config, edited_event_sets, automatic_event_sets, ...
+        start_event_sets, label_defs, cfg, {}, new_coverage);
     edit_info.editor_opened = true;
 
     round_meta = struct( ...
@@ -83,26 +89,20 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events(data, confi
         'reviewer_role', cfg.reviewer_role, ...
         'start_from', cfg.start_from, ...
         'source_review_round', source_review_round, ...
+        'source_analysis_id', source_analysis_id, ...
         'reviewer_id', cfg.reviewer_id, ...
         'notes', cfg.notes);
     [new_event_sets, new_round] = create_manual_review_round( ...
         start_event_sets, edited_event_sets, new_coverage, config, round_meta);
     review_history(end+1, 1) = new_round;
 
-    if cfg.replace_reviewed || isempty(loaded_event_sets) || ~isfinite(active_round_id)
-        reviewed_event_sets = new_event_sets;
-        active_round_id = new_round.round_id;
-    else
-        review_history(end).accepted_as_active = false;
-        reviewed_event_sets = loaded_event_sets;
-    end
+    reviewed_event_sets = new_event_sets;
+    active_round_id = new_round.round_id;
 
-    if cfg.save_edits
-        save_manual_event_sets(edit_file, automatic_event_sets, reviewed_event_sets, ...
-            review_history, active_round_id, label_defs, config, N, fs);
-        log_message(config, 1, ...
-            'Saved manual label review round: %s', edit_file);
-    end
+    save_manual_event_sets(edit_file, automatic_event_sets, reviewed_event_sets, ...
+        review_history, active_round_id, label_defs, config, N, fs);
+    log_message(config, 1, ...
+        'Saved manual label review round: %s', edit_file);
     edit_info = apply_active_round_info(edit_info, review_history, ...
         active_round_id, label_defs, N);
 end
@@ -111,18 +111,15 @@ end
 
 function cfg = label_edit_config(config)
 % LABEL_EDIT_CONFIG Resolve and validate manual-event editor policy.
-% cfg contains apply/save/replace flags, window_sec, min_interval_sec,
+% cfg contains window_sec, min_interval_sec,
 % filename_suffix, start_from, reviewer_role/id, and notes. GUI opening is
 % derived only from config.execution.mode by manual_review_enabled.
 
     cfg = struct();
-    cfg.apply_saved_edits = true;
-    cfg.save_edits = true;
     cfg.window_sec = 300;
     cfg.min_interval_sec = 1;
     cfg.filename_suffix = '_manual_label_events.mat';
     cfg.start_from = 'automatic';
-    cfg.replace_reviewed = true;
     cfg.reviewer_role = 'researcher';
     cfg.reviewer_id = '';
     cfg.notes = '';
@@ -137,9 +134,6 @@ function cfg = label_edit_config(config)
         end
     end
 
-    cfg.apply_saved_edits = logical(cfg.apply_saved_edits);
-    cfg.save_edits = logical(cfg.save_edits);
-    cfg.replace_reviewed = logical(cfg.replace_reviewed);
     cfg.window_sec = max(30, cfg.window_sec);
     cfg.min_interval_sec = max(0, cfg.min_interval_sec);
     cfg.start_from = char(string(cfg.start_from));
@@ -151,6 +145,20 @@ function cfg = label_edit_config(config)
     if isempty(cfg.reviewer_role), cfg.reviewer_role = 'unknown'; end
     cfg.reviewer_id = char(string(cfg.reviewer_id));
     cfg.notes = char(string(cfg.notes));
+end
+
+function analysis_id = configured_analysis_id(config)
+% CONFIGURED_ANALYSIS_ID Resolve the automatic analysis reviewed by this run.
+
+    analysis_id = '';
+    if isfield(config, 'execution') && ...
+            isfield(config.execution, 'analysis_id') && ...
+            ~isempty(config.execution.analysis_id)
+        analysis_id = char(string(config.execution.analysis_id));
+    end
+    if isempty(analysis_id)
+        analysis_id = create_analysis_id(config);
+    end
 end
 
 function edit_info = init_edit_info(edit_file)
@@ -166,6 +174,7 @@ function edit_info = init_edit_info(edit_file)
         'editor_opened', false, ...
         'start_from', '', ...
         'source_review_round', NaN, ...
+        'source_analysis_id', '', ...
         'reviewer_role', '', ...
         'review_scope', 'explicitly_viewed_or_edited_regions_per_label', ...
         'review_coverage_mask', false(0, 0), ...
@@ -209,6 +218,7 @@ function edit_info = apply_active_round_info(edit_info, history, active_round_id
     end
     edit_info.start_from = active.start_from;
     edit_info.source_review_round = active.source_review_round;
+    edit_info.source_analysis_id = active.source_analysis_id;
     edit_info.reviewer_role = active.reviewer_role;
     edit_info.reviewed_fields = {defs(reviewed).field};
     edit_info.reviewed_labels = {defs(reviewed).type};
@@ -440,6 +450,15 @@ function [loaded_sets, reviewed_fields, schema_version, review_coverage_mask, ..
             end
             loaded_sets = event_sets_from_review_round( ...
                 review_history(active_index), label_defs, fs, N);
+            % Histories created before sigh joined the unified reviewer have
+            % no sigh state. Preserve the current automatic sigh layer until
+            % a unified round explicitly reviews it.
+            sigh_index = find(strcmp(get_labels('short'), 'sigh'), 1);
+            if strcmp(review_history(active_index).source_analysis_id, ...
+                    'legacy_unknown') && ...
+                    ~any(review_history(active_index).review_mask(:, sigh_index))
+                loaded_sets.sigh = automatic_sets.sigh;
+            end
             review_coverage_mask = generic_coverage_from_round( ...
                 review_history(active_index), label_defs, N);
             reviewed_fields = {label_defs(any(review_coverage_mask, 1)).field};
@@ -456,7 +475,8 @@ function [loaded_sets, reviewed_fields, schema_version, review_coverage_mask, ..
     end
     legacy_meta = struct('round_id', 1, 'timestamp', saved_timestamp, ...
         'reviewer_role', 'unknown', 'start_from', 'automatic', ...
-        'source_review_round', NaN, 'reviewer_id', '', ...
+        'source_review_round', NaN, 'source_analysis_id', 'legacy_unknown', ...
+        'reviewer_id', '', ...
         'notes', sprintf('Migrated from manual-review schema %g.', schema_version));
     [~, legacy_round] = create_manual_review_round(loaded_sets, loaded_sets, ...
         review_coverage_mask, config, legacy_meta);
@@ -522,6 +542,8 @@ function history = normalize_saved_review_history(saved_history, N, config)
         normalized(i).reviewer_role = char(string(source.reviewer_role));
         normalized(i).start_from = start_from;
         normalized(i).source_review_round = source.source_review_round;
+        normalized(i).source_analysis_id = optional_text( ...
+            source, 'source_analysis_id', 'legacy_unknown');
         normalized(i).events = normalize_event_types_and_meta(source.events, config.fs);
         normalized(i).mask = logical(source.mask);
         normalized(i).review_mask = logical(source.review_mask);
@@ -591,7 +613,7 @@ end
 
 function value = review_round_template()
 % REVIEW_ROUND_TEMPLATE Define the persisted schema for one immutable review round.
-% Fields: round_id/timestamp/reviewer_role; start_from/source_review_round;
+% Fields: round_id/timestamp/reviewer_role; start_from/source review/analysis;
 % canonical events; Nsample x 11 mask and review_mask; per-label review_status;
 % changed_labels; reviewer_id/notes; schema_version; and accepted_as_active.
 
@@ -601,6 +623,7 @@ function value = review_round_template()
         'reviewer_role', '', ...
         'start_from', '', ...
         'source_review_round', NaN, ...
+        'source_analysis_id', '', ...
         'events', {normalize_event_types_and_meta(empty_events())}, ...
         'mask', false(0, numel(get_labels('short'))), ...
         'review_mask', false(0, numel(get_labels('short'))), ...
@@ -633,6 +656,7 @@ function provenance = make_review_provenance(history, active_round_id)
         'latest_reviewer_role', 'none', ...
         'start_from', 'none', ...
         'source_review_round', NaN, ...
+        'latest_source_analysis_id', '', ...
         'number_of_rounds', numel(history), ...
         'most_recent_round_id', NaN);
     if ~isempty(history)
@@ -645,6 +669,7 @@ function provenance = make_review_provenance(history, active_round_id)
     provenance.latest_reviewer_role = active.reviewer_role;
     provenance.start_from = active.start_from;
     provenance.source_review_round = active.source_review_round;
+    provenance.latest_source_analysis_id = active.source_analysis_id;
 end
 
 function save_manual_event_sets(edit_file, automatic_event_sets, reviewed_event_sets, ...
@@ -675,14 +700,15 @@ function save_manual_event_sets(edit_file, automatic_event_sets, reviewed_event_
         review_history, active_round_id);
     reviewed_fields = {label_defs(any(manual_label_review_mask, 1)).field};
     manual_label_edit_meta = struct( ...
-        'version', 5, ...
-        'schema_version', 5, ...
+        'version', 6, ...
+        'schema_version', 6, ...
         'subject', config.subject, ...
         'measure', config.measure, ...
         'n_samples', N, ...
         'fs', fs, ...
         'data_columns', {config.data_columns}, ...
         'active_round_id', active_round_id, ...
+        'source_analysis_id', review_history(active_index).source_analysis_id, ...
         'review_scope', 'explicitly_viewed_or_edited_regions_per_label', ...
         'reviewed_fields', {reviewed_fields}, ...
         'saved_on', char(datetime('now', 'Format', 'yyyy-MM-dd HH:mm:ss')) );
@@ -696,12 +722,13 @@ function save_manual_event_sets(edit_file, automatic_event_sets, reviewed_event_
 end
 
 function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
-    data, config, event_sets, auto_event_sets, start_event_sets, label_defs, cfg, ...
-    reviewed_fields, review_coverage_mask)
+    data, resp_cycles, config, event_sets, auto_event_sets, start_event_sets, ...
+    label_defs, cfg, reviewed_fields, review_coverage_mask)
 % RUN_EDITOR Edit one label at a time while recording viewed sample coverage.
 %
 % Inputs:
 %   data                - Nsample x Nchannel preprocessed signal matrix.
+%   resp_cycles         - Respiratory cycles used to snap sigh edits.
 %   config              - Channel, sampling, and recording-display settings.
 %   event_sets          - Working per-label event-set struct.
 %   auto_event_sets     - Automatic events shown as reference when applicable.
@@ -731,6 +758,8 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
     drag_active = false;
     drag_ax = gobjects(0);
     temp_patches = gobjects(0);
+    [sigh_breath_events, sigh_breath_peak_t] = ...
+        build_sigh_breath_candidates(resp_cycles, N, fs);
 
     idx_lungs = config.channels.lungs_idx;
     idx_diaph = config.channels.diaph_idx;
@@ -791,12 +820,14 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
     set(fh, 'CloseRequestFcn', @(~,~) finish_editing());
 
     log_message(config, 1, ...
-        ['Manual label review ON: choose a label, drag to add or click ' ...
-         'to remove intervals; press Done when finished.']);
+        ['Manual label review ON: drag to add/remove intervals; for sigh, ' ...
+         'click to toggle the nearest breath; press Done when finished.']);
     log_message(config, 2, '\nManual label event editor ON.');
     log_message(config, 2, '  Choose a label from the dropdown.');
     log_message(config, 2, ...
         '  Drag on a non-shaded area to add an interval for that label.');
+    log_message(config, 2, ...
+        '  For sigh, click to toggle the nearest reviewed respiratory breath.');
     log_message(config, 2, ...
         '  Click a shaded interval to remove it for the selected label.');
     log_message(config, 2, ...
@@ -890,6 +921,9 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
         if ~drag_active || ~isgraphics(fh)
             return;
         end
+        if strcmp(label_defs(current_label_idx).edit_mode, 'breath_event')
+            return;
+        end
         if ~isgraphics(drag_ax)
             return;
         end
@@ -916,8 +950,38 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
         if ~isfinite(t_stop) || ~isfinite(drag_start_t)
             return;
         end
-        add_interval(drag_start_t, t_stop);
+        if strcmp(label_defs(current_label_idx).edit_mode, 'breath_event')
+            toggle_nearest_breath(drag_start_t);
+        else
+            add_interval(drag_start_t, t_stop);
+        end
         drag_start_t = NaN;
+    end
+
+    function toggle_nearest_breath(t_click)
+    % TOGGLE_NEAREST_BREATH Add/remove the closest canonical sigh breath event.
+
+        if isempty(sigh_breath_peak_t)
+            warning('MAGMA:ManualLabelEdit:NoSighBreaths', ...
+                'No valid respiratory breaths are available for sigh editing.');
+            return;
+        end
+        [~, breath_index] = min(abs(sigh_breath_peak_t - t_click));
+        candidate = sigh_breath_events(breath_index);
+        field = label_defs(current_label_idx).field;
+        events = event_sets.(field);
+        peak_t = sigh_breath_peak_t(breath_index);
+        remove = false(size(events));
+        if ~isempty(events)
+            remove = [events.start_t] <= peak_t & [events.end_t] > peak_t;
+        end
+        if any(remove)
+            events(remove) = [];
+            event_sets.(field) = events;
+        else
+            event_sets.(field) = sort_events_by_time([events; candidate]);
+        end
+        refresh_event_patches();
     end
 
     function add_interval(t0, t1)
@@ -1084,6 +1148,79 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
         if isgraphics(fh)
             uiresume(fh);
         end
+    end
+end
+
+function [events, peak_t] = build_sigh_breath_candidates(resp_cycles, N, fs)
+% BUILD_SIGH_BREATH_CANDIDATES Create midpoint-bounded events for all belts.
+
+    events = empty_events();
+    peak_t = zeros(0, 1);
+    belt_names = {'lungs', 'diaph'};
+    for i = 1:numel(belt_names)
+        name = belt_names{i};
+        if ~isstruct(resp_cycles) || ~isfield(resp_cycles, name) || ...
+                ~isfield(resp_cycles.(name), 'peak_t')
+            continue;
+        end
+        belt = resp_cycles.(name);
+        if isfield(belt, 'available') && ~belt.available
+            continue;
+        end
+        belt_peaks = belt.peak_t(:);
+        valid = isfinite(belt_peaks) & belt_peaks >= 0 & ...
+            belt_peaks <= (N - 1) / fs;
+        if isfield(belt, 'amp') && numel(belt.amp) == numel(belt_peaks)
+            amplitude = belt.amp(:);
+            valid = valid & isfinite(amplitude) & amplitude > 0;
+        end
+        belt_peaks = belt_peaks(valid);
+        belt_peaks = unique(sort(belt_peaks));
+        [belt_events, belt_centers] = midpoint_breath_events( ...
+            belt_peaks, N, fs);
+        events = [events; belt_events]; %#ok<AGROW>
+        peak_t = [peak_t; belt_centers]; %#ok<AGROW>
+    end
+    if isempty(peak_t)
+        return;
+    end
+    peak_sample = max(1, min(N, round(peak_t * fs) + 1));
+    [~, unique_index] = unique(peak_sample, 'stable');
+    events = events(unique_index);
+    peak_t = peak_t(unique_index);
+    [peak_t, order] = sort(peak_t);
+    events = events(order);
+end
+
+function [events, centers] = midpoint_breath_events(peak_t, N, fs)
+% MIDPOINT_BREATH_EVENTS Bound each breath halfway to neighboring peaks.
+
+    centers = peak_t(:);
+    events = repmat(empty_events(), 0, 1);
+    if isempty(centers)
+        return;
+    end
+    events = repmat(make_event('sigh', 0, 0, N, fs), numel(centers), 1);
+    for i = 1:numel(centers)
+        if i == 1
+            if numel(centers) > 1
+                start_t = max(0, centers(i) - 0.5 * (centers(i + 1) - centers(i)));
+            else
+                start_t = max(0, centers(i) - 0.5);
+            end
+        else
+            start_t = 0.5 * (centers(i - 1) + centers(i));
+        end
+        if i == numel(centers)
+            if numel(centers) > 1
+                end_t = min(N / fs, centers(i) + 0.5 * (centers(i) - centers(i - 1)));
+            else
+                end_t = min(N / fs, centers(i) + 0.5);
+            end
+        else
+            end_t = 0.5 * (centers(i) + centers(i + 1));
+        end
+        events(i) = make_event('sigh', start_t, end_t, N, fs);
     end
 end
 

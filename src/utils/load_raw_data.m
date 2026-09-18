@@ -14,12 +14,26 @@ function [data, config, do_analysis] = load_raw_data(config)
     config.sub_results_filename = ['Sub' num2str(config.subject) '_M' num2str(config.measure) '_labels.mat'];
     config.sub_features_filename = ['Sub' num2str(config.subject) '_M' num2str(config.measure) '_features.mat'];
 
+    mode = execution_mode(config);
+    result_file = fullfile(config.sub_results_path, config.sub_results_filename);
+    result_exists = isfile(result_file);
+    if strcmp(mode, 'review_only') && ~result_exists
+        error('MAGMA:Execution:MissingAutomaticResults', ...
+            ['review_only requires existing automatic results for Sub %d, ' ...
+             'Measurement %d: %s'], ...
+            config.subject, config.measure, result_file);
+    end
+
     do_analysis = true;
-    if isfolder(config.sub_results_path) && exist([config.sub_results_path filesep config.sub_results_filename] , 'file')
-        if config.overwrite_results
+    if result_exists
+        if strcmp(mode, 'review_only')
+            log_message(config, 1, ...
+                'Loading existing automatic results for review: Sub %d | Measurement: %d', ...
+                config.subject, config.measure);
+        elseif strcmp(mode, 'analyze_and_review') || config.overwrite_results
             do_analysis = true;
             log_message(config, 1, ...
-                'Overwritting analysis for: Sub %d | Measurement: %d', ...
+                'Overwriting analysis for: Sub %d | Measurement: %d', ...
                 config.subject, config.measure);
         else
             do_analysis = false;

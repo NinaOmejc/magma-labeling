@@ -317,13 +317,15 @@ function testCompoundRawEventTypeIsRejected(testCase)
         'MAGMA:Events:UnknownType');
 end
 
-function testManualEditorIncludesDeepButNotSigh(testCase)
+function testManualEditorIncludesAllCanonicalLabels(testCase)
     definitions = manual_label_definitions();
     fields = {definitions.field};
     verifyTrue(testCase, ismember('deep', fields));
     verifyTrue(testCase, ismember('thoracic', fields));
-    verifyFalse(testCase, ismember('sigh', fields));
-    verifyEqual(testCase, numel(fields), 10);
+    verifyTrue(testCase, ismember('sigh', fields));
+    verifyEqual(testCase, definitions(strcmp(fields, 'sigh')).edit_mode, ...
+        'breath_event');
+    verifyEqual(testCase, numel(fields), 11);
 end
 
 function testManualEditVersionOneMigrationUsesFieldIdentity(testCase)
@@ -332,8 +334,7 @@ function testManualEditVersionOneMigrationUsesFieldIdentity(testCase)
     cleanup_dir = onCleanup(@() rmdir(output_dir, 's'));
     config = make_test_config(output_dir);
     config.fs = 10;
-    config.LabelEdit.apply_saved_edits = true;
-    config.execution.mode = 'analyze_only';
+    config.execution.mode = 'analyze';
     N = 1000;
     data = zeros(N, numel(config.data_columns));
 
@@ -359,7 +360,8 @@ function testManualEditVersionOneMigrationUsesFieldIdentity(testCase)
         config.subject, config.measure, config.LabelEdit.filename_suffix));
     save(edit_file, 'manual_label_event_sets', 'manual_label_edit_meta');
 
-    [migrated, info] = manual_edit_label_events(data, config, automatic_sets);
+    [migrated, info] = manual_edit_label_events( ...
+        data, struct(), config, automatic_sets);
     verifyTrue(testCase, info.applied_saved_edits);
     verifyEqual(testCase, migrated.rapid.type, 'rapid');
     verifyEqual(testCase, migrated.rapid.start_idx, manual_label_event_sets.rapidB.start_idx);
@@ -373,7 +375,7 @@ function testManualEditVersionOneMigrationUsesFieldIdentity(testCase)
 
     repo_root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
     source = fileread(fullfile(repo_root, 'src', 'gui', 'manual_edit_label_events.m'));
-    verifyTrue(testCase, contains(source, "'schema_version', 5"));
+    verifyTrue(testCase, contains(source, "'schema_version', 6"));
     verifyTrue(testCase, contains(source, 'manual_label_edit_meta.label_names'));
     verifyEmpty(testCase, info.reviewed_fields);
     verifyEqual(testCase, info.status_by_label.rapid, 'unreviewed');

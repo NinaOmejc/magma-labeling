@@ -94,8 +94,8 @@ function testActiveLayerUsesNewestValuesButOnlyNewestCoverage(testCase)
         'latest_round_id', 2, 'latest_reviewer_role', 'expert', ...
         'start_from', 'latest_reviewed', 'source_review_round', 1, ...
         'number_of_rounds', 2, 'most_recent_round_id', 2));
-    annotations = assemble_annotation_layers(automatic, active_sets, manual, ...
-        empty_sigh_review(), N, config);
+    annotations = assemble_annotation_layers( ...
+        automatic, active_sets, manual, N, config);
 
     rapid = strcmp(annotations.label_names, 'rapid');
     deep = strcmp(annotations.label_names, 'deep');
@@ -138,7 +138,6 @@ function testSavedLatestReviewedStateLoadsWithoutChangingAutomatic(testCase)
     config = review_config();
     config.path_results_out = output_dir;
     config.sub_results_path = output_dir;
-    config.LabelEdit.apply_saved_edits = true;
     config.LabelEdit.start_from = 'latest_reviewed';
     defs = manual_label_definitions();
     N = 50;
@@ -172,7 +171,8 @@ function testSavedLatestReviewedStateLoadsWithoutChangingAutomatic(testCase)
         'manual_label_review_history', 'manual_label_active_round_id', ...
         'manual_label_review_provenance', 'manual_label_edit_meta');
 
-    [loaded, info] = manual_edit_label_events(zeros(N,6), config, automatic);
+    [loaded, info] = manual_edit_label_events( ...
+        zeros(N,6), struct(), config, automatic);
     verifyEqual(testCase, automatic, automatic_before);
     verifyEqual(testCase, loaded.rapid.start_idx, 5);
     verifyEqual(testCase, loaded.rapid.end_idx, 20);
@@ -194,7 +194,7 @@ function testLatestReviewedRequiresAnExistingReview(testCase)
     config.LabelEdit.start_from = 'latest_reviewed';
     defs = manual_label_definitions();
     verifyError(testCase, @() manual_edit_label_events( ...
-        zeros(20,6), config, empty_event_sets(defs)), ...
+        zeros(20,6), struct(), config, empty_event_sets(defs)), ...
         'MAGMA:ManualLabelEdit:MissingLatestReviewed');
 end
 
@@ -221,9 +221,4 @@ function status = status_struct(values, defs, label_names)
     for i = 1:numel(defs)
         status.(defs(i).field) = values{strcmp(label_names, defs(i).type)};
     end
-end
-
-function review = empty_sigh_review()
-    review = struct('reviewed', false, 'status', 'unreviewed', ...
-        'automatic_events', empty_events(), 'reviewed_events', empty_events());
 end

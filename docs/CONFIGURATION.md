@@ -3,7 +3,7 @@
 The main configuration file is:
 
 ```text
-src/get_config.m
+src/get_config_defaults.m
 ```
 
 Only the most important settings are summarized here.
@@ -39,10 +39,14 @@ detector progress. Warnings and errors are always shown.
 `config.execution.mode` is the sole switch for opening manual review:
 
 ```matlab
-config.execution.mode = 'analyze_only';       % do not open manual review
+config.execution.mode = 'analyze';            % automatic analysis only
 config.execution.mode = 'analyze_and_review'; % analyze, then review
-config.execution.mode = 'review_only';        % open review in review-only runs
+config.execution.mode = 'review_only';        % load automatic results, then review
 ```
+
+`review_only` requires an existing recording result. It loads the saved
+automatic annotations and respiratory cycles without rerunning feature
+extraction or detectors.
 
 ## Respiratory-cycle extraction
 
@@ -172,23 +176,28 @@ Missing-data blocks are not bridged during phase analysis.
 
 ## Manual review
 
-The manual sigh and final interval review GUIs are enabled only when:
+The unified 11-label reviewer is enabled only when:
 
 ```matlab
 ismember(config.execution.mode, {'analyze_and_review', 'review_only'})
 ```
 
-There are no separate `config.sigh.manual_control` or
-`config.LabelEdit.manual_control` switches. Other final-review settings remain:
+Sighs are edited in the same reviewer and snap to respiratory breaths. There
+are no separate manual-control, apply-saved, or save-review switches. Review
+rounds are always appended to the persistent history file and record the
+automatic `source_analysis_id` they derive from. Settings that remain:
 
 ```matlab
-config.LabelEdit.apply_saved_edits
-config.LabelEdit.save_edits
 config.LabelEdit.start_from
 config.LabelEdit.reviewer_role
 ```
 
-Respiratory-cycle peak review is a distinct upstream feature-extraction GUI
-and remains controlled by `config.resp.manual_control`.
+For example, a clinician can review the frozen automatic analysis with:
+
+```matlab
+config.execution.mode = 'review_only';
+config.LabelEdit.start_from = 'automatic';
+config.LabelEdit.reviewer_role = 'clinician';
+```
 
 Automatic and manually reviewed annotations remain separate.

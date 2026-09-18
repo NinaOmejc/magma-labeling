@@ -13,7 +13,7 @@ config = get_config_defaults();
 config.path_data_in = 'D:\Projects\MAGMA\raw_data';
 config.path_results_out = 'D:\Projects\MAGMA\data_analysis\statistical_labeling';
 config.fs = 200;
-config.subjects = [21];
+config.subjects = [1:2];
 config.remove_subjects = [3 30 91];
 config.measurements = [1 2];
 config.subjects(ismember(config.subjects, config.remove_subjects)) = [];
@@ -22,7 +22,7 @@ config.subjects(ismember(config.subjects, config.remove_subjects)) = [];
 config.overwrite_results = false;       % If true, recompute even if "*_labels.h5" output already exists.
 config.overwrite_features = false;      % If true, recompute respiratory features even if "*_features.mat" already exists.
 config.verbosity = 2;                   % 1 = concise progress, 2 = detailed progress.
-config.execution.mode = 'analyze_only'; % 'analyze_only', 'analyze_and_review', or 'review_only'.
+config.execution.mode = 'analyze';          % 'analyze', 'analyze_and_review', or 'review_only'.
 
 % RESPIRATORY REPRESENTATION
 config.resp.amp_method = 'symmetric';  % Selected breath amplitude: 'expiratory' (peak to following trough), 'inspiratory' (peak to preceding trough), or 'symmetric' (peak to the mean of both troughs)
@@ -47,9 +47,6 @@ config.desat.do_plot = true;                                % save desaturation 
 config.LabelMask.do_plot = true;                            % generate a label-mask summary figure
 
 % MANUAL REVIEW
-config.resp.manual_control = true;                          % this review is the base of the analysis (checking peaks and troughts of breaths), should be done carefully and always. Its done only once, then its saved and reloaded.
-config.LabelEdit.apply_saved_edits = false;
-config.LabelEdit.save_edits = true;
 config.LabelEdit.start_from = 'automatic';
 config.LabelEdit.reviewer_role = 'researcher';
 

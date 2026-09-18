@@ -18,14 +18,11 @@ function config = make_test_config(output_dir)
 
     config.detrend.do_plot = false;
     config.resp.do_plot = false;
-    config.resp.manual_control = false;
     config.resp.qc.enabled = false;
     config.reference.do_plot = false;
     config.normality.do_plot = false;
     config.sigh.do_plot = false;
-    config.execution.mode = 'analyze_only';
-    config.LabelEdit.apply_saved_edits = false;
-    config.LabelEdit.save_edits = false;
+    config.execution.mode = 'analyze';
 
     detector_fields = {'shallow', 'deep', 'thoracic', 'irregular', 'slow', 'rapid', 'async', 'desat', 'apnea', 'periodic'};
     for i = 1:numel(detector_fields)

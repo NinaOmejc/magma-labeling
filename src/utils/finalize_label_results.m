@@ -1,6 +1,6 @@
 function out = finalize_label_results( ...
     data, resp_cycles, resp_features, session_reference, ...
-    detections, sigh_review, config) %#ok<INUSD>
+    detections, config) %#ok<INUSD>
 % FINALIZE_LABEL_RESULTS Finalize automatic and reviewed label annotations.
 %
 % Detector outputs enter through detections and are frozen before manual
@@ -14,7 +14,6 @@ function out = finalize_label_results( ...
 %   session_reference - Common physiological reference interval metadata.
 %   detections        - Struct with per-label automatic event sets, detector
 %                       candidate events, and compact diagnostics.
-%   sigh_review       - Automatic/reviewed sigh events and review coverage.
 %   config            - Sampling, labels, review, and detector settings.
 %
 % Output:
@@ -30,8 +29,8 @@ function out = finalize_label_results( ...
 %         burden_automatic/burden_reviewed, overlap_automatic/overlap_reviewed,
 %         and evidence_automatic/evidence_reviewed summarize each provenance.
 %         db_phenotype_evidence bundles phenotype summaries; candidate_events
-%         retains genuine pre-final intervals; manual_label_edit and sigh_review retain
-%         the two manual-review outcomes.
+%         retains genuine pre-final intervals; manual_label_edit retains the
+%         unified 11-label review outcome.
 
     automatic_event_sets = detections.events;
     candidate_events = canonical_candidate_event_sets( ...
@@ -40,10 +39,10 @@ function out = finalize_label_results( ...
     N = size(data, 1);
 
     [reviewed_event_sets, manual_label_edit] = ...
-        manual_edit_label_events(data, config, automatic_event_sets);
+        manual_edit_label_events( ...
+            data, resp_cycles, config, automatic_event_sets);
     annotations = assemble_annotation_layers( ...
-        automatic_event_sets, reviewed_event_sets, manual_label_edit, ...
-        sigh_review, N, config);
+        automatic_event_sets, reviewed_event_sets, manual_label_edit, N, config);
 
     label_names = annotations.label_names;
     [available, availability_reason] = compute_label_availability( ...
@@ -113,7 +112,6 @@ function out = finalize_label_results( ...
     out.evidence_reviewed = evidence_reviewed;
     out.db_phenotype_evidence = db_phenotype_evidence;
     out.manual_label_edit = manual_label_edit;
-    out.sigh_review = sigh_review;
 end
 
 function sets = canonical_candidate_event_sets(input_sets)

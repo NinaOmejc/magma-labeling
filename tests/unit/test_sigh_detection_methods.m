@@ -32,15 +32,16 @@ function testCanonicalAmplitudeIgnoresContradictoryAuxiliaryFields(testCase)
 
     for i = 1:numel(methods)
         config.sigh.method = methods{i};
-        [~, expected_diagnostics, expected_review] = ...
+        [expected_events, expected_diagnostics] = ...
             detect_sigh(data, features, cycles, config);
-        [~, actual_diagnostics, actual_review] = ...
+        [actual_events, actual_diagnostics] = ...
             detect_sigh(data, features, contradictory_cycles, config);
-        [~, no_aux_diagnostics, no_aux_review] = ...
+        [no_aux_events, no_aux_diagnostics] = ...
             detect_sigh(data, features, no_aux_cycles, config);
 
-        verifyEqual(testCase, actual_review.automatic_flags_lungs, ...
-            expected_review.automatic_flags_lungs);
+        verifyEqual(testCase, actual_events, expected_events);
+        verifyEqual(testCase, actual_diagnostics.lungs.sigh_flags, ...
+            expected_diagnostics.lungs.sigh_flags);
         verifyEqual(testCase, actual_diagnostics.lungs.sigh_amplitude, ...
             expected_diagnostics.lungs.sigh_amplitude);
         verifyEqual(testCase, actual_diagnostics.lungs.sigh_baseline, ...
@@ -49,8 +50,9 @@ function testCanonicalAmplitudeIgnoresContradictoryAuxiliaryFields(testCase)
             expected_diagnostics.lungs.sigh_ratio);
         verifyEqual(testCase, actual_diagnostics.comparison, ...
             expected_diagnostics.comparison);
-        verifyEqual(testCase, no_aux_review.automatic_flags_lungs, ...
-            expected_review.automatic_flags_lungs);
+        verifyEqual(testCase, no_aux_events, expected_events);
+        verifyEqual(testCase, no_aux_diagnostics.lungs.sigh_flags, ...
+            expected_diagnostics.lungs.sigh_flags);
         verifyEqual(testCase, no_aux_diagnostics.lungs.sigh_ratio, ...
             expected_diagnostics.lungs.sigh_ratio);
     end
@@ -113,14 +115,14 @@ function testExactlyOneCompleteWindowExtendsOneMedianEverywhere(testCase)
 end
 
 function testShortEmptyAndUnusableSequencesAreUnavailable(testCase)
-    [events, diagnostics, review] = run_rolling(ones(14, 1), 3);
+    [events, diagnostics] = run_rolling(ones(14, 1), 3);
     verifyEmpty(testCase, events);
     verifyFalse(testCase, diagnostics.lungs.available);
     verifyEqual(testCase, diagnostics.lungs.status, ...
         'insufficient_breath_positions');
     verifyTrue(testCase, all(isnan(diagnostics.lungs.sigh_baseline)));
     verifyTrue(testCase, all(isnan(diagnostics.lungs.sigh_ratio)));
-    verifyFalse(testCase, any(review.automatic_flags_lungs));
+    verifyFalse(testCase, any(diagnostics.lungs.sigh_flags));
 
     [events, diagnostics] = run_rolling(zeros(0, 1), 3);
     verifyEmpty(testCase, events);
@@ -172,14 +174,14 @@ function testMissingLungsUsesValidDiaphragmWithoutAlignmentError(testCase)
         'global_amplitude_available', false, ...
         'reference_quality', 'belt_unavailable');
 
-    [events, diagnostics, review] = detect_sigh( ...
+    [events, diagnostics] = detect_sigh( ...
         data, features, cycles, config);
 
     verifyEqual(testCase, diagnostics.lungs.status, 'belt_ignored');
     verifyFalse(testCase, diagnostics.lungs.available);
     verifyEmpty(testCase, diagnostics.lungs.sigh_flags);
     verifyTrue(testCase, diagnostics.diaph.available);
-    verifyTrue(testCase, review.automatic_flags_diaph(13));
+    verifyTrue(testCase, diagnostics.diaph.sigh_flags(13));
     verifyNotEmpty(testCase, events);
 end
 
@@ -232,9 +234,9 @@ function testInvalidTargetAndInclusiveThreshold(testCase)
     amplitude = ones(21, 1);
     amplitude(11) = 2;
     amplitude(5) = NaN;
-    [~, diagnostics, review] = run_rolling(amplitude, 3);
+    [~, diagnostics] = run_rolling(amplitude, 3);
 
-    verifyTrue(testCase, review.automatic_flags_lungs(11));
+    verifyTrue(testCase, diagnostics.lungs.sigh_flags(11));
     verifyEqual(testCase, diagnostics.lungs.sigh_ratio(11), 2);
     verifyFalse(testCase, diagnostics.lungs.evaluable_mask(5));
     verifyTrue(testCase, isnan(diagnostics.lungs.sigh_ratio(5)));
@@ -279,12 +281,12 @@ function testRatioPlotHandlesValidEvidenceWithZeroDetectedSighs(testCase)
     existing_figures = findall(groot, 'Type', 'figure');
     cleanup = onCleanup(@() close_new_figures(existing_figures)); %#ok<NASGU>
 
-    [events, diagnostics, review] = detect_sigh( ...
+    [events, diagnostics] = detect_sigh( ...
         data, features, cycles, config);
 
     verifyTrue(testCase, diagnostics.lungs.available);
     verifyTrue(testCase, any(isfinite(diagnostics.lungs.sigh_ratio)));
-    verifyFalse(testCase, any(review.automatic_flags_lungs));
+    verifyFalse(testCase, any(diagnostics.lungs.sigh_flags));
     verifyEqual(testCase, ...
         diagnostics.comparison.lungs.rolling_median_2x_count, 0);
     verifyEqual(testCase, ...
@@ -302,9 +304,9 @@ function testGlobalRatioOutlierMatchesFrozenPreviousImplementation(testCase)
         config.sigh.min_abs_ratio, config.sigh.iqr_k, ...
         config.sigh.min_gap_sec);
 
-    [~, diagnostics, review] = detect_sigh(data, features, cycles, config);
+    [~, diagnostics] = detect_sigh(data, features, cycles, config);
 
-    verifyEqual(testCase, review.automatic_flags_lungs, expected);
+    verifyEqual(testCase, diagnostics.lungs.sigh_flags, expected);
     verifyEqual(testCase, diagnostics.sigh_method, 'global_ratio_outlier');
 end
 
@@ -318,18 +320,18 @@ function testLegacy60sMatchesFrozenAndReportsLocalBaseline(testCase)
         config.sigh.legacy_amp_ratio_thr, ...
         config.sigh.legacy_min_prev_breaths);
 
-    [~, diagnostics, review] = detect_sigh(data, features, cycles, config);
+    [~, diagnostics] = detect_sigh(data, features, cycles, config);
 
-    verifyEqual(testCase, review.automatic_flags_lungs, expected);
+    verifyEqual(testCase, diagnostics.lungs.sigh_flags, expected);
     verifyEqual(testCase, diagnostics.lungs.sigh_baseline(18), 1);
     verifyEqual(testCase, diagnostics.lungs.sigh_ratio(18), 2);
     verifyTrue(testCase, diagnostics.lungs.evaluable_mask(18));
 end
 
-function [events, diagnostics, review] = run_rolling(amplitude, min_valid)
+function [events, diagnostics] = run_rolling(amplitude, min_valid)
     [data, features, cycles, config] = sigh_fixture(amplitude);
     config.sigh.rolling_min_valid_breaths = min_valid;
-    [events, diagnostics, review] = detect_sigh(data, features, cycles, config);
+    [events, diagnostics] = detect_sigh(data, features, cycles, config);
 end
 
 function [data, features, cycles, config] = sigh_fixture(amplitude)
@@ -378,7 +380,7 @@ function config = minimal_sigh_config()
     config.subject = 999;
     config.measure = 1;
     config.make_figs_visible = 'off';
-    config.execution = struct('mode', 'analyze_only');
+    config.execution = struct('mode', 'analyze');
     config.resp = struct('amp_method', 'expiratory');
     config.sigh = struct( ...
         'method', 'rolling_median_2x', ...
@@ -391,7 +393,6 @@ function config = minimal_sigh_config()
         'iqr_k', 3.5, ...
         'min_gap_sec', 2, ...
         'do_plot', false, ...
-        'manual_window_sec', 1200, ...
         'legacy_prev_win_sec', 60, ...
         'legacy_amp_ratio_thr', 1.5, ...
         'legacy_min_prev_breaths', 3);

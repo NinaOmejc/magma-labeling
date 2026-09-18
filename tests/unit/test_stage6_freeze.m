@@ -413,8 +413,8 @@ function testAutomaticAndReviewedLayersRemainSeparate(testCase)
     manual = struct('reviewed_fields', {{'rapid'}}, ...
         'status_by_label', struct('rapid', 'reviewed_rejected'), ...
         'review_coverage_mask', coverage);
-    sigh = empty_sigh_review();
-    annotations = assemble_annotation_layers(automatic, reviewed, manual, sigh, 300, config);
+    annotations = assemble_annotation_layers( ...
+        automatic, reviewed, manual, 300, config);
     rapid = strcmp(annotations.label_names, 'rapid');
     shallow = strcmp(annotations.label_names, 'shallow');
     verifyTrue(testCase, any(annotations.mask_automatic(:, rapid)));
@@ -435,7 +435,7 @@ function testUnreviewedDiffersFromReviewedNegative(testCase)
         'status_by_label', struct('desat', 'reviewed_accepted'), ...
         'review_coverage_mask', coverage);
     annotations = assemble_annotation_layers( ...
-        automatic, reviewed, manual, empty_sigh_review(), 20, config);
+        automatic, reviewed, manual, 20, config);
     desat = strcmp(annotations.label_names, 'desat');
     apnea = strcmp(annotations.label_names, 'apnea');
     verifyFalse(testCase, any(annotations.mask_reviewed(:, desat)));
@@ -452,8 +452,7 @@ function testManualV3CoverageMigratesByLabelIdentity(testCase)
     config = stage6_config();
     config.sub_results_path = output_dir;
     config.path_results_out = output_dir;
-    config.LabelEdit.apply_saved_edits = true;
-    config.execution.mode = 'analyze_only';
+    config.execution.mode = 'analyze';
     defs = manual_label_definitions();
     automatic = empty_event_sets(defs);
     automatic.deep = make_event_fixture('deep_breathing_lungs',10,20,config.fs);
@@ -474,7 +473,8 @@ function testManualV3CoverageMigratesByLabelIdentity(testCase)
     save(filename,'manual_label_automatic_event_sets','manual_label_event_sets', ...
         'manual_label_review_mask','manual_label_edit_meta');
 
-    [reviewed, info] = manual_edit_label_events(zeros(N,6),config,automatic);
+    [reviewed, info] = manual_edit_label_events( ...
+        zeros(N,6), struct(), config, automatic);
     new_deep_index = strcmp({defs.field},'deep');
     verifyNotEmpty(testCase, automatic.deep);
     verifyEmpty(testCase, reviewed.deep);
@@ -492,7 +492,7 @@ end
 function testAutomaticSighCandidatesSurviveWithoutReview(testCase)
     config = stage6_config();
     config.sigh.method = 'global_ratio_outlier';
-    config.execution.mode = 'analyze_only';
+    config.execution.mode = 'analyze';
     config.sigh.do_plot = false;
     peak_t = (0:4:96)';
     amp = ones(size(peak_t)); amp(12) = 4; amp(end) = NaN;
@@ -502,20 +502,18 @@ function testAutomaticSighCandidatesSurviveWithoutReview(testCase)
     phys = struct('lungs', belt, 'diaph', belt);
     resp_feat = struct('lungs', belt, 'diaph', belt);
     data = zeros(1000, 6);
-    [events, diagnostics, review] = detect_sigh( ...
+    [events, diagnostics] = detect_sigh( ...
         data, phys, resp_feat, config);
     verifyNotEmpty(testCase, events);
-    verifyEqual(testCase, review.automatic_events, events);
-    verifyFalse(testCase, review.reviewed);
     verifyTrue(testCase, diagnostics.available);
-    verifyTrue(testCase, any(review.automatic_flags_lungs));
+    verifyTrue(testCase, any(diagnostics.lungs.sigh_flags));
     verifyFalse(testCase, isfield(diagnostics.lungs, ...
         'selected_breath_mask'));
 end
 
 function testSighInterfacesAreRespiratoryOnly(testCase)
     verifyEqual(testCase, nargin('detect_sigh'), 4);
-    verifyEqual(testCase, nargin('manual_edit_sigh_flags'), 7);
+    verifyEqual(testCase, exist('manual_edit_sigh_flags', 'file'), 0);
 end
 
 function testReviewedSighDoesNotDestroyAutomaticCandidates(testCase)
@@ -523,13 +521,14 @@ function testReviewedSighDoesNotDestroyAutomaticCandidates(testCase)
     defs = manual_label_definitions();
     automatic = empty_event_sets(defs);
     reviewed = automatic;
-    automatic_sigh = make_event_fixture('sigh_lungs',5,7,config.fs);
-    sigh = struct('reviewed',true,'review_scope','explicitly_viewed_regions', ...
-        'review_mask',true(100,1),'status','reviewed_rejected', ...
-        'automatic_events',automatic_sigh,'reviewed_events',empty_events());
-    manual = struct('reviewed_fields',{{}},'status_by_label',struct(), ...
-        'review_coverage_mask',false(100,numel(defs)));
-    annotations = assemble_annotation_layers(automatic,reviewed,manual,sigh,100,config);
+    automatic.sigh = make_event_fixture('sigh_lungs',5,7,config.fs);
+    coverage = false(100,numel(defs));
+    coverage(:,strcmp({defs.field},'sigh')) = true;
+    manual = struct('reviewed_fields',{{'sigh'}}, ...
+        'status_by_label',struct('sigh','reviewed_rejected'), ...
+        'review_coverage_mask',coverage);
+    annotations = assemble_annotation_layers( ...
+        automatic, reviewed, manual, 100, config);
     sigh_idx = strcmp(annotations.label_names,'sigh');
     verifyTrue(testCase,any(annotations.mask_automatic(:,sigh_idx)));
     verifyFalse(testCase,any(annotations.mask_reviewed(:,sigh_idx)));
@@ -790,7 +789,7 @@ function testRecordingResultUsesDeduplicatedOutputSchema(testCase)
         'evidence_automatic', fixture.label_evidence_summary_automatic, ...
         'evidence_reviewed', fixture.label_evidence_summary_reviewed, ...
         'db_phenotype_evidence', fixture.db_phenotype_evidence, ...
-        'manual_label_edit', struct(), 'sigh_review', struct());
+        'manual_label_edit', struct());
     results = build_recording_results(config, fixture.resp_cycles, ...
         fixture.resp_ref, fixture.session_reference, ...
         fixture.resp_features, labels);
@@ -858,13 +857,9 @@ function testConfigurationLayersAndDemoUseSharedRunner(testCase)
     verifyTrue(testCase, contains(demo_source, 'config.subjects = 42;'));
     verifyTrue(testCase, contains(demo_source, 'config.measurements = 1;'));
     verifyTrue(testCase, contains(demo_source, ...
-        'config.resp.manual_control = false;'));
-    verifyTrue(testCase, contains(demo_source, ...
-        'config.execution.mode = ''analyze_only'';'));
+        'config.execution.mode = ''analyze'';'));
     verifyFalse(testCase, contains(demo_source, 'config.sigh.manual_control'));
     verifyFalse(testCase, contains(demo_source, 'config.LabelEdit.manual_control'));
-    verifyTrue(testCase, contains(demo_source, ...
-        'config.LabelEdit.apply_saved_edits = false;'));
     verifyTrue(testCase, contains(demo_source, 'run_magma(config);'));
     verifyFalse(testCase, contains(demo_source, 'min_dur_sec'));
     verifyFalse(testCase, contains(demo_source, 'threshold'));
@@ -1006,11 +1001,6 @@ end
 function sets = empty_event_sets(defs)
     sets = struct();
     for i = 1:numel(defs), sets.(defs(i).field) = empty_events(); end
-end
-
-function review = empty_sigh_review()
-    review = struct('reviewed', false, 'status', 'unreviewed', ...
-        'automatic_events', empty_events(), 'reviewed_events', empty_events());
 end
 
 function event = make_event_fixture(type, start_t, end_t, fs)

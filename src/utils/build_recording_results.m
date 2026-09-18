@@ -33,7 +33,7 @@ function results = build_recording_results( ...
 %     label_overlap_summary_automatic, label_overlap_summary_reviewed - Prespecified pair overlaps.
 %     label_evidence_summary_automatic, label_evidence_summary_reviewed - Descriptive label evidence.
 %     db_phenotype_evidence - Automatic/reviewed phenotype evidence bundle.
-%     manual_label_edit, manual_sigh_review - Manual review outcomes and coverage.
+%     manual_label_edit - Unified manual-review outcome and coverage.
 %     config - Complete resolved run configuration, including config.input_config.
 %     upstream_input_preprocessing - Text describing preprocessing before MAGMA.
 
@@ -74,7 +74,14 @@ function results = build_recording_results( ...
     results.label_evidence_summary_reviewed = label_results.evidence_reviewed;
     results.db_phenotype_evidence = label_results.db_phenotype_evidence;
     results.manual_label_edit = label_results.manual_label_edit;
-    results.manual_sigh_review = label_results.sigh_review;
+    if ~isfield(config, 'execution') || ~isstruct(config.execution)
+        config.execution = struct();
+    end
+    if ~isfield(config.execution, 'analysis_id') || ...
+            isempty(config.execution.analysis_id)
+        config.execution.analysis_id = create_analysis_id(config);
+    end
+    results.analysis_id = config.execution.analysis_id;
     results.config = config;
     results.upstream_input_preprocessing = get_config_value( ...
         config, 'HDF5', 'upstream_input_preprocessing', ...

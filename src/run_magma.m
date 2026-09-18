@@ -5,6 +5,7 @@ function run_magma(base_config)
 % recording-specific fields are added. Each recording then starts from a
 % fresh copy of that base configuration.
 
+mode = execution_mode(base_config);
 if ~isfolder(base_config.path_results_out)
     mkdir(base_config.path_results_out);
 end
@@ -25,6 +26,28 @@ for isub = 1:length(base_config.subjects)
         if ~do_analysis
             continue;
         end
+
+        if strcmp(mode, 'review_only')
+            result_file = fullfile( ...
+                config.sub_results_path, config.sub_results_filename);
+            existing_results = load(result_file);
+            review_config = config;
+            if isfield(existing_results, 'config') && ...
+                    isfield(existing_results.config, 'detrend')
+                review_config.detrend = existing_results.config.detrend;
+            end
+            review_config.detrend.do_plot = false;
+            [data, review_config] = preprocess_data(data_raw, review_config);
+            config.times = review_config.times;
+            results = review_existing_results(data, existing_results, config);
+            save_recording_results(results, data_raw, data, config);
+            log_message(config, 1, ...
+                'Successfully finished manual review for: Sub %d | Measurement: %d', ...
+                config.subject, config.measure);
+            continue;
+        end
+
+        config.execution.analysis_id = create_analysis_id(config);
         
         % PREPROCESS DATA
         log_message(config, 2, 'Preprocessing signals...');
@@ -64,7 +87,8 @@ for isub = 1:length(base_config.subjects)
         log_message(config, 2, 'Detecting apnea...');
         [events_apnea, diagnostics_apnea, candidates_apnea] = detect_apnea(data, resp_features, resp_ref, config);
         log_message(config, 2, 'Detecting sighs...');
-        [~, diagnostics_sigh, sigh_review] = detect_sigh(data, resp_features, resp_cycles, config);
+        [events_sigh, diagnostics_sigh] = detect_sigh( ...
+            data, resp_features, resp_cycles, config);
         log_message(config, 2, 'Detecting periodic breathing...');
         [events_periodic, diagnostics_periodic, candidates_periodic] = detect_periodic_breathing(data, resp_cycles, config);
  
@@ -77,6 +101,7 @@ for isub = 1:length(base_config.subjects)
             'rapid', events_rapid, ...
             'irregular', events_irregular, ...
             'apnea', events_apnea, ...
+            'sigh', events_sigh, ...
             'periodic', events_periodic, ...
             'thoracic', events_thoracic, ...
             'async', events_async, ...
@@ -102,7 +127,7 @@ for isub = 1:length(base_config.subjects)
         detections.spo2_ref = spo2_ref;
 
         label_results = finalize_label_results( ...
-            data, resp_cycles, resp_features, session_reference, detections, sigh_review, config);
+            data, resp_cycles, resp_features, session_reference, detections, config);
 
         plot_label_mask(label_results.mask_automatic, label_results.label_names, config);
         

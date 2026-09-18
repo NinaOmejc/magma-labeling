@@ -4,7 +4,7 @@ function [final_event_sets, review_round] = create_manual_review_round( ...
 % source_event_sets and edited_event_sets are structs keyed by editable label;
 % review_coverage_mask is Nsample-by-Neditable-label; config supplies canonical
 % label order and fs. final_event_sets preserves source labels outside coverage.
-% review_round fields include round/timestamp/reviewer/source metadata; canonical
+% review_round fields include round/timestamp/reviewer/source analysis metadata; canonical
 % events and mask; full-label review_mask/status; changed_labels; notes; schema
 % version; and accepted_as_active.
 
@@ -63,6 +63,7 @@ function [final_event_sets, review_round] = create_manual_review_round( ...
         'reviewer_role', metadata.reviewer_role, ...
         'start_from', metadata.start_from, ...
         'source_review_round', metadata.source_review_round, ...
+        'source_analysis_id', metadata.source_analysis_id, ...
         'events', {final_events}, ...
         'mask', logical(final_mask), ...
         'review_mask', logical(round_review_mask), ...
@@ -110,7 +111,7 @@ end
 function metadata = normalize_metadata(metadata)
 % NORMALIZE_METADATA Fill and validate manual-review round metadata.
 % Fields are round_id, timestamp, reviewer_role, start_from, source_review_round,
-% reviewer_id, and notes; start_from is automatic or latest_reviewed.
+% source_analysis_id, reviewer_id, and notes.
 
     if nargin < 1 || isempty(metadata), metadata = struct(); end
     metadata = with_default(metadata, 'round_id', 1);
@@ -118,6 +119,7 @@ function metadata = normalize_metadata(metadata)
     metadata = with_default(metadata, 'reviewer_role', 'researcher');
     metadata = with_default(metadata, 'start_from', 'automatic');
     metadata = with_default(metadata, 'source_review_round', NaN);
+    metadata = with_default(metadata, 'source_analysis_id', 'unknown');
     metadata = with_default(metadata, 'reviewer_id', '');
     metadata = with_default(metadata, 'notes', '');
 
@@ -130,6 +132,7 @@ function metadata = normalize_metadata(metadata)
     metadata.reviewer_role = char(string(metadata.reviewer_role));
     metadata.start_from = validatestring(char(string(metadata.start_from)), ...
         {'automatic', 'latest_reviewed'});
+    metadata.source_analysis_id = char(string(metadata.source_analysis_id));
     metadata.reviewer_id = char(string(metadata.reviewer_id));
     metadata.notes = char(string(metadata.notes));
 end

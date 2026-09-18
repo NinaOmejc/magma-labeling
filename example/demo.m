@@ -9,9 +9,7 @@ config.path_results_out = fullfile(example_root, 'output');
 config.subjects = 42;
 config.measurements = 1; % Use [1 2] to process both bundled recordings.
 
-config.resp.manual_control = false;
-config.execution.mode = 'analyze_only';
-config.LabelEdit.apply_saved_edits = false;
+config.execution.mode = 'analyze';
 
 config.overwrite_results = true;
 config.overwrite_features = true;

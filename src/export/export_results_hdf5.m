@@ -109,6 +109,9 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
     write_numeric(filename, '/meta/subject', results.subject, options);
     write_numeric(filename, '/meta/measurement', results.measure, options);
     write_numeric(filename, '/meta/fs', fs, options);
+    if isfield(results, 'analysis_id')
+        write_text(filename, '/meta/analysis_id', results.analysis_id);
+    end
     write_text(filename, '/meta/export_schema_version', export_schema_version);
     write_text(filename, '/meta/upstream_input_preprocessing', ...
         results.upstream_input_preprocessing);
@@ -393,6 +396,10 @@ function write_review_history(filename, path, history, options)
         write_text(filename, [round_path '/start_from'], history(i).start_from);
         write_numeric(filename, [round_path '/source_review_round'], ...
             history(i).source_review_round, options);
+        if isfield(history, 'source_analysis_id')
+            write_text(filename, [round_path '/source_analysis_id'], ...
+                history(i).source_analysis_id);
+        end
         write_events(filename, [round_path '/events'], history(i).events, options);
         write_numeric(filename, [round_path '/mask'], ...
             uint8(history(i).mask), options);
