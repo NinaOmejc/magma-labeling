@@ -74,6 +74,9 @@ Three optional review stages are available:
 
 Reviewed coverage is stored explicitly, so unreviewed data are not interpreted as manually confirmed negatives.
 
+In respiratory review, blue dots are editable trough landmarks between red
+peaks. They are not explicit hold boundaries.
+
 ## Tests
 
 Run:

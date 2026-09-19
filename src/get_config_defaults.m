@@ -70,7 +70,7 @@ function config = get_config_defaults()
     config.resp.qc.min_prom_ratio = 0.35;       % unusually low prominence relative to neighboring peaks
 
     % manual control of respiratory cycles (independent of execution.mode)
-    config.resp.manual_control = true;          % allow click-to-add/remove breath peaks before label detection
+    config.resp.manual_control = true;          % allow peak edits and independent movement of existing troughs before label detection
     config.resp.manual_window_sec = 300;        % visible time span for manual breath GUI scrolling
     
     %---- SESSION PHYSIOLOGICAL REFERENCE ----

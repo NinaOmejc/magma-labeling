@@ -31,6 +31,10 @@ results.resp_features
 ```
 
 These contain reviewed respiratory landmarks and derived breath-level evidence.
+For each belt, `trough_idx`, `trough_t`, and `trough_val` remain aligned at one
+trough per consecutive peak pair. Optional `trough_overrides` rows store manual
+corrections as `[left_peak_idx, right_peak_idx, trough_idx]`; older caches may
+omit this field. The blue trough landmarks are not explicit hold boundaries.
 
 ### Final automatic events
 

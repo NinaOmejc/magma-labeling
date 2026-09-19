@@ -35,8 +35,8 @@ function resp_cycles = extract_respiration_features(data, config)
         edit_diaph = is_editable_resp_signal(resp_cycles.diaph);
 
         if edit_lungs || edit_diaph
-            peak_idx_lungs_before = resp_cycles.lungs.peak_idx;
-            peak_idx_diaph_before = resp_cycles.diaph.peak_idx;
+            lungs_before = resp_cycles.lungs;
+            diaph_before = resp_cycles.diaph;
             [edited_lungs, edited_diaph, review_confirmed] = ...
                 manual_edit_respiration_features(data, resp_cycles.lungs, resp_cycles.diaph, config);
             if review_confirmed
@@ -44,8 +44,10 @@ function resp_cycles = extract_respiration_features(data, config)
                 resp_cycles.diaph = edited_diaph;
                 manual_review_performed = true;
                 manual_edits_made = ...
-                    (edit_lungs && peak_indices_changed(peak_idx_lungs_before, resp_cycles.lungs.peak_idx)) || ...
-                    (edit_diaph && peak_indices_changed(peak_idx_diaph_before, resp_cycles.diaph.peak_idx));
+                    (edit_lungs && respiration_breath_landmarks_changed( ...
+                        lungs_before, resp_cycles.lungs)) || ...
+                    (edit_diaph && respiration_breath_landmarks_changed( ...
+                        diaph_before, resp_cycles.diaph));
                 if manual_edits_made
                     review_status = 'manual_reviewed_edited';
                 else
@@ -77,12 +79,6 @@ function resp_cycles = extract_respiration_features(data, config)
         'manual_review_performed', manual_review_performed, ...
         'manual_edits_made', manual_edits_made, ...
         'loaded_from_cache', false);
-end
-
-function tf = peak_indices_changed(before, after)
-% PEAK_INDICES_CHANGED Test whether manual review changed ordered peak indices.
-
-    tf = ~isequal(before(:), after(:));
 end
 
 function save_final_respiration_feature_figure(b, config, basename)

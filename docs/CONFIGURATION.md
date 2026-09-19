@@ -80,6 +80,12 @@ Respiratory peaks are detected once and reused by all downstream labels.
 Respiratory-cycle peak/trough review is a distinct upstream step controlled by
 `config.resp.manual_control`, independent of `config.execution.mode`. Confirmed
 cycles and their review provenance are saved in the respiratory-feature cache.
+In the review GUI, red peaks can be added or removed. Existing blue trough dots
+can be moved independently to another finite sample strictly between their two
+surrounding peaks, or reset to the configured automatic trough. Blue dots are
+editable trough landmarks; they are not explicit hold boundaries. Each manual
+trough correction remains anchored to its surrounding peak sample pair, so a
+later peak edit invalidates only corrections whose pair changed.
 
 ## Session reference
 

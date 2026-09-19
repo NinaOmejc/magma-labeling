@@ -7,6 +7,7 @@ function b = extract_respiration_feature(x, config, basename)
 %   peak_idx/peak_t    - Breath-peak sample indices and times in seconds.
 %   peak_val           - Signal value at each retained peak.
 %   trough_idx/trough_t/trough_val - Inter-peak trough locations and values.
+%   trough_overrides   - K-by-3 manual [left peak, right peak, trough] samples.
 %   amp_exp            - Peak-to-following-trough excursion; final value is NaN.
 %   amp_insp           - Peak-to-preceding-trough excursion; first value is NaN.
 %   amp_sym            - Peak-to-adjacent-trough mean; first/final values are NaN.
