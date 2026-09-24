@@ -124,7 +124,7 @@ function config = get_config_defaults()
 
     %---- LABEL 5 - irregular - DETECTION SETTINGS
     config.irregular = struct();              % irregular breathing settings
-    config.irregular.analysis_win_sec = 60;   % trailing IBI-variability analysis window (history used to estimate CoV)
+    config.irregular.analysis_win_sec = 120;   % trailing IBI-variability analysis window (history used to estimate CoV)
     config.irregular.cov_thr   = 0.4;         % CoV threshold for irregularity
     config.irregular.plot_cov_step_sec = 1;   % display CoV as held values over "step_sec" windows (just for display)
     config.irregular.do_plot       = true;    % save irregular breathing diagnostic plot
@@ -170,7 +170,7 @@ function config = get_config_defaults()
     config.periodic.eami.envelope_lowpass_hz = 0.125;
     config.periodic.eami.envelope_lowpass_order = 6;
     config.periodic.eami.energy_win_sec = 60;
-    config.periodic.eami.threshold = 0.60;
+    config.periodic.eami.threshold = 0.50;
 
     % Guyot et al., PLOS ONE 2020 (DOI 10.1371/journal.pone.0221191).
     % The centered window/overlap and Matrix Pencil structure follow the paper.

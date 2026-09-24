@@ -68,14 +68,10 @@ function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b
         'Callback', @(src,~) set_xlim(src.Value));
     uicontrol(fh, 'Style', 'popupmenu', ...
         'String', {'Edit peaks', 'Move trough'}, ...
-        'Units', 'normalized', 'Position', [0.48 0.008 0.13 0.038], ...
+        'Units', 'normalized', 'Position', [0.50 0.008 0.20 0.038], ...
         'Callback', @(src,~) change_edit_mode(src));
-    uicontrol(fh, 'Style', 'pushbutton', ...
-        'String', 'Reset trough to automatic', ...
-        'Units', 'normalized', 'Position', [0.62 0.008 0.20 0.038], ...
-        'Callback', @(~,~) reset_selected_trough());
     uicontrol(fh, 'Style', 'pushbutton', 'String', 'Reviewed', ...
-        'Units', 'normalized', 'Position', [0.83 0.008 0.13 0.038], ...
+        'Units', 'normalized', 'Position', [0.72 0.008 0.24 0.038], ...
         'Callback', @(~,~) confirm_review());
 
     selectedL = plot(ax1, NaN, NaN, 'o', 'MarkerSize', 10, ...
@@ -126,9 +122,6 @@ function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b
     log_message(config, 2, ...
         ['  Blue dots are editable trough landmarks, not explicit hold ' ...
          'boundaries.']);
-    log_message(config, 2, ...
-        ['  Reset trough to automatic restores the selected interpeak ' ...
-         'interval''s configured automatic trough.']);
     log_message(config, 2, ...
         '  Press Reviewed to accept the current respiratory cycles.');
     log_message(config, 2, ...
@@ -331,37 +324,6 @@ function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b
                 new_idx, (new_idx - 1) / fs), false);
         catch err
             if startsWith(err.identifier, 'MAGMA:Respiration:')
-                show_status(err.message, true);
-            else
-                rethrow(err);
-            end
-        end
-        drawnow;
-    end
-
-    function reset_selected_trough()
-    % RESET_SELECTED_TROUGH Remove one selected pair's manual override.
-
-        if isempty(selected_belt)
-            show_status('Select a blue trough dot before resetting it.', true);
-            return;
-        end
-        try
-            if strcmp(selected_belt, 'lungs')
-                b_l = reset_respiration_trough_override(b_l, ...
-                    selected_left_peak, selected_right_peak, config);
-                update_breath_plots(pkL, trL, b_l);
-                refresh_selection_marker(b_l);
-            else
-                b_d = reset_respiration_trough_override(b_d, ...
-                    selected_left_peak, selected_right_peak, config);
-                update_breath_plots(pkD, trD, b_d);
-                refresh_selection_marker(b_d);
-            end
-            show_status('Selected trough reset to its automatic location.', false);
-        catch err
-            if startsWith(err.identifier, 'MAGMA:Respiration:')
-                clear_trough_selection();
                 show_status(err.message, true);
             else
                 rethrow(err);

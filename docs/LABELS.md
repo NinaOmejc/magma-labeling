@@ -1,159 +1,149 @@
-# Label definitions
+# MAGMA labels and phenotype evidence
 
-MAGMA detects elementary physiological patterns rather than clinical diagnoses.
+MAGMA separates **elementary physiological labels** from **prespecified dysfunctional-breathing (DB) phenotype evidence**.
 
-Labels are independent and may overlap.
+- **Level 1 — elementary physiological labels/evidence:** time-resolved signal-derived respiratory or physiological patterns.
+- **Level 2 — continuous prespecified MAGMA DB phenotype evidence:** recording-level evidence profiles assembled from Level-1 labels and detector summaries to represent clinically motivated DB patterns.
+- **Level 3 — future data-driven phenotype discovery:** unsupervised discovery of additional respiratory profiles from the multivariate Level-1/Level-2 representation.
 
-Unless explicitly literature-derived, thresholds below are operational research criteria.
+Neither Level 1 nor Level 2 should be interpreted as a clinical diagnosis. Labels may overlap, and several phenotype patterns may coexist in the same recording or participant.
 
-| Label | Primary evidence | Primary condition |
-|---|---|---|
-| `shallow` | Belt excursion | $0.10 < A/A_{ref} \leq 0.80$, sustained ≥30 s |
-| `deep` | Belt excursion | $A/A_{ref} \geq 1.20$, sustained ≥30 s |
-| `slow` | Respiratory rate | ≤10 breaths/min, 60-s estimate, localized state ≥30 s |
-| `rapid` | Respiratory rate | ≥20 breaths/min, 60-s estimate, localized state ≥30 s |
-| `irregular` | IBI variability | 60-s $CV_{IBI} \geq 0.30$ |
-| `apnea` | Very-low respiratory movement | ≤10% reference excursion for ≥10 s |
-| `sigh` | Local breath excursion | Breath ≥2× centered 15-breath median |
-| `periodic` | eAMI | eAMI ≥0.60 with sustained periodic modulation |
-| `thoracic` | Relative thoracic/abdominal excursion | Normalized T/A ≥1.5 for ≥30 s |
-| `async` | Thoracoabdominal phase offset | Reliable absolute phase offset ≥30° for sustained period |
-| `desat` | SpO₂ | <90% or ≥3 percentage-point reference drop for ≥10 s |
+## Level 1 — elementary physiological labels/evidence
 
-## Shallow and deep breathing
+The canonical label set is defined in `src/get_labels.m`.
 
-Amplitude is measured relative to the belt-specific session reference.
+| Label | Long name | Primary evidence | Primary operational condition |
+|---|---|---|---|
+| `shallow` | Shallow breathing | Belt excursion | `0.10 < A/A_ref <= 0.80`, sustained >= 30 s |
+| `deep` | Deep breathing | Belt excursion | `A/A_ref >= 1.20`, sustained >= 30 s |
+| `slow` | Slow breathing | Respiratory rate | `RR <= 10 breaths/min`, 60-s estimate, localized state >= 30 s |
+| `rapid` | Rapid breathing | Respiratory rate | `RR >= 20 breaths/min`, 60-s estimate, localized state >= 30 s |
+| `irregular` | Irregular breathing | Inter-breath-interval variability | 60-s `CV_IBI >= 0.40` |
+| `apnea` | Apnea-like respiratory pause | Very-low respiratory movement | <= 10% of reference excursion for >= 10 s |
+| `sigh` | Sigh | Local breath excursion | Breath amplitude >= 2 x centered 15-breath median |
+| `periodic` | Periodic breathing / Cheyne-Stokes-like pattern | eAMI by default | eAMI >= 0.60 with sustained periodic modulation |
+| `thoracic` | Thoracic-dominant breathing | Relative thoracic/abdominal excursion | Normalized thoracic-to-abdominal ratio >= 1.5 for >= 30 s |
+| `async` | Respiratory asynchrony | Thoracoabdominal phase offset | Reliable absolute phase offset >= 30 degrees for a sustained period |
+| `desat` | Oxygen desaturation | SpO2 | SpO2 < 90% or >= 3 percentage-point drop from reference for >= 10 s |
 
-The two belts are evaluated independently because their absolute amplitudes are not directly comparable.
+Unless explicitly literature-derived, thresholds above are **operational MAGMA research criteria** rather than validated clinical diagnostic cutoffs.
 
-## Slow and rapid breathing
+### Shallow and deep breathing
+
+Amplitude is measured relative to the belt-specific session reference. The thoracic and abdominal belts are evaluated independently because their absolute amplitudes are not directly comparable.
+
+The selected canonical breath-amplitude definition is controlled by `config.resp.amp_method` and is shared by downstream amplitude-based analyses.
+
+### Slow and rapid breathing
 
 Respiratory rate is estimated over 60-s windows and then localized using the reviewed respiratory cycles.
 
-## Irregular breathing
+These labels describe respiratory-rate states. By themselves they do not establish a clinical diagnosis such as hyperventilation syndrome.
+
+### Irregular breathing
 
 The primary measure is the coefficient of variation of inter-breath intervals:
 
-$$
-CV_{IBI}
-=
-\frac{\mathrm{SD}(IBI)}
-{\mathrm{mean}(IBI)}.
-$$
+`CV_IBI = SD(IBI) / mean(IBI)`
 
-Entropy and other nonlinear variability measures are not part of the current binary label.
+The current operational threshold is `CV_IBI >= 0.40` over the configured 60-s analysis window. Other nonlinear variability measures are not part of the current binary label.
 
-## Apnea-like respiratory pauses
+### Apnea-like respiratory pauses
 
 The label represents prolonged very-low respiratory movement.
 
-Breath-amplitude evidence is preferred. Raw respiratory-belt excursion is used as a fallback when breath amplitudes cannot be evaluated.
+Breath-amplitude evidence is preferred. Raw respiratory-belt excursion is used as a fallback when breath amplitudes cannot be evaluated. When both belts are evaluable, both must support the event.
 
-When both belts are evaluable, both must support the event.
+Because airflow is not measured directly, this label should be interpreted as an **apnea-like respiratory pause**, not as confirmed obstructive or central sleep apnea.
 
-Because airflow is not measured directly, this label should be interpreted as an **apnea-like respiratory pause**, not confirmed obstructive or central apnea.
+### Sigh
 
-## Sigh
+The primary method uses a local rolling-median criterion:
 
-The primary method uses the Genecand-style local criterion:
+`A_i >= 2 x median(A_(i-7), ..., A_(i+7))`
 
-$$
-A_i
-\geq
-2\,
-\operatorname{median}
-(A_{i-7},\ldots,A_{i+7}).
-$$
+The same canonical breath amplitude selected by `config.resp.amp_method` is used by all sigh methods.
 
-The same canonical belt amplitude selected by `config.resp.amp_method` is used by all sigh methods.
+### Periodic breathing
 
-## Periodic breathing
+The default primary detector is the estimated amplitude modulation index (eAMI). The Guyot demodulation/Matrix-Pencil implementation is retained as complementary evidence and can be selected as the primary method with `config.periodic.primary_method = 'guyot'`.
 
-The primary detector is the estimated amplitude modulation index (eAMI).
+MAGMA currently uses an adapted eAMI threshold of `0.60` and a configured Guyot modulation-frequency band of `0.008-0.050 Hz`. These are MAGMA settings rather than exact published diagnostic thresholds.
 
-With the default eAMI primary selection, the Guyot demodulation/Matrix Pencil
-implementation is retained as complementary evidence. It can instead supply
-the final label through `config.periodic.primary_method = 'guyot'`.
+The output represents **periodic or Cheyne-Stokes-like respiratory-effort modulation**, not a clinical diagnosis of Cheyne-Stokes respiration.
 
-MAGMA uses an adapted eAMI threshold of `0.60` and a configured Guyot
-modulation-frequency band of `0.008–0.050 Hz`; these are tuned MAGMA settings,
-not exact published thresholds. Guyot centered-window decisions represent the
-nearest-center interval (boundaries halfway between adjacent centers) and are
-never projected across the full 120-second analysis window. Sustained support
-must still meet the configured 60-second minimum.
+Periodic breathing is distinct from the Level-2 phenotype **periodic deep sighing**.
 
-The output represents periodic or Cheyne–Stokes-like respiratory-effort modulation rather than a clinical diagnosis of Cheyne–Stokes respiration.
+### Thoracic-dominant breathing
 
-## Thoracic-dominant breathing
+Thoracic and abdominal excursions are first normalized to their own session references. The operational label is based on:
 
-Thoracic and abdominal excursions are first normalized to their own session references.
+`normalized thoracic excursion / normalized abdominal excursion >= 1.5`
 
-The label is based on:
+This describes relative thoracic dominance within the recording, not the absolute thoracic contribution to tidal volume. The current threshold is an operational automatic-label rule rather than a validated clinical cutoff.
 
-$$
-\frac{T_{normalized}}
-{A_{normalized}}
-\geq 1.5.
-$$
+### Respiratory asynchrony
 
-This describes relative thoracic dominance, not the absolute thoracic contribution to tidal volume.
+The primary method is thoracoabdominal phase offset. Thoracic and abdominal signals are evaluated at one shared respiratory frequency, with reviewed breath timing guiding the respiratory fundamental where available.
 
-## Respiratory asynchrony
+For local phase differences `delta_phi_j`, the circular summary is:
 
-The primary measure is thoracoabdominal phase offset.
+`Z = (1/N) * sum(exp(i * delta_phi_j))`
 
-Thoracic and abdominal signals are evaluated at one shared respiratory frequency. Reviewed breath timing guides the respiratory fundamental where available.
+with:
 
-For local phase differences $\Delta\phi_j$,
-
-$$
-Z
-=
-\frac{1}{N}
-\sum_j e^{i\Delta\phi_j}.
-$$
-
-The circular mean phase is:
-
-$$
-\bar{\phi}=\arg(Z),
-$$
-
-and phase consistency is:
-
-$$
-R=|Z|.
-$$
+- circular mean phase: `phi_bar = arg(Z)`
+- phase consistency: `R = |Z|`
 
 Primary evidence requires:
 
-- $|\bar{\phi}| \geq 30^\circ$;
-- $R \geq 0.80$;
+- `|phi_bar| >= 30 degrees`;
+- `R >= 0.80`;
 - at least 80% valid phase evidence;
-- summary over five respiratory cycles;
+- a summary over five respiratory cycles;
 - sustained support for the configured minimum duration.
 
-A stable $180^\circ$ relationship therefore represents a large phase offset even though its phase consistency is high.
+A stable 180-degree relationship therefore represents a large phase offset even when phase consistency is high. The older wavelet-coherence detector remains available as complementary evidence.
 
-The older wavelet-coherence detector remains available as complementary evidence.
+### Oxygen desaturation
 
-## Oxygen desaturation
+A desaturation event is detected when either:
 
-A desaturation event is detected when:
+- `SpO2 < 90%`, or
+- `SpO2_ref - SpO2 >= 3` percentage points,
 
-$$
-\mathrm{SpO}_2 < 90\%
-$$
+for at least 10 s.
 
-or
+The absolute criterion does not require an available session reference. Event diagnostics also store nadir, event depth, criterion support, and recovery information.
 
-$$
-\mathrm{SpO}_{2,ref}-\mathrm{SpO}_2
-\geq 3
-$$
+## Level 2 — continuous prespecified MAGMA DB phenotype evidence
 
-percentage points for at least 10 s.
+Level 2 combines Level-1 labels and detector summaries into **continuous phenotype-evidence profiles**. These profiles are descriptive and do **not** create binary clinical phenotype-present/absent diagnoses.
 
-The absolute criterion does not require an available session reference.
+| Prespecified MAGMA DB phenotype evidence | Main Level-1 inputs | Assessable from current signals? | Main limitation / missing clinical information |
+|---|---|---|---|
+| Hyperventilation-like respiratory pattern | `rapid`, `deep`, rapid-deep overlap, RR, relative excursion | Partially | ETCO2/capnography, ventilation relative to metabolic demand, CPET/ergospirometry, clinical assessment, Nijmegen questionnaire are needed for clinical interpretation |
+| Periodic deep sighing | `sigh`, `irregular`, `deep`, sigh-irregular overlap | Yes | Continuous pattern evidence; no clinical cutoff is imposed |
+| Thoracic-dominant breathing | `thoracic` and thoracic/abdominal balance metrics | Yes | Belts are independently normalized and uncalibrated; clinical/ergospirometric validation is desirable |
+| Forced abdominal expiration | none sufficient at present | No | Belt movement alone cannot establish active abdominal-muscle recruitment |
+| Thoraco-abdominal asynchrony | `async` and phase-offset/coherence summaries | Yes | Algorithmic evidence is not a clinical diagnosis |
 
-Event diagnostics additionally store nadir, event depth, criterion support, and recovery information.
+The current implementation is in `src/utils/build_db_phenotype_evidence.m`.
+
+### Relationship between Level 1 and Level 2
+
+Level 1 answers **"what respiratory/physiological pattern is present and when?"**
+
+Level 2 answers **"how much evidence does this recording contain for a prespecified clinically motivated DB pattern?"**
+
+Examples:
+
+- `rapid` and `deep` are Level-1 states; their burden and overlap contribute to the Level-2 **hyperventilation-like** profile.
+- individual `sigh` events and `irregular` breathing contribute to **periodic deep sighing**.
+- `thoracic` directly contributes to **thoracic-dominant breathing** evidence.
+- `async` directly contributes to **thoraco-abdominal asynchrony** evidence.
+- no current Level-1 label is sufficient to establish **forced abdominal expiration**.
+
+Automatic and manually reviewed annotation layers can generate parallel Level-2 evidence profiles. External clinical data are intentionally kept separate from the signal-derived phenotype evidence so they can be used for later clinical interpretation and validation.
+
+See `PHENOTYPES.md` for the detailed phenotype-level interpretation and recommended clinical-validation structure.
