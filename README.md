@@ -12,7 +12,7 @@ Labels are independent and may overlap. They describe signal-derived physiologic
 
 - [Configuration](docs/CONFIGURATION.md)
 - [Label definitions](docs/LABELS.md)
-- [Phenotypes] (docs/PHENOTYPES.md)
+- [Phenotypes](docs/PHENOTYPES.md)
 - [Outputs](docs/OUTPUTS.md)
 
 ## Input
