@@ -3,8 +3,9 @@
 MAGMA separates **elementary physiological labels** from **prespecified dysfunctional-breathing (DB) phenotype evidence**.
 
 - **Level 1 — elementary physiological labels/evidence:** time-resolved signal-derived respiratory or physiological patterns.
-- **Level 2 — continuous prespecified MAGMA DB phenotype evidence:** recording-level evidence profiles assembled from Level-1 labels and detector summaries to represent clinically motivated DB patterns.
-- **Level 3 — future data-driven phenotype discovery:** unsupervised discovery of additional respiratory profiles from the multivariate Level-1/Level-2 representation.
+- **Level 2A — full prespecified MAGMA DB phenotype evidence:** recording-level evidence profiles, detector summaries, QC, and provenance.
+- **Level 2B — fixed compact phenotype representation:** exactly 21 raw recording-level variables in an authoritative order.
+- **Level 3 — future data-driven phenotype discovery:** downstream unsupervised discovery from the fixed Level-2B representation.
 
 Neither Level 1 nor Level 2 should be interpreted as a clinical diagnosis. Labels may overlap, and several phenotype patterns may coexist in the same recording or participant.
 
@@ -116,9 +117,13 @@ for at least 10 s.
 
 The absolute criterion does not require an available session reference. Event diagnostics also store nadir, event depth, criterion support, and recovery information.
 
-## Level 2 — continuous prespecified MAGMA DB phenotype evidence
+## Level 2A and Level 2B — recording-level phenotype evidence
 
-Level 2 combines Level-1 labels and detector summaries into **continuous phenotype-evidence profiles**. These profiles are descriptive and do **not** create binary clinical phenotype-present/absent diagnoses.
+Level 2A combines Level-1 labels and detector summaries into full continuous
+phenotype-evidence profiles. Level 2B selects a fixed 16-feature prespecified
+DB representation plus five non-duplicated additional-pattern burdens. Both are
+descriptive and do **not** create binary clinical phenotype-present/absent
+diagnoses.
 
 | Prespecified MAGMA DB phenotype evidence | Main Level-1 inputs | Assessable from current signals? | Main limitation / missing clinical information |
 |---|---|---|---|
@@ -134,7 +139,7 @@ The current implementation is in `src/utils/build_db_phenotype_evidence.m`.
 
 Level 1 answers **"what respiratory/physiological pattern is present and when?"**
 
-Level 2 answers **"how much evidence does this recording contain for a prespecified clinically motivated DB pattern?"**
+Level 2 answers **"how much evidence does this recording contain for a prespecified clinically motivated DB pattern?"** Level 2A retains the full answer; Level 2B provides the fixed raw 21-variable cohort representation.
 
 Examples:
 

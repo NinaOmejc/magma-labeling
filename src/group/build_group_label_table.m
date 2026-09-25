@@ -9,8 +9,9 @@ function group_table = build_group_label_table(config_or_results_path)
 %                 recording duration, per-label availability/burden/event/review
 %                 summaries, belt/reference QC, overlap, and numeric detector
 %                 summaries. Dynamic per-label fields use canonical short names.
-% Also writes group_label_summary CSV/MAT, measure-comparability metadata,
-% per-event durations, compact candidate-event QC, and cohort QC summaries.
+% Also writes group_label_summary CSV/MAT, fixed Level-2B phenotype matrices,
+% measure-comparability metadata, per-event durations, compact candidate-event
+% QC, and cohort QC summaries.
 
     if nargin < 1 || isempty(config_or_results_path)
         config = get_config();
@@ -51,6 +52,7 @@ function group_table = build_group_label_table(config_or_results_path)
     out_mat = fullfile(out_dir, 'group_label_summary.mat');
     writetable(group_table, out_csv);
     save(out_mat, 'group_table');
+    build_group_phenotype_tables(group_table, out_dir);
     write_measure_comparability_table(out_dir);
     event_duration_table = build_group_event_duration_table(files);
     candidate_event_qc = build_group_candidate_event_table(files);
@@ -81,6 +83,8 @@ function row = label_file_to_summary_row(label_file, config, canonical_labels)
     row.subject = get_loaded_value(loaded, 'subject', file_subject);
     row.measure = get_loaded_value(loaded, 'measure', file_measure);
     row.measurement = row.measure;
+    row.recording_id = sprintf('Sub%d_M%d', row.subject, row.measure);
+    row.analysis_id = saved_analysis_id(loaded);
     row.subject_group = subject_group_for_subject(row.subject, config);
     if isfield(loaded, 'resp_ref')
         row = add_respiratory_reference_summary(row, loaded.resp_ref);
@@ -111,6 +115,20 @@ function row = label_file_to_summary_row(label_file, config, canonical_labels)
     end
     row = add_authoritative_trace_summaries(row, loaded);
 
+end
+
+function analysis_id = saved_analysis_id(loaded)
+% SAVED_ANALYSIS_ID Read the immutable run identifier when available.
+
+    analysis_id = '';
+    if isfield(loaded, 'analysis_id') && ~isempty(loaded.analysis_id)
+        analysis_id = char(string(loaded.analysis_id));
+    elseif isfield(loaded, 'config') && isstruct(loaded.config) && ...
+            isfield(loaded.config, 'execution') && ...
+            isfield(loaded.config.execution, 'analysis_id') && ...
+            ~isempty(loaded.config.execution.analysis_id)
+        analysis_id = char(string(loaded.config.execution.analysis_id));
+    end
 end
 
 function row = add_label_summaries(row, loaded, config, canonical_labels)

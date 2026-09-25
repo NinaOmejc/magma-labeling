@@ -9,7 +9,7 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
 %   signals_raw          - Nsample x Nchannel raw physiological signal matrix.
 %   signals_preprocessed - Nsample x Nchannel processed signal matrix.
 %
-% The v9 file stores sample signals/time under /signals and /time;
+% The v11 file stores sample signals/time under /signals and /time;
 % reviewed breath cycles under /resp_cycles, canonical feature traces under
 % /resp_features, and compact detector evidence under /detector_diagnostics;
 % common-interval metadata under /session_reference, per-belt
@@ -17,13 +17,14 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
 % and SpO2 reference metadata under /spo2_reference; sample x label masks
 % and per-label
 % metadata under /labels; canonical automatic/reviewed events under /events;
-% review rounds under /review; and burden, overlap, phenotype, and recording
+% review rounds under /review; and burden, overlap, full phenotype evidence,
+% fixed compact phenotype features, and recording
 % identifiers/configuration under /burden, /overlap, /phenotype_evidence,
 % /config, and /meta. Compact pre-final intervals live under /events/candidate.
 
     filename = char(string(filename));
     validate_export_inputs(filename, results, signals_raw, signals_preprocessed);
-    export_schema_version = 'magma_ml_hdf5_v10';
+    export_schema_version = 'magma_ml_hdf5_v11';
     out_dir = fileparts(filename);
     if ~isempty(out_dir) && ~isfolder(out_dir)
         mkdir(out_dir);
@@ -147,6 +148,7 @@ function validate_export_inputs(filename, results, raw, preprocessed)
         error('MAGMA:HDF5:MissingResultField', ...
             'Missing required result field(s): %s.', strjoin(missing, ', '));
     end
+    validate_phenotype_bundle(results.db_phenotype_evidence);
     if ~isnumeric(raw) || ~isnumeric(preprocessed) || ...
             size(raw, 1) ~= size(preprocessed, 1)
         error('MAGMA:HDF5:SignalAlignment', ...
@@ -187,6 +189,24 @@ function validate_export_inputs(filename, results, raw, preprocessed)
         results.candidate_events, results.config.fs, expected);
     validate_session_reference(results.session_reference, N, ...
         results.config.fs, results.measure);
+end
+
+function validate_phenotype_bundle(bundle)
+% VALIDATE_PHENOTYPE_BUNDLE Require both fixed automatic/reviewed matrices.
+
+    if ~isstruct(bundle) || ~all(isfield(bundle, {'automatic', 'reviewed'}))
+        error('MAGMA:HDF5:InvalidPhenotypeEvidence', ...
+            'db_phenotype_evidence must contain automatic and reviewed layers.');
+    end
+    layers = {'automatic', 'reviewed'};
+    for i = 1:numel(layers)
+        layer = bundle.(layers{i});
+        if ~isstruct(layer) || ~isfield(layer, 'compact_features')
+            error('MAGMA:HDF5:InvalidPhenotypeEvidence', ...
+                '%s phenotype evidence lacks compact_features.', layers{i});
+        end
+        validate_compact_phenotype_features(layer.compact_features);
+    end
 end
 
 function validate_candidate_event_sets(sets, fs, labels)

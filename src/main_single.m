@@ -4,8 +4,8 @@
 % SETTINGS
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% Advanced scientific thresholds and processing defaults are defined in get_config_defaults.m. 
-config = get_config_defaults(); 
+% Advanced scientific thresholds and processing defaults are defined in get_config_defaults.m.
+config = get_config();
 
 % Here below are the main arguments to be checked and modified:
 
@@ -13,7 +13,7 @@ config = get_config_defaults();
 config.path_data_in = 'D:\Projects\MAGMA\raw_data';
 config.path_results_out = 'D:\Projects\MAGMA\data_analysis\statistical_labeling';
 config.fs = 200;
-config.subjects = [30:42];
+config.subjects = 30:42;
 config.remove_subjects = [3 30 91];
 config.measurements = [1 2];
 config.subjects(ismember(config.subjects, config.remove_subjects)) = [];

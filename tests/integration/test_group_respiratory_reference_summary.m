@@ -275,12 +275,80 @@ function testEventsAndCandidatesUseSemanticIdentityAndIndices(testCase)
          'duration','accepted','rejection_reason','uncertainty_sec'});
     verifyEqual(testCase,candidate_table.label,"rapid");
     verifyEqual(testCase,candidate_table.duration,28);
-    verifyFalse(testCase,candidate_table.accepted);
+    verifyFalse(testCase,logical(candidate_table.accepted));
     verifyEqual(testCase,candidate_table.rejection_reason,"too_short");
     qc_data = load(fullfile(results_root,'group_analysis','cohort_qc_summary.mat'));
     rapid_row = qc_data.cohort_qc.by_label.label == "rapid";
     verifyEqual(testCase, ...
         qc_data.cohort_qc.by_label.rejected_candidate_count(rapid_row),1);
+end
+
+function testDedicatedPhenotypeTablesUseFixedSchemaAndProvenance(testCase)
+    results_root = tempname;
+    subject_dir = fullfile(results_root, 'Sub1_M2');
+    mkdir(subject_dir);
+    cleanup_dir = onCleanup(@() rmdir(results_root, 's'));
+
+    schema = get_phenotype_feature_schema();
+    subject = 1;
+    measure = 2;
+    analysis_id = 'analysis_fixture';
+    label_names = get_labels('short');
+    label_available = true(1, 11);
+    mask_automatic = false(20, 11);
+    config = struct('fs', 10);
+    automatic = compact_output(schema, 1:21);
+    reviewed = compact_output(schema, 101:121);
+    db_phenotype_evidence = struct( ...
+        'automatic', struct('compact_features', automatic), ...
+        'reviewed', struct('compact_features', reviewed));
+    save(fullfile(subject_dir, 'Sub1_M2_labels.mat'), 'subject', 'measure', ...
+        'analysis_id', 'label_names', 'label_available', 'mask_automatic', ...
+        'config', 'db_phenotype_evidence');
+
+    build_group_label_table(results_root);
+    out_dir = fullfile(results_root, 'group_analysis');
+    auto = readtable(fullfile(out_dir, ...
+        'group_phenotype_features_automatic.csv'), ...
+        'TextType', 'string', 'VariableNamingRule', 'preserve');
+    review = readtable(fullfile(out_dir, ...
+        'group_phenotype_features_reviewed.csv'), ...
+        'TextType', 'string', 'VariableNamingRule', 'preserve');
+    availability = readtable(fullfile(out_dir, ...
+        'group_phenotype_availability_automatic.csv'), ...
+        'TextType', 'string', 'VariableNamingRule', 'preserve');
+    dictionary = readtable(fullfile(out_dir, ...
+        'phenotype_feature_dictionary.csv'), ...
+        'TextType', 'string', 'VariableNamingRule', 'preserve');
+
+    expected_columns = [{'recording_id', 'subject', 'measure', ...
+        'subject_group', 'analysis_id'}, schema.feature_names];
+    verifyEqual(testCase, auto.Properties.VariableNames, expected_columns);
+    verifyEqual(testCase, auto.recording_id, "Sub1_M2");
+    verifyEqual(testCase, auto.analysis_id, "analysis_fixture");
+    verifyEqual(testCase, table2array(auto(:, 6:end)), 1:21);
+    verifyEqual(testCase, table2array(review(:, 6:end)), 101:121);
+    verifyEqual(testCase, table2array(availability(:, 6:end)), ones(1, 21));
+    verifyEqual(testCase, dictionary.feature_index, (1:21)');
+    verifyEqual(testCase, dictionary.feature_name, ...
+        string(schema.feature_names(:)));
+    verifyTrue(testCase, isfile(fullfile(out_dir, ...
+        'group_phenotype_features.mat')));
+    verifyTrue(testCase, isfile(fullfile(out_dir, ...
+        'group_phenotype_features_long.csv')));
+end
+
+function compact = compact_output(schema, values)
+% COMPACT_OUTPUT Create one valid saved compact-vector fixture.
+
+    compact = struct('version', 'magma_compact_phenotype_features_v1', ...
+        'schema_version', schema.version, 'n_features', schema.n_features, ...
+        'feature_names', {schema.feature_names}, 'values', double(values), ...
+        'available', true(1, schema.n_features), ...
+        'coverage_fraction', ones(1, schema.n_features), ...
+        'missing_reason', {repmat({''}, 1, schema.n_features)}, ...
+        'phenotype_group', {schema.phenotype_group}, ...
+        'feature_role', {schema.feature_role}, 'units', {schema.units});
 end
 
 function resp_ref = synthetic_saved_reference()

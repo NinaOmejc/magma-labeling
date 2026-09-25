@@ -1,358 +1,199 @@
 # MAGMA dysfunctional-breathing phenotypes
 
-## Continuous prespecified MAGMA DB phenotype evidence
-
-The current implementation defines five prespecified clinically motivated DB phenotype profiles in `src/utils/build_db_phenotype_evidence.m`.
-
-| Prespecified DB phenotype | Core features for the primary analysis representation | Number of core features | Additional stored/supporting evidence |
-|---|---|---:|---|
-| **Hyperventilation-like respiratory pattern** | Rapid-breathing fraction; deep-breathing fraction; rapid-deep overlap fraction; median respiratory rate during rapid breathing; median relative excursion during deep breathing | **5** | Rapid-deep overlap duration, event count and event duration; belt-specific summaries; external ETCO2/capnography, CPET/ergospirometry, Nijmegen Questionnaire and clinical assessment |
-| **Periodic deep sighing** | Sighs per 15 min; maximum sigh count in any 15-min window; irregular-breathing fraction; fraction of sighs overlapping irregular breathing; median inter-sigh interval | **5** | Raw sigh count; minimum inter-sigh interval; deep-breathing fraction; detailed sigh-amplitude descriptors |
-| **Thoracic-dominant breathing** | Thoracic-dominance fraction; median normalized thoracic-to-abdominal excursion ratio; median thoracic-dominant episode duration | **3** | Event count; maximum duration; median log-ratio; median relative thoracic fraction |
-| **Forced abdominal expiration** | No adequate current signal-derived feature | **0** | Future candidates require clinical annotation or more direct abdominal-muscle/mechanical evidence |
-| **Thoraco-abdominal asynchrony** | Asynchrony fraction; median absolute thoracoabdominal phase offset; median asynchrony episode duration | **3** | Maximum phase offset; event count; resultant length; frequency-selection metrics; coherence comparison; QC and availability fields |
-
-The compact representation therefore contains:
-
-- 5 hyperventilation-like features;
-- 5 periodic-deep-sighing features;
-- 3 thoracic-dominance features;
-- 0 forced-abdominal-expiration features;
-- 3 thoracoabdominal-asynchrony features.
-
-**Total: 16 primary Level-2 DB phenotype features per recording**, subject to physiological availability.
-
-These 16 features are the proposed primary representation for phenotype-space clustering. The larger evidence objects remain available for quality control, interpretation, sensitivity analyses, and secondary modelling.
----
-
-## Hyperventilation-like respiratory pattern
-
-MAGMA intentionally uses the term **hyperventilation-like respiratory pattern**, rather than hyperventilation syndrome.
-
-Hyperventilation is physiologically defined by ventilation being excessive relative to metabolic demand and is therefore not established by respiratory belts alone. Rapid and deep breathing provide compatible respiratory-pattern evidence but do not by themselves demonstrate hyperventilation syndrome.
-
-### Core analysis features
-
-1. **Rapid-breathing fraction**  
-   Fraction of assessable recording time classified as rapid breathing.
-
-2. **Deep-breathing fraction**  
-   Fraction of assessable recording time classified as deep breathing.
-
-3. **Rapid-deep overlap fraction**  
-   Degree to which rapid and deep breathing occur simultaneously.
-
-4. **Median respiratory rate during rapid breathing**  
-   Summary of rate severity when rapid breathing is present.
-
-5. **Median relative excursion during deep breathing**  
-   Summary of breathing-depth increase relative to the recording-specific reference.
-
-### Additional evidence retained by MAGMA
-
-The full phenotype evidence object additionally stores:
-
-- rapid-deep overlap duration;
-- rapid-deep overlap fractions relative to each component;
-- rapid-deep overlap event count;
-- median and maximum rapid-deep event duration;
-- belt-specific respiratory-rate summaries;
-- belt-specific relative deep-excursion summaries.
-
-### External clinical information
-
-Clinical interpretation may additionally use:
-
-- ETCO2 / capnography;
-- ventilation relative to metabolic demand;
-- cardiopulmonary exercise testing / ergospirometry;
-- clinical assessment;
-- Nijmegen Questionnaire.
-
-These external clinical variables are not currently combined into the signal-derived phenotype score and should remain distinguishable from the physiological evidence.
-
----
-
-## Periodic deep sighing
-
-Periodic deep sighing is represented as a recurrent sighing pattern rather than by the occurrence of an isolated sigh.
-
-It is deliberately distinct from the Level-1 `periodic` label:
-
-- **periodic deep sighing** describes repeated sighs and their temporal organization within irregular breathing;
-- **periodic breathing** describes cyclic waxing-waning modulation of respiratory effort.
-
-### Core analysis features
-
-1. **Sighs per 15 minutes**  
-   Recording-normalized sigh frequency.
-
-2. **Maximum sigh count in any 15-minute window**  
-   Captures local clustering of sighs even when whole-recording frequency is moderate.
-
-3. **Irregular-breathing fraction**  
-   Fraction of assessable recording time showing respiratory timing irregularity.
-
-4. **Fraction of sighs overlapping irregular breathing**  
-   Measures the degree to which sighs occur within irregular respiratory periods.
-
-5. **Median inter-sigh interval**  
-   Describes the typical temporal spacing of recurrent sighs.
-
-### Additional evidence retained by MAGMA
-
-The complete phenotype profile may additionally contain:
-
-- total sigh count;
-- minimum inter-sigh interval;
-- deep-breathing fraction;
-- detailed sigh-amplitude summaries.
-
-Deep-breathing fraction is retained in the full evidence object because sighs are augmented breaths and sustained deep breathing may provide additional context. It is not included in the compact primary representation to avoid unnecessary overlap with the hyperventilation-like phenotype.
-
----
-
-## Thoracic-dominant breathing
-
-Thoracic-dominant breathing is derived from relative thoracic and abdominal excursion.
-
-Because the two respiratory belts are uncalibrated, each is normalized independently to its own recording-specific reference. The resulting measures therefore describe **relative change in thoracic versus abdominal motion**, not absolute rib-cage contribution to tidal volume.
-
-### Core analysis features
-
-1. **Thoracic-dominance fraction**  
-   Fraction of assessable recording time classified as thoracic dominant.
-
-2. **Median normalized thoracic-to-abdominal excursion ratio**  
-   Typical magnitude of relative thoracic dominance.
-
-3. **Median thoracic-dominant episode duration**  
-   Persistence of the thoracic-dominant pattern.
-
-### Additional evidence retained by MAGMA
-
-The full evidence profile additionally stores:
-
-- event count;
-- maximum event duration;
-- median log thoracic-to-abdominal ratio;
-- median relative thoracic fraction.
-
-The ratio, log-ratio, and relative-fraction measures are alternative descriptions of largely the same thoracoabdominal balance. They are retained for interpretation and methodological comparison but are not all included in the compact analysis representation.
-
----
-
-## Forced abdominal expiration
-
-Forced abdominal expiration is retained as one of the five prespecified clinically motivated DB phenotypes but is currently marked as **not assessable from the available signals**.
-
-The respiratory belts measure thoracic and abdominal movement but do not directly establish active abdominal-muscle contraction or expiratory recruitment.
-
-MAGMA therefore does not use thoracic dominance, abdominal excursion, or another indirect belt-derived measure as a surrogate for forced abdominal expiration.
-
-Potential future evidence could include:
-
-- clinical annotation;
-- direct abdominal muscle activity;
-- calibrated respiratory mechanics;
-- expiratory abdominal excursion;
-- expiratory slope;
-- expiratory duration;
-- abdominal-to-thoracic expiratory ratio;
-- persistence or event burden.
-
-These remain future candidates and are not part of the current Level-2 feature vector.
-
----
-
-## Thoraco-abdominal asynchrony
-
-Thoraco-abdominal asynchrony is derived from the phase relationship between the thoracic and abdominal respiratory belts.
-
-The primary detector estimates the respiratory phase difference at a shared respiratory frequency and summarizes the local phase relationship using circular statistics.
-
-### Core analysis features
-
-1. **Asynchrony fraction**  
-   Fraction of assessable recording time classified as asynchronous.
-
-2. **Median absolute thoracoabdominal phase offset**  
-   Typical magnitude of temporal displacement between thoracic and abdominal motion.
-
-3. **Median asynchrony episode duration**  
-   Persistence of asynchronous breathing when present.
-
-
-### Additional evidence retained by MAGMA
-
-The full evidence structure stores substantially more information, including:
-
-- event count;
-- maximum event duration;
-- maximum absolute phase offset;
-- resultant length / phase consistency;
-- selected respiratory frequency;
-- expected respiratory frequency;
-- selected-to-expected frequency ratio;
-- reference availability and quality;
-- phase-offset quality-control information;
-- complementary wavelet-coherence evidence;
-- method-comparison information;
-- polarity metadata;
-- skip codes and availability information.
-
-These additional fields are useful for quality control and methodological interpretation but should **not** be treated as equally weighted phenotype features.
-
-The HDF5 export may therefore contain many nested asynchrony datasets even though the compact phenotype representation contains only three primary asynchrony features.
-
-
-
----
-
-## Labels and phenotypes crosswalk
-
-| Level-1 evidence | Level-2 phenotype(s) it directly informs |
+MAGMA separates four analysis layers:
+
+1. **Level 1 — elementary physiological evidence.** Time-resolved labels,
+   events, assessability masks, breath evidence, and detector diagnostics.
+2. **Level 2A — full prespecified phenotype evidence archive.** Recording-level
+   burden, events, detector summaries, QC, provenance, and supporting measures.
+3. **Level 2B — fixed compact phenotype representation.** Exactly 21 raw,
+   interpretable recording-level variables in a versioned order.
+4. **Level 3 — future data-driven phenotype discovery.** Clustering or other
+   discovery performed downstream; it is not implemented by the MAGMA labeling
+   pipeline.
+
+A phenotype is **not one number**, no binary clinical diagnosis is produced,
+and the five prespecified phenotypes are not mutually exclusive. The full
+Level-2A archive is deliberately larger than the Level-2B clustering vector.
+
+## Five prespecified DB phenotypes
+
+| Prespecified phenotype | Level-2B features | Signal assessment status |
+|---|---:|---|
+| Hyperventilation-like respiratory pattern | 5 | `partial` |
+| Periodic deep sighing | 5 | `assessable` when the required evidence is available |
+| Thoracic-dominant breathing | 3 | `assessable` when both belts support the analysis |
+| Forced abdominal expiration | 0 | `not_assessable` |
+| Thoraco-abdominal asynchrony | 3 | `assessable` when both belts and phase evidence support the analysis |
+
+`signal_assessment_status` describes what the signal modality can establish.
+The separate `evidence_available` field states whether the required evidence
+exists in the current recording. A `partial` status is not the same as
+unavailable.
+
+### Hyperventilation-like respiratory pattern
+
+MAGMA intentionally does not use the term *hyperventilation syndrome*.
+Respiratory belts can show rapid/deep breathing but cannot establish that
+ventilation is excessive relative to metabolic demand.
+
+The five compact features are:
+
+1. rapid-breathing fraction of rapid-assessable time;
+2. deep-breathing fraction of deep-assessable time;
+3. rapid/deep overlap duration divided by time where both labels are jointly
+   assessable;
+4. the median of available per-belt recording-scope respiratory-rate medians;
+5. the median of available per-belt recording-scope normalized breath-excursion
+   medians.
+
+Rate and excursion medians use the full relevant layer-specific assessable
+scope, not only samples already labeled rapid or deep. The Level-2A archive
+also retains directional overlap fractions, overlap event summaries,
+event-conditioned medians, and belt-specific values.
+
+### Periodic deep sighing
+
+Periodic deep sighing describes the recurrence and organization of sighs. It
+is distinct from the Level-1 `periodic` label, which describes waxing/waning
+respiratory effort.
+
+The five compact features are:
+
+1. coverage-aware sigh frequency per 15 minutes;
+2. maximum sigh count in a continuously assessable 15-minute interval;
+3. irregular-breathing fraction of irregular-assessable time;
+4. fraction of assessable canonical sigh events whose midpoint occurs in an
+   irregular-positive state;
+5. median of available per-belt recording-scope ordinary IBI CoV medians.
+
+The 15-minute maximum is unavailable when no continuous assessable 15-minute
+interval exists. For reviewed evidence, unreviewed gaps are never counted as
+reviewed negatives. The event-level sigh/irregular feature is distinct from
+the sample-duration overlap metric, which remains in Level 2A.
+
+### Thoracic-dominant breathing
+
+Each uncalibrated respiratory belt is normalized to its own session reference.
+The result describes relative thoracic-versus-abdominal change, not an absolute
+rib-cage contribution to tidal volume.
+
+The three compact features are thoracic-dominant fraction, the recording-scope
+median normalized thoracic-to-abdominal excursion ratio, and median event
+duration. If the detector is assessable and has zero events, the compact event
+duration is 0 seconds. If the detector is unavailable, it remains `NaN`.
+
+### Forced abdominal expiration
+
+Forced abdominal expiration remains one of the five prespecified phenotypes,
+but the current signals cannot establish active abdominal-muscle recruitment.
+It contributes no compact feature. Thoracic dominance or belt excursion is not
+used as a surrogate. Future assessment would require clinical annotation or
+more direct muscular/mechanical evidence.
+
+### Thoraco-abdominal asynchrony
+
+The three compact features are asynchrony fraction, recording-scope median
+absolute phase offset over reliable finite phase evidence, and median event
+duration. As for thoracic dominance, an assessable detector with zero events
+has a compact event duration of 0 seconds; unavailable evidence remains `NaN`.
+
+The Level-2A archive retains event counts, maximum durations, phase consistency,
+frequency-selection evidence, method comparison, reference quality, polarity
+metadata, coherence diagnostics, skip codes, and other QC fields. These fields
+are not additional clustering variables.
+
+## Fixed Level-2B schema
+
+`get_phenotype_feature_schema.m` is the sole authority for names, order, units,
+roles, display names, and source descriptions. `build_compact_phenotype_features.m`
+is the sole recording-level builder.
+
+| # | Feature name | Units |
+|---:|---|---|
+| 1 | `db_hyperventilation_rapid_fraction` | fraction |
+| 2 | `db_hyperventilation_deep_fraction` | fraction |
+| 3 | `db_hyperventilation_rapid_deep_overlap_fraction` | fraction |
+| 4 | `db_hyperventilation_median_rr_bpm` | breaths_per_min |
+| 5 | `db_hyperventilation_median_relative_excursion` | ratio |
+| 6 | `db_periodic_deep_sighing_sighs_per_15_min` | events_per_15_min |
+| 7 | `db_periodic_deep_sighing_max_sighs_15_min` | events_per_15_min |
+| 8 | `db_periodic_deep_sighing_irregular_fraction` | fraction |
+| 9 | `db_periodic_deep_sighing_sigh_irregular_overlap_fraction` | fraction |
+| 10 | `db_periodic_deep_sighing_median_ibi_cov` | dimensionless |
+| 11 | `db_thoracic_dominant_fraction` | fraction |
+| 12 | `db_thoracic_dominant_median_ta_ratio` | ratio |
+| 13 | `db_thoracic_dominant_median_event_duration_sec` | seconds |
+| 14 | `db_asynchrony_fraction` | fraction |
+| 15 | `db_asynchrony_median_abs_phase_deg` | degrees |
+| 16 | `db_asynchrony_median_event_duration_sec` | seconds |
+| 17 | `pattern_apnea_fraction` | fraction |
+| 18 | `pattern_periodic_fraction` | fraction |
+| 19 | `pattern_shallow_fraction` | fraction |
+| 20 | `pattern_slow_fraction` | fraction |
+| 21 | `pattern_desaturation_fraction` | fraction |
+
+The first 16 variables represent the prespecified DB phenotypes. The final five
+are non-duplicated additional respiratory-pattern burdens. Forced abdominal
+expiration contributes zero variables.
+
+Deep breathing, rapid breathing, irregular breathing, and sighing remain fully
+available at Level 1 and contribute to the prespecified phenotypes; they are not
+duplicated as additional Level-2 respiratory-pattern profiles. The only
+additional Level-2 profiles are apneic breathing, periodic breathing, shallow
+breathing, slow breathing, and desaturation.
+
+## Availability, zero, and coverage
+
+All fractions use assessable time as their denominator. For each compact
+feature MAGMA stores the value, an availability flag, coverage fraction, and a
+missing reason.
+
+```text
+unavailable != negative
+```
+
+A finite zero is a valid available negative. Missing or unusable signal
+evidence remains `NaN` with `available=false`; it is never silently converted
+to zero. The compact vectors are raw and unscaled. MAGMA performs no
+cross-subject normalization, imputation, transformation, PCA, or clustering.
+
+## Automatic and reviewed representations
+
+The automatic and reviewed layers are always separate:
+
+- **automatic** uses the full physiologically assessable recording and is the
+  default whole-cohort clustering representation;
+- **reviewed** uses only explicitly reviewed *and* physiologically assessable
+  regions and is intended primarily for validation and sensitivity analysis.
+
+Recording-scope rate, excursion, CoV, balance, and phase medians obey the same
+layer scope. A reviewed median therefore never incorporates an unreviewed
+region, and automatic/reviewed values are never silently mixed in one row.
+
+## Level-2A archive and Level-1 crosswalk
+
+The full archive preserves useful burden, event, overlap, belt-specific,
+method-comparison, availability, QC, and provenance evidence. It also preserves
+event-conditioned continuous summaries alongside the recording-scope summaries
+used by Level 2B.
+
+| Level-1 evidence | Level-2 use |
 |---|---|
-| `rapid` | Hyperventilation-like respiratory pattern |
-| `deep` | Hyperventilation-like respiratory pattern; retained as supporting context for periodic deep sighing |
-| rapid-deep overlap | Hyperventilation-like respiratory pattern |
-| `sigh` | Periodic deep sighing |
-| `irregular` | Periodic deep sighing |
-| sigh-irregular overlap | Periodic deep sighing |
-| `thoracic` | Thoracic-dominant breathing |
-| `async` | Thoraco-abdominal asynchrony |
-| `shallow` | Additional descriptive respiratory-pattern profile |
-| `slow` | Additional descriptive respiratory-pattern profile |
-| `apnea` | Additional apneic-breathing profile; not equivalent to a sleep-apnea diagnosis |
-| `periodic` | Additional periodic-breathing profile; distinct from periodic deep sighing |
-| `desat` | Additional oxygenation profile; not itself a DB phenotype |
+| `rapid`, `deep`, rapid/deep overlap | Hyperventilation-like pattern |
+| `sigh`, `irregular`, sigh/irregular overlap | Periodic deep sighing |
+| `thoracic` and normalized belt balance | Thoracic-dominant breathing |
+| `async` and reliable phase evidence | Thoraco-abdominal asynchrony |
+| `apnea`, `periodic`, `shallow`, `slow`, `desat` | Additional compact burdens |
 
----
+## External clinical data and Level 3
 
-## Additional respiratory-pattern profiles
+Nijmegen Questionnaire, ETCO2/capnography, CPET/ergospirometry, clinical
+observations, and other clinical variables remain external to the signal-derived
+21-feature vector. They may be merged downstream for interpretation,
+validation, or association analysis, but are not used to create MAGMA Level-2
+features.
 
-In addition to the five prespecified DB phenotype profiles, MAGMA retains recording-level summaries for physiological patterns that are **not currently incorporated into the primary compact representation of the five prespecified DB phenotypes**:
-
-- apneic breathing;
-- periodic breathing;
-- shallow breathing;
-- slow breathing;
-- desaturation.
-
-Rapid breathing, deep breathing, irregular breathing, sighing, thoracic dominance, and respiratory asynchrony remain available as Level-1 physiological evidence but are already incorporated into the prespecified Level-2 phenotype framework and are therefore not duplicated here as separate additional phenotype profiles.
-
-These additional patterns are descriptive physiological characteristics, not additional prespecified DB phenotypes.
-
-### Compact additional-pattern features
-
-For the primary phenotype-space analysis, one principal burden feature can be retained for each additional pattern:
-
-| Additional respiratory pattern | Primary compact feature | Optional severity descriptor |
-|---|---|---|
-| **Apneic breathing** | Apnea fraction | Median event duration or suppression severity |
-| **Periodic breathing** | Periodic-breathing fraction | eAMI / modulation strength |
-| **Shallow breathing** | Shallow-breathing fraction | Median relative excursion |
-| **Slow breathing** | Slow-breathing fraction | Median respiratory rate |
-| **Desaturation** | Desaturation fraction | Minimum SpO2 or maximum SpO2 decrease |
-
-If all five primary burden measures are used together with the 16 compact prespecified-phenotype features, the resulting primary recording-level phenotype-space representation contains approximately **21 variables**.
-
-This 21-variable representation is a proposed analysis representation rather than a replacement for the full stored evidence.
-
----
-
-## How a phenotype profile is created
-
-A Level-2 MAGMA phenotype is **not one final number** and is not currently converted into a binary phenotype-present / phenotype-absent assignment.
-
-Instead, Level 2 aggregates the time-resolved Level-1 evidence across a recording into a small set of continuous summary measures.
-
-Examples include:
-
-- fraction of assessable recording time occupied by a pattern;
-- number of detected episodes;
-- median and maximum episode duration;
-- temporal overlap between relevant Level-1 labels;
-- event frequency;
-- inter-event timing;
-- median respiratory rate;
-- relative respiratory excursion;
-- thoracoabdominal phase offset;
-- physiological severity measures.
-
-The general transformation is therefore:
-
-`time-resolved Level-1 evidence -> recording-level summary measures -> multivariate Level-2 phenotype profile`
-
-and not:
-
-`time-resolved Level-1 evidence -> one phenotype score`
-
-No weighted combination of the Level-2 measures into one scalar phenotype score is currently defined.
-
----
-
-## Recording-level aggregation
-
-The Level-2 phenotype profiles summarize an **entire recording**.
-
-Level-1 labels remain time resolved, while Level-2 variables describe the burden, intensity, co-occurrence, and temporal organization of those labels over the assessable recording.
-
-For example:
-
-- rapid-breathing fraction represents the proportion of assessable recording time classified as rapid;
-- sighs per 15 min summarizes discrete sigh occurrence over the recording;
-- thoracic-dominance fraction summarizes the burden of thoracic-dominant breathing;
-- median phase offset summarizes the typical magnitude of thoracoabdominal displacement during assessable asynchrony evidence.
-
-Unavailable physiological evidence is distinguished from a negative phenotype result. Missing or unusable signals should therefore produce unavailable / `NaN` evidence where appropriate rather than being interpreted as phenotype absence.
-
-### Automatic and reviewed representations
-
-MAGMA stores phenotype evidence separately for the automatic and reviewed annotation layers.
-
-For the automatic layer:
-
-- annotation scope: `full_assessable_recording`;
-- phenotype summaries use all recording regions for which the relevant physiological evidence is assessable.
-
-For the reviewed layer:
-
-- annotation scope: `explicitly_reviewed_and_assessable_regions`;
-- summaries are based on the reviewed annotation layer and should not imply that unreviewed regions were clinically confirmed negative.
-
-The automatic and reviewed profiles should remain distinguishable throughout validation and downstream modelling.
-
----
-
-## Full evidence archive versus compact analysis representation
-
-Two Level-2 representations should be distinguished.
-
-### Level 2A: full phenotype evidence archive
-
-The complete HDF5/MAT output retains:
-
-- all available recording-level summaries;
-- event counts and durations;
-- alternative evidence measures;
-- detector-specific summaries;
-- quality-control information;
-- availability flags;
-- method comparisons;
-- provenance.
-
-This representation is intended for reproducibility, quality control, detailed interpretation, sensitivity analyses, and secondary modelling.
-
-### Level 2B: compact phenotype representation
-
-The compact analysis representation contains:
-
-- **16 core features** representing the four currently signal-assessable prespecified DB phenotypes;
-- optionally **5 additional respiratory-pattern burden features**.
-
-The resulting approximately **21-variable recording-level vector** is the preferred starting point for unsupervised phenotype-space analyses.
-
-Before clustering, numerical features should be appropriately transformed and scaled, and redundancy should be checked empirically. Feature reduction should preserve the conceptual balance between phenotypes rather than being driven only by the number of detector outputs available for each phenotype.
-
----
+Level 3 will consume the fixed Level-2B matrix in an explicit downstream
+pipeline that owns preprocessing and clustering. MAGMA does not define
+clinical cutoffs or discover clusters as part of labeling.
