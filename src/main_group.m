@@ -13,7 +13,7 @@ if ~isempty(src_root)
 end
 
 % load config structure
-config = get_config();
+config = get_config_defaults();
 config.group.subjects = subjects;
 config.group.measurements = measurements;
 % Optional: fill these when subject metadata are available. If left empty,

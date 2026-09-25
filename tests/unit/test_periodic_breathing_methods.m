@@ -4,7 +4,7 @@ function tests = test_periodic_breathing_methods
 end
 
 function testCurrentPeriodicConfigurationContainsBothMethods(testCase)
-    config = get_config();
+    config = get_config_defaults();
     verifyEqual(testCase, fieldnames(config.periodic), ...
         {'primary_method'; 'do_plot'; 'eami'; 'guyot'});
     verifyFalse(testCase, isfield(config, 'csr'));

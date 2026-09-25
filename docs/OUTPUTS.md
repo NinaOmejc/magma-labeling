@@ -14,11 +14,12 @@ Sub<subject>_M<measurement>_labels.h5
 ```
 
 The MAT file is the authoritative MATLAB result. The HDF5 file uses schema
-`magma_ml_hdf5_v12` and is intended for downstream Python/ML analysis.
+`magma_ml_hdf5_v12` and is intended as a portable recording-level exchange
+format for downstream analysis.
 
 ## Recording-level MATLAB fields
 
-Level-1 and full Level-2A evidence remains available in:
+Level-1 and detailed Level-2 evidence remains available in:
 
 ```matlab
 results.resp_cycles
@@ -38,8 +39,8 @@ results.label_evidence_summary_automatic
 results.label_evidence_summary_reviewed
 ```
 
-The phenotype bundle contains full evidence and compact features for each
-annotation layer:
+The phenotype bundle contains detailed evidence and a compact numeric summary
+for each annotation layer:
 
 ```matlab
 results.db_phenotype_evidence.automatic.prespecified_db
@@ -136,8 +137,8 @@ Important high-level groups include:
 MATLAB configuration may retain `config.times`, but that full-length vector is
 intentionally omitted from `/config` to avoid storing it twice.
 
-The full Level-2A archive is retained below `/phenotype_evidence`. Fixed
-Level-2B datasets are directly readable at:
+The detailed Level-2 evidence is retained below `/phenotype_evidence`. Fixed
+recording-level numeric-summary datasets are directly readable at:
 
 ```text
 /phenotype_evidence/automatic/compact_features/version
@@ -166,8 +167,8 @@ The identical structure exists under:
 /phenotype_evidence/reviewed/compact_features/
 ```
 
-The main Python use case therefore reads the fixed datasets directly rather
-than recursively discovering arbitrary evidence fields.
+Downstream readers can access the fixed datasets directly rather than
+recursively discovering arbitrary evidence fields.
 
 Text arrays are stored as zero-padded UTF-8 byte columns. Numeric arrays and
 label masks use HDF5 compression where appropriate; logical arrays are stored
@@ -216,15 +217,13 @@ Each feature CSV has the five identifier columns:
 recording_id, subject, measure, subject_group, analysis_id
 ```
 
-followed immediately by exactly the 21 fixed feature columns. Availability and
+followed immediately by exactly the 21 fixed summary columns. Availability and
 coverage are kept in separate aligned tables, so QC columns never interrupt the
-ML matrix. Missing feature values remain `NaN`.
+numeric phenotype summary. Missing values remain `NaN`.
 
-`recording_id` uses `Sub<subject>_M<measure>`, which permits a future clustering
-result containing `recording_id`, `cluster`, `clustering_method`, and `run_id`
-to merge directly with the phenotype table. Automatic values are the primary
-whole-cohort clustering input. Reviewed values remain separate for validation
-and sensitivity analyses.
+`recording_id` uses `Sub<subject>_M<measure>` as a stable key for joining these
+outputs with other recording-level tables. Automatic and reviewed summaries
+are exported separately and are never silently mixed.
 
 `phenotype_feature_dictionary.csv` has one row per feature and the columns:
 

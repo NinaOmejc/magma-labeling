@@ -178,7 +178,7 @@ function testDefaultExpiratoryReproducesCurrentCalculation(testCase)
 
     b = recompute_respiration_breath_fields(struct(), x, peak_idx, config);
     previous_result = [b.peak_val(1:end-1) - b.trough_val; NaN];
-    default_config = get_config();
+    default_config = get_config_defaults();
 
     verifyEqual(testCase, b.amp, previous_result);
     verifyEqual(testCase, b.amp, b.amp_exp);

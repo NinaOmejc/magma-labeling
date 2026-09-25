@@ -3,7 +3,7 @@ example_root = fileparts(mfilename('fullpath'));
 repo_root = fileparts(example_root);
 addpath(genpath(fullfile(repo_root, 'src')));
 
-config = get_config();
+config = get_config_defaults();
 config.path_data_in = fullfile(example_root, 'data');
 config.path_results_out = fullfile(example_root, 'output');
 config.subjects = 42;

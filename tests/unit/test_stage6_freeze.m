@@ -878,7 +878,8 @@ function testSharedRunnerSavesBaseConfigurationBeforeRecordingMutation(testCase)
     copy_pos = strfind(runner_source, 'config = base_config;');
     mutation_pos = strfind(runner_source, ...
         'config.subject = base_config.subjects(isub)');
-    verifyTrue(testCase, contains(main_source, 'config = get_config();'));
+    verifyTrue(testCase, contains(main_source, ...
+        'config = get_config_defaults();'));
     verifyTrue(testCase, contains(main_source, 'run_magma(config);'));
     verifyNotEmpty(testCase, save_pos);
     verifyNotEmpty(testCase, loop_pos);
@@ -889,24 +890,11 @@ function testSharedRunnerSavesBaseConfigurationBeforeRecordingMutation(testCase)
     verifyLessThan(testCase, copy_pos(2), mutation_pos(1));
 end
 
-function testConfigurationLayersAndDemoUseSharedRunner(testCase)
+function testConfigurationDefaultsAndDemoUseSharedRunner(testCase)
     repo_root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
-    simple = get_config();
-    defaults = get_config_defaults();
 
-    verifyEqual(testCase, simple.shallow, defaults.shallow);
-    verifyEqual(testCase, simple.deep, defaults.deep);
-    verifyEqual(testCase, simple.reference, defaults.reference);
-    verifyEqual(testCase, simple.async.phase_offset, defaults.async.phase_offset);
-    verifyEqual(testCase, simple.HDF5, defaults.HDF5);
-    verifyEqual(testCase, simple.execution, defaults.execution);
-
-    simple_source = fileread(fullfile(repo_root, 'src', 'get_config.m'));
     defaults_source = fileread(fullfile( ...
         repo_root, 'src', 'get_config_defaults.m'));
-    verifyFalse(testCase, contains(simple_source, 'mkdir('));
-    verifyFalse(testCase, contains(simple_source, 'save('));
-    verifyFalse(testCase, contains(simple_source, 'addpath('));
     verifyFalse(testCase, contains(defaults_source, 'mkdir('));
     verifyFalse(testCase, contains(defaults_source, 'save('));
     verifyFalse(testCase, contains(defaults_source, 'addpath('));

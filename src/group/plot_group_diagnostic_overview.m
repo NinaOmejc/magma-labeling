@@ -12,7 +12,7 @@ function overview = plot_group_diagnostic_overview(config_or_results_path, group
 %              fraction/event-count plots and summary CSV, and diagnostic CSV.
 
     if nargin < 1 || isempty(config_or_results_path)
-        config = get_config();
+        config = get_config_defaults();
         results_path = config.path_results_out;
         config_or_results_path = config;
     elseif isstruct(config_or_results_path)

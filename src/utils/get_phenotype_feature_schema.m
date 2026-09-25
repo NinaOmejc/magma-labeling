@@ -1,9 +1,9 @@
 function schema = get_phenotype_feature_schema()
-% GET_PHENOTYPE_FEATURE_SCHEMA Define the fixed Level-2B phenotype features.
+% GET_PHENOTYPE_FEATURE_SCHEMA Define the fixed numeric phenotype summary.
 % This is the sole authority for feature names, order, display metadata, roles,
 % units, and human-readable source descriptions used by recording, HDF5, and
 % cohort outputs. Values are raw recording-level measures; no scaling,
-% imputation, or data-driven feature selection is performed here.
+% imputation, or feature selection is performed here.
 
     schema = struct();
     schema.version = 'magma_compact_phenotype_feature_schema_v1';

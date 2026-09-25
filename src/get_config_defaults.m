@@ -1,7 +1,6 @@
 function config = get_config_defaults()
 % GET_CONFIG_DEFAULTS Define the complete MAGMA configuration defaults.
-% This file contains the complete MAGMA defaults. Most users should edit
-% get_config.m rather than this file.
+% This file contains the complete user-facing scientific and export defaults.
 %
 % Outputs:
 %   config - Scalar pipeline configuration struct. Core fields path_data_in,
@@ -261,7 +260,7 @@ function config = get_config_defaults()
     config.LabelEdit.min_interval_sec = 1;       % minimum drag interval accepted as a manual event
     config.LabelEdit.filename_suffix = '_manual_label_events.mat';
 
-    %---- PER-RECORDING ML-READY EXPORT
+    %---- PER-RECORDING HDF5 EXCHANGE EXPORT
     % MAT remains authoritative and is not replaced. HDF5 contains simple
     % numeric/text datasets on the same native 200-Hz master timeline.
     config.HDF5 = struct();

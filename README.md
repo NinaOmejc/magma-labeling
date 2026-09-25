@@ -35,7 +35,7 @@ At least one respiratory belt is required for respiratory analysis. Labels requi
 Edit:
 
 ```matlab
-src/get_config.m
+src/get_config_defaults.m
 ```
 
 Then run:

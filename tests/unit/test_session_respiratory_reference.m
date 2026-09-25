@@ -583,7 +583,7 @@ function testSighKeepsWholeRecordAmplitudeReference(testCase)
 end
 
 function testCurrentReferenceConfigurationAndApneaSourceSemantics(testCase)
-    config = get_config();
+    config = get_config_defaults();
     verifyFalse(testCase, isfield(config, 'baseline_sec'));
     verifyFalse(testCase, isfield(config, 'baseline_location'));
     verifyFalse(testCase, isfield(config, 'resp_ref'));

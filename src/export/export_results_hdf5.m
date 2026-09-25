@@ -1,5 +1,5 @@
 function export_results_hdf5(filename, results, signals_raw, signals_preprocessed)
-% EXPORT_RESULTS_HDF5 Write one validated recording in the ML exchange schema.
+% EXPORT_RESULTS_HDF5 Write one validated recording in the HDF5 exchange schema.
 %
 % Inputs:
 %   filename             - Destination .h5 path; an existing file is replaced.

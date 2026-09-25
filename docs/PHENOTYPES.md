@@ -1,24 +1,29 @@
 # MAGMA dysfunctional-breathing phenotypes
 
-MAGMA separates four analysis layers:
+MAGMA separates two analysis levels:
 
-1. **Level 1 — elementary physiological evidence.** Time-resolved labels,
+1. **Level 1 — time-resolved physiological labels and evidence.** Labels,
    events, assessability masks, breath evidence, and detector diagnostics.
-2. **Level 2A — full prespecified phenotype evidence archive.** Recording-level
-   burden, events, detector summaries, QC, provenance, and supporting measures.
-3. **Level 2B — fixed compact phenotype representation.** Exactly 21 raw,
-   interpretable recording-level variables in a versioned order.
-4. **Level 3 — future data-driven phenotype discovery.** Clustering or other
-   discovery performed downstream; it is not implemented by the MAGMA labeling
-   pipeline.
+2. **Level 2 — recording-level phenotype and respiratory-pattern evidence.**
+   Detailed profiles and a fixed 21-value numeric summary are provided for
+   automatic and reviewed annotation layers.
+
+Level 2 contains two groups:
+
+- **Literature-based prespecified dysfunctional-breathing phenotypes:**
+  hyperventilation-like respiratory pattern, periodic deep sighing,
+  thoracic-dominant breathing, forced abdominal expiration, and
+  thoraco-abdominal asynchrony.
+- **Additional MAGMA label-derived respiratory patterns:** apneic breathing,
+  periodic breathing, shallow breathing, slow breathing, and desaturation.
 
 A phenotype is **not one number**, no binary clinical diagnosis is produced,
-and the five prespecified phenotypes are not mutually exclusive. The full
-Level-2A archive is deliberately larger than the Level-2B clustering vector.
+and the ten recording-level profiles are not mutually exclusive. The detailed
+Level-2 evidence contains more information than the fixed numeric summary.
 
 ## Five prespecified DB phenotypes
 
-| Prespecified phenotype | Level-2B features | Signal assessment status |
+| Prespecified phenotype | Selected summary measures | Signal assessment status |
 |---|---:|---|
 | Hyperventilation-like respiratory pattern | 5 | `partial` |
 | Periodic deep sighing | 5 | `assessable` when the required evidence is available |
@@ -48,7 +53,7 @@ The five compact features are:
    medians.
 
 Rate and excursion medians use the full relevant layer-specific assessable
-scope, not only samples already labeled rapid or deep. The Level-2A archive
+scope, not only samples already labeled rapid or deep. The detailed Level-2 evidence
 also retains directional overlap fractions, overlap event summaries,
 event-conditioned medians, and belt-specific values.
 
@@ -70,7 +75,7 @@ The five compact features are:
 The 15-minute maximum is unavailable when no continuous assessable 15-minute
 interval exists. For reviewed evidence, unreviewed gaps are never counted as
 reviewed negatives. The event-level sigh/irregular feature is distinct from
-the sample-duration overlap metric, which remains in Level 2A.
+the sample-duration overlap metric, which remains in the detailed Level-2 evidence.
 
 ### Thoracic-dominant breathing
 
@@ -98,16 +103,18 @@ absolute phase offset over reliable finite phase evidence, and median event
 duration. As for thoracic dominance, an assessable detector with zero events
 has a compact event duration of 0 seconds; unavailable evidence remains `NaN`.
 
-The Level-2A archive retains event counts, maximum durations, phase consistency,
+The detailed Level-2 evidence retains event counts, maximum durations, phase consistency,
 frequency-selection evidence, method comparison, reference quality, polarity
 metadata, coherence diagnostics, skip codes, and other QC fields. These fields
-are not additional clustering variables.
+are not part of the fixed numeric summary.
 
-## Fixed Level-2B schema
+## Fixed recording-level numeric summary
 
 `get_phenotype_feature_schema.m` is the sole authority for names, order, units,
 roles, display names, and source descriptions. `build_compact_phenotype_features.m`
-is the sole recording-level builder.
+is the sole recording-level builder. The public `compact_features` structure
+contains 21 selected numeric measures derived from the Level-2 phenotype and
+respiratory-pattern evidence.
 
 | # | Feature name | Units |
 |---:|---|---|
@@ -155,28 +162,27 @@ unavailable != negative
 
 A finite zero is a valid available negative. Missing or unusable signal
 evidence remains `NaN` with `available=false`; it is never silently converted
-to zero. The compact vectors are raw and unscaled. MAGMA performs no
-cross-subject normalization, imputation, transformation, PCA, or clustering.
+to zero. The compact summaries are raw and unscaled. MAGMA performs no
+cross-subject normalization, imputation, or transformation of these outputs.
 
-## Automatic and reviewed representations
+## Automatic and reviewed summaries
 
 The automatic and reviewed layers are always separate:
 
-- **automatic** uses the full physiologically assessable recording and is the
-  default whole-cohort clustering representation;
+- **automatic** uses the full physiologically assessable recording;
 - **reviewed** uses only explicitly reviewed *and* physiologically assessable
-  regions and is intended primarily for validation and sensitivity analysis.
+  regions.
 
 Recording-scope rate, excursion, CoV, balance, and phase medians obey the same
 layer scope. A reviewed median therefore never incorporates an unreviewed
 region, and automatic/reviewed values are never silently mixed in one row.
 
-## Level-2A archive and Level-1 crosswalk
+## Detailed Level-2 evidence and Level-1 crosswalk
 
 The full archive preserves useful burden, event, overlap, belt-specific,
 method-comparison, availability, QC, and provenance evidence. It also preserves
 event-conditioned continuous summaries alongside the recording-scope summaries
-used by Level 2B.
+selected for the fixed numeric summary.
 
 | Level-1 evidence | Level-2 use |
 |---|---|
@@ -186,14 +192,10 @@ used by Level 2B.
 | `async` and reliable phase evidence | Thoraco-abdominal asynchrony |
 | `apnea`, `periodic`, `shallow`, `slow`, `desat` | Additional compact burdens |
 
-## External clinical data and Level 3
+## External clinical data
 
 Nijmegen Questionnaire, ETCO2/capnography, CPET/ergospirometry, clinical
 observations, and other clinical variables remain external to the signal-derived
-21-feature vector. They may be merged downstream for interpretation,
-validation, or association analysis, but are not used to create MAGMA Level-2
-features.
-
-Level 3 will consume the fixed Level-2B matrix in an explicit downstream
-pipeline that owns preprocessing and clustering. MAGMA does not define
-clinical cutoffs or discover clusters as part of labeling.
+21-value summary. They may be combined with MAGMA outputs in other repositories
+for interpretation, validation, or association analysis, but are not used to
+create MAGMA Level-2 evidence.

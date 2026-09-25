@@ -7,7 +7,7 @@ function save_recording_results(results, data_raw, data, config)
 %   data     - Nsample x Nchannel preprocessed signal matrix for HDF5.
 %   config   - Result directory/filename, recording identity, and HDF5 settings.
 % The MAT file stores each results field as a top-level variable; optional
-% HDF5 export uses the validated ML exchange schema.
+% HDF5 export uses the validated recording-level exchange schema.
 
     log_message(config, 2, 'Saving MAT results...');
     save(fullfile(config.sub_results_path, config.sub_results_filename), ...

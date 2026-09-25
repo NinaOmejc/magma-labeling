@@ -186,7 +186,7 @@ function testHistoricalPeriodicNamesMapToCanonicalGroupOutputs(testCase)
     subject_dir = fullfile(results_root, 'Sub9_M1');
     mkdir(subject_dir);
     cleanup_dir = onCleanup(@() rmdir(results_root, 's'));
-    current = get_config();
+    current = get_config_defaults();
     subject = 9;
     measure = 1;
     label_names = {current.labels.short};
@@ -218,7 +218,7 @@ function testAssessedZeroLabelsRemainDistinctFromUnavailable(testCase)
     mkdir(subject_dir);
     cleanup_dir = onCleanup(@() rmdir(results_root, 's'));
 
-    current = get_config();
+    current = get_config_defaults();
     subject = 42;
     measure = 3;
     mask_automatic = false(100, numel(current.labels));
@@ -245,7 +245,7 @@ function testEventsAndCandidatesUseSemanticIdentityAndIndices(testCase)
     mkdir(subject_dir);
     cleanup_dir = onCleanup(@() rmdir(results_root, 's'));
 
-    current = get_config();
+    current = get_config_defaults();
     subject = 8;
     measure = 1;
     label_names = {current.labels.short};

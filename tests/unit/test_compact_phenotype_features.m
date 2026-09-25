@@ -1,5 +1,5 @@
 function tests = test_compact_phenotype_features
-% Deterministic Level-2A/2B phenotype semantics and scope tests.
+% Deterministic recording-level phenotype summary semantics and scope tests.
     tests = functiontests(localfunctions);
 end
 

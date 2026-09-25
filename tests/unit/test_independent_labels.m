@@ -29,7 +29,7 @@ function testGetLabelsFormatsAndConfiguration(testCase)
     verifyError(testCase, @() get_labels('unknown'), ...
         'MAGMA:GetLabels:InvalidFormat');
 
-    config = get_config();
+    config = get_config_defaults();
     verifyEqual(testCase, {config.labels.short}, get_labels('short'));
     verifyEqual(testCase, [config.labels.idx], get_labels('idx'));
     verifyEqual(testCase, config.labels(2).short, 'deep');
@@ -194,7 +194,7 @@ function testThoracicDominanceHasNoOneBeltFallback(testCase)
 end
 
 function testEffectiveInputConfigurationUsesKnownExclusion(testCase)
-    config = get_config();
+    config = get_config_defaults();
     config.subject = 7;
     config.measure = 1;
     config = resolve_signal_channels(config);
@@ -426,7 +426,7 @@ end
 
 function testIrregularityMoveAndFallbacks(testCase)
     repo_root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
-    config = get_config();
+    config = get_config_defaults();
     verifyTrue(testCase, isfile(fullfile(repo_root, 'src', 'feature_extraction', ...
         'compute_irregularity_metrics.m')));
     verifyFalse(testCase, isfile(fullfile(repo_root, 'src', 'label_detection', ...

@@ -5,7 +5,7 @@ function tests = test_sigh_detection_methods
 end
 
 function testRollingMedianIsTheConfiguredDefault(testCase)
-    config = get_config();
+    config = get_config_defaults();
 
     verifyEqual(testCase, config.sigh.method, 'rolling_median_2x');
     verifyEqual(testCase, config.sigh.rolling_window_breaths, 15);

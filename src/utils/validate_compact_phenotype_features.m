@@ -1,5 +1,5 @@
 function validate_compact_phenotype_features(compact)
-% VALIDATE_COMPACT_PHENOTYPE_FEATURES Enforce the fixed Level-2B contract.
+% VALIDATE_COMPACT_PHENOTYPE_FEATURES Enforce the fixed numeric-summary contract.
 
     schema = get_phenotype_feature_schema();
     required = {'version', 'schema_version', 'n_features', ...

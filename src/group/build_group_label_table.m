@@ -9,12 +9,12 @@ function group_table = build_group_label_table(config_or_results_path)
 %                 recording duration, per-label availability/burden/event/review
 %                 summaries, belt/reference QC, overlap, and numeric detector
 %                 summaries. Dynamic per-label fields use canonical short names.
-% Also writes group_label_summary CSV/MAT, fixed Level-2B phenotype matrices,
+% Also writes group_label_summary CSV/MAT, fixed recording-level phenotype summaries,
 % measure-comparability metadata, per-event durations, compact candidate-event
 % QC, and cohort QC summaries.
 
     if nargin < 1 || isempty(config_or_results_path)
-        config = get_config();
+        config = get_config_defaults();
         results_path = config.path_results_out;
     elseif isstruct(config_or_results_path)
         config = config_or_results_path;
@@ -590,7 +590,7 @@ function row = add_event_counts(row, events, canonical_labels)
 end
 
 function row = add_compact_evidence_summaries(row, evidence, prefix)
-% ADD_COMPACT_EVIDENCE_SUMMARIES Flatten scalar ML-ready evidence only.
+% ADD_COMPACT_EVIDENCE_SUMMARIES Flatten scalar recording-level evidence only.
 
     row = add_scalar_summary_fields(row, evidence, prefix);
 end

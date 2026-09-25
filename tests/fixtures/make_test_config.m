@@ -5,7 +5,7 @@ function config = make_test_config(output_dir)
         output_dir = tempname;
     end
 
-    config = get_config();
+    config = get_config_defaults();
     config.subject = 999;
     config.measure = 1;
     config.path_results_out = output_dir;

@@ -1,8 +1,8 @@
 function compact = build_compact_phenotype_features( ...
     label_burden, overlaps, label_evidence)
-% BUILD_COMPACT_PHENOTYPE_FEATURES Build the fixed raw Level-2B representation.
+% BUILD_COMPACT_PHENOTYPE_FEATURES Build the fixed recording-level numeric summary.
 % Inputs are the Level-1 burden/overlap/evidence summaries for one annotation
-% layer. The 21 output values follow get_phenotype_feature_schema exactly.
+% layer. The 21 summary values follow get_phenotype_feature_schema exactly.
 % NaN is retained for unavailable or insufficiently supported evidence; no
 % imputation, scaling, or cross-recording normalization occurs here.
 

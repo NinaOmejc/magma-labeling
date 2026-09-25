@@ -264,7 +264,9 @@ function testPhenotypeEvidenceUsesGroupedNonDiagnosticSchema(testCase)
     [burden, overlaps, label_evidence] = phenotype_fixture();
     evidence = build_db_phenotype_evidence(burden, overlaps, label_evidence);
     verifyEqual(testCase, evidence.levels.level_1, ...
-        'elementary physiological labels and evidence');
+        'time-resolved physiological labels and evidence');
+    verifyEqual(testCase, evidence.levels.level_2, ...
+        'recording-level respiratory phenotype and pattern evidence');
     verifyEqual(testCase, numel(fieldnames(evidence.prespecified_db)), 5);
     expected_patterns = {'apneic_breathing', 'periodic_breathing', ...
         'shallow_breathing', 'slow_breathing', 'desaturation'};
