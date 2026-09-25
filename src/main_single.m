@@ -24,6 +24,14 @@ config.overwrite_features = false;      % If true, recompute respiratory feature
 config.verbosity = 2;                   % 1 = concise progress, 2 = detailed progress.
 config.execution.mode = 'analyze';      % 'analyze', 'analyze_and_review', or 'review_only'.
 
+% LABEL SELECTION
+% Empty = normal behavior: new recordings analyze all labels; existing
+% recordings obey config.overwrite_results.
+config.execution.selected_labels = {};
+% To calculate or rerun only selected labels, for example:
+% config.execution.selected_labels = {'irregular'};
+% config.execution.selected_labels = {'irregular', 'slow'};
+
 % RESPIRATORY REPRESENTATION
 config.resp.amp_method = 'symmetric';  % Selected breath amplitude: 'expiratory' (peak to following trough), 'inspiratory' (peak to preceding trough), or 'symmetric' (peak to the mean of both troughs)
 config.resp.plot_amp_method_comparison = true; % save an optional comparison of all three breath-amplitude definitions

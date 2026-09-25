@@ -34,6 +34,7 @@ function config = get_config_defaults()
     config.verbosity = 1;                                                   % 1 = concise progress, 2 = detailed progress
     config.execution = struct();
     config.execution.mode = 'analyze';                                     % 'analyze', 'analyze_and_review', or 'review_only'
+    config.execution.selected_labels = {};                                 % empty = normal full/overwrite behavior; non-empty = compute or rerun only these canonical labels
     
     % FIRST CHECK: plot [X1, X2] seconds of raw data
     config.plot_raw_data = false;                               % save an overview plot of raw signals
@@ -52,7 +53,12 @@ function config = get_config_defaults()
     %---- PROBLEMS ----
     config.problems.missing_lung_belt = [ ...                  % known [subject, measurement] recordings without a usable lung belt (e.g. first 20 subjects have a broken belt)
         (1:20)', ones(20, 1); ...
-        (1:20)', 2 * ones(20, 1)];
+        (1:20)', 2 * ones(20, 1); ...
+        23, 1; 23, 2; ...
+        33, 1; 33, 2; ...
+        35, 1; 35, 2; ...
+        40, 1; 40, 2; ...
+        ];
 
     %---- RESPIRATION / BREATHING AMPLITUDE EXTRACTION SETTINGS ----
     config.resp.min_peak_dist_sec = 1.0;    % *** Peak selection; min time between breaths (tune if needed)

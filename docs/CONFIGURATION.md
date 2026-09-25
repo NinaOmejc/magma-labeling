@@ -28,6 +28,7 @@ config.overwrite_features
 config.make_figs_visible
 config.verbosity
 config.execution.mode
+config.execution.selected_labels
 ```
 
 Individual detector plots can additionally be controlled with the corresponding `do_plot` field.
@@ -43,6 +44,15 @@ config.execution.mode = 'analyze';            % automatic analysis only
 config.execution.mode = 'analyze_and_review'; % analyze, then review
 config.execution.mode = 'review_only';        % load automatic results, then review
 ```
+
+`config.execution.selected_labels = {}` keeps normal behavior. A non-empty
+canonical subset, such as `{'irregular'}` or `{'irregular','slow'}`, computes
+only those detectors. If a result already exists, the selected labels are
+replaced and all non-selected automatic and reviewed annotations are preserved;
+`overwrite_results` does not need to be enabled for this selective update. On a
+new recording, unselected labels retain their canonical columns and are marked
+unavailable with reason `not_computed`. Label selection is not valid with
+`review_only`; review the saved merged result in a separate review-only run.
 
 `review_only` requires an existing recording result. It loads the saved
 automatic annotations and respiratory cycles without rerunning feature
