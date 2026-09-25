@@ -207,12 +207,14 @@ function metrics = empty_phase_offset_metrics(t_grid, config)
             'Phase-offset belt polarity multipliers must each be +1 or -1.');
     end
     if lungs_multiplier == 1 && diaph_multiplier == 1
-        polarity_source = 'recorded_channel_polarity';
+        polarity_source = 'preprocessing_standardized_belt_polarity';
     else
-        polarity_source = 'user_configured_fixed_hardware_correction';
+        polarity_source = ...
+            'preprocessing_standardized_then_user_configured_fixed_hardware_correction';
     end
     polarity_convention = ...
-        'configured_fixed_multipliers_thoracic_minus_abdominal_no_automatic_optimization';
+        ['preprocessing_standardized_plus_configured_fixed_multipliers_' ...
+         'thoracic_minus_abdominal_no_phase_optimization'];
     frequency_selection = [ ...
         'reviewed_breath_timing_guided_joint_magnitude_or_' ...
         'joint_wavelet_magnitude_fallback_at_one_shared_frequency'];

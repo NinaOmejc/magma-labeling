@@ -14,7 +14,7 @@ Sub<subject>_M<measurement>_labels.h5
 ```
 
 The MAT file is the authoritative MATLAB result. The HDF5 file uses schema
-`magma_ml_hdf5_v11` and is intended for downstream Python/ML analysis.
+`magma_ml_hdf5_v12` and is intended for downstream Python/ML analysis.
 
 ## Recording-level MATLAB fields
 
@@ -132,6 +132,10 @@ Important high-level groups include:
 /meta
 ```
 
+`/time` is the single authoritative recording time axis in HDF5. The in-memory
+MATLAB configuration may retain `config.times`, but that full-length vector is
+intentionally omitted from `/config` to avoid storing it twice.
+
 The full Level-2A archive is retained below `/phenotype_evidence`. Fixed
 Level-2B datasets are directly readable at:
 
@@ -148,6 +152,13 @@ Level-2B datasets are directly readable at:
 /phenotype_evidence/automatic/compact_features/feature_role
 /phenotype_evidence/automatic/compact_features/units
 ```
+
+Prespecified phenotype evidence is stored only under
+`/phenotype_evidence/<layer>/prespecified_db`; deprecated top-level aliases
+are not duplicated. The `respiratory_patterns` branch contains only
+`apneic_breathing`, `periodic_breathing`, `shallow_breathing`,
+`slow_breathing`, and `desaturation`. Deep, rapid, irregular, and sigh
+evidence remains available in the Level-1 outputs.
 
 The identical structure exists under:
 

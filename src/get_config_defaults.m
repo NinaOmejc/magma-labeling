@@ -10,7 +10,8 @@ function config = get_config_defaults()
 %            overwrite_results/overwrite_features and make_figs_visible control
 %            execution; plot_raw_data/plot_raw_data_xrange and LabelMask control
 %            overview plots. Nested problems records known data exclusions;
-%            detrend controls preprocessing; resp controls breath extraction/review;
+%            preprocessing controls belt-polarity QC; detrend controls signal
+%            detrending; resp controls breath extraction/review;
 %            reference controls session/global baseline estimation. shallow, deep,
 %            slow, rapid, irregular, apnea, sigh, periodic, thoracic, async, and desat
 %            contain detector thresholds/windows; grid_step_sec defines their common
@@ -40,6 +41,8 @@ function config = get_config_defaults()
     config.plot_raw_data_xrange = [1, 10];                      % raw overview x-axis range in seconds
 
     %---- PREPROCESSING ----                
+    config.preprocessing = struct();
+    config.preprocessing.check_belt_polarity = true;            % conservatively correct persistent acquisition-level diaphragm-belt inversion
     config.detrend.method = 'none';                         % 'hpfilter': Butterworth high-pass filter with filtfilt, 'moving_detrend': moving-average trend subtraction, or 'none': no additional detrending.
     config.detrend.signals = {'Resp-Lungs', 'Resp-Diaphragm'};  % *** signals to additionally detrend before feature extraction (in general, all signals are already detrended, this is just additional moving detrend, that can be useful for some noisier data)
     config.detrend.highpass_cutoff = 0.01;                      % high-pass cutoff frequency in Hz

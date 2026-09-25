@@ -25,11 +25,16 @@ function testOldTwentyHertzCacheIsRejected(testCase)
     saved = load(cache_file, 'feature_cache_meta');
 
     verifyNotEqual(testCase, actual.lungs.peak_idx, resp_feat.lungs.peak_idx);
-    verifyEqual(testCase, saved.feature_cache_meta.cache_version, 8);
+    verifyEqual(testCase, saved.feature_cache_meta.cache_version, 9);
     verifyEqual(testCase, saved.feature_cache_meta.fs, 200);
     verifyEqual(testCase, saved.feature_cache_meta.measurement, config.measure);
     verifyEqual(testCase, saved.feature_cache_meta.n_samples, size(data,1));
-    verifyEqual(testCase, saved.feature_cache_meta.amp_method, 'expiratory');
+    verifyEqual(testCase, saved.feature_cache_meta.amp_method, ...
+        resolve_respiration_amplitude_method(config));
+    verifyTrue(testCase, isfield(saved.feature_cache_meta, ...
+        'belt_polarity_checked'));
+    verifyTrue(testCase, isfield(saved.feature_cache_meta, ...
+        'diaphragm_polarity_flipped'));
 end
 
 function testCompatibleMasterRateCacheIsReused(testCase)
@@ -78,13 +83,15 @@ function testAmplitudeMethodChangeReselectsWithoutLosingReviewedBreaths(testCase
             'manual_edits_made', true, ...
             'loaded_from_cache', false));
     feature_cache_meta = struct( ...
-        'cache_version', 8, ...
+        'cache_version', 9, ...
         'subject', config.subject, ...
         'measurement', config.measure, ...
         'fs', config.fs, ...
         'n_samples', n_samples, ...
         'data_columns', {config.data_columns}, ...
-        'amp_method', 'expiratory');
+        'amp_method', 'expiratory', ...
+        'belt_polarity_checked', false, ...
+        'diaphragm_polarity_flipped', false);
     reviewed = resp_cycles;
     cache_file = fullfile(output_dir, config.sub_features_filename);
     save(cache_file, 'resp_cycles', 'feature_cache_meta');
@@ -136,13 +143,15 @@ function testLegacyCacheWithoutTroughOverridesRetainsReviewedPeaks(testCase)
             'manual_edits_made', true, ...
             'loaded_from_cache', false));
     feature_cache_meta = struct( ...
-        'cache_version', 8, ...
+        'cache_version', 9, ...
         'subject', config.subject, ...
         'measurement', config.measure, ...
         'fs', config.fs, ...
         'n_samples', n_samples, ...
         'data_columns', {config.data_columns}, ...
-        'amp_method', 'expiratory');
+        'amp_method', 'expiratory', ...
+        'belt_polarity_checked', false, ...
+        'diaphragm_polarity_flipped', false);
     cache_file = fullfile(output_dir, config.sub_features_filename);
     save(cache_file, 'resp_cycles', 'feature_cache_meta');
 
@@ -152,6 +161,51 @@ function testLegacyCacheWithoutTroughOverridesRetainsReviewedPeaks(testCase)
     verifyEqual(testCase, loaded.lungs.peak_idx, legacy_belt.peak_idx);
     verifyEqual(testCase, loaded.lungs.trough_idx, legacy_belt.trough_idx);
     verifyFalse(testCase, isfield(loaded.lungs, 'trough_overrides'));
+end
+
+function testVersionEightPrePolarityCacheIsRejected(testCase)
+    output_dir = tempname;
+    mkdir(output_dir);
+    cleanup_dir = onCleanup(@() rmdir(output_dir, 's'));
+    config = make_test_config(output_dir);
+    data = make_synthetic_master_data(10001, config.fs);
+
+    resp_cycles = load_or_extract_respiratory_cycles(data, config);
+    cache_file = fullfile(output_dir, config.sub_features_filename);
+    cached = load(cache_file);
+    feature_cache_meta = cached.feature_cache_meta;
+    feature_cache_meta.cache_version = 8;
+    feature_cache_meta = rmfield(feature_cache_meta, ...
+        {'belt_polarity_checked', 'diaphragm_polarity_flipped'});
+    save(cache_file, 'resp_cycles', 'feature_cache_meta');
+
+    recomputed = load_or_extract_respiratory_cycles(data, config);
+    saved = load(cache_file, 'feature_cache_meta');
+
+    verifyFalse(testCase, recomputed.provenance.loaded_from_cache);
+    verifyEqual(testCase, saved.feature_cache_meta.cache_version, 9);
+    verifyFalse(testCase, saved.feature_cache_meta.belt_polarity_checked);
+    verifyFalse(testCase, saved.feature_cache_meta.diaphragm_polarity_flipped);
+end
+
+function testPolarityConventionMismatchInvalidatesCache(testCase)
+    output_dir = tempname;
+    mkdir(output_dir);
+    cleanup_dir = onCleanup(@() rmdir(output_dir, 's'));
+    config = make_test_config(output_dir);
+    config.preprocessing.belt_polarity_qc = struct( ...
+        'checked', true, 'flipped', false);
+    data = make_synthetic_master_data(10001, config.fs);
+    load_or_extract_respiratory_cycles(data, config);
+
+    config.preprocessing.belt_polarity_qc.flipped = true;
+    recomputed = load_or_extract_respiratory_cycles(data, config);
+    cache_file = fullfile(output_dir, config.sub_features_filename);
+    saved = load(cache_file, 'feature_cache_meta');
+
+    verifyFalse(testCase, recomputed.provenance.loaded_from_cache);
+    verifyTrue(testCase, saved.feature_cache_meta.belt_polarity_checked);
+    verifyTrue(testCase, saved.feature_cache_meta.diaphragm_polarity_flipped);
 end
 
 function b = reviewed_cache_belt(n_samples)

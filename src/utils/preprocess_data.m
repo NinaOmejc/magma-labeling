@@ -188,6 +188,11 @@ function [output, config, trend] = preprocess_data(t_series, config)
         
     end
 
+    % Standardize only clear, persistent acquisition-level belt inversion.
+    % This is deliberately independent of respiratory-asynchrony detection.
+    [output, trend, config] = correct_respiratory_belt_polarity( ...
+        output, trend, config, sampl_freq);
+
     if isvector(output)
         n_master_samples = numel(output);
     else

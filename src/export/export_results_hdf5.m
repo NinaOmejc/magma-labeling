@@ -9,7 +9,7 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
 %   signals_raw          - Nsample x Nchannel raw physiological signal matrix.
 %   signals_preprocessed - Nsample x Nchannel processed signal matrix.
 %
-% The v11 file stores sample signals/time under /signals and /time;
+% The v12 file stores sample signals/time under /signals and /time;
 % reviewed breath cycles under /resp_cycles, canonical feature traces under
 % /resp_features, and compact detector evidence under /detector_diagnostics;
 % common-interval metadata under /session_reference, per-belt
@@ -24,7 +24,7 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
 
     filename = char(string(filename));
     validate_export_inputs(filename, results, signals_raw, signals_preprocessed);
-    export_schema_version = 'magma_ml_hdf5_v11';
+    export_schema_version = 'magma_ml_hdf5_v12';
     out_dir = fileparts(filename);
     if ~isempty(out_dir) && ~isfolder(out_dir)
         mkdir(out_dir);
@@ -105,7 +105,11 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
         results.label_evidence_summary_reviewed, options);
     write_value(filename, '/phenotype_evidence', ...
         results.db_phenotype_evidence, options);
-    write_value(filename, '/config', results.config, options);
+    config_export = results.config;
+    if isfield(config_export, 'times')
+        config_export = rmfield(config_export, 'times');
+    end
+    write_value(filename, '/config', config_export, options);
 
     write_numeric(filename, '/meta/subject', results.subject, options);
     write_numeric(filename, '/meta/measurement', results.measure, options);
