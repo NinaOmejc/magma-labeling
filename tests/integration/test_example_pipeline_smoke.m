@@ -147,8 +147,8 @@ function testExampleRecordingRunsAtMasterRate(testCase)
     verifyFalse(testCase, isfield(export_results, 'event_boundary_info'));
     verifyFalse(testCase, isfield(export_results, 'diagnostic_signals'));
     verifyEqual(testCase, numel(reasons), 11);
-    verifyEqual(testCase, phenotypes.version, 'magma_phenotypes_v4');
-    verifyEqual(testCase, phenotypes.numeric_summary.n_features, 21);
+    verifyEqual(testCase, phenotypes.version, 'magma_phenotypes_v7');
+    verifyEqual(testCase, phenotypes.numeric_summary.n_features, 22);
     verifyEqual(testCase, label_results.events_automatic, events);
     verifyEqual(testCase, label_results.mask_automatic, mask);
     verifyFalse(testCase, any(label_results.review_coverage_mask(:)));
@@ -205,7 +205,7 @@ function testExampleRecordingRunsAtMasterRate(testCase)
     verifyFalse(testCase, hdf5_path_exists(hdf5_file, ...
         '/diagnostics/periodic/eami/lungs/eami'));
     verifyEqual(testCase, read_hdf5_text(hdf5_file, ...
-        '/meta/export_schema_version'), {'magma_ml_hdf5_v13'});
+        '/meta/export_schema_version'), {'magma_ml_hdf5_v15'});
     verifyEqual(testCase, read_hdf5_text(hdf5_file, ...
         '/labels/automatic/evidence/version'), ...
         {'detector_specific_evidence_summary_v6'});

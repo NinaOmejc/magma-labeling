@@ -20,7 +20,7 @@ Sub<subject>_M<measurement>_features.mat
 ```
 
 The MAT file is the authoritative MATLAB result. The HDF5 file uses schema
-`magma_ml_hdf5_v13` as a portable recording-level representation.
+`magma_ml_hdf5_v15` as a portable recording-level representation.
 
 ## Two output levels
 
@@ -51,19 +51,39 @@ forced_abdominal_expiration
 thoracoabdominal_asynchrony
 ```
 
-`label_based` contains exactly five profiles:
+`label_based` contains exactly six profiles:
 
 ```text
 apneic_breathing
 periodic_breathing
 shallow_breathing
 slow_breathing
+irregular_breathing
 desaturation
 ```
 
 These profiles are descriptive, may coexist, and are not binary diagnoses.
 
-Each `numeric_summary` has the same fixed 21 values in the same schema order
+Every detailed phenotype or pattern contains exactly:
+
+```text
+name
+available
+signal_derived_measures
+limitations
+source_provenance
+```
+
+`available` means sufficient MAGMA signal support exists to compute the
+profile for this recording. It does not mean that the phenotype is present or
+that a clinical diagnosis has been established.
+
+```text
+available != phenotype present
+available != clinical diagnosis
+```
+
+Each `numeric_summary` has the same fixed 22 values in the same schema order
 and contains:
 
 ```text

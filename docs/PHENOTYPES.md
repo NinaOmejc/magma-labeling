@@ -5,7 +5,7 @@ MAGMA separates two analysis levels:
 1. **Level 1 — time-resolved physiological labels and evidence.** Labels,
    events, assessability masks, breath evidence, and detector diagnostics.
 2. **Level 2 — recording-level phenotype and respiratory-pattern evidence.**
-   Detailed profiles and a fixed 21-value numeric summary are provided for
+   Detailed profiles and a fixed 22-value numeric summary are provided for
    automatic and reviewed annotation layers.
 
 Level 2 contains two groups:
@@ -15,26 +15,33 @@ Level 2 contains two groups:
   thoracic-dominant breathing, forced abdominal expiration, and
   thoraco-abdominal asynchrony.
 - **Additional MAGMA label-derived respiratory patterns:** apneic breathing,
-  periodic breathing, shallow breathing, slow breathing, and desaturation.
+  periodic breathing, shallow breathing, slow breathing, irregular breathing,
+  and desaturation.
 
 A phenotype is **not one number**, no binary clinical diagnosis is produced,
-and the ten recording-level profiles are not mutually exclusive. The detailed
+and the eleven recording-level profiles are not mutually exclusive. The detailed
 Level-2 evidence contains more information than the fixed numeric summary.
 
 ## Five literature-based phenotypes
 
-| Literature-based phenotype | Selected summary measures | Signal assessment status |
+| Literature-based phenotype | Selected summary measures | Availability condition |
 |---|---:|---|
-| Hyperventilation-like respiratory pattern | 5 | `partial` |
-| Periodic deep sighing | 5 | `assessable` when the required evidence is available |
-| Thoracic-dominant breathing | 3 | `assessable` when both belts support the analysis |
-| Forced abdominal expiration | 0 | `not_assessable` |
-| Thoraco-abdominal asynchrony | 3 | `assessable` when both belts and phase evidence support the analysis |
+| Hyperventilation-like respiratory pattern | 5 | rapid or deep evidence is available |
+| Periodic deep sighing | 5 | sigh and irregular evidence are available |
+| Thoracic-dominant breathing | 3 | the two-belt thoracic profile is available |
+| Forced abdominal expiration | 0 | unavailable with the current signals |
+| Thoraco-abdominal asynchrony | 3 | the two-belt asynchrony profile is available |
 
-`signal_assessment_status` describes what the signal modality can establish.
-The separate `evidence_available` field states whether the required evidence
-exists in the current recording. A `partial` status is not the same as
-unavailable.
+Every detailed phenotype contains only `name`, `available`,
+`signal_derived_measures`, `limitations`, and `source_provenance`. `available`
+means that sufficient MAGMA signal support exists to compute the profile for
+this recording. It does not mean that the phenotype is present or that a
+clinical diagnosis has been established.
+
+```text
+available != phenotype present
+available != clinical diagnosis
+```
 
 ### Hyperventilation-like respiratory pattern
 
@@ -108,11 +115,38 @@ frequency-selection evidence, method comparison, reference quality, polarity
 metadata, coherence diagnostics, skip codes, and other QC fields. These fields
 are not part of the fixed numeric summary.
 
+## Six label-based respiratory patterns
+
+The additional MAGMA label-based profiles are apneic breathing, periodic
+breathing, shallow breathing, slow breathing, irregular breathing, and
+desaturation. Each reuses its corresponding Level-1 label without introducing
+a new detector or definition.
+
+### Irregular breathing
+
+- **Origin:** Label-based
+- **Feature:** Irregular-breathing burden
+- **Description:** Irregular-breathing duration divided by
+  irregular-assessable duration.
+- **Clinician-readable interpretation:** Proportion of assessable recording
+  time classified as irregular breathing based on excessive breath-to-breath
+  timing variability.
+- **Units:** fraction
+
+Irregular breathing may occur independently of recurrent sighing and is
+therefore exposed as its own label-based profile. The same irregular burden
+also remains a characteristic of the literature-based periodic-deep-sighing
+profile. This intentional reuse represents two different interpretations of
+the same established Level-1 evidence. Recent breathing-pattern-disorder
+literature also recognizes irregular breathing as a clinically recognizable
+abnormal breathing pattern; MAGMA nevertheless reports a signal-derived
+pattern rather than a diagnosis.
+
 ## Fixed recording-level numeric summary
 
 The phenotype summary schema is the sole authority for names, order, units,
 roles, display names, and source descriptions. The public `numeric_summary`
-structure contains 21 selected numeric measures derived from the Level-2
+structure contains 22 selected numeric measures derived from the Level-2
 phenotype and respiratory-pattern evidence.
 
 | # | Feature name | Units |
@@ -137,17 +171,17 @@ phenotype and respiratory-pattern evidence.
 | 18 | `pattern_periodic_fraction` | fraction |
 | 19 | `pattern_shallow_fraction` | fraction |
 | 20 | `pattern_slow_fraction` | fraction |
-| 21 | `pattern_desaturation_fraction` | fraction |
+| 21 | `pattern_irregular_fraction` | fraction |
+| 22 | `pattern_desaturation_fraction` | fraction |
 
-The first 16 variables represent the literature-based phenotypes. The final five
-are non-duplicated additional respiratory-pattern burdens. Forced abdominal
+The first 16 variables represent the literature-based phenotypes. The final six
+are additional label-based respiratory-pattern burdens. Forced abdominal
 expiration contributes zero variables.
 
-Deep breathing, rapid breathing, irregular breathing, and sighing remain fully
-available at Level 1 and contribute to the literature-based phenotypes; they are not
-duplicated as additional Level-2 respiratory-pattern profiles. The only
-additional Level-2 profiles are apneic breathing, periodic breathing, shallow
-breathing, slow breathing, and desaturation.
+Deep breathing, rapid breathing, and sighing remain fully available at Level 1
+and contribute to the literature-based phenotypes without separate Level-2
+profiles. Irregular breathing intentionally contributes to periodic deep
+sighing and also appears as an independent label-based Level-2 profile.
 
 ## Availability, zero, and coverage
 
@@ -189,10 +223,13 @@ selected for the fixed numeric summary.
 | `sigh`, `irregular`, sigh/irregular overlap | Periodic deep sighing |
 | `thoracic` and normalized belt balance | Thoracic-dominant breathing |
 | `async` and reliable phase evidence | Thoraco-abdominal asynchrony |
+| `irregular` | Periodic deep sighing and independent Irregular breathing profile |
 | `apnea`, `periodic`, `shallow`, `slow`, `desat` | Additional label-based burdens |
 
-## External clinical data
+## Scientific interpretation limitations
 
 Nijmegen Questionnaire, ETCO2/capnography, CPET/ergospirometry, clinical
 observations, and other clinical variables remain external to the signal-derived
-21-value summary and are not used to create MAGMA Level-2 evidence.
+22-value summary and are not used to create MAGMA Level-2 evidence. They are
+not pipeline inputs and are not stored as placeholders. Relevant scientific
+caveats are expressed only through each profile's `limitations` field.

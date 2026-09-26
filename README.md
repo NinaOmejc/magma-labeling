@@ -10,8 +10,8 @@ Labels are independent and may overlap. They describe signal-derived physiologic
 
 MAGMA has two scientific output levels: Level 1 contains the time-resolved
 labels and their supporting evidence; Level 2 contains recording-level
-phenotypes and patterns. The five literature-based and five label-based Level-2
-profiles are descriptive, may coexist, and are accompanied by a fixed 21-value
+phenotypes and patterns. The five literature-based and six label-based Level-2
+profiles are descriptive, may coexist, and are accompanied by a fixed 22-value
 numeric summary.
 
 ## Documentation
@@ -63,7 +63,7 @@ The pipeline:
 The main recording outputs are
 `Sub<subject>_M<measurement>_results.mat` and
 `Sub<subject>_M<measurement>_results.h5`. The respiratory-feature cache keeps
-the `_features.mat` suffix. See [Outputs](docs/OUTPUTS.md) for the HDF5 v13
+the `_features.mat` suffix. See [Outputs](docs/OUTPUTS.md) for the HDF5 v15
 hierarchy and group-output filenames.
 
 ## Respiratory reference

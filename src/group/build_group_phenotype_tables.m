@@ -120,7 +120,7 @@ function layer = read_layer(layer, row, loaded, layer_name, schema)
 end
 
 function T = feature_table(identifiers, values, schema)
-% FEATURE_TABLE Append exactly 21 contiguous fixed-order feature columns.
+% FEATURE_TABLE Append exactly 22 contiguous fixed-order feature columns.
 
     T = identifiers;
     for i = 1:schema.n_features

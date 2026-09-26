@@ -9,7 +9,7 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
 %   signals_raw          - Nsample x Nchannel raw physiological signal matrix.
 %   signals_preprocessed - Nsample x Nchannel processed signal matrix.
 %
-% The v13 file stores signals/time under /signals and /time; reviewed breath
+% The v15 file stores signals/time under /signals and /time; reviewed breath
 % cycles under /breaths; derived respiration under /respiration; detector
 % evidence under /diagnostics; automatic/reviewed label layers under /labels;
 % canonical events under /events; recording profiles under /phenotypes;
@@ -18,7 +18,7 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
 
     filename = char(string(filename));
     validate_export_inputs(filename, results, signals_raw, signals_preprocessed);
-    export_schema_version = 'magma_ml_hdf5_v13';
+    export_schema_version = 'magma_ml_hdf5_v15';
     out_dir = fileparts(filename);
     if ~isempty(out_dir) && ~isfolder(out_dir)
         mkdir(out_dir);
@@ -204,7 +204,10 @@ function validate_phenotype_bundle(bundle)
         'thoracic_dominant_breathing'; 'forced_abdominal_expiration'; ...
         'thoracoabdominal_asynchrony'};
     label_names = {'apneic_breathing'; 'periodic_breathing'; ...
-        'shallow_breathing'; 'slow_breathing'; 'desaturation'};
+        'shallow_breathing'; 'slow_breathing'; 'irregular_breathing'; ...
+        'desaturation'};
+    profile_fields = {'name'; 'available'; 'signal_derived_measures'; ...
+        'limitations'; 'source_provenance'};
     layers = {'automatic', 'reviewed'};
     for i = 1:numel(layers)
         layer = bundle.(layers{i});
@@ -217,8 +220,21 @@ function validate_phenotype_bundle(bundle)
         if ~isequal(fieldnames(layer.literature_based), literature_names) || ...
                 ~isequal(fieldnames(layer.label_based), label_names)
             error('MAGMA:HDF5:InvalidPhenotypes', ...
-                '%s phenotypes do not contain the canonical ten profiles.', ...
+                '%s phenotypes do not contain the canonical eleven profiles.', ...
                 layers{i});
+        end
+        profile_groups = {'literature_based', 'label_based'};
+        for group_idx = 1:numel(profile_groups)
+            profiles = layer.(profile_groups{group_idx});
+            profile_names = fieldnames(profiles);
+            for profile_idx = 1:numel(profile_names)
+                if ~isequal(fieldnames(profiles.(profile_names{profile_idx})), ...
+                        profile_fields)
+                    error('MAGMA:HDF5:InvalidPhenotypes', ...
+                        '%s.%s does not use the simplified phenotype schema.', ...
+                        layers{i}, profile_names{profile_idx});
+                end
+            end
         end
         validate_compact_phenotype_features(layer.numeric_summary);
     end

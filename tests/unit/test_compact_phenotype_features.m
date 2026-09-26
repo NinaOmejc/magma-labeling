@@ -3,7 +3,7 @@ function tests = test_compact_phenotype_features
     tests = functiontests(localfunctions);
 end
 
-function testSchemaHasExactlyFixedUniqueTwentyOneFeatures(testCase)
+function testSchemaHasExactlyFixedUniqueTwentyTwoFeatures(testCase)
     schema = get_phenotype_feature_schema();
     expected = { ...
         'db_hyperventilation_rapid_fraction', ...
@@ -24,12 +24,13 @@ function testSchemaHasExactlyFixedUniqueTwentyOneFeatures(testCase)
         'db_asynchrony_median_event_duration_sec', ...
         'pattern_apnea_fraction', 'pattern_periodic_fraction', ...
         'pattern_shallow_fraction', 'pattern_slow_fraction', ...
+        'pattern_irregular_fraction', ...
         'pattern_desaturation_fraction'};
-    verifyEqual(testCase, schema.n_features, 21);
+    verifyEqual(testCase, schema.n_features, 22);
     verifyEqual(testCase, schema.feature_names, expected);
-    verifyEqual(testCase, numel(unique(schema.feature_names)), 21);
+    verifyEqual(testCase, numel(unique(schema.feature_names)), 22);
     verifyEqual(testCase, nnz(strcmp(schema.feature_role, 'literature_based')), 16);
-    verifyEqual(testCase, nnz(strcmp(schema.feature_role, 'label_based')), 5);
+    verifyEqual(testCase, nnz(strcmp(schema.feature_role, 'label_based')), 6);
     verifyFalse(testCase, any(contains(schema.feature_names, 'forced_abdominal')));
 end
 
@@ -38,15 +39,20 @@ function testAdditionalPatternsAreNotDuplicated(testCase)
     output = build_db_phenotype_evidence(burden, overlap, evidence);
     verifyEqual(testCase, fieldnames(output.label_based), { ...
         'apneic_breathing'; 'periodic_breathing'; 'shallow_breathing'; ...
-        'slow_breathing'; 'desaturation'});
+        'slow_breathing'; 'irregular_breathing'; 'desaturation'});
+    verifyEqual(testCase, output.label_based.irregular_breathing.name, ...
+        'Irregular breathing');
+    verifyTrue(testCase, output.label_based.irregular_breathing.available);
+    verifyEqual(testCase, ...
+        output.label_based.irregular_breathing.signal_derived_measures.fraction, ...
+        burden.by_label.irregular.fraction);
     verifyTrue(testCase, isfield(burden.by_label, 'deep'));
     verifyTrue(testCase, isfield(burden.by_label, 'rapid'));
     verifyTrue(testCase, isfield(burden.by_label, 'irregular'));
     verifyTrue(testCase, isfield(burden.by_label, 'sigh'));
     verifyFalse(testCase, isfield(output, 'hyperventilation_syndrome'));
-    verifyEqual(testCase, ...
-        output.literature_based.hyperventilation_like.signal_assessment_status, ...
-        'partial');
+    verifyTrue(testCase, ...
+        output.literature_based.hyperventilation_like.available);
 end
 
 function testRapidDeepUsesJointAssessableDenominator(testCase)
@@ -99,6 +105,10 @@ function testCompactCombinesBeltsAndKeepsZeroDistinctFromUnavailable(testCase)
     verifyEqual(testCase, compact.values(10), 0.3, 'AbsTol', eps);
     verifyEqual(testCase, compact.values(12), 1.4);
     verifyEqual(testCase, compact.values(15), 35);
+    verifyEqual(testCase, compact.values(21), ...
+        burden.by_label.irregular.fraction);
+    verifyEqual(testCase, compact.values(22), ...
+        burden.by_label.desat.fraction);
     verifyEqual(testCase, compact.values([13 16]), [0 0]);
     verifyTrue(testCase, all(compact.available([13 16])));
 

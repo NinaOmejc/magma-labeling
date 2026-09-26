@@ -6,7 +6,7 @@ respiratory phenotype and pattern evidence.
 - **Level 1 — time-resolved physiological labels and evidence:** signal-derived
   respiratory or physiological patterns, events, assessability, and diagnostics.
 - **Level 2 — recording-level respiratory phenotype and pattern evidence:**
-  detailed evidence profiles plus a fixed 21-value numeric summary.
+  detailed evidence profiles plus a fixed 22-value numeric summary.
 
 Neither Level 1 nor Level 2 should be interpreted as a clinical diagnosis. Labels may overlap, and several phenotype patterns may coexist in the same recording or participant.
 
@@ -122,17 +122,17 @@ The absolute criterion does not require an available session reference. Event di
 
 Level 2 combines Level-1 labels and detector summaries into detailed
 phenotype-evidence profiles. The public `numeric_summary` output selects 16
-measures from the literature-based phenotypes plus five non-duplicated
-label-based pattern burdens. Both forms are descriptive and do **not** create binary
+measures from the literature-based phenotypes plus six label-based
+pattern burdens. Both forms are descriptive and do **not** create binary
 clinical phenotype-present/absent diagnoses.
 
-| Literature-based MAGMA phenotype evidence | Main Level-1 inputs | Assessable from current signals? | Main limitation / missing clinical information |
+| Literature-based MAGMA phenotype evidence | Main Level-1 inputs | Availability condition | Main limitation |
 |---|---|---|---|
-| Hyperventilation-like respiratory pattern | `rapid`, `deep`, rapid-deep overlap, RR, relative excursion | Partially | ETCO2/capnography, ventilation relative to metabolic demand, CPET/ergospirometry, clinical assessment, Nijmegen questionnaire are needed for clinical interpretation |
-| Periodic deep sighing | `sigh`, `irregular`, `deep`, sigh-irregular overlap | Yes | Continuous pattern evidence; no clinical cutoff is imposed |
-| Thoracic-dominant breathing | `thoracic` and thoracic/abdominal balance metrics | Yes | Belts are independently normalized and uncalibrated; clinical/ergospirometric validation is desirable |
-| Forced abdominal expiration | none sufficient at present | No | Belt movement alone cannot establish active abdominal-muscle recruitment |
-| Thoraco-abdominal asynchrony | `async` and phase-offset/coherence summaries | Yes | Algorithmic evidence is not a clinical diagnosis |
+| Hyperventilation-like respiratory pattern | `rapid`, `deep`, rapid-deep overlap, RR, relative excursion | rapid or deep evidence is available | Respiratory belts do not establish clinical hyperventilation or hyperventilation syndrome |
+| Periodic deep sighing | `sigh`, `irregular`, `deep`, sigh-irregular overlap | sigh and irregular evidence are available | Continuous pattern evidence; no clinical cutoff is imposed |
+| Thoracic-dominant breathing | `thoracic` and thoracic/abdominal balance metrics | the two-belt profile is available | Belts are independently normalized and uncalibrated |
+| Forced abdominal expiration | none sufficient at present | unavailable | Belt movement alone cannot establish active abdominal-muscle recruitment |
+| Thoraco-abdominal asynchrony | `async` and phase-offset/coherence summaries | the two-belt profile is available | Algorithmic evidence is not a clinical diagnosis |
 
 ### Relationship between Level 1 and Level 2
 
@@ -141,7 +141,7 @@ Level 1 answers **"what respiratory/physiological pattern is present and when?"*
 Level 2 answers **"how much evidence does this recording contain for a
 literature-based phenotype or additional label-derived pattern?"** Detailed profiles
 retain the supporting evidence, while `numeric_summary` provides the fixed raw
-21-value recording-level summary.
+22-value recording-level summary.
 
 Examples:
 
@@ -149,8 +149,14 @@ Examples:
 - individual `sigh` events and `irregular` breathing contribute to **periodic deep sighing**.
 - `thoracic` directly contributes to **thoracic-dominant breathing** evidence.
 - `async` directly contributes to **thoraco-abdominal asynchrony** evidence.
+- `irregular` contributes to **periodic deep sighing** and is also exposed as
+  the independent label-based pattern **Irregular breathing**. This reuse is
+  intentional because irregular breathing can occur without recurrent sighing.
 - no current Level-1 label is sufficient to establish **forced abdominal expiration**.
 
-Automatic and manually reviewed annotation layers can generate parallel Level-2 evidence profiles. External clinical data are intentionally kept separate from the signal-derived phenotype evidence so they can be used for later clinical interpretation and validation.
+Automatic and manually reviewed annotation layers generate parallel Level-2
+profiles. Each profile's `available` field means sufficient MAGMA signal
+support exists to compute it; it does not mean the phenotype is present or
+clinically diagnosed. Interpretation caveats are stored in `limitations`.
 
-See `PHENOTYPES.md` for the detailed phenotype-level interpretation and recommended clinical-validation structure.
+See `PHENOTYPES.md` for detailed phenotype-level interpretation.

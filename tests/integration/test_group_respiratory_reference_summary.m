@@ -297,8 +297,8 @@ function testDedicatedPhenotypeTablesUseFixedSchemaAndProvenance(testCase)
     label_available = true(1, 11);
     mask_automatic = false(20, 11);
     config = struct('fs', 10);
-    automatic = compact_output(schema, 1:21);
-    reviewed = compact_output(schema, 101:121);
+    automatic = compact_output(schema, 1:22);
+    reviewed = compact_output(schema, 101:122);
     phenotypes = struct( ...
         'automatic', struct('numeric_summary', automatic), ...
         'reviewed', struct('numeric_summary', reviewed));
@@ -326,10 +326,10 @@ function testDedicatedPhenotypeTablesUseFixedSchemaAndProvenance(testCase)
     verifyEqual(testCase, auto.Properties.VariableNames, expected_columns);
     verifyEqual(testCase, auto.recording_id, "Sub1_M2");
     verifyEqual(testCase, auto.analysis_id, "analysis_fixture");
-    verifyEqual(testCase, table2array(auto(:, 6:end)), 1:21);
-    verifyEqual(testCase, table2array(review(:, 6:end)), 101:121);
-    verifyEqual(testCase, table2array(availability(:, 6:end)), ones(1, 21));
-    verifyEqual(testCase, dictionary.feature_index, (1:21)');
+    verifyEqual(testCase, table2array(auto(:, 6:end)), 1:22);
+    verifyEqual(testCase, table2array(review(:, 6:end)), 101:122);
+    verifyEqual(testCase, table2array(availability(:, 6:end)), ones(1, 22));
+    verifyEqual(testCase, dictionary.feature_index, (1:22)');
     verifyEqual(testCase, dictionary.feature_name, ...
         string(schema.feature_names(:)));
     verifyTrue(testCase, isfile(fullfile(out_dir, ...
@@ -341,7 +341,7 @@ end
 function compact = compact_output(schema, values)
 % COMPACT_OUTPUT Create one valid saved compact-vector fixture.
 
-    compact = struct('version', 'magma_phenotype_numeric_summary_v2', ...
+    compact = struct('version', 'magma_phenotype_numeric_summary_v3', ...
         'schema_version', schema.version, 'n_features', schema.n_features, ...
         'feature_names', {schema.feature_names}, 'values', double(values), ...
         'available', true(1, schema.n_features), ...
