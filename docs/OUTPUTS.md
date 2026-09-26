@@ -6,53 +6,65 @@ Each recording is written below:
 <config.path_results_out>/Sub<subject>_M<measurement>/
 ```
 
-The main files are:
+The main recording files are:
 
 ```text
-Sub<subject>_M<measurement>_labels.mat
-Sub<subject>_M<measurement>_labels.h5
+Sub<subject>_M<measurement>_results.mat
+Sub<subject>_M<measurement>_results.h5
+```
+
+The respiratory-feature cache remains:
+
+```text
+Sub<subject>_M<measurement>_features.mat
 ```
 
 The MAT file is the authoritative MATLAB result. The HDF5 file uses schema
-`magma_ml_hdf5_v12` and is intended as a portable recording-level exchange
-format for downstream analysis.
+`magma_ml_hdf5_v13` as a portable recording-level representation.
 
-## Recording-level MATLAB fields
+## Two output levels
 
-Level-1 and detailed Level-2 evidence remains available in:
+Level 1 contains time-resolved physiological labels, accepted and candidate
+events, assessability, burden, overlap, supporting evidence, and detector
+diagnostics. Level 2 contains recording-level phenotypes and patterns. The two
+annotation layers remain separate throughout: `automatic` and `reviewed`.
 
-```matlab
-results.resp_cycles
-results.resp_features
-results.events_automatic
-results.events_reviewed
-results.mask_automatic
-results.mask_reviewed
-results.label_assessable_mask
-results.label_reviewed_assessable_mask
-results.detector_diagnostics
-results.label_burden_automatic
-results.label_burden_reviewed
-results.label_overlap_summary_automatic
-results.label_overlap_summary_reviewed
-results.label_evidence_summary_automatic
-results.label_evidence_summary_reviewed
-```
-
-The phenotype bundle contains detailed evidence and a compact numeric summary
-for each annotation layer:
+The MATLAB phenotype bundle is available at:
 
 ```matlab
-results.db_phenotype_evidence.automatic.prespecified_db
-results.db_phenotype_evidence.automatic.respiratory_patterns
-results.db_phenotype_evidence.automatic.compact_features
+results.phenotypes.automatic.literature_based
+results.phenotypes.automatic.label_based
+results.phenotypes.automatic.numeric_summary
 
-results.db_phenotype_evidence.reviewed.prespecified_db
-results.db_phenotype_evidence.reviewed.respiratory_patterns
-results.db_phenotype_evidence.reviewed.compact_features
+results.phenotypes.reviewed.literature_based
+results.phenotypes.reviewed.label_based
+results.phenotypes.reviewed.numeric_summary
 ```
 
-Each `compact_features` struct contains:
+`literature_based` contains exactly five profiles:
+
+```text
+hyperventilation_like
+periodic_deep_sighing
+thoracic_dominant_breathing
+forced_abdominal_expiration
+thoracoabdominal_asynchrony
+```
+
+`label_based` contains exactly five profiles:
+
+```text
+apneic_breathing
+periodic_breathing
+shallow_breathing
+slow_breathing
+desaturation
+```
+
+These profiles are descriptive, may coexist, and are not binary diagnoses.
+
+Each `numeric_summary` has the same fixed 21 values in the same schema order
+and contains:
 
 ```text
 version
@@ -68,114 +80,94 @@ feature_role
 units
 ```
 
-Every aligned vector has exactly 21 elements in the fixed schema order.
-`values` and `coverage_fraction` are doubles; `available` is logical. Raw
-values are not scaled or imputed.
+Values are not scaled or imputed. A finite zero is distinct from unavailable
+evidence; unavailable values remain `NaN` with `available=false`.
 
-Candidate events remain separate from final accepted events:
+## HDF5 structure
 
-```matlab
-results.candidate_events
+The public hierarchy is:
+
+```text
+/signals
+    /preprocessed
+    /raw                  optional
+/time
+
+/breaths
+/respiration
+/diagnostics
+
+/labels
+    /names
+    /automatic
+        /mask
+        /available
+        /availability_reason
+        /assessable_mask
+        /burden
+        /overlap
+        /evidence
+    /reviewed
+        /mask
+        /available
+        /availability_reason
+        /assessable_mask
+        /coverage_mask
+        /status
+        /burden
+        /overlap
+        /evidence
+
+/events
+    /automatic
+    /reviewed
+    /candidate
+
+/phenotypes
+    /automatic
+        /literature_based
+        /label_based
+        /numeric_summary
+    /reviewed
+        /literature_based
+        /label_based
+        /numeric_summary
+
+/references
+    /session
+    /respiration
+        /lungs
+        /diaphragm
+    /spo2
+
+/review
+/config
+/meta
 ```
 
-They contain meaningful pre-final candidates where a detector has a distinct
-candidate stage and are not duplicates of `events_automatic`.
+`/time` is the single authoritative recording time axis in HDF5. The MATLAB
+configuration may retain `config.times`, but the full vector is omitted from
+`/config` to avoid duplicate storage.
 
-## Automatic versus reviewed annotations
+Numeric-summary datasets can be read directly below
+`/phenotypes/<layer>/numeric_summary`. Text arrays are zero-padded UTF-8 byte
+columns. Logical arrays are stored as `uint8` with a logical attribute.
+Numeric arrays and label masks use HDF5 compression where appropriate. By
+default, raw signals are omitted, preprocessed signals are included, and only
+exported signals are cast to compressed single precision; this does not alter
+the in-memory analysis or MAT output.
 
-Automatic and manually reviewed annotations are stored separately. Review
-coverage is explicit:
+## Automatic and reviewed annotations
+
+Automatic and reviewed annotations are not mixed. Review coverage is explicit:
 
 ```text
 unreviewed != negative
 unavailable physiological evidence != negative
 ```
 
-Automatic phenotype features use the full physiologically assessable scope.
-Reviewed phenotype features use only explicitly reviewed and physiologically
-assessable regions.
-
-## HDF5 structure
-
-Important high-level groups include:
-
-```text
-/signals/preprocessed
-/signals/raw                 (optional)
-/time
-
-/resp_cycles
-/resp_features
-/detector_diagnostics
-
-/labels/automatic_mask
-/labels/reviewed_mask
-/labels/assessable_mask
-/labels/reviewed_assessable_mask
-/labels/review_coverage_mask
-
-/events/automatic
-/events/reviewed
-/events/candidate
-
-/burden/automatic
-/burden/reviewed
-/overlap/automatic
-/overlap/reviewed
-/evidence_summary/automatic
-/evidence_summary/reviewed
-
-/phenotype_evidence
-/session_reference
-/resp_reference
-/spo2_reference
-/config
-/meta
-```
-
-`/time` is the single authoritative recording time axis in HDF5. The in-memory
-MATLAB configuration may retain `config.times`, but that full-length vector is
-intentionally omitted from `/config` to avoid storing it twice.
-
-The detailed Level-2 evidence is retained below `/phenotype_evidence`. Fixed
-recording-level numeric-summary datasets are directly readable at:
-
-```text
-/phenotype_evidence/automatic/compact_features/version
-/phenotype_evidence/automatic/compact_features/schema_version
-/phenotype_evidence/automatic/compact_features/n_features
-/phenotype_evidence/automatic/compact_features/feature_names
-/phenotype_evidence/automatic/compact_features/values
-/phenotype_evidence/automatic/compact_features/available
-/phenotype_evidence/automatic/compact_features/coverage_fraction
-/phenotype_evidence/automatic/compact_features/missing_reason
-/phenotype_evidence/automatic/compact_features/phenotype_group
-/phenotype_evidence/automatic/compact_features/feature_role
-/phenotype_evidence/automatic/compact_features/units
-```
-
-Prespecified phenotype evidence is stored only under
-`/phenotype_evidence/<layer>/prespecified_db`; deprecated top-level aliases
-are not duplicated. The `respiratory_patterns` branch contains only
-`apneic_breathing`, `periodic_breathing`, `shallow_breathing`,
-`slow_breathing`, and `desaturation`. Deep, rapid, irregular, and sigh
-evidence remains available in the Level-1 outputs.
-
-The identical structure exists under:
-
-```text
-/phenotype_evidence/reviewed/compact_features/
-```
-
-Downstream readers can access the fixed datasets directly rather than
-recursively discovering arbitrary evidence fields.
-
-Text arrays are stored as zero-padded UTF-8 byte columns. Numeric arrays and
-label masks use HDF5 compression where appropriate; logical arrays are stored
-exactly as `uint8` with a logical attribute. By default the export omits raw
-signals, includes preprocessed signals, and casts only exported signals to
-compressed single precision. HDF5 storage settings do not modify the in-memory
-analysis, MAT output, features, or labels.
+Automatic summaries use the full physiologically assessable scope. Reviewed
+summaries use only explicitly reviewed and physiologically assessable regions.
 
 ## Group-level outputs
 
@@ -185,7 +177,7 @@ Group outputs are written to:
 <config.path_results_out>/group_analysis/
 ```
 
-The existing broad QC outputs are retained, including:
+The broad label and QC outputs remain:
 
 ```text
 group_label_summary.csv
@@ -200,43 +192,24 @@ group_measure_comparability.csv
 Dedicated phenotype outputs are:
 
 ```text
-group_phenotype_features_automatic.csv
-group_phenotype_features_reviewed.csv
-group_phenotype_availability_automatic.csv
-group_phenotype_availability_reviewed.csv
-group_phenotype_coverage_automatic.csv
-group_phenotype_coverage_reviewed.csv
-phenotype_feature_dictionary.csv
-group_phenotype_features_long.csv
-group_phenotype_features.mat
+phenotype_summary_automatic.csv
+phenotype_summary_reviewed.csv
+phenotype_availability_automatic.csv
+phenotype_availability_reviewed.csv
+phenotype_coverage_automatic.csv
+phenotype_coverage_reviewed.csv
+phenotype_dictionary.csv
+phenotype_summary_long.csv
+phenotype_summary.mat
 ```
 
-Each feature CSV has the five identifier columns:
+The wide summary, availability, and coverage files begin with:
 
 ```text
 recording_id, subject, measure, subject_group, analysis_id
 ```
 
-followed immediately by exactly the 21 fixed summary columns. Availability and
-coverage are kept in separate aligned tables, so QC columns never interrupt the
-numeric phenotype summary. Missing values remain `NaN`.
-
-`recording_id` uses `Sub<subject>_M<measure>` as a stable key for joining these
-outputs with other recording-level tables. Automatic and reviewed summaries
-are exported separately and are never silently mixed.
-
-`phenotype_feature_dictionary.csv` has one row per feature and the columns:
-
-```text
-feature_index
-feature_name
-display_name
-phenotype_group
-feature_role
-units
-source_description
-```
-
-`group_phenotype_features_long.csv` is a tidy QC representation containing one
-row per recording, annotation layer, and feature. No group output is
-pre-standardized, transformed, or imputed.
+and then contain the 21 schema-ordered fields. `recording_id` uses
+`Sub<subject>_M<measure>`. `phenotype_dictionary.csv` documents every field;
+`phenotype_summary_long.csv` contains one row per recording, annotation layer,
+and numeric-summary field.

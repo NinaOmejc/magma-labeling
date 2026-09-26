@@ -28,15 +28,15 @@ function testSchemaHasExactlyFixedUniqueTwentyOneFeatures(testCase)
     verifyEqual(testCase, schema.n_features, 21);
     verifyEqual(testCase, schema.feature_names, expected);
     verifyEqual(testCase, numel(unique(schema.feature_names)), 21);
-    verifyEqual(testCase, nnz(strcmp(schema.feature_role, 'prespecified_db')), 16);
-    verifyEqual(testCase, nnz(strcmp(schema.feature_role, 'additional_pattern')), 5);
+    verifyEqual(testCase, nnz(strcmp(schema.feature_role, 'literature_based')), 16);
+    verifyEqual(testCase, nnz(strcmp(schema.feature_role, 'label_based')), 5);
     verifyFalse(testCase, any(contains(schema.feature_names, 'forced_abdominal')));
 end
 
 function testAdditionalPatternsAreNotDuplicated(testCase)
     [burden, overlap, evidence] = compact_fixture(900, true(900, 11));
     output = build_db_phenotype_evidence(burden, overlap, evidence);
-    verifyEqual(testCase, fieldnames(output.respiratory_patterns), { ...
+    verifyEqual(testCase, fieldnames(output.label_based), { ...
         'apneic_breathing'; 'periodic_breathing'; 'shallow_breathing'; ...
         'slow_breathing'; 'desaturation'});
     verifyTrue(testCase, isfield(burden.by_label, 'deep'));
@@ -45,7 +45,7 @@ function testAdditionalPatternsAreNotDuplicated(testCase)
     verifyTrue(testCase, isfield(burden.by_label, 'sigh'));
     verifyFalse(testCase, isfield(output, 'hyperventilation_syndrome'));
     verifyEqual(testCase, ...
-        output.prespecified_db.hyperventilation_like.signal_assessment_status, ...
+        output.literature_based.hyperventilation_like.signal_assessment_status, ...
         'partial');
 end
 

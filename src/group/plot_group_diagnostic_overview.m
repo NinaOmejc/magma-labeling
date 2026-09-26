@@ -125,27 +125,27 @@ end
 
 function records = result_records_from_table(group_table)
 % RESULT_RECORDS_FROM_TABLE Build a manifest of readable recording result files.
-% Each record has label_file, numeric subject/measure, and subject_group text;
+% Each record has result_file, numeric subject/measure, and subject_group text;
 % table rows whose saved file no longer exists are omitted.
 
-    records = struct('label_file', {}, 'subject', {}, 'measure', {}, 'subject_group', {});
+    records = struct('result_file', {}, 'subject', {}, 'measure', {}, 'subject_group', {});
     if isempty(group_table) || height(group_table) == 0 || ...
-            ~ismember('label_file', group_table.Properties.VariableNames)
+            ~ismember('result_file', group_table.Properties.VariableNames)
         return;
     end
 
-    label_files = table_text_column(group_table, 'label_file', "");
+    result_files = table_text_column(group_table, 'result_file', "");
     subject = table_numeric_column(group_table, 'subject', nan(height(group_table), 1));
     measure = table_numeric_column(group_table, 'measure', nan(height(group_table), 1));
     subject_group = table_text_column(group_table, 'subject_group', "Unknown");
 
     for i = 1:height(group_table)
-        label_file = char(label_files(i));
-        if isempty(label_file) || ~isfile(label_file)
+        result_file = char(result_files(i));
+        if isempty(result_file) || ~isfile(result_file)
             continue;
         end
 
-        records(end+1).label_file = label_file; %#ok<AGROW>
+        records(end+1).result_file = result_file; %#ok<AGROW>
         records(end).subject = subject(i);
         records(end).measure = measure(i);
         records(end).subject_group = char(subject_group(i));
@@ -208,7 +208,7 @@ function has_signal = plot_measure_time_series(ax, records, spec, config)
 
     traces = struct('t', {}, 'y', {}, 'subject_group', {});
     for i = 1:numel(records)
-        [t, y] = load_record_signal(records(i).label_file, spec);
+        [t, y] = load_record_signal(records(i).result_file, spec);
         if isempty(t) || isempty(y)
             continue;
         end
@@ -240,12 +240,12 @@ function has_signal = plot_measure_time_series(ax, records, spec, config)
     has_signal = true;
 end
 
-function [t, y] = load_record_signal(label_file, spec)
+function [t, y] = load_record_signal(result_file, spec)
 % LOAD_RECORD_SIGNAL Read one finite, time-aligned authoritative trace.
 % Delegates path resolution and strict time/value alignment to the reusable
 % group trace reader.
 
-    [t, y] = load_group_diagnostic_trace(label_file, spec);
+    [t, y] = load_group_diagnostic_trace(result_file, spec);
 end
 
 function [t_plot, y_plot] = thin_trace(t, y, step_sec)

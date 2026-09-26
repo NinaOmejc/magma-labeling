@@ -121,12 +121,12 @@ The absolute criterion does not require an available session reference. Event di
 ## Level 2 — recording-level phenotype and pattern evidence
 
 Level 2 combines Level-1 labels and detector summaries into detailed
-phenotype-evidence profiles. The public `compact_features` output selects 16
-measures from the prespecified phenotypes plus five non-duplicated additional
-pattern burdens. Both forms are descriptive and do **not** create binary
+phenotype-evidence profiles. The public `numeric_summary` output selects 16
+measures from the literature-based phenotypes plus five non-duplicated
+label-based pattern burdens. Both forms are descriptive and do **not** create binary
 clinical phenotype-present/absent diagnoses.
 
-| Prespecified MAGMA DB phenotype evidence | Main Level-1 inputs | Assessable from current signals? | Main limitation / missing clinical information |
+| Literature-based MAGMA phenotype evidence | Main Level-1 inputs | Assessable from current signals? | Main limitation / missing clinical information |
 |---|---|---|---|
 | Hyperventilation-like respiratory pattern | `rapid`, `deep`, rapid-deep overlap, RR, relative excursion | Partially | ETCO2/capnography, ventilation relative to metabolic demand, CPET/ergospirometry, clinical assessment, Nijmegen questionnaire are needed for clinical interpretation |
 | Periodic deep sighing | `sigh`, `irregular`, `deep`, sigh-irregular overlap | Yes | Continuous pattern evidence; no clinical cutoff is imposed |
@@ -134,15 +134,13 @@ clinical phenotype-present/absent diagnoses.
 | Forced abdominal expiration | none sufficient at present | No | Belt movement alone cannot establish active abdominal-muscle recruitment |
 | Thoraco-abdominal asynchrony | `async` and phase-offset/coherence summaries | Yes | Algorithmic evidence is not a clinical diagnosis |
 
-The current implementation is in `src/utils/build_db_phenotype_evidence.m`.
-
 ### Relationship between Level 1 and Level 2
 
 Level 1 answers **"what respiratory/physiological pattern is present and when?"**
 
 Level 2 answers **"how much evidence does this recording contain for a
-prespecified phenotype or additional respiratory pattern?"** Detailed profiles
-retain the supporting evidence, while `compact_features` provides the fixed raw
+literature-based phenotype or additional label-derived pattern?"** Detailed profiles
+retain the supporting evidence, while `numeric_summary` provides the fixed raw
 21-value recording-level summary.
 
 Examples:

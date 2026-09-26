@@ -56,7 +56,10 @@ unavailable with reason `not_computed`. Label selection is not valid with
 
 `review_only` requires an existing recording result. It loads the saved
 automatic annotations and respiratory cycles without rerunning feature
-extraction or detectors.
+extraction or detectors. Recording results use the filenames
+`Sub<subject>_M<measurement>_results.mat` and
+`Sub<subject>_M<measurement>_results.h5`; the respiratory-feature cache remains
+`Sub<subject>_M<measurement>_features.mat`.
 
 ## Respiratory-cycle extraction
 

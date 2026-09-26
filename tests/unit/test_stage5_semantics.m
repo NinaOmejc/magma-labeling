@@ -267,16 +267,16 @@ function testPhenotypeEvidenceUsesGroupedNonDiagnosticSchema(testCase)
         'time-resolved physiological labels and evidence');
     verifyEqual(testCase, evidence.levels.level_2, ...
         'recording-level respiratory phenotype and pattern evidence');
-    verifyEqual(testCase, numel(fieldnames(evidence.prespecified_db)), 5);
+    verifyEqual(testCase, numel(fieldnames(evidence.literature_based)), 5);
     expected_patterns = {'apneic_breathing', 'periodic_breathing', ...
         'shallow_breathing', 'slow_breathing', 'desaturation'};
     verifyTrue(testCase, all(isfield( ...
-        evidence.respiratory_patterns, expected_patterns)));
+        evidence.label_based, expected_patterns)));
     verifyEqual(testCase, ...
-        numel(fieldnames(evidence.respiratory_patterns)), ...
+        numel(fieldnames(evidence.label_based)), ...
         numel(expected_patterns));
 
-    group_names = {'prespecified_db', 'respiratory_patterns'};
+    group_names = {'literature_based', 'label_based'};
     forbidden = {'diagnosis', 'present', 'phenotype_present'};
     for g = 1:numel(group_names)
         group = evidence.(group_names{g});
@@ -287,34 +287,34 @@ function testPhenotypeEvidenceUsesGroupedNonDiagnosticSchema(testCase)
     end
 
     verifyFalse(testCase, ...
-        evidence.prespecified_db.hyperventilation_like.assessable_from_current_signals);
+        evidence.literature_based.hyperventilation_like.assessable_from_current_signals);
     verifyFalse(testCase, ...
-        evidence.prespecified_db.forced_abdominal_expiration.assessable_from_current_signals);
+        evidence.literature_based.forced_abdominal_expiration.assessable_from_current_signals);
     verifyFalse(testCase, ...
-        evidence.prespecified_db.forced_abdominal_expiration.evidence_available);
+        evidence.literature_based.forced_abdominal_expiration.evidence_available);
     verifyTrue(testCase, ...
-        evidence.prespecified_db.periodic_deep_sighing.evidence_available);
+        evidence.literature_based.periodic_deep_sighing.evidence_available);
     unavailable_irregular = burden;
     unavailable_irregular.by_label.irregular.available = false;
     without_irregular = build_db_phenotype_evidence( ...
         unavailable_irregular, overlaps, label_evidence);
     verifyFalse(testCase, ...
-        without_irregular.prespecified_db.periodic_deep_sighing.evidence_available);
+        without_irregular.literature_based.periodic_deep_sighing.evidence_available);
     verifyFalse(testCase, isfield( ...
-        evidence.prespecified_db.periodic_deep_sighing.signal_derived_measures, 'CSR'));
+        evidence.literature_based.periodic_deep_sighing.signal_derived_measures, 'CSR'));
     verifyEqual(testCase, ...
-        evidence.prespecified_db.thoracic_dominant_breathing.signal_derived_measures.median_thoracic_to_abdominal_ratio, 1.7);
+        evidence.literature_based.thoracic_dominant_breathing.signal_derived_measures.median_thoracic_to_abdominal_ratio, 1.7);
     verifyTrue(testCase, ...
-        evidence.prespecified_db.thoracoabdominal_asynchrony.signal_derived_measures.analysis_valid);
+        evidence.literature_based.thoracoabdominal_asynchrony.signal_derived_measures.analysis_valid);
 
     bundle = build_db_phenotype_evidence_bundle( ...
         burden, overlaps, label_evidence, burden, overlaps, label_evidence);
     verifyEqual(testCase, bundle.version, ...
-        'magma_db_phenotype_evidence_bundle_v3');
+        'magma_phenotype_bundle_v4');
     verifyTrue(testCase, isfield(bundle, 'automatic'));
     verifyTrue(testCase, isfield(bundle, 'reviewed'));
-    verifyTrue(testCase, isfield(bundle.automatic, 'prespecified_db'));
-    verifyTrue(testCase, isfield(bundle.reviewed, 'respiratory_patterns'));
+    verifyTrue(testCase, isfield(bundle.automatic, 'literature_based'));
+    verifyTrue(testCase, isfield(bundle.reviewed, 'label_based'));
 end
 
 function testEvidenceSummaryDoesNotInventConfidence(testCase)

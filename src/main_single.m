@@ -19,15 +19,14 @@ config.measurements = [1 2];
 config.subjects(ismember(config.subjects, config.remove_subjects)) = [];
 
 % EXECUTION
-config.overwrite_results = true;       % If true, recompute even if "*_labels.h5" output already exists.
+config.overwrite_results = true;       % If true, recompute even if "*_results.mat" output already exists.
 config.overwrite_features = false;      % If true, recompute respiratory features even if "*_features.mat" already exists.
 config.verbosity = 2;                   % 1 = concise progress, 2 = detailed progress.
 config.execution.mode = 'analyze';      % 'analyze', 'analyze_and_review', or 'review_only'.
 
 % LABEL SELECTION
-% Empty = normal behavior: new recordings analyze all labels; existing
-% recordings obey config.overwrite_results.
 config.execution.selected_labels = {};
+% Empty = normal behavior: new recordings analyze all labels; existing recordings obey config.overwrite_results.
 % To calculate or rerun only selected labels, for example:
 % config.execution.selected_labels = {'irregular'};
 % config.execution.selected_labels = {'irregular', 'slow'};

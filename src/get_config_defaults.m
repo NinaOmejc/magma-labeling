@@ -3,20 +3,8 @@ function config = get_config_defaults()
 % This file contains the complete user-facing scientific and export defaults.
 %
 % Outputs:
-%   config - Scalar pipeline configuration struct. Core fields path_data_in,
-%            path_results_out, input_filename_pattern, subjects/remove_subjects,
-%            measurements, fs (Hz), data_columns, and labels define input identity.
-%            overwrite_results/overwrite_features and make_figs_visible control
-%            execution; plot_raw_data/plot_raw_data_xrange and LabelMask control
-%            overview plots. Nested problems records known data exclusions;
-%            preprocessing controls belt-polarity QC; detrend controls signal
-%            detrending; resp controls breath extraction/review;
-%            reference controls session/global baseline estimation. shallow, deep,
-%            slow, rapid, irregular, apnea, sigh, periodic, thoracic, async, and desat
-%            contain detector thresholds/windows; grid_step_sec defines their common
-%            analysis grid. LabelEdit controls unified manual review and HDF5
-%            controls export. Durations are seconds and respiratory rates are
-%            breaths/min unless a field or inline comment states otherwise.
+%   config - Scalar pipeline configuration struct.
+
 
     config = struct;                                                                                   % main configuration container
     config.path_data_in = 'D:\Projects\MAGMA\raw_data';                                                % *** folder with raw input .dat files
@@ -271,7 +259,7 @@ function config = get_config_defaults()
     % numeric/text datasets on the same native 200-Hz master timeline.
     config.HDF5 = struct();
     config.HDF5.enabled = true;
-    config.HDF5.filename_suffix = '_labels.h5';
+    config.HDF5.filename_suffix = '_results.h5';
     config.HDF5.include_raw_signals = false;
     config.HDF5.include_preprocessed_signals = true;
     config.HDF5.signal_datatype = 'single';

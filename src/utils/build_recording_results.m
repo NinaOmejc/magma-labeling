@@ -32,7 +32,7 @@ function results = build_recording_results( ...
 %     label_burden_automatic, label_burden_reviewed - Per-label seconds, fractions, and counts.
 %     label_overlap_summary_automatic, label_overlap_summary_reviewed - Prespecified pair overlaps.
 %     label_evidence_summary_automatic, label_evidence_summary_reviewed - Descriptive label evidence.
-%     db_phenotype_evidence - Automatic/reviewed phenotype evidence bundle.
+%     phenotypes - Automatic/reviewed recording-level phenotype bundle.
 %     manual_label_edit - Unified manual-review outcome and coverage.
 %     config - Complete resolved run configuration, including config.input_config.
 %     upstream_input_preprocessing - Text describing preprocessing before MAGMA.
@@ -72,7 +72,7 @@ function results = build_recording_results( ...
     results.label_overlap_summary_reviewed = label_results.overlap_reviewed;
     results.label_evidence_summary_automatic = label_results.evidence_automatic;
     results.label_evidence_summary_reviewed = label_results.evidence_reviewed;
-    results.db_phenotype_evidence = label_results.db_phenotype_evidence;
+    results.phenotypes = label_results.phenotypes;
     results.manual_label_edit = label_results.manual_label_edit;
     if ~isfield(config, 'execution') || ~isstruct(config.execution)
         config.execution = struct();

@@ -8,6 +8,12 @@ The framework detects 11 elementary patterns:
 
 Labels are independent and may overlap. They describe signal-derived physiological patterns rather than mutually exclusive clinical diagnoses.
 
+MAGMA has two scientific output levels: Level 1 contains the time-resolved
+labels and their supporting evidence; Level 2 contains recording-level
+phenotypes and patterns. The five literature-based and five label-based Level-2
+profiles are descriptive, may coexist, and are accompanied by a fixed 21-value
+numeric summary.
+
 ## Documentation
 
 - [Configuration](docs/CONFIGURATION.md)
@@ -53,6 +59,12 @@ The pipeline:
 5. detects automatic physiological labels;
 6. optionally allows manual label review;
 7. saves MATLAB, HDF5, diagnostic, and group-level outputs.
+
+The main recording outputs are
+`Sub<subject>_M<measurement>_results.mat` and
+`Sub<subject>_M<measurement>_results.h5`. The respiratory-feature cache keeps
+the `_features.mat` suffix. See [Outputs](docs/OUTPUTS.md) for the HDF5 v13
+hierarchy and group-output filenames.
 
 ## Respiratory reference
 

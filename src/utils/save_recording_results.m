@@ -15,7 +15,7 @@ function save_recording_results(results, data_raw, data, config)
     if get_config_value(config, 'HDF5', 'enabled', true)
         log_message(config, 2, 'Saving HDF5 results...');
         hdf5_suffix = get_config_value(config, 'HDF5', ...
-            'filename_suffix', '_labels.h5');
+            'filename_suffix', '_results.h5');
         hdf5_filename = fullfile(config.sub_results_path, ...
             sprintf('Sub%d_M%d%s', config.subject, config.measure, hdf5_suffix));
         export_results_hdf5(hdf5_filename, results, data_raw, data);

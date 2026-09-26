@@ -10,7 +10,7 @@ MAGMA separates two analysis levels:
 
 Level 2 contains two groups:
 
-- **Literature-based prespecified dysfunctional-breathing phenotypes:**
+- **Literature-based dysfunctional-breathing phenotypes:**
   hyperventilation-like respiratory pattern, periodic deep sighing,
   thoracic-dominant breathing, forced abdominal expiration, and
   thoraco-abdominal asynchrony.
@@ -21,9 +21,9 @@ A phenotype is **not one number**, no binary clinical diagnosis is produced,
 and the ten recording-level profiles are not mutually exclusive. The detailed
 Level-2 evidence contains more information than the fixed numeric summary.
 
-## Five prespecified DB phenotypes
+## Five literature-based phenotypes
 
-| Prespecified phenotype | Selected summary measures | Signal assessment status |
+| Literature-based phenotype | Selected summary measures | Signal assessment status |
 |---|---:|---|
 | Hyperventilation-like respiratory pattern | 5 | `partial` |
 | Periodic deep sighing | 5 | `assessable` when the required evidence is available |
@@ -42,7 +42,7 @@ MAGMA intentionally does not use the term *hyperventilation syndrome*.
 Respiratory belts can show rapid/deep breathing but cannot establish that
 ventilation is excessive relative to metabolic demand.
 
-The five compact features are:
+The five selected numeric-summary measures are:
 
 1. rapid-breathing fraction of rapid-assessable time;
 2. deep-breathing fraction of deep-assessable time;
@@ -63,7 +63,7 @@ Periodic deep sighing describes the recurrence and organization of sighs. It
 is distinct from the Level-1 `periodic` label, which describes waxing/waning
 respiratory effort.
 
-The five compact features are:
+The five selected numeric-summary measures are:
 
 1. coverage-aware sigh frequency per 15 minutes;
 2. maximum sigh count in a continuously assessable 15-minute interval;
@@ -83,25 +83,25 @@ Each uncalibrated respiratory belt is normalized to its own session reference.
 The result describes relative thoracic-versus-abdominal change, not an absolute
 rib-cage contribution to tidal volume.
 
-The three compact features are thoracic-dominant fraction, the recording-scope
+The three selected numeric-summary measures are thoracic-dominant fraction, the recording-scope
 median normalized thoracic-to-abdominal excursion ratio, and median event
-duration. If the detector is assessable and has zero events, the compact event
+duration. If the detector is assessable and has zero events, the summary event
 duration is 0 seconds. If the detector is unavailable, it remains `NaN`.
 
 ### Forced abdominal expiration
 
-Forced abdominal expiration remains one of the five prespecified phenotypes,
+Forced abdominal expiration remains one of the five literature-based phenotypes,
 but the current signals cannot establish active abdominal-muscle recruitment.
-It contributes no compact feature. Thoracic dominance or belt excursion is not
+It contributes no numeric-summary measure. Thoracic dominance or belt excursion is not
 used as a surrogate. Future assessment would require clinical annotation or
 more direct muscular/mechanical evidence.
 
 ### Thoraco-abdominal asynchrony
 
-The three compact features are asynchrony fraction, recording-scope median
+The three selected numeric-summary measures are asynchrony fraction, recording-scope median
 absolute phase offset over reliable finite phase evidence, and median event
 duration. As for thoracic dominance, an assessable detector with zero events
-has a compact event duration of 0 seconds; unavailable evidence remains `NaN`.
+has a summary event duration of 0 seconds; unavailable evidence remains `NaN`.
 
 The detailed Level-2 evidence retains event counts, maximum durations, phase consistency,
 frequency-selection evidence, method comparison, reference quality, polarity
@@ -110,11 +110,10 @@ are not part of the fixed numeric summary.
 
 ## Fixed recording-level numeric summary
 
-`get_phenotype_feature_schema.m` is the sole authority for names, order, units,
-roles, display names, and source descriptions. `build_compact_phenotype_features.m`
-is the sole recording-level builder. The public `compact_features` structure
-contains 21 selected numeric measures derived from the Level-2 phenotype and
-respiratory-pattern evidence.
+The phenotype summary schema is the sole authority for names, order, units,
+roles, display names, and source descriptions. The public `numeric_summary`
+structure contains 21 selected numeric measures derived from the Level-2
+phenotype and respiratory-pattern evidence.
 
 | # | Feature name | Units |
 |---:|---|---|
@@ -140,19 +139,19 @@ respiratory-pattern evidence.
 | 20 | `pattern_slow_fraction` | fraction |
 | 21 | `pattern_desaturation_fraction` | fraction |
 
-The first 16 variables represent the prespecified DB phenotypes. The final five
+The first 16 variables represent the literature-based phenotypes. The final five
 are non-duplicated additional respiratory-pattern burdens. Forced abdominal
 expiration contributes zero variables.
 
 Deep breathing, rapid breathing, irregular breathing, and sighing remain fully
-available at Level 1 and contribute to the prespecified phenotypes; they are not
+available at Level 1 and contribute to the literature-based phenotypes; they are not
 duplicated as additional Level-2 respiratory-pattern profiles. The only
 additional Level-2 profiles are apneic breathing, periodic breathing, shallow
 breathing, slow breathing, and desaturation.
 
 ## Availability, zero, and coverage
 
-All fractions use assessable time as their denominator. For each compact
+All fractions use assessable time as their denominator. For each numeric-summary
 feature MAGMA stores the value, an availability flag, coverage fraction, and a
 missing reason.
 
@@ -162,7 +161,7 @@ unavailable != negative
 
 A finite zero is a valid available negative. Missing or unusable signal
 evidence remains `NaN` with `available=false`; it is never silently converted
-to zero. The compact summaries are raw and unscaled. MAGMA performs no
+to zero. The numeric summaries are raw and unscaled. MAGMA performs no
 cross-subject normalization, imputation, or transformation of these outputs.
 
 ## Automatic and reviewed summaries
@@ -190,12 +189,10 @@ selected for the fixed numeric summary.
 | `sigh`, `irregular`, sigh/irregular overlap | Periodic deep sighing |
 | `thoracic` and normalized belt balance | Thoracic-dominant breathing |
 | `async` and reliable phase evidence | Thoraco-abdominal asynchrony |
-| `apnea`, `periodic`, `shallow`, `slow`, `desat` | Additional compact burdens |
+| `apnea`, `periodic`, `shallow`, `slow`, `desat` | Additional label-based burdens |
 
 ## External clinical data
 
 Nijmegen Questionnaire, ETCO2/capnography, CPET/ergospirometry, clinical
 observations, and other clinical variables remain external to the signal-derived
-21-value summary. They may be combined with MAGMA outputs in other repositories
-for interpretation, validation, or association analysis, but are not used to
-create MAGMA Level-2 evidence.
+21-value summary and are not used to create MAGMA Level-2 evidence.

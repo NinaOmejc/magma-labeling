@@ -28,7 +28,7 @@ function out = finalize_label_results( ...
 %         detector_diagnostics retains unique evidence;
 %         burden_automatic/burden_reviewed, overlap_automatic/overlap_reviewed,
 %         and evidence_automatic/evidence_reviewed summarize each provenance.
-%         db_phenotype_evidence bundles phenotype summaries; candidate_events
+%         phenotypes bundles recording-level profiles; candidate_events
 %         retains genuine pre-final intervals; manual_label_edit retains the
 %         unified 11-label review outcome.
 
@@ -82,7 +82,7 @@ function out = finalize_label_results( ...
         burden_reviewed, config, annotations.mask_reviewed, ...
         annotations.events_reviewed, reviewed_assessable_mask);
 
-    db_phenotype_evidence = build_db_phenotype_evidence_bundle( ...
+    phenotypes = build_db_phenotype_evidence_bundle( ...
         burden_automatic, overlap_automatic, evidence_automatic, ...
         burden_reviewed, overlap_reviewed, evidence_reviewed);
 
@@ -113,7 +113,7 @@ function out = finalize_label_results( ...
     out.overlap_reviewed = overlap_reviewed;
     out.evidence_automatic = evidence_automatic;
     out.evidence_reviewed = evidence_reviewed;
-    out.db_phenotype_evidence = db_phenotype_evidence;
+    out.phenotypes = phenotypes;
     out.manual_label_edit = manual_label_edit;
 end
 

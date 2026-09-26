@@ -1,4 +1,4 @@
-function [t, y] = load_group_diagnostic_trace(label_file, spec)
+function [t, y] = load_group_diagnostic_trace(result_file, spec)
 % LOAD_GROUP_DIAGNOSTIC_TRACE Read one authoritative saved trace and its time.
 % spec supplies source/field_path and time_source/time_path. Empty or missing
 % values return empty outputs. Nonempty length mismatches are visible warnings,
@@ -7,7 +7,7 @@ function [t, y] = load_group_diagnostic_trace(label_file, spec)
     t = [];
     y = [];
     requested = unique({spec.source, spec.time_source}, 'stable');
-    loaded = load(label_file, requested{:});
+    loaded = load(result_file, requested{:});
     if ~isfield(loaded, spec.source) || ~isfield(loaded, spec.time_source)
         return;
     end
@@ -30,7 +30,7 @@ function [t, y] = load_group_diagnostic_trace(label_file, spec)
         warning('MAGMA:Group:TraceLengthMismatch', ...
             ['Skipping trace %s from %s: authoritative time path %s has %d ' ...
              'values but the trace has %d.'], ...
-            spec.field_path, label_file, spec.time_path, numel(t), numel(y));
+            spec.field_path, result_file, spec.time_path, numel(t), numel(y));
         t = [];
         y = [];
         return;

@@ -24,7 +24,7 @@ function group_table = build_group_label_table(config_or_results_path)
         results_path = char(config_or_results_path);
     end
 
-    files = dir(fullfile(results_path, 'Sub*_M*', '*_labels.mat'));
+    files = dir(fullfile(results_path, 'Sub*_M*', '*_results.mat'));
     files = filter_result_files(files, config);
     out_dir = fullfile(results_path, 'group_analysis');
     if ~isfolder(out_dir)
@@ -35,8 +35,8 @@ function group_table = build_group_label_table(config_or_results_path)
     rows = {};
     all_fields = {};
     for i = 1:numel(files)
-        label_file = fullfile(files(i).folder, files(i).name);
-        row = label_file_to_summary_row(label_file, config, canonical_labels);
+        result_file = fullfile(files(i).folder, files(i).name);
+        row = result_file_to_summary_row(result_file, config, canonical_labels);
         rows{end+1} = row; %#ok<AGROW>
         all_fields = union(all_fields, fieldnames(row), 'stable');
     end
@@ -70,16 +70,16 @@ function group_table = build_group_label_table(config_or_results_path)
     log_message(config, 1, 'Saved group label summary: %s', out_csv);
 end
 
-function row = label_file_to_summary_row(label_file, config, canonical_labels)
-% LABEL_FILE_TO_SUMMARY_ROW Convert one saved recording into scalar table fields.
-% label_file supplies saved results; config supplies grouping/fallback settings;
+function row = result_file_to_summary_row(result_file, config, canonical_labels)
+% RESULT_FILE_TO_SUMMARY_ROW Convert one saved recording into scalar table fields.
+% result_file supplies saved results; config supplies grouping/fallback settings;
 % canonical_labels fixes the label-summary column order and names.
 
-    loaded = load(label_file);
+    loaded = load(result_file);
 
     row = struct();
-    row.label_file = label_file;
-    [file_subject, file_measure] = parse_subject_measure(label_file);
+    row.result_file = result_file;
+    [file_subject, file_measure] = parse_subject_measure(result_file);
     row.subject = get_loaded_value(loaded, 'subject', file_subject);
     row.measure = get_loaded_value(loaded, 'measure', file_measure);
     row.measurement = row.measure;
@@ -704,7 +704,7 @@ end
 function value = missing_value_for_field(name)
 % MISSING_VALUE_FOR_FIELD Choose text, zero-availability, or NaN table defaults.
 
-    if strcmp(name, 'label_file') || strcmp(name, 'subject_group') || ...
+    if strcmp(name, 'result_file') || strcmp(name, 'subject_group') || ...
             strcmp(name, 'change_pattern') || endsWith(name, '_quality') || ...
             endsWith(name, '_action')
         value = '';
@@ -789,17 +789,17 @@ function subjects = get_subject_group_list(config, name)
     subjects = subjects(:)';
 end
 
-function [subject, measure] = parse_subject_measure(label_file)
+function [subject, measure] = parse_subject_measure(result_file)
 % PARSE_SUBJECT_MEASURE Parse subject measure.
 % Extracts numeric identifiers from a Sub<number>_M<number> filename/path;
 % both outputs are NaN when the naming convention is absent.
 
     subject = nan;
     measure = nan;
-    [~, name] = fileparts(label_file);
+    [~, name] = fileparts(result_file);
     tok = regexp(name, 'Sub(\d+)_M(\d+)', 'tokens', 'once');
     if isempty(tok)
-        tok = regexp(label_file, 'Sub(\d+)_M(\d+)', 'tokens', 'once');
+        tok = regexp(result_file, 'Sub(\d+)_M(\d+)', 'tokens', 'once');
     end
     if ~isempty(tok)
         subject = str2double(tok{1});
