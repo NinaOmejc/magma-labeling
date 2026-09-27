@@ -19,6 +19,18 @@ The respiratory-feature cache remains:
 Sub<subject>_M<measurement>_features.mat
 ```
 
+When `config.PhenotypeSummary.do_plot` is enabled, the final merged phenotype
+bundle is also presented as:
+
+```text
+Sub<subject>_M<measurement>_phenotype_summary.png
+```
+
+The figure displays the existing fixed 22-feature numeric summary grouped by
+phenotype. It does not recompute, normalize, score, or impute phenotype values.
+Unavailable values are shown explicitly, and forced abdominal expiration is
+marked as not assessable from the current signals.
+
 The MAT file is the authoritative MATLAB result. The HDF5 file uses schema
 `magma_ml_hdf5_v15` as a portable recording-level representation.
 

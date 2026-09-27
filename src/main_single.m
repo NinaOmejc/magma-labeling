@@ -8,18 +8,17 @@
 config = get_config_defaults();
 
 % Here below are the main arguments to be checked and modified:
-
 % INPUT / OUTPUT
 config.path_data_in = 'D:\Projects\MAGMA\raw_data';
 config.path_results_out = 'D:\Projects\MAGMA\data_analysis\statistical_labeling';
 config.fs = 200;
-config.subjects = [1 20 23 32 40];
+config.subjects = [1 20 23 24 32 40];
 config.remove_subjects = [3 30 91];
 config.measurements = [1 2];
 config.subjects(ismember(config.subjects, config.remove_subjects)) = [];
 
 % EXECUTION
-config.overwrite_results = true;       % If true, recompute even if "*_results.mat" output already exists.
+config.overwrite_results = false;       % If true, recompute even if "*_results.mat" output already exists.
 config.overwrite_features = false;      % If true, recompute respiratory features even if "*_features.mat" already exists.
 config.verbosity = 2;                   % 1 = concise progress, 2 = detailed progress.
 config.execution.mode = 'analyze';      % 'analyze', 'analyze_and_review', or 'review_only'.

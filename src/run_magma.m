@@ -137,6 +137,7 @@ function run_magma(base_config)
             results = build_recording_results( ...
                 config, resp_cycles, resp_ref, session_reference, ...
                 resp_features, label_results);
+            plot_phenotype_summary(results.phenotypes, config);
             if selective && result_exists
                 log_message(config, 2, 'Saving merged results...');
             end

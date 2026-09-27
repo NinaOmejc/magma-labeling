@@ -50,7 +50,7 @@ function config = get_config_defaults()
 
     %---- RESPIRATION / BREATHING AMPLITUDE EXTRACTION SETTINGS ----
     config.resp.min_peak_dist_sec = 1.0;    % *** Peak selection; min time between breaths (tune if needed)
-    config.resp.min_peak_prom     = 0.2;    % *** Peak selection; key knob: increase to reduce extra peaks. But then this alters also apnea detection, where the amplitudes are extremely small. Trade-off...
+    config.resp.min_peak_prom     = 0.25;    % *** Peak selection; key knob: increase to reduce extra peaks. But then this alters also apnea detection, where the amplitudes are extremely small. Trade-off...
     config.resp.min_peak_height   = -1.0;   % only peaks that have standardized amplitude above "min_peak_height" = -1.0 are allowed.
     config.resp.smooth_sec       = 0.25;    % Pre-processing; light smoothing (seconds); set to 0 to disable
     config.resp.trough_method = 'min';      % Trough selection; 'prctile' or 'min' (default)
@@ -243,6 +243,10 @@ function config = get_config_defaults()
     config.LabelMask = struct();                 % label-mask heatmap figure
     config.LabelMask.do_plot = true;             % generate a label-mask summary figure
     config.LabelMask.use_long_names = true;      % use long dysfunction names on the y-axis instead of only short codes
+
+    config.PhenotypeSummary = struct();           % recording-level numeric phenotype summary figure
+    config.PhenotypeSummary.do_plot = true;       % generate the phenotype summary after the final bundle is assembled
+    config.PhenotypeSummary.show_reviewed = false;% optionally add reviewed numeric-summary values when available
     
     %---- MANUAL LABEL EVENT EDITING
     config.LabelEdit = struct();

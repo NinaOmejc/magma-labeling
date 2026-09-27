@@ -33,6 +33,17 @@ config.execution.selected_labels
 
 Individual detector plots can additionally be controlled with the corresponding `do_plot` field.
 
+The recording-level phenotype summary figure is controlled separately:
+
+```matlab
+config.PhenotypeSummary.do_plot = true;
+config.PhenotypeSummary.show_reviewed = false;
+```
+
+By default it shows the automatic 22-feature numeric summary. Set
+`show_reviewed` to `true` to add a reviewed column when a reviewed numeric
+summary is present; automatic values are never substituted for reviewed values.
+
 `config.verbosity = 1` prints concise progress, including important skip and
 signal-availability messages. Set it to `2` for detailed pipeline-stage and
 detector progress. Warnings and errors are always shown.
