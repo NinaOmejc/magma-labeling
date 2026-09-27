@@ -259,13 +259,15 @@ function config = get_config_defaults()
     config.LabelEdit.filename_suffix = '_manual_label_events.mat';
 
     %---- PER-RECORDING HDF5 EXCHANGE EXPORT
-    % MAT remains authoritative and is not replaced. HDF5 contains simple
-    % numeric/text datasets on the same native 200-Hz master timeline.
+    % MAT remains authoritative and is not replaced. HDF5 contains native
+    % numeric/text datasets plus a separate export-only lower-rate ML timeline.
     config.HDF5 = struct();
     config.HDF5.enabled = true;
     config.HDF5.filename_suffix = '_results.h5';
     config.HDF5.include_raw_signals = false;
     config.HDF5.include_preprocessed_signals = true;
+    config.HDF5.include_ml_signals = true;
+    config.HDF5.ml_sampling_hz = 10;
     config.HDF5.signal_datatype = 'single';
     config.HDF5.compression_level = 4;
     config.HDF5.upstream_input_preprocessing = ...

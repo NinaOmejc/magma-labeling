@@ -9,7 +9,8 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
 %   signals_raw          - Nsample x Nchannel raw physiological signal matrix.
 %   signals_preprocessed - Nsample x Nchannel processed signal matrix.
 %
-% The v15 file stores signals/time under /signals and /time; reviewed breath
+% The v16 file stores native signals/time under /signals and /time, plus an
+% export-only lower-rate ML signal bundle under /signals/ml; reviewed breath
 % cycles under /breaths; derived respiration under /respiration; detector
 % evidence under /diagnostics; automatic/reviewed label layers under /labels;
 % canonical events under /events; recording profiles under /phenotypes;
@@ -18,7 +19,7 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
 
     filename = char(string(filename));
     validate_export_inputs(filename, results, signals_raw, signals_preprocessed);
-    export_schema_version = 'magma_ml_hdf5_v15';
+    export_schema_version = 'magma_ml_hdf5_v16';
     out_dir = fileparts(filename);
     if ~isempty(out_dir) && ~isfolder(out_dir)
         mkdir(out_dir);
@@ -40,6 +41,22 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
             options);
     end
     write_numeric(filename, '/time', (0:N-1)' / fs, options);
+    if options.include_ml_signals
+        ml = build_ml_signal_export(signals_preprocessed, results.config, ...
+            options.ml_sampling_hz);
+        write_numeric(filename, '/signals/ml/data', ...
+            cast_export_signal(ml.data, options.signal_datatype), options);
+        write_numeric(filename, '/signals/ml/time', ml.time, options);
+        write_numeric(filename, '/signals/ml/fs', ml.fs, options);
+        write_numeric(filename, '/signals/ml/source_fs', ml.source_fs, options);
+        write_text(filename, '/signals/ml/channel_names', ml.channel_names);
+        write_text(filename, '/signals/ml/channel_roles', ml.channel_roles);
+        write_numeric(filename, '/signals/ml/source_channel_indices', ...
+            ml.source_channel_indices, options);
+        write_text(filename, '/signals/ml/source', ml.source);
+        write_text(filename, '/signals/ml/resampling_method', ...
+            ml.resampling_method);
+    end
 
     write_value(filename, '/breaths', results.resp_cycles, options);
     write_value(filename, '/respiration', results.resp_features, options);
@@ -566,11 +583,16 @@ function options = hdf5_export_options(config)
             config, 'HDF5', 'include_raw_signals', false), ...
         'include_preprocessed_signals', get_config_value( ...
             config, 'HDF5', 'include_preprocessed_signals', true), ...
+        'include_ml_signals', get_config_value( ...
+            config, 'HDF5', 'include_ml_signals', true), ...
+        'ml_sampling_hz', get_config_value( ...
+            config, 'HDF5', 'ml_sampling_hz', 10), ...
         'signal_datatype', lower(char(string(get_config_value( ...
             config, 'HDF5', 'signal_datatype', 'single')))), ...
         'compression_level', get_config_value( ...
             config, 'HDF5', 'compression_level', 4));
-    logical_fields = {'include_raw_signals', 'include_preprocessed_signals'};
+    logical_fields = {'include_raw_signals', 'include_preprocessed_signals', ...
+        'include_ml_signals'};
     for i = 1:numel(logical_fields)
         value = options.(logical_fields{i});
         if ~(islogical(value) || isnumeric(value)) || ~isscalar(value) || ...
@@ -593,6 +615,160 @@ function options = hdf5_export_options(config)
             'config.HDF5.compression_level must be an integer from 0 to 9.');
     end
     options.compression_level = double(level);
+    ml_sampling_hz = options.ml_sampling_hz;
+    if ~isnumeric(ml_sampling_hz) || ~isreal(ml_sampling_hz) || ...
+            ~isscalar(ml_sampling_hz) || ~isfinite(ml_sampling_hz) || ...
+            ml_sampling_hz <= 0 || ...
+            ~isfield(config, 'fs') || ~isnumeric(config.fs) || ...
+            ~isscalar(config.fs) || ~isfinite(config.fs) || ...
+            ml_sampling_hz > config.fs
+        error('MAGMA:HDF5:InvalidExportSetting', ...
+            ['config.HDF5.ml_sampling_hz must be a finite positive scalar ' ...
+             'no greater than config.fs.']);
+    end
+    options.ml_sampling_hz = double(ml_sampling_hz);
+end
+
+function ml = build_ml_signal_export(preprocessed, config, target_fs)
+% BUILD_ML_SIGNAL_EXPORT Construct the export-only lower-rate signal bundle.
+% Only resolved diaphragm, lungs, and SpO2 channels are considered. A channel
+% with fewer than two finite samples is omitted; other non-finite gaps are
+% filled on a temporary copy before anti-aliased resampling.
+
+    source_fs = double(config.fs);
+    [indices, names, roles] = resolve_ml_export_channels( ...
+        config, size(preprocessed, 2));
+    ratio = target_fs / source_fs;
+    [p, q] = rat(ratio, 1e-12);
+    output_count = floor((size(preprocessed, 1) - 1) * p / q) + 1;
+    output_count = max(0, output_count);
+
+    data = zeros(output_count, 0);
+    kept_names = cell(0, 1);
+    kept_roles = cell(0, 1);
+    kept_indices = zeros(0, 1);
+    for i = 1:numel(indices)
+        [prepared, usable] = prepare_channel_for_resampling( ...
+            preprocessed(:, indices(i)));
+        if ~usable
+            continue;
+        end
+        data(:, end+1) = resample_ml_channel( ...
+            prepared, p, q, output_count); %#ok<AGROW>
+        kept_names{end+1, 1} = names{i}; %#ok<AGROW>
+        kept_roles{end+1, 1} = roles{i}; %#ok<AGROW>
+        kept_indices(end+1, 1) = indices(i); %#ok<AGROW>
+    end
+
+    ml = struct();
+    ml.data = data;
+    ml.time = (0:output_count-1)' / target_fs;
+    ml.fs = target_fs;
+    ml.source_fs = source_fs;
+    ml.channel_names = kept_names;
+    ml.channel_roles = kept_roles;
+    ml.source_channel_indices = kept_indices;
+    ml.source = 'signals/preprocessed';
+    ml.resampling_method = ...
+        'MATLAB resample polyphase FIR with endpoint-value padding';
+end
+
+function [indices, names, roles] = resolve_ml_export_channels(config, n_columns)
+% RESOLVE_ML_EXPORT_CHANNELS Select resolved channels in canonical ML order.
+
+    if ~isfield(config, 'channels') || ~isstruct(config.channels)
+        error('MAGMA:HDF5:InvalidChannelMetadata', ...
+            'results.config.channels is required for ML signal export.');
+    end
+    channels = config.channels;
+    canonical_roles = {'diaph', 'lungs', 'spo2'};
+    indices = zeros(0, 1);
+    names = cell(0, 1);
+    roles = cell(0, 1);
+    for i = 1:numel(canonical_roles)
+        role = canonical_roles{i};
+        index_field = [role '_idx'];
+        if ~isfield(channels, index_field) || isempty(channels.(index_field))
+            continue;
+        end
+        index = channels.(index_field);
+        if ~isnumeric(index) || ~isscalar(index) || ~isfinite(index) || ...
+                index ~= round(index) || index < 1 || index > n_columns
+            error('MAGMA:HDF5:InvalidChannelMetadata', ...
+                'results.config.channels.%s is not a valid signal column.', ...
+                index_field);
+        end
+        name = resolved_ml_channel_name(config, channels, role, index);
+        indices(end+1, 1) = double(index); %#ok<AGROW>
+        names{end+1, 1} = name; %#ok<AGROW>
+        roles{end+1, 1} = role; %#ok<AGROW>
+    end
+end
+
+function name = resolved_ml_channel_name(config, channels, role, index)
+% RESOLVED_ML_CHANNEL_NAME Return the original configured exported name.
+
+    name_field = [role '_name'];
+    if isfield(channels, name_field) && ~isempty(channels.(name_field))
+        name = char(string(channels.(name_field)));
+    elseif isfield(config, 'data_columns') && numel(config.data_columns) >= index
+        configured_names = cellstr(string(config.data_columns));
+        name = configured_names{index};
+    elseif isfield(channels, 'data_columns') && ...
+            numel(channels.data_columns) >= index
+        configured_names = cellstr(string(channels.data_columns));
+        name = configured_names{index};
+    else
+        error('MAGMA:HDF5:InvalidChannelMetadata', ...
+            'No exported name is available for ML signal role %s.', role);
+    end
+end
+
+function [prepared, usable] = prepare_channel_for_resampling(signal)
+% PREPARE_CHANNEL_FOR_RESAMPLING Fill gaps only in a temporary export copy.
+% Internal gaps use linear interpolation; leading/trailing gaps use the
+% nearest finite sample. Missing values are never replaced with zero.
+
+    prepared = double(signal(:));
+    finite_mask = isfinite(prepared);
+    finite_indices = find(finite_mask);
+    usable = numel(finite_indices) >= 2;
+    if ~usable
+        prepared = zeros(0, 1);
+        return;
+    end
+    first_finite = finite_indices(1);
+    last_finite = finite_indices(end);
+    prepared(1:first_finite-1) = prepared(first_finite);
+    prepared(last_finite+1:end) = prepared(last_finite);
+    internal_missing = find(~finite_mask & ...
+        (1:numel(prepared))' > first_finite & ...
+        (1:numel(prepared))' < last_finite);
+    if ~isempty(internal_missing)
+        prepared(internal_missing) = interp1(finite_indices, ...
+            prepared(finite_indices), internal_missing, 'linear');
+    end
+end
+
+function output = resample_ml_channel(signal, p, q, output_count)
+% RESAMPLE_ML_CHANNEL Apply MATLAB's anti-aliased polyphase FIR resampler.
+% Endpoint-value padding keeps the default filter's implicit zero extension
+% away from the retained recording. The pad covers two default FIR half-spans
+% and is aligned to q so the original first sample maps to an integer output.
+
+    default_filter_half_span = 10 * max(p, q) / p;
+    minimum_padding = 2 * ceil(default_filter_half_span);
+    padding_count = q * ceil(minimum_padding / q);
+    padded = [repmat(signal(1), padding_count, 1); signal; ...
+        repmat(signal(end), padding_count, 1)];
+    padded_output = resample(padded, p, q);
+    first_output = round(padding_count * p / q) + 1;
+    last_output = first_output + output_count - 1;
+    if last_output > numel(padded_output)
+        error('MAGMA:HDF5:ResamplingFailure', ...
+            'ML resampling produced fewer samples than expected.');
+    end
+    output = padded_output(first_output:last_output);
 end
 
 function signal = cast_export_signal(signal, datatype)

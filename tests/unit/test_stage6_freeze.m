@@ -677,6 +677,8 @@ function testHdf5RoundTripPreservesOrderMasksNaNsAndRespiration(testCase)
     config = stage6_config();
     verifyFalse(testCase, config.HDF5.include_raw_signals);
     verifyTrue(testCase, config.HDF5.include_preprocessed_signals);
+    verifyTrue(testCase, config.HDF5.include_ml_signals);
+    verifyEqual(testCase, config.HDF5.ml_sampling_hz, 10);
     verifyEqual(testCase, config.HDF5.signal_datatype, 'single');
     verifyEqual(testCase, config.HDF5.compression_level, 4);
     N = 20;
@@ -746,7 +748,7 @@ function testHdf5RoundTripPreservesOrderMasksNaNsAndRespiration(testCase)
     verifyFalse(testCase, hdf5_path_exists(filename, ...
         '/respiration/diagnostic_signals'));
     verifyEqual(testCase, read_hdf5_text(filename, ...
-        '/meta/export_schema_version'), {'magma_ml_hdf5_v15'});
+        '/meta/export_schema_version'), {'magma_ml_hdf5_v16'});
     layers = {'automatic', 'reviewed'};
     canonical_phenotypes = {'hyperventilation_like', ...
         'periodic_deep_sighing', 'thoracic_dominant_breathing', ...
@@ -821,6 +823,185 @@ function testHdf5RoundTripPreservesOrderMasksNaNsAndRespiration(testCase)
         '/review/provenance/latest_round_id'), 1);
     verifyEqual(testCase, read_hdf5_text(filename, '/review/scope'), ...
         {'explicitly_viewed_or_edited_regions_per_label'});
+end
+
+function testHdf5MlExportKeepsNativeAndAddsFilteredCanonicalBundle(testCase)
+    config = make_test_config();
+    N = 4001;
+    t = (0:N-1)' / config.fs;
+    raw = zeros(N, numel(config.data_columns));
+    preprocessed = raw;
+    preprocessed(:, config.channels.diaph_idx) = sin(2*pi*0.25*t);
+    preprocessed(:, config.channels.lungs_idx) = sin(2*pi*8*t);
+    preprocessed(:, config.channels.spo2_idx) = 96;
+    original_preprocessed = preprocessed;
+    results = export_fixture(config, N);
+    filename = [tempname '.h5'];
+    cleanup = onCleanup(@() delete_if_present(filename));
+
+    export_results_hdf5(filename, results, raw, preprocessed);
+
+    verifySize(testCase, h5read(filename, '/signals/preprocessed'), ...
+        [N numel(config.data_columns)]);
+    verifyNumElements(testCase, h5read(filename, '/time'), N);
+    ml_data = double(h5read(filename, '/signals/ml/data'));
+    ml_time = h5read(filename, '/signals/ml/time');
+    verifySize(testCase, ml_data, [201 3]);
+    verifyNumElements(testCase, ml_time, size(ml_data, 1));
+    verifyEqual(testCase, ml_time(1), 0);
+    verifyTrue(testCase, all(isfinite(ml_time)));
+    verifyTrue(testCase, all(diff(ml_time) > 0));
+    verifyEqual(testCase, diff(ml_time), ...
+        repmat(0.1, numel(ml_time)-1, 1), 'AbsTol', 10*eps);
+    verifyEqual(testCase, h5read(filename, '/signals/ml/fs'), 10);
+    verifyEqual(testCase, h5read(filename, '/signals/ml/source_fs'), 200);
+    verifyEqual(testCase, read_hdf5_text(filename, ...
+        '/signals/ml/channel_names'), ...
+        {'Resp-Diaphragm', 'Resp-Lungs', 'SpO₂'});
+    verifyEqual(testCase, read_hdf5_text(filename, ...
+        '/signals/ml/channel_roles'), {'diaph', 'lungs', 'spo2'});
+    verifyEqual(testCase, h5read(filename, ...
+        '/signals/ml/source_channel_indices'), [6; 4; 3]);
+    verifyEqual(testCase, read_hdf5_text(filename, '/signals/ml/source'), ...
+        {'signals/preprocessed'});
+    verifyEqual(testCase, read_hdf5_text(filename, ...
+        '/signals/ml/resampling_method'), ...
+        {'MATLAB resample polyphase FIR with endpoint-value padding'});
+
+    % A non-zero SpO2 baseline must remain stable at both retained edges.
+    verifyEqual(testCase, ml_data(:, 3), 96 * ones(size(ml_data, 1), 1), ...
+        'AbsTol', 2e-3);
+    verifyEqual(testCase, ml_data([1 ceil(end/2) end], 3), [96; 96; 96], ...
+        'AbsTol', 2e-3);
+
+    % Preserve a clean respiratory component while suppressing an 8-Hz
+    % component above the 10-Hz representation's Nyquist frequency.
+    expected_respiration = sin(2*pi*0.25*ml_time);
+    correlation = corrcoef(ml_data(:, 1), expected_respiration);
+    verifyGreaterThan(testCase, correlation(1, 2), 0.999);
+    verifyLessThan(testCase, max(abs(ml_data(:, 1) - expected_respiration)), ...
+        0.02);
+    verifyLessThan(testCase, sqrt(mean(ml_data(:, 2).^2)), 0.05);
+    settled_high_frequency = ml_data(21:end-20, 2);
+    verifyLessThan(testCase, sqrt(mean(settled_high_frequency.^2)), 0.01);
+    verifyTrue(testCase, isequaln(preprocessed, original_preprocessed));
+end
+
+function testHdf5MlExportUsesConfiguredFiveHertzRate(testCase)
+    config = make_test_config();
+    config.HDF5.ml_sampling_hz = 5;
+    N = 2001;
+    raw = zeros(N, numel(config.data_columns));
+    preprocessed = raw;
+    results = export_fixture(config, N);
+    filename = [tempname '.h5'];
+    cleanup = onCleanup(@() delete_if_present(filename));
+
+    export_results_hdf5(filename, results, raw, preprocessed);
+
+    ml_data = h5read(filename, '/signals/ml/data');
+    ml_time = h5read(filename, '/signals/ml/time');
+    verifySize(testCase, ml_data, [51 3]);
+    verifyEqual(testCase, h5read(filename, '/signals/ml/fs'), 5);
+    verifyEqual(testCase, diff(ml_time), ...
+        repmat(0.2, numel(ml_time)-1, 1), 'AbsTol', 10*eps);
+end
+
+function testHdf5MlExportOmitsMissingLungsWithoutSubstitution(testCase)
+    config = make_test_config();
+    config.data_columns = ...
+        {'ECG1', 'ECG2', 'SpO₂', 'Blood Pressure', 'Resp-Diaphragm'};
+    config = resolve_signal_channels(config);
+    N = 401;
+    raw = zeros(N, numel(config.data_columns));
+    preprocessed = raw;
+    preprocessed(:, config.channels.diaph_idx) = 1;
+    preprocessed(:, config.channels.spo2_idx) = 96;
+    results = export_fixture(config, N);
+    filename = [tempname '.h5'];
+    cleanup = onCleanup(@() delete_if_present(filename));
+
+    export_results_hdf5(filename, results, raw, preprocessed);
+
+    verifySize(testCase, h5read(filename, '/signals/ml/data'), [21 2]);
+    verifyEqual(testCase, read_hdf5_text(filename, ...
+        '/signals/ml/channel_names'), {'Resp-Diaphragm', 'SpO₂'});
+    verifyEqual(testCase, read_hdf5_text(filename, ...
+        '/signals/ml/channel_roles'), {'diaph', 'spo2'});
+    verifyEqual(testCase, h5read(filename, ...
+        '/signals/ml/source_channel_indices'), [5; 3]);
+end
+
+function testHdf5MlExportFillsGapsAndOmitsUnusableChannels(testCase)
+    config = make_test_config();
+    N = 1001;
+    t = (0:N-1)' / config.fs;
+    raw = zeros(N, numel(config.data_columns));
+    preprocessed = raw;
+    diaph = sin(2*pi*0.25*t);
+    diaph([1:20 400:450 N-19:N]) = NaN;
+    preprocessed(:, config.channels.diaph_idx) = diaph;
+    preprocessed(:, config.channels.lungs_idx) = NaN;
+    preprocessed(500, config.channels.lungs_idx) = 1;
+    spo2 = 96 * ones(N, 1);
+    spo2(300:320) = Inf;
+    preprocessed(:, config.channels.spo2_idx) = spo2;
+    original_preprocessed = preprocessed;
+    results = export_fixture(config, N);
+    filename = [tempname '.h5'];
+    cleanup = onCleanup(@() delete_if_present(filename));
+
+    export_results_hdf5(filename, results, raw, preprocessed);
+
+    ml_data = h5read(filename, '/signals/ml/data');
+    verifySize(testCase, ml_data, [51 2]);
+    verifyTrue(testCase, all(isfinite(ml_data(:))));
+    verifyEqual(testCase, read_hdf5_text(filename, ...
+        '/signals/ml/channel_roles'), {'diaph', 'spo2'});
+    verifyTrue(testCase, isequaln(preprocessed, original_preprocessed));
+end
+
+function testHdf5MlExportRejectsInvalidSettings(testCase)
+    invalid_rates = {0, -1, NaN, Inf, 1i, 201, [5 10]};
+    for i = 1:numel(invalid_rates)
+        config = make_test_config();
+        config.HDF5.ml_sampling_hz = invalid_rates{i};
+        results = export_fixture(config, 20);
+        filename = [tempname '.h5'];
+        cleanup = onCleanup(@() delete_if_present(filename));
+        signals = zeros(20, numel(config.data_columns));
+        verifyError(testCase, @() export_results_hdf5( ...
+            filename, results, signals, signals), ...
+            'MAGMA:HDF5:InvalidExportSetting');
+    end
+
+    config = make_test_config();
+    config.HDF5.include_ml_signals = 2;
+    results = export_fixture(config, 20);
+    filename = [tempname '.h5'];
+    cleanup = onCleanup(@() delete_if_present(filename));
+    signals = zeros(20, numel(config.data_columns));
+    verifyError(testCase, @() export_results_hdf5( ...
+        filename, results, signals, signals), ...
+        'MAGMA:HDF5:InvalidExportSetting');
+end
+
+function testHdf5MlExportCanBeDisabledWithoutChangingNativeExport(testCase)
+    config = make_test_config();
+    config.HDF5.include_ml_signals = false;
+    N = 401;
+    raw = zeros(N, numel(config.data_columns));
+    preprocessed = raw;
+    results = export_fixture(config, N);
+    filename = [tempname '.h5'];
+    cleanup = onCleanup(@() delete_if_present(filename));
+
+    export_results_hdf5(filename, results, raw, preprocessed);
+
+    verifyFalse(testCase, hdf5_path_exists(filename, '/signals/ml'));
+    verifySize(testCase, h5read(filename, '/signals/preprocessed'), ...
+        size(preprocessed));
+    verifyNumElements(testCase, h5read(filename, '/time'), N);
 end
 
 function testRecordingResultUsesDeduplicatedOutputSchema(testCase)

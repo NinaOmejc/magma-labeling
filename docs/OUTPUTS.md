@@ -32,7 +32,7 @@ Unavailable values are shown explicitly, and forced abdominal expiration is
 marked as not assessable from the current signals.
 
 The MAT file is the authoritative MATLAB result. The HDF5 file uses schema
-`magma_ml_hdf5_v15` as a portable recording-level representation.
+`magma_ml_hdf5_v16` as a portable recording-level representation.
 
 ## Two output levels
 
@@ -123,6 +123,16 @@ The public hierarchy is:
 /signals
     /preprocessed
     /raw                  optional
+    /ml
+        /data
+        /time
+        /fs
+        /source_fs
+        /channel_names
+        /channel_roles
+        /source_channel_indices
+        /source
+        /resampling_method
 /time
 
 /breaths
@@ -177,17 +187,44 @@ The public hierarchy is:
 /meta
 ```
 
-`/time` is the single authoritative recording time axis in HDF5. The MATLAB
-configuration may retain `config.times`, but the full vector is omitted from
-`/config` to avoid duplicate storage.
+Schema v16 provides two signal levels. `/signals/preprocessed` remains the
+authoritative processed signal on the native recording timeline in `/time`;
+optional `/signals/raw` is unchanged. `/signals/ml/data` is an additional,
+export-only, anti-aliased lower-rate copy with its own exactly aligned timeline
+in `/signals/ml/time`. Its default rate is 10 Hz and can be changed with
+`config.HDF5.ml_sampling_hz` without changing any MATLAB analysis rate or
+scientific calculation.
+
+The ML bundle contains resolved channels in the stable role order `diaph`,
+`lungs`, `spo2`. A missing channel is omitted, never replaced by a zero-valued
+channel. Channels with fewer than two finite source samples are also omitted.
+For otherwise usable channels, internal non-finite gaps are linearly
+interpolated and leading/trailing gaps use the nearest finite value on a
+temporary export copy. MATLAB's anti-aliased polyphase FIR `resample` operation
+then uses endpoint-value padding so non-zero baselines such as SpO2 do not
+acquire zero-extension boundary excursions.
+
+ML values retain the preprocessed signal units and scale: respiratory belts
+remain in their existing belt units and SpO2 remains a percentage. No
+normalization, centering, z-scoring, or per-recording scaling is applied. The
+ML representation is never fed back into respiratory processing, detectors,
+events, labels, reviews, burden, evidence, references, or phenotypes, and it
+does not alter MAT results.
+
+The MATLAB configuration may retain `config.times`, but the full native vector
+is omitted from `/config` to avoid duplicate storage. `/time` remains the
+authoritative native recording time axis; `/signals/ml/time` applies only to
+`/signals/ml/data`.
 
 Numeric-summary datasets can be read directly below
 `/phenotypes/<layer>/numeric_summary`. Text arrays are zero-padded UTF-8 byte
 columns. Logical arrays are stored as `uint8` with a logical attribute.
 Numeric arrays and label masks use HDF5 compression where appropriate. By
-default, raw signals are omitted, preprocessed signals are included, and only
-exported signals are cast to compressed single precision; this does not alter
-the in-memory analysis or MAT output.
+default, raw signals are omitted, preprocessed and ML signals are included, and
+only exported signals are cast to compressed single precision; this does not
+alter the in-memory analysis or MAT output. Set
+`config.HDF5.include_ml_signals=false` to omit the complete `/signals/ml`
+group while retaining the native export.
 
 ## Automatic and reviewed annotations
 
