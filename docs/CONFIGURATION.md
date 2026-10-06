@@ -74,6 +74,25 @@ extraction or detectors. Recording results use the filenames
 
 ## Respiratory-cycle extraction
 
+Preprocessing first aligns the diaphragm belt with the lung belt, then checks
+their common orientation using the median inspiration-to-expiration duration
+ratio from complete breaths. A ratio below 0.90 keeps the signals, above 1.10
+flips both, and the inclusive interval remains unchanged as ambiguous. The
+settings are:
+
+```matlab
+config.preprocessing.check_belt_polarity = true;
+config.preprocessing.absolute_polarity.enabled = true;
+config.preprocessing.absolute_polarity.ratio_lower = 0.90;
+config.preprocessing.absolute_polarity.ratio_upper = 1.10;
+config.preprocessing.absolute_polarity.min_valid_breaths = 10;
+```
+
+The separate relative and absolute decisions are saved under
+`config.preprocessing.belt_polarity_qc` and
+`config.preprocessing.absolute_polarity_qc`. Final breath landmarks are
+detected after both polarity steps, before manual review.
+
 ```matlab
 config.resp.manual_control
 config.resp.manual_window_sec

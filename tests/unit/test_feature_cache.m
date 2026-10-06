@@ -208,6 +208,27 @@ function testPolarityConventionMismatchInvalidatesCache(testCase)
     verifyTrue(testCase, saved.feature_cache_meta.diaphragm_polarity_flipped);
 end
 
+function testAbsolutePolarityConventionMismatchInvalidatesCache(testCase)
+    output_dir = tempname;
+    mkdir(output_dir);
+    cleanup_dir = onCleanup(@() rmdir(output_dir, 's'));
+    config = make_test_config(output_dir);
+    config.preprocessing.absolute_polarity_qc = struct( ...
+        'absolute_polarity_checked', true, ...
+        'absolute_polarity_flipped', false);
+    data = make_synthetic_master_data(10001, config.fs);
+    load_or_extract_respiratory_cycles(data, config);
+
+    config.preprocessing.absolute_polarity_qc.absolute_polarity_flipped = true;
+    recomputed = load_or_extract_respiratory_cycles(data, config);
+    saved = load(fullfile(output_dir, config.sub_features_filename), ...
+        'feature_cache_meta');
+
+    verifyFalse(testCase, recomputed.provenance.loaded_from_cache);
+    verifyTrue(testCase, saved.feature_cache_meta.absolute_polarity_checked);
+    verifyTrue(testCase, saved.feature_cache_meta.absolute_polarity_flipped);
+end
+
 function b = reviewed_cache_belt(n_samples)
     b = empty_respiration_feature('reviewed');
     b.x0 = zeros(n_samples, 1);

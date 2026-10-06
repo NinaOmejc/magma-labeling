@@ -65,7 +65,6 @@ function run_magma(base_config)
                     config.subject, config.measure);
                 log_message(config, 1, 'Selected labels: %s', ...
                     strjoin(selected_labels, ', '));
-                log_message(config, 2, 'Loading existing result...');
                 existing_results = load(result_file);
             elseif selective
                 log_message(config, 1, ...
@@ -83,19 +82,14 @@ function run_magma(base_config)
             config.execution.partial_rerun = selective && result_exists;
             config.execution.updated_labels = selected_labels;
 
-            log_message(config, 2, 'Preprocessing signals...');
             [data, config] = preprocess_data(data_raw, config);
 
             [resp_cycles, reused_cycles] = reusable_resp_cycles( ...
                 existing_results, data, config);
-            if reused_cycles
-                log_message(config, 2, 'Reusing respiratory cycles...');
-            else
-                log_message(config, 2, 'Extracting respiratory cycles...');
+            if ~reused_cycles
                 resp_cycles = load_or_extract_respiratory_cycles(data, config);
             end
 
-            log_message(config, 2, 'Computing respiratory reference...');
             session_reference = get_session_reference_interval( ...
                 size(data, 1), config);
             resp_ref = compute_respiratory_reference( ...
@@ -108,44 +102,36 @@ function run_magma(base_config)
             % Always recompute derived evidence from the established cycles.
             % This prevents stale configuration-dependent traces (for example,
             % an old irregularity window) from surviving a selected rerun.
-            log_message(config, 2, 'Recomputing respiratory evidence...');
             resp_features = compute_respiratory_features( ...
                 data, resp_cycles, resp_ref, config);
-
-            detections = run_selected_label_detectors( ...
-                data, resp_features, resp_cycles, resp_ref, ...
-                session_reference, config, selected_labels, existing_results);
-
-            log_message(config, 2, 'Building final label masks...');
-            if selective
-                if result_exists
-                    log_message(config, 2, 'Preserving non-selected labels...');
-                end
-                label_results = finalize_selected_label_results( ...
-                    data, resp_features, detections, config, ...
-                    selected_labels, existing_results);
-            else
-                label_results = finalize_label_results( ...
-                    data, resp_cycles, resp_features, session_reference, ...
-                    detections, config);
-            end
-
-            plot_label_mask( ...
-                label_results.mask_automatic, label_results.label_names, config);
-
-            log_message(config, 2, 'Computing summary measures...');
-            results = build_recording_results( ...
-                config, resp_cycles, resp_ref, session_reference, ...
-                resp_features, label_results);
-            plot_phenotype_summary(results.phenotypes, config);
-            if selective && result_exists
-                log_message(config, 2, 'Saving merged results...');
-            end
-            save_recording_results(results, data_raw, data, config);
-            log_message(config, 1, ...
-                ['Successfully finished label detection for: Sub %d | ' ...
-                 'Measurement: %d'], config.subject, config.measure);
-            log_message(config, 2, 'Done.');
+            
+            % log_message(config, 2, 'Detecting labels...');
+            % detections = run_selected_label_detectors( ...
+            %     data, resp_features, resp_cycles, resp_ref, ...
+            %     session_reference, config, selected_labels, existing_results);
+            % 
+            % if selective
+            %     label_results = finalize_selected_label_results( ...
+            %         data, resp_features, detections, config, ...
+            %         selected_labels, existing_results);
+            % else
+            %     label_results = finalize_label_results( ...
+            %         data, resp_cycles, resp_features, session_reference, ...
+            %         detections, config);
+            % end
+            % 
+            % plot_label_mask( ...
+            %     label_results.mask_automatic, label_results.label_names, ...
+            %     config, label_results.availability_reason);
+            % 
+            % results = build_recording_results( ...
+            %     config, resp_cycles, resp_ref, session_reference, ...
+            %     resp_features, label_results);
+            % plot_phenotype_summary(results.phenotypes, config);
+            % save_recording_results(results, data_raw, data, config);
+            % log_message(config, 1, ...
+            %     ['Successfully finished label detection for: Sub %d | ' ...
+            %      'Measurement: %d'], config.subject, config.measure);
         end
     end
 end
@@ -183,7 +169,7 @@ function [resp_cycles, reused] = reusable_resp_cycles(existing, data, config)
                     cellstr(string(config.data_columns)))
             return;
         end
-        if polarity_flipped(existing.config) ~= polarity_flipped(config)
+        if ~isequal(polarity_state(existing.config), polarity_state(config))
             return;
         end
     end
@@ -231,16 +217,30 @@ function [resp_cycles, ok] = select_reused_amplitude( ...
     end
 end
 
-function tf = polarity_flipped(config)
-% POLARITY_FLIPPED Read preprocessing polarity provenance safely.
+function state = polarity_state(config)
+% POLARITY_STATE Read relative and absolute preprocessing provenance safely.
 
-    tf = false;
+    state = [false false false];
     if isfield(config, 'preprocessing') && ...
             isstruct(config.preprocessing) && ...
             isfield(config.preprocessing, 'belt_polarity_qc') && ...
             isstruct(config.preprocessing.belt_polarity_qc) && ...
             isfield(config.preprocessing.belt_polarity_qc, 'flipped') && ...
             isscalar(config.preprocessing.belt_polarity_qc.flipped)
-        tf = logical(config.preprocessing.belt_polarity_qc.flipped);
+        state(1) = logical(config.preprocessing.belt_polarity_qc.flipped);
+    end
+    if isfield(config, 'preprocessing') && ...
+            isstruct(config.preprocessing) && ...
+            isfield(config.preprocessing, 'absolute_polarity_qc') && ...
+            isstruct(config.preprocessing.absolute_polarity_qc)
+        qc = config.preprocessing.absolute_polarity_qc;
+        if isfield(qc, 'absolute_polarity_checked') && ...
+                isscalar(qc.absolute_polarity_checked)
+            state(2) = logical(qc.absolute_polarity_checked);
+        end
+        if isfield(qc, 'absolute_polarity_flipped') && ...
+                isscalar(qc.absolute_polarity_flipped)
+            state(3) = logical(qc.absolute_polarity_flipped);
+        end
     end
 end

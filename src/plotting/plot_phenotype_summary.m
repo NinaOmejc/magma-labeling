@@ -199,18 +199,26 @@ function draw_feature_row(ax, y, index, schema, automatic, reviewed, columns, ha
     text(ax, columns.unit, y, display_unit(schema.units{index}), ...
         'HorizontalAlignment', 'center', 'Color', [0.35 0.35 0.35], ...
         'Interpreter', 'none');
-    text(ax, columns.automatic, y, display_value(automatic, index), ...
-        'HorizontalAlignment', 'right', 'Interpreter', 'none');
+    [value_text, value_color] = display_value(automatic, index);
+    text(ax, columns.automatic, y, value_text, ...
+        'HorizontalAlignment', 'right', 'Color', value_color, ...
+        'Interpreter', 'none');
     if has_reviewed
-        text(ax, columns.reviewed, y, display_value(reviewed, index), ...
-            'HorizontalAlignment', 'right', 'Interpreter', 'none');
+        [value_text, value_color] = display_value(reviewed, index);
+        text(ax, columns.reviewed, y, value_text, ...
+            'HorizontalAlignment', 'right', 'Color', value_color, ...
+            'Interpreter', 'none');
     end
 end
 
-function value_text = display_value(summary, index)
-% DISPLAY_VALUE Preserve explicit unavailable versus available-zero states.
+function [value_text, value_color] = display_value(summary, index)
+% DISPLAY_VALUE Distinguish not computed, unavailable, and measured values.
 
-    if ~summary.available(index)
+    value_color = [0 0 0];
+    if strcmp(summary.missing_reason{index}, 'not_computed')
+        value_text = 'Not computed';
+        value_color = [0.45 0.45 0.45];
+    elseif ~summary.available(index)
         value_text = 'Unavailable';
     else
         value_text = sprintf('%.2f', summary.values(index));

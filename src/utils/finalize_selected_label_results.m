@@ -72,8 +72,9 @@ function out = finalize_selected_label_results( ...
         reviewed_assessable_mask(:, unselected) = logical( ...
             existing_results.label_reviewed_assessable_mask(:, unselected));
     end
+    reviewed_availability_reason(strcmp(availability_reason, ...
+        'not_computed')) = {'not_computed'};
 
-    log_message(config, 2, 'Rebuilding merged summaries...');
     burden_automatic = compute_recording_label_burden( ...
         mask_automatic, labels, available, events_automatic, ...
         config.fs, assessable_mask);
@@ -179,6 +180,9 @@ function [events, mask, coverage, status, scope, history, provenance, edit] = ..
     status(selected) = {'unreviewed'};
     if ~isempty(events)
         events = events(~ismember({events.type}, labels(selected)));
+    end
+    if isempty(events)
+        events = normalize_event_types_and_meta(empty_events());
     end
     edit = clear_selected_edit_state(edit, labels(selected), selected, N, numel(labels));
 end

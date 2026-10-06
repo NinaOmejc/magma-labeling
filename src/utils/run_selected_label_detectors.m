@@ -15,63 +15,52 @@ function detections = run_selected_label_detectors( ...
         config, selected_labels);
 
     if should_run_label('shallow', selected_labels)
-        log_message(config, 2, 'Detecting shallow breathing...');
         [detections.events.shallow, detections.candidate_events.shallow] = ...
             detect_shallow_breathing(data, resp_features, config);
     end
     if should_run_label('deep', selected_labels)
-        log_message(config, 2, 'Detecting deep breathing...');
         [detections.events.deep, detections.candidate_events.deep] = ...
             detect_deep_breathing(data, resp_features, config);
     end
     if should_run_label('slow', selected_labels)
-        log_message(config, 2, 'Detecting slow breathing...');
         [detections.events.slow, detections.candidate_events.slow] = ...
             detect_slow_breathing(data, resp_features, config);
     end
     if should_run_label('rapid', selected_labels)
-        log_message(config, 2, 'Detecting rapid breathing...');
         [detections.events.rapid, detections.candidate_events.rapid] = ...
             detect_rapid_breathing(data, resp_features, config);
     end
     if should_run_label('irregular', selected_labels)
-        log_message(config, 2, 'Detecting irregular breathing...');
         [detections.events.irregular, detections.candidate_events.irregular] = ...
             detect_irregular_breathing(data, resp_features, config);
     end
     if should_run_label('apnea', selected_labels)
-        log_message(config, 2, 'Detecting apnea...');
         [detections.events.apnea, detections.diagnostics.apnea, ...
             detections.candidate_events.apnea] = ...
             detect_apnea(data, resp_features, resp_ref, config);
     end
     if should_run_label('sigh', selected_labels)
-        log_message(config, 2, 'Detecting sighs...');
         [detections.events.sigh, detections.diagnostics.sigh] = ...
             detect_sigh(data, resp_features, resp_cycles, config);
         detections.candidate_events.sigh = empty_candidate_events();
     end
     if should_run_label('periodic', selected_labels)
-        log_message(config, 2, 'Detecting periodic breathing...');
         [detections.events.periodic, detections.diagnostics.periodic, ...
             detections.candidate_events.periodic] = ...
             detect_periodic_breathing(data, resp_cycles, config);
     end
     if should_run_label('thoracic', selected_labels)
-        log_message(config, 2, 'Detecting thoracic dominance...');
         [detections.events.thoracic, ...
             detections.candidate_events.thoracic] = ...
             detect_thoracic_dominant_breathing(data, resp_features, config);
     end
     if should_run_label('async', selected_labels)
-        log_message(config, 2, 'Detecting respiratory asynchrony...');
         [detections.events.async, detections.diagnostics.async] = ...
             detect_respiratory_asynchrony( ...
                 data, session_reference, resp_cycles, config);
         detections.candidate_events.async = empty_candidate_events();
     end
     if should_run_label('desat', selected_labels)
-        log_message(config, 2, 'Detecting desaturation...');
         [detections.events.desat, detections.diagnostics.desat, ...
             detections.spo2_ref] = ...
             detect_desaturation(data, session_reference, config);

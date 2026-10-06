@@ -148,6 +148,7 @@ function [data, config, t] = polarity_fixture(relative_sign)
     config.detrend.signals = {'Resp-Lungs', 'Resp-Diaphragm'};
     config.detrend.do_plot = false;
     config.preprocessing.check_belt_polarity = true;
+    config.preprocessing.absolute_polarity.enabled = false;
     config.problems.missing_lung_belt = zeros(0, 2);
     config = resolve_signal_channels(config);
 

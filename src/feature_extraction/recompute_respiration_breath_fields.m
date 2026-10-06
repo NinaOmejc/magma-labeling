@@ -45,12 +45,18 @@ function b = recompute_respiration_breath_fields(b, x, peak_idx, config)
     end
 
     n = numel(peak_idx);
-    trough_idx = zeros(n - 1, 1);
-    trough_val = zeros(n - 1, 1);
+    trough_idx = nan(n - 1, 1);
+    trough_val = nan(n - 1, 1);
     retained_overrides = zeros(0, 3);
 
     for i = 1:n-1
-        idx_range = peak_idx(i):peak_idx(i+1);
+        % Peak samples cannot also be trough samples. Searching only the
+        % strict interior prevents a low-valued peak endpoint from being
+        % selected as its adjacent trough.
+        idx_range = (peak_idx(i) + 1):(peak_idx(i+1) - 1);
+        if isempty(idx_range)
+            continue;
+        end
         seg = x(idx_range);
 
         switch lower(config.resp.trough_method)

@@ -137,12 +137,63 @@ function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b
     end
 
     function confirm_review()
-    % CONFIRM_REVIEW Accept the edited breath cycles and resume execution.
+    % CONFIRM_REVIEW Accept only internally consistent edited breath cycles.
+
+        [valid, message, issue, belt_name] = review_landmarks_are_valid();
+        if ~valid
+            full_message = sprintf( ...
+                'Cannot confirm review for %s: %s', belt_name, message);
+            show_status(full_message, true);
+            focus_invalid_interval(issue);
+            warning('MAGMA:Respiration:InvalidLandmarkReview', ...
+                '%s', full_message);
+            warndlg(full_message, ...
+                'Invalid respiratory landmarks', 'modal');
+            return;
+        end
 
         review_confirmed = true;
         if isgraphics(fh)
             uiresume(fh);
         end
+    end
+
+    function [valid, message, issue, belt_name] = ...
+            review_landmarks_are_valid()
+    % REVIEW_LANDMARKS_ARE_VALID Validate editable belts before GUI acceptance.
+
+        valid = true;
+        message = '';
+        issue = struct();
+        belt_name = '';
+        if edit_lungs
+            [valid, message, issue] = ...
+                validate_respiration_cycle_landmarks(b_l);
+            belt_name = 'Resp-Lungs';
+            if ~valid
+                return;
+            end
+        end
+        if edit_diaph
+            [valid, message, issue] = ...
+                validate_respiration_cycle_landmarks(b_d);
+            belt_name = 'Resp-Diaphragm';
+        end
+    end
+
+    function focus_invalid_interval(issue)
+    % FOCUS_INVALID_INTERVAL Move the linked axes near the conflicting pair.
+
+        if ~isstruct(issue) || ~isfield(issue, 'left_peak_idx') || ...
+                ~isfinite(issue.left_peak_idx)
+            return;
+        end
+        center_t = (issue.left_peak_idx - 1) / fs;
+        focus_span = min(window_sec, 30);
+        x0 = max(0, center_t - focus_span / 2);
+        x1 = min(t_raw(end), x0 + focus_span);
+        x0 = max(0, x1 - focus_span);
+        xlim(ax1, [x0 x1]);
     end
 
     function cancel_review()

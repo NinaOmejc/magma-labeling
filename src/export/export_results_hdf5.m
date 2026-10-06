@@ -71,6 +71,10 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
     write_value(filename, '/references/spo2', results.spo2_ref, options);
 
     write_text(filename, '/labels/names', results.label_names);
+    computation_status = repmat({'computed'}, 1, numel(results.label_names));
+    computation_status(strcmp(results.label_availability_reason, ...
+        'not_computed')) = {'not_computed'};
+    write_text(filename, '/labels/computation_status', computation_status);
     write_numeric(filename, '/labels/automatic/available', ...
         uint8(results.label_available(:)'), options);
     write_text(filename, '/labels/automatic/availability_reason', ...

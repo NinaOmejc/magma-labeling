@@ -12,10 +12,11 @@ config = get_config_defaults();
 config.path_data_in = 'D:\Projects\MAGMA\raw_data';
 config.path_results_out = 'D:\Projects\MAGMA\data_analysis\statistical_labeling';
 config.fs = 200;
-config.subjects = [1 20 23 24 32 40];
+config.subjects = [86:145];
 config.remove_subjects = [3 30 91];
 config.measurements = [1 2];
 config.subjects(ismember(config.subjects, config.remove_subjects)) = [];
+
 
 % EXECUTION
 config.overwrite_results = false;       % If true, recompute even if "*_results.mat" output already exists.
@@ -32,12 +33,12 @@ config.execution.selected_labels = {};
 
 % RESPIRATORY REPRESENTATION
 config.resp.amp_method = 'symmetric';  % Selected breath amplitude: 'expiratory' (peak to following trough), 'inspiratory' (peak to preceding trough), or 'symmetric' (peak to the mean of both troughs)
-config.resp.plot_amp_method_comparison = true; % save an optional comparison of all three breath-amplitude definitions
+config.resp.plot_amp_method_comparison = false; % save an optional comparison of all three breath-amplitude definitions
 
 % PLOTTING
 config.make_figs_visible = 'off';                           % If 'off' plots are only saved, and not shown, which increases the speed.
 config.plot_raw_data = false;                               % save an overview plot of raw signals
-config.reference.do_plot = true;                            % save respiratory-reference QC figure
+config.reference.do_plot = false;                            % save respiratory-reference QC figure
 config.shallow.do_plot = true;                              % save shallow breathing diagnostic plot
 config.deep.do_plot = true;                                 % save deep breathing diagnostic plot
 config.slow.do_plot  = true;                                % save slow breathing diagnostic plot

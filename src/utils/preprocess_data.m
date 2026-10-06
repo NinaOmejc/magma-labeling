@@ -192,6 +192,8 @@ function [output, config, trend] = preprocess_data(t_series, config)
     % This is deliberately independent of respiratory-asynchrony detection.
     [output, trend, config] = correct_respiratory_belt_polarity( ...
         output, trend, config, sampl_freq);
+    [output, trend, config] = determine_absolute_respiratory_polarity( ...
+        output, trend, config, sampl_freq);
 
     if isvector(output)
         n_master_samples = numel(output);

@@ -1,10 +1,11 @@
-function fig = plot_label_mask(label_mask, label_names, config)
+function fig = plot_label_mask(label_mask, label_names, config, availability_reason)
 % PLOT_LABEL_MASK Render detected label states as a time-by-label raster.
 %
 % Inputs:
 %   label_mask  - Nsample x Nlabel logical matrix on the native sample grid.
 %   label_names - Nlabel cell array of canonical short label names.
 %   config      - Pipeline settings supplying fs, label metadata, and plot options.
+%   availability_reason - Optional per-label reasons; not_computed rows are gray.
 %
 % Outputs:
 %   fig - Figure handle while plotting; empty after save_figure or when disabled.
@@ -24,6 +25,17 @@ function fig = plot_label_mask(label_mask, label_names, config)
         return;
     end
     label_names = validate_canonical_label_order(label_names, n_labels);
+    if nargin < 4 || isempty(availability_reason)
+        availability_reason = repmat({'available'}, 1, n_labels);
+    end
+    availability_reason = cellstr(string(availability_reason));
+    if numel(availability_reason) ~= n_labels
+        error('MAGMA:LabelMask:AvailabilityAlignment', ...
+            'availability_reason must contain one value per label.');
+    end
+    not_computed = strcmp(availability_reason, 'not_computed');
+    display_mask = double(label_mask');
+    display_mask(not_computed, :) = 2;
 
     t_sec = (0:n_samples-1) / config.fs;
     row_labels = resolve_row_labels(label_names, config, n_labels);
@@ -36,7 +48,7 @@ function fig = plot_label_mask(label_mask, label_names, config)
         'Color', 'w');
 
     ax = axes('Parent', fig);
-    imagesc(ax, t_sec, 1:n_labels, double(label_mask'));
+    imagesc(ax, t_sec, 1:n_labels, display_mask);
     if t_sec(end) > 0
         xlim(ax, [0 t_sec(end)]);
     else
@@ -58,11 +70,11 @@ function fig = plot_label_mask(label_mask, label_names, config)
 
     cmap = build_label_mask_colormap(config);
     colormap(ax, cmap);
-    caxis(ax, [-0.5 1.5]);
+    caxis(ax, [-0.5 2.5]);
 
     cb = colorbar(ax);
-    cb.Ticks = [0 1];
-    cb.TickLabels = {'Absent', 'Present'};
+    cb.Ticks = [0 1 2];
+    cb.TickLabels = {'Absent', 'Present', 'Not computed'};
     ylabel(cb, 'Label state');
 
     hold(ax, 'on');
@@ -98,18 +110,18 @@ function label_names = validate_canonical_label_order(label_names, n_labels)
 end
 
 function cmap = build_label_mask_colormap(config)
-% BUILD_LABEL_MASK_COLORMAP Resolve the two RGB colors for absent/present states.
-% cmap is a clipped 2 x 3 matrix, optionally read from config.LabelMask.
+% BUILD_LABEL_MASK_COLORMAP Resolve absent, present, and not-computed colors.
 
-    cmap = [ ...
+    binary_colors = [ ...
         1.00 1.00 1.00; ...
         0.78 0.12 0.12];
 
     if isfield(config, 'LabelMask') && isfield(config.LabelMask, 'binary_colors') && ...
             isnumeric(config.LabelMask.binary_colors) && all(size(config.LabelMask.binary_colors) == [2, 3])
-        cmap = config.LabelMask.binary_colors;
+        binary_colors = config.LabelMask.binary_colors;
     end
 
+    cmap = [binary_colors; 0.72 0.72 0.72];
     cmap = min(max(cmap, 0), 1);
 end
 

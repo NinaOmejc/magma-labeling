@@ -31,6 +31,11 @@ function config = get_config_defaults()
     %---- PREPROCESSING ----                
     config.preprocessing = struct();
     config.preprocessing.check_belt_polarity = true;            % conservatively correct persistent acquisition-level diaphragm-belt inversion
+    config.preprocessing.absolute_polarity = struct();
+    config.preprocessing.absolute_polarity.enabled = true;      % infer the common belt orientation from inspiration/expiration timing
+    config.preprocessing.absolute_polarity.ratio_lower = 0.90;
+    config.preprocessing.absolute_polarity.ratio_upper = 1.10;
+    config.preprocessing.absolute_polarity.min_valid_breaths = 10;
     config.detrend.method = 'none';                         % 'hpfilter': Butterworth high-pass filter with filtfilt, 'moving_detrend': moving-average trend subtraction, or 'none': no additional detrending.
     config.detrend.signals = {'Resp-Lungs', 'Resp-Diaphragm'};  % *** signals to additionally detrend before feature extraction (in general, all signals are already detrended, this is just additional moving detrend, that can be useful for some noisier data)
     config.detrend.highpass_cutoff = 0.01;                      % high-pass cutoff frequency in Hz
@@ -55,9 +60,9 @@ function config = get_config_defaults()
     config.resp.smooth_sec       = 0.25;    % Pre-processing; light smoothing (seconds); set to 0 to disable
     config.resp.trough_method = 'min';      % Trough selection; 'prctile' or 'min' (default)
     config.resp.trough_prct   = 5;          % Trough selection; 5th percentile trough
-    config.resp.amp_method = 'inspiratory';  % Selected breath amplitude: 'expiratory' (peak to following trough), 'inspiratory' (peak to preceding trough), or 'symmetric' (peak to the mean of both troughs)
+    config.resp.amp_method = 'symmetric';  % Selected breath amplitude: 'expiratory' (peak to following trough), 'inspiratory' (peak to preceding trough), or 'symmetric' (peak to the mean of both troughs)
     config.resp.plot_amp_method_comparison = false; % save an optional comparison of all three breath-amplitude definitions
-    config.resp.do_plot         = true;     % save breath extraction diagnostic plots
+    config.resp.do_plot         = false;     % save breath extraction diagnostic plots
 
     % qc - conservative removal of likely duplicate/split automatic peaks
     config.resp.qc.enabled = true;              % enable conservative automatic peak QC before manual review
@@ -166,7 +171,7 @@ function config = get_config_defaults()
     config.periodic.eami.envelope_lowpass_hz = 0.125;
     config.periodic.eami.envelope_lowpass_order = 6;
     config.periodic.eami.energy_win_sec = 60;
-    config.periodic.eami.threshold = 0.50;
+    config.periodic.eami.threshold = 0.40;
 
     % Guyot et al., PLOS ONE 2020 (DOI 10.1371/journal.pone.0221191).
     % The centered window/overlap and Matrix Pencil structure follow the paper.
