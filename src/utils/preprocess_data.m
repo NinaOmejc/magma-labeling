@@ -194,6 +194,8 @@ function [output, config, trend] = preprocess_data(t_series, config)
         output, trend, config, sampl_freq);
     [output, trend, config] = determine_absolute_respiratory_polarity( ...
         output, trend, config, sampl_freq);
+    [output, trend, config] = align_respiration_to_feature_cache( ...
+        output, trend, config);
 
     if isvector(output)
         n_master_samples = numel(output);

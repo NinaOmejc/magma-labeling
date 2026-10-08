@@ -75,16 +75,26 @@ extraction or detectors. Recording results use the filenames
 ## Respiratory-cycle extraction
 
 Preprocessing first aligns the diaphragm belt with the lung belt, then checks
-their common orientation using the median inspiration-to-expiration duration
-ratio from complete breaths. A ratio below 0.90 keeps the signals, above 1.10
-flips both, and the inclusive interval remains unchanged as ambiguous. The
-settings are:
+their common orientation using a temporary average of the separately
+standardized belts. Within each complete breath, time above the midpoint
+between its peak and neighboring troughs measures whether high peaks are
+narrow or broad. Narrow highs in at least 65% of breaths keep the orientation;
+broad highs in at least 65% flip both belts. A 0.45–0.55 midpoint-dwell band
+leaves near-symmetric shapes unchanged. The shared I:E ratio remains a
+diagnostic; one usable belt falls back to its own I:E ratio. The settings are:
+
+The relative correction flips the diaphragm when the median informative-window
+correlation is at most `-0.65`, at least 80% of informative windows are
+negative, and at least 60% of windows are informative.
 
 ```matlab
 config.preprocessing.check_belt_polarity = true;
 config.preprocessing.absolute_polarity.enabled = true;
 config.preprocessing.absolute_polarity.ratio_lower = 0.90;
 config.preprocessing.absolute_polarity.ratio_upper = 1.10;
+config.preprocessing.absolute_polarity.majority_threshold = 0.65;
+config.preprocessing.absolute_polarity.high_dwell_lower = 0.45;
+config.preprocessing.absolute_polarity.high_dwell_upper = 0.55;
 config.preprocessing.absolute_polarity.min_valid_breaths = 10;
 ```
 
@@ -92,6 +102,14 @@ The separate relative and absolute decisions are saved under
 `config.preprocessing.belt_polarity_qc` and
 `config.preprocessing.absolute_polarity_qc`. Final breath landmarks are
 detected after both polarity steps, before manual review.
+
+With `config.overwrite_features = false`, an existing compatible
+`*_features.mat` keeps the respiratory signal orientation used when its peaks
+and troughs were reviewed, even if the current polarity heuristic chooses a
+different orientation. The current heuristic's QC is retained in
+`config.preprocessing.computed_polarity_qc`. Set `overwrite_features = true`
+for recordings whose polarity and landmarks should be recomputed and reviewed
+again. An incompatible manually reviewed cache is never silently overwritten.
 
 ```matlab
 config.resp.manual_control

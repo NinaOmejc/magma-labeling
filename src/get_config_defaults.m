@@ -35,6 +35,9 @@ function config = get_config_defaults()
     config.preprocessing.absolute_polarity.enabled = true;      % infer the common belt orientation from inspiration/expiration timing
     config.preprocessing.absolute_polarity.ratio_lower = 0.90;
     config.preprocessing.absolute_polarity.ratio_upper = 1.10;
+    config.preprocessing.absolute_polarity.majority_threshold = 0.65;
+    config.preprocessing.absolute_polarity.high_dwell_lower = 0.45;
+    config.preprocessing.absolute_polarity.high_dwell_upper = 0.55;
     config.preprocessing.absolute_polarity.min_valid_breaths = 10;
     config.detrend.method = 'none';                         % 'hpfilter': Butterworth high-pass filter with filtfilt, 'moving_detrend': moving-average trend subtraction, or 'none': no additional detrending.
     config.detrend.signals = {'Resp-Lungs', 'Resp-Diaphragm'};  % *** signals to additionally detrend before feature extraction (in general, all signals are already detrended, this is just additional moving detrend, that can be useful for some noisier data)
@@ -43,15 +46,9 @@ function config = get_config_defaults()
     config.detrend.window_length = 60;                          % moving detrend window length in seconds
     config.detrend.do_plot = true;                              % save detrending diagnostic plots
     
+
     %---- PROBLEMS ----
-    config.problems.missing_lung_belt = [ ...                  % known [subject, measurement] recordings without a usable lung belt (e.g. first 20 subjects have a broken belt)
-        (1:20)', ones(20, 1); ...
-        (1:20)', 2 * ones(20, 1); ...
-        23, 1; 23, 2; ...
-        33, 1; 33, 2; ...
-        35, 1; 35, 2; ...
-        40, 1; 40, 2; ...
-        ];
+    config.problems.missing_lung_belt = [];
 
     %---- RESPIRATION / BREATHING AMPLITUDE EXTRACTION SETTINGS ----
     config.resp.min_peak_dist_sec = 1.0;    % *** Peak selection; min time between breaths (tune if needed)
