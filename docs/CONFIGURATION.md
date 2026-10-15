@@ -275,3 +275,55 @@ config.LabelEdit.reviewer_role = 'clinician';
 ```
 
 Automatic and manually reviewed annotations remain separate.
+
+## Saved-result cohort analysis
+
+`run('src/main_group.m')` uses `config.group` and reads saved
+`*_results.mat` files only. To override the defaults, define `config`
+before calling `run`:
+
+```matlab
+config = get_config_defaults();
+config.group.subjects = [];             % discover all saved subject IDs
+config.group.measurements = [1 2];      % M1 and M2
+config.group.exclude_subjects = config.remove_subjects;
+config.group.control_subjects = [];     % optional metadata
+config.group.patient_subjects = [];     % optional metadata
+config.group.paired_measurements = [1 2];
+config.group.plot_layer = 'automatic';   % or 'reviewed'
+config.group.plot_label_histograms = true;
+config.group.plot_stratified_histograms = true;
+run('src/main_group.m');
+```
+
+Set `subjects` to numeric IDs for a subset. Empty `subjects` discovers
+all saved IDs; exclusions still apply. `measurements` can be any distinct
+subset of 1–4. Set `paired_measurements` to two distinct values in 1–4,
+such as `[3 4]` or `[1 3]`, and include both in `measurements`.
+Pairs match by subject ID. Subjects without both recordings remain in the
+`group_details.xlsx` Paired_changes sheet with an invalid-pair flag. Missing control/patient metadata are
+reported as `Unknown`; group membership is never inferred from IDs.
+
+When both explicit group lists are empty, `main_group.m` looks for
+`ML_database_WORK_IN_PROGRESS_20Sep26_MG.xlsx` two directories above
+`config.path_results_out`. It reads only `Questionnaire` columns
+`Sub_code` and `grp`: 0 means Control (healthy control) and 1 means
+Patient, as defined by the workbook dictionary. Matching uses the numeric
+subject ID in `Sub_code`; unmatched subjects stay `Unknown`.
+Explicit `control_subjects`/`patient_subjects` lists take precedence.
+Set `config.group.metadata_file` to a specific workbook path to override
+discovery, or to `''` to disable it. Group-specific histograms are generated
+when Control or Patient subjects are present.
+
+M1 is before rehabilitation and before exercise/stress; M2 is before
+rehabilitation and after exercise/stress. M3 and M4 are the analogous
+before/after exercise recordings after rehabilitation. The default M1 to M2
+difference does not estimate rehabilitation effectiveness.
+
+Group tables are consolidated in `group_summary.xlsx` and `group_details.xlsx`.
+Only `group_label_burden_histograms_automatic` plots are generated, including
+the Control, Patient, and combined variants when metadata are present. Set
+the two remaining plot switches to false for tables only. `plot_layer` selects
+the descriptive and paired table layer; selecting `reviewed` generates tables
+without plots. The diagnostic overview and other descriptive plots have been
+removed. See [OUTPUTS.md](OUTPUTS.md) for the worksheet layout.

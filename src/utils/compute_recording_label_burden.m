@@ -50,6 +50,16 @@ function summary = compute_recording_label_burden( ...
                 event_duration_summary(events, name, fs, valid);
             entry.median_event_duration_sec = finite_median(event_duration_sec);
             entry.max_event_duration_sec = finite_max(event_duration_sec);
+            selected = select_label_events(events, name);
+            if strcmp(name, 'sigh') && ~isempty(selected) && ...
+                    any([selected.start_idx] == [selected.end_idx])
+                % One sample encodes a discrete reviewed peak, not clinical
+                % sigh duration. Counts and assessable-time rates remain valid.
+                entry.duration_sec = NaN;
+                entry.fraction = NaN;
+                entry.median_event_duration_sec = NaN;
+                entry.max_event_duration_sec = NaN;
+            end
         end
         summary.by_label.(name) = entry;
     end

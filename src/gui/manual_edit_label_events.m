@@ -78,11 +78,25 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events( ...
     end
 
     edited_event_sets = start_event_sets;
+    [sigh_candidates, ~, sigh_panel_peaks] = build_sigh_breath_candidates(resp_cycles, N, fs);
+    start_event_sets.sigh = sigh_events_at_peaks( ...
+        start_event_sets.sigh, sigh_candidates, sigh_panel_peaks, fs);
+    edited_event_sets.sigh = start_event_sets.sigh;
     new_coverage = false(N, numel(label_defs));
-    [edited_event_sets, ~, new_coverage] = run_editor( ...
+    [edited_event_sets, ~, new_coverage, committed] = run_editor( ...
         data, resp_cycles, config, edited_event_sets, automatic_event_sets, ...
         start_event_sets, label_defs, cfg, {}, new_coverage);
     edit_info.editor_opened = true;
+    edit_info.cancelled = ~committed;
+    if ~committed
+        % Cancelling preserves the previously active review, including its scope.
+        if ~isempty(loaded_event_sets)
+            reviewed_event_sets = loaded_event_sets;
+            edit_info = apply_active_round_info(edit_info, review_history, ...
+                active_round_id, label_defs, N);
+        end
+        return;
+    end
 
     round_meta = struct( ...
         'round_id', next_round_id(review_history), ...
@@ -116,7 +130,7 @@ function cfg = label_edit_config(config)
 % derived only from config.execution.mode by manual_review_enabled.
 
     cfg = struct();
-    cfg.window_sec = 300;
+    cfg.window_sec = 600;
     cfg.min_interval_sec = 1;
     cfg.filename_suffix = '_manual_label_events.mat';
     cfg.start_from = 'automatic';
@@ -172,6 +186,7 @@ function edit_info = init_edit_info(edit_file)
         'applied_saved_edits', false, ...
         'loaded_schema_version', NaN, ...
         'editor_opened', false, ...
+        'cancelled', false, ...
         'start_from', '', ...
         'source_review_round', NaN, ...
         'source_analysis_id', '', ...
@@ -245,7 +260,7 @@ function event_sets = ensure_event_sets(source_sets, label_defs, fs, N)
         field = label_defs(i).field;
         source_index = find(strcmp(mapped_fields, field), 1);
         if isempty(source_index) || isempty(source_sets.(source_fields{source_index}))
-            event_sets.(field) = empty_events();
+            event_sets.(field) = empty_editable_events();
         else
             event_sets.(field) = sanitize_events( ...
                 source_sets.(source_fields{source_index}), fs, N);
@@ -256,27 +271,22 @@ end
 function events = sanitize_events(events, fs, N)
 % SANITIZE_EVENTS Normalize editable events to the canonical seven-field schema.
 % Output fields are type, one-based start_idx/end_idx, half-open start_t/end_t
-% and duration in seconds, plus an empty belt source. Optional fs/N recompute
+% and duration in seconds, preserving belt source when supplied. Optional fs/N recompute
 % and clip timing.
 
     if nargin < 2, fs = []; end
     if nargin < 3, N = []; end
     if isempty(events)
-        events = empty_events();
+        events = empty_editable_events();
         return;
     end
 
-    template = empty_events();
-    template(1).type = '';
-    template(1).start_idx = 1;
-    template(1).end_idx = 1;
-    template(1).start_t = 0;
-    template(1).end_t = 0;
-    template(1).duration = 0;
+    template = editable_event_template();
     out = repmat(template, numel(events), 1);
 
     for i = 1:numel(events)
         out(i).type = char(string(get_event_field(events(i), 'type', '')));
+        out(i).belt = char(string(get_event_field(events(i), 'belt', '')));
         out(i).start_idx = round(get_event_field(events(i), 'start_idx', 1));
         out(i).end_idx = round(get_event_field(events(i), 'end_idx', out(i).start_idx));
         if ~isempty(N)
@@ -294,6 +304,7 @@ function events = sanitize_events(events, fs, N)
                 (out(i).end_idx - out(i).start_idx + 1) / fs;
         end
     end
+    events = out;
 end
 
 function value = get_event_field(event, field, default_value)
@@ -544,7 +555,7 @@ function history = normalize_saved_review_history(saved_history, N, config)
         normalized(i).source_review_round = source.source_review_round;
         normalized(i).source_analysis_id = optional_text( ...
             source, 'source_analysis_id', 'legacy_unknown');
-        normalized(i).events = normalize_event_types_and_meta(source.events, config.fs);
+        normalized(i).events = normalize_review_events(source.events, config.fs);
         normalized(i).mask = logical(source.mask);
         normalized(i).review_mask = logical(source.review_mask);
         normalized(i).review_status = reshape(cellstr(string(source.review_status)), 1, []);
@@ -581,7 +592,7 @@ function event_sets = event_sets_from_review_round(round_info, defs, fs, N)
 % Output fields follow defs; event times are recomputed at fs and clipped to N.
 
     event_sets = struct();
-    events = normalize_event_types_and_meta(round_info.events, fs);
+    events = normalize_review_events(round_info.events, fs);
     for i = 1:numel(defs)
         keep = strcmp({events.type}, defs(i).type);
         event_sets.(defs(i).field) = sanitize_events(events(keep), fs, N);
@@ -721,7 +732,7 @@ function save_manual_event_sets(edit_file, automatic_event_sets, reviewed_event_
         'manual_label_review_provenance', 'manual_label_edit_meta');
 end
 
-function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
+function [event_sets, reviewed_fields, review_coverage_mask, committed] = run_editor( ...
     data, resp_cycles, config, event_sets, auto_event_sets, start_event_sets, ...
     label_defs, cfg, reviewed_fields, review_coverage_mask)
 % RUN_EDITOR Edit one label at a time while recording viewed sample coverage.
@@ -742,6 +753,7 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
 %   event_sets          - Edited per-label event arrays.
 %   reviewed_fields     - Fields for which any viewport was explicitly shown.
 %   review_coverage_mask - Updated sample-by-editable-label review coverage.
+%   committed           - True only for Done; closing X discards the pending round.
 
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
@@ -749,44 +761,44 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
 
     fs = config.fs;
     N = size(data, 1);
+    event_sets = ensure_event_sets(event_sets, label_defs, fs, N);
+    auto_event_sets = ensure_event_sets(auto_event_sets, label_defs, fs, N);
+    start_event_sets = ensure_event_sets(start_event_sets, label_defs, fs, N);
     t_raw = (0:N-1)' / fs;
     t_end = t_raw(end);
     window_sec = min(max(30, cfg.window_sec), max(30, t_end));
-    current_label_idx = 1;
+    % Keep the complete event/coverage schema, but do not offer desaturation review.
+    editable_label_indices = find(~strcmp({label_defs.field}, 'desat'));
+    current_label_idx = editable_label_indices(1);
     reviewed = ismember({label_defs.field}, reviewed_fields);
     drag_start_t = NaN;
     drag_active = false;
     drag_ax = gobjects(0);
     temp_patches = gobjects(0);
-    [sigh_breath_events, sigh_breath_peak_t] = ...
+    committed = false;
+    finished = false;
+    [sigh_breath_events, sigh_breath_peak_t, sigh_panel_peaks] = ...
         build_sigh_breath_candidates(resp_cycles, N, fs);
 
     idx_lungs = config.channels.lungs_idx;
     idx_diaph = config.channels.diaph_idx;
-    idx_spo2 = config.channels.spo2_idx;
 
     fh = figure('Units', 'pixels', 'Position', near_fullscreen_figure_position(), 'Visible', 'on', ...
         'Name', 'Manual label event editor', 'NumberTitle', 'off');
 
-    ax1 = subplot(3, 1, 1); hold(ax1, 'on');
+    ax1 = subplot(2,1,1); hold(ax1, 'on');
     plot_trace_or_message(ax1, t_raw, data, idx_lungs, 'Resp-Lungs');
     title(ax1, 'Manual label editing: lungs');
     ylabel(ax1, 'Resp-Lungs'); grid(ax1, 'on');
     set_global_ylim_from_channel(ax1, data, idx_lungs);
 
-    ax2 = subplot(3, 1, 2); hold(ax2, 'on');
+    ax2 = subplot(2,1,2); hold(ax2, 'on');
     plot_trace_or_message(ax2, t_raw, data, idx_diaph, 'Resp-Diaphragm');
     title(ax2, 'Manual label editing: diaphragm');
-    ylabel(ax2, 'Resp-Diaphragm'); grid(ax2, 'on');
+    ylabel(ax2, 'Resp-Diaphragm'); xlabel(ax2, 'Time (s)'); grid(ax2, 'on');
     set_global_ylim_from_channel(ax2, data, idx_diaph);
 
-    ax3 = subplot(3, 1, 3); hold(ax3, 'on');
-    plot_trace_or_message(ax3, t_raw, data, idx_spo2, 'SpO2');
-    title(ax3, 'Manual label editing: SpO2');
-    ylabel(ax3, 'SpO2'); xlabel(ax3, 'Time (s)'); grid(ax3, 'on');
-    set_global_ylim_from_channel(ax3, data, idx_spo2);
-
-    ax = [ax1 ax2 ax3];
+    ax = [ax1 ax2];
     for i = 1:numel(ax)
         set(ax(i), 'ButtonDownFcn', @(~,~) begin_drag(ax(i)));
     end
@@ -796,10 +808,10 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
     sgtitle(['MANUAL LABEL EVENT EDITING' newline ...
         'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)]);
 
-    label_names = {label_defs.name};
+    label_names = {label_defs(editable_label_indices).name};
     uicontrol(fh, 'Style', 'popupmenu', 'String', label_names, ...
         'Units', 'normalized', 'Position', [0.01 0.955 0.24 0.035], ...
-        'Value', current_label_idx, 'Callback', @(src,~) change_label(src.Value));
+        'Value', 1, 'Callback', @(src,~) change_label(src.Value));
     uicontrol(fh, 'Style', 'slider', 'Units', 'normalized', ...
         'Position', [0.10 0.01 0.55 0.03], 'Min', 0, ...
         'Max', max(0, t_end - window_sec), 'Value', 0, ...
@@ -817,28 +829,28 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
 
     set(fh, 'WindowButtonMotionFcn', @(~,~) update_drag());
     set(fh, 'WindowButtonUpFcn', @(~,~) finish_drag());
-    set(fh, 'CloseRequestFcn', @(~,~) finish_editing());
+    set(fh, 'CloseRequestFcn', @(~,~) cancel_editing());
 
     log_message(config, 1, ...
         ['Manual label review ON: drag to add/remove intervals; for sigh, ' ...
-         'click to toggle the nearest breath; press Done when finished.']);
+         'click a breath peak; press Done to save, or X to cancel.']);
     log_message(config, 2, '\nManual label event editor ON.');
     log_message(config, 2, '  Choose a label from the dropdown.');
     log_message(config, 2, ...
         '  Drag on a non-shaded area to add an interval for that label.');
     log_message(config, 2, ...
-        '  For sigh, click to toggle the nearest reviewed respiratory breath.');
+        '  For sigh, click a hollow breath peak to add it or a red dot to remove it.');
     log_message(config, 2, ...
         '  Click a shaded interval to remove it for the selected label.');
     log_message(config, 2, ...
         '  Reset restores the configured starting annotations (%s).', ...
         cfg.start_from);
-    log_message(config, 2, '  Close or press Done when finished.\n');
+    log_message(config, 2, '  Done saves the review; X cancels without saving.\n');
 
     refresh_event_patches();
     mark_current_view_reviewed();
-    uiwait(fh);
-    mark_current_view_reviewed();
+    if ~finished, uiwait(fh); end
+    if committed, mark_current_view_reviewed(); end
     if isgraphics(fh)
         delete(fh);
     end
@@ -861,12 +873,15 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
         x0 = max(0, min(x0, max(0, t_end - window_sec)));
         xlim(ax1, [x0 min(x0 + window_sec, t_end)]);
         mark_current_view_reviewed();
+        if strcmp(label_defs(current_label_idx).edit_mode, 'breath_event')
+            refresh_event_patches();
+        end
     end
 
     function change_label(value)
     % CHANGE_LABEL Select a label index and redraw its event intervals.
 
-        current_label_idx = value;
+        current_label_idx = editable_label_indices(value);
         mark_current_view_reviewed();
         refresh_event_patches();
     end
@@ -902,7 +917,8 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
     function begin_drag(clicked_ax)
     % BEGIN_DRAG Start a candidate event interval at the clicked time in seconds.
 
-        if ~strcmp(get(fh, 'SelectionType'), 'normal')
+        if strcmp(label_defs(current_label_idx).edit_mode, 'breath_event') || ...
+                ~strcmp(get(fh, 'SelectionType'), 'normal')
             return;
         end
         t_click = current_axis_time(clicked_ax);
@@ -950,30 +966,30 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
         if ~isfinite(t_stop) || ~isfinite(drag_start_t)
             return;
         end
-        if strcmp(label_defs(current_label_idx).edit_mode, 'breath_event')
-            toggle_nearest_breath(drag_start_t);
-        else
-            add_interval(drag_start_t, t_stop);
-        end
+        add_interval(drag_start_t, t_stop);
         drag_start_t = NaN;
     end
 
-    function toggle_nearest_breath(t_click)
-    % TOGGLE_NEAREST_BREATH Add/remove the closest canonical sigh breath event.
+    function toggle_nearest_breath(breath_index)
+    % TOGGLE_NEAREST_BREATH Toggle the exact breath selected by a marker callback.
 
         if isempty(sigh_breath_peak_t)
             warning('MAGMA:ManualLabelEdit:NoSighBreaths', ...
                 'No valid respiratory breaths are available for sigh editing.');
             return;
         end
-        [~, breath_index] = min(abs(sigh_breath_peak_t - t_click));
+        if ~strcmp(label_defs(current_label_idx).edit_mode, 'breath_event') || ...
+                ~strcmp(get(fh, 'SelectionType'), 'normal') || ...
+                breath_index < 1 || breath_index > numel(sigh_breath_events)
+            return;
+        end
         candidate = sigh_breath_events(breath_index);
         field = label_defs(current_label_idx).field;
         events = event_sets.(field);
-        peak_t = sigh_breath_peak_t(breath_index);
+        peak_index = candidate.start_idx;
         remove = false(size(events));
         if ~isempty(events)
-            remove = [events.start_t] <= peak_t & [events.end_t] > peak_t;
+            remove = [events.start_idx] == peak_index & [events.end_idx] == peak_index;
         end
         if any(remove)
             events(remove) = [];
@@ -981,6 +997,8 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
         else
             event_sets.(field) = sort_events_by_time([events; candidate]);
         end
+        review_coverage_mask(peak_index, current_label_idx) = true;
+        reviewed(current_label_idx) = true;
         refresh_event_patches();
     end
 
@@ -1039,10 +1057,14 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
 
         delete(findall(fh, 'Tag', 'ManualLabelEventPatch'));
         delete(findall(fh, 'Tag', 'ManualLabelAutomaticPatch'));
+        delete(findall(fh, 'Tag', 'ManualSighPeak'));
         delete_temp_patches();
 
         field = label_defs(current_label_idx).field;
-        if strcmp(cfg.start_from, 'latest_reviewed')
+        is_sigh = strcmp(label_defs(current_label_idx).edit_mode, 'breath_event');
+        if is_sigh
+            draw_sigh_peaks();
+        elseif strcmp(cfg.start_from, 'latest_reviewed')
             automatic_events = auto_event_sets.(field);
             for ie = 1:numel(automatic_events)
                 for ia = 1:numel(ax)
@@ -1050,17 +1072,45 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
                 end
             end
         end
-        events = event_sets.(field);
-        for ie = 1:numel(events)
-            for ia = 1:numel(ax)
-                add_event_patch(ax(ia), events(ie), ie);
+        if ~is_sigh
+            events = event_sets.(field);
+            for ie = 1:numel(events)
+                for ia = 1:numel(ax)
+                    add_event_patch(ax(ia), events(ie), ie);
+                end
             end
         end
         title(ax1, sprintf('Manual label editing: lungs | %s', label_defs(current_label_idx).name));
         title(ax2, sprintf('Manual label editing: diaphragm | %s', label_defs(current_label_idx).name));
-        title(ax3, sprintf('Manual label editing: SpO2 | %s', label_defs(current_label_idx).name));
         align_axes_x_widths(ax);
         drawnow;
+    end
+
+    function draw_sigh_peaks()
+    % DRAW_SIGH_PEAKS Draw each panel's actual peak at the shared breath identity.
+        channels = {idx_lungs, idx_diaph};
+        selected = event_sets.sigh;
+        selected_indices = [selected.start_idx];
+        limits = xlim(ax1);
+        for panel = 1:2
+            channel = channels{panel};
+            if isempty(channel), continue; end
+            for breath = 1:size(sigh_panel_peaks, 1)
+                t_peak = sigh_panel_peaks(breath, panel);
+                if ~isfinite(t_peak) || t_peak < limits(1) || t_peak > limits(2), continue; end
+                y_peak = interp1(t_raw, data(:, channel), t_peak, 'linear');
+                if ~isfinite(y_peak), continue; end
+                face = 'none'; edge = [0.35 0.35 0.35];
+                if ismember(sigh_breath_events(breath).start_idx, selected_indices)
+                    face = [0.85 0.10 0.12]; edge = face;
+                end
+                line(ax(panel), t_peak, y_peak, 'LineStyle', 'none', ...
+                    'Marker', 'o', 'MarkerSize', 5, 'MarkerFaceColor', face, ...
+                    'MarkerEdgeColor', edge, 'Tag', 'ManualSighPeak', ...
+                    'HitTest', 'on', 'PickableParts', 'visible', ...
+                    'ButtonDownFcn', @(~,~) toggle_nearest_breath(breath));
+            end
+        end
     end
 
     function add_automatic_reference_patch(target_ax, ev)
@@ -1069,7 +1119,8 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
         y_limits = ylim(target_ax);
         p = patch(target_ax, [ev.start_t ev.end_t ev.end_t ev.start_t], ...
             [y_limits(1) y_limits(1) y_limits(2) y_limits(2)], ...
-            'none', 'EdgeColor', [0.20 0.45 0.90], 'LineStyle', '--', ...
+            [0.20 0.45 0.90], 'FaceColor', 'none', ...
+            'EdgeColor', [0.20 0.45 0.90], 'LineStyle', '--', ...
             'LineWidth', 1, 'Tag', 'ManualLabelAutomaticPatch', ...
             'HitTest', 'off', 'PickableParts', 'none');
         try
@@ -1146,81 +1197,18 @@ function [event_sets, reviewed_fields, review_coverage_mask] = run_editor( ...
     % FINISH_EDITING Resume execution while retaining the working annotations.
 
         if isgraphics(fh)
+            committed = true;
+            finished = true;
             uiresume(fh);
         end
     end
-end
 
-function [events, peak_t] = build_sigh_breath_candidates(resp_cycles, N, fs)
-% BUILD_SIGH_BREATH_CANDIDATES Create midpoint-bounded events for all belts.
-
-    events = empty_events();
-    peak_t = zeros(0, 1);
-    belt_names = {'lungs', 'diaph'};
-    for i = 1:numel(belt_names)
-        name = belt_names{i};
-        if ~isstruct(resp_cycles) || ~isfield(resp_cycles, name) || ...
-                ~isfield(resp_cycles.(name), 'peak_t')
-            continue;
-        end
-        belt = resp_cycles.(name);
-        if isfield(belt, 'available') && ~belt.available
-            continue;
-        end
-        belt_peaks = belt.peak_t(:);
-        valid = isfinite(belt_peaks) & belt_peaks >= 0 & ...
-            belt_peaks <= (N - 1) / fs;
-        if isfield(belt, 'amp') && numel(belt.amp) == numel(belt_peaks)
-            amplitude = belt.amp(:);
-            valid = valid & isfinite(amplitude) & amplitude > 0;
-        end
-        belt_peaks = belt_peaks(valid);
-        belt_peaks = unique(sort(belt_peaks));
-        [belt_events, belt_centers] = midpoint_breath_events( ...
-            belt_peaks, N, fs);
-        events = [events; belt_events]; %#ok<AGROW>
-        peak_t = [peak_t; belt_centers]; %#ok<AGROW>
-    end
-    if isempty(peak_t)
-        return;
-    end
-    peak_sample = max(1, min(N, round(peak_t * fs) + 1));
-    [~, unique_index] = unique(peak_sample, 'stable');
-    events = events(unique_index);
-    peak_t = peak_t(unique_index);
-    [peak_t, order] = sort(peak_t);
-    events = events(order);
-end
-
-function [events, centers] = midpoint_breath_events(peak_t, N, fs)
-% MIDPOINT_BREATH_EVENTS Bound each breath halfway to neighboring peaks.
-
-    centers = peak_t(:);
-    events = repmat(empty_events(), 0, 1);
-    if isempty(centers)
-        return;
-    end
-    events = repmat(make_event('sigh', 0, 0, N, fs), numel(centers), 1);
-    for i = 1:numel(centers)
-        if i == 1
-            if numel(centers) > 1
-                start_t = max(0, centers(i) - 0.5 * (centers(i + 1) - centers(i)));
-            else
-                start_t = max(0, centers(i) - 0.5);
-            end
-        else
-            start_t = 0.5 * (centers(i - 1) + centers(i));
-        end
-        if i == numel(centers)
-            if numel(centers) > 1
-                end_t = min(N / fs, centers(i) + 0.5 * (centers(i) - centers(i - 1)));
-            else
-                end_t = min(N / fs, centers(i) + 0.5);
-            end
-        else
-            end_t = 0.5 * (centers(i) + centers(i + 1));
-        end
-        events(i) = make_event('sigh', start_t, end_t, N, fs);
+    function cancel_editing()
+    % CANCEL_EDITING Discard the pending round; no review file is written.
+        committed = false;
+        finished = true;
+        drag_active = false;
+        if isgraphics(fh), uiresume(fh); end
     end
 end
 
@@ -1268,7 +1256,8 @@ end
 function ev = make_event(event_type, start_t, end_t, N, fs)
 % MAKE_EVENT Snap dragged time boundaries to a valid sample interval.
 % ev is scalar with type, start_idx, end_idx, half-open start_t/end_t in
-% seconds, and duration in seconds; indices are clipped to N at sampling rate fs.
+% seconds, duration in seconds, and an unspecified belt source. Indices are
+% clipped to N at sampling rate fs.
 
     start_idx = max(1, min(N, round(start_t * fs) + 1));
     end_idx = max(start_idx, min(N, round(end_t * fs)));
@@ -1280,13 +1269,24 @@ function ev = make_event(event_type, start_t, end_t, N, fs)
 
     start_t = (start_idx - 1) / fs;
     end_t = end_idx / fs;
-    ev = struct( ...
-        'type', event_type, ...
-        'start_idx', start_idx, ...
-        'end_idx', end_idx, ...
-        'start_t', start_t, ...
-        'end_t', end_t, ...
-        'duration', (end_idx - start_idx + 1) / fs);
+    ev = editable_event_template();
+    ev.type = event_type;
+    ev.start_idx = start_idx;
+    ev.end_idx = end_idx;
+    ev.start_t = start_t;
+    ev.end_t = end_t;
+    ev.duration = (end_idx - start_idx + 1) / fs;
+end
+
+function ev = editable_event_template()
+% EDITABLE_EVENT_TEMPLATE Define the GUI event schema independently of path helpers.
+    ev = struct('type', '', 'start_idx', 1, 'end_idx', 1, ...
+        'start_t', 0, 'end_t', 0, 'duration', 0, 'belt', '');
+end
+
+function events = empty_editable_events()
+% EMPTY_EDITABLE_EVENTS Keep empty and populated GUI events schema-compatible.
+    events = repmat(editable_event_template(), 0, 1);
 end
 
 function events = sort_events_by_time(events)

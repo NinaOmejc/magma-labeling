@@ -1,11 +1,10 @@
-function outputs = build_group_phenotype_tables(group_table, out_dir)
-% BUILD_GROUP_PHENOTYPE_TABLES Write fixed-order cohort phenotype matrices.
+function outputs = build_group_phenotype_tables(group_table)
+% BUILD_GROUP_PHENOTYPE_TABLES Build fixed-order cohort phenotype matrices.
 % Values are read from each recording's authoritative numeric_summary struct;
 % no feature scalar is recalculated here. Automatic and reviewed provenance are
 % kept in separate raw, unscaled tables with aligned availability and coverage.
 
     schema = get_phenotype_feature_schema();
-    if ~isfolder(out_dir), mkdir(out_dir); end
     n_recordings = height(group_table);
     n_features = schema.n_features;
 
@@ -36,39 +35,6 @@ function outputs = build_group_phenotype_tables(group_table, out_dir)
     outputs.long = [long_table(identifiers, auto, schema, 'automatic'); ...
         long_table(identifiers, reviewed, schema, 'reviewed')];
 
-    writetable(outputs.summary_automatic, fullfile(out_dir, ...
-        'phenotype_summary_automatic.csv'));
-    writetable(outputs.summary_reviewed, fullfile(out_dir, ...
-        'phenotype_summary_reviewed.csv'));
-    writetable(outputs.availability_automatic, fullfile(out_dir, ...
-        'phenotype_availability_automatic.csv'));
-    writetable(outputs.availability_reviewed, fullfile(out_dir, ...
-        'phenotype_availability_reviewed.csv'));
-    writetable(outputs.coverage_automatic, fullfile(out_dir, ...
-        'phenotype_coverage_automatic.csv'));
-    writetable(outputs.coverage_reviewed, fullfile(out_dir, ...
-        'phenotype_coverage_reviewed.csv'));
-    writetable(outputs.dictionary, fullfile(out_dir, ...
-        'phenotype_dictionary.csv'));
-    writetable(outputs.long, fullfile(out_dir, ...
-        'phenotype_summary_long.csv'));
-
-    phenotype_summary_automatic = outputs.summary_automatic;
-    phenotype_summary_reviewed = outputs.summary_reviewed;
-    phenotype_availability_automatic = outputs.availability_automatic;
-    phenotype_availability_reviewed = outputs.availability_reviewed;
-    phenotype_coverage_automatic = outputs.coverage_automatic;
-    phenotype_coverage_reviewed = outputs.coverage_reviewed;
-    phenotype_dictionary = outputs.dictionary;
-    phenotype_summary_long = outputs.long;
-    save(fullfile(out_dir, 'phenotype_summary.mat'), ...
-        'phenotype_summary_automatic', ...
-        'phenotype_summary_reviewed', ...
-        'phenotype_availability_automatic', ...
-        'phenotype_availability_reviewed', ...
-        'phenotype_coverage_automatic', ...
-        'phenotype_coverage_reviewed', ...
-        'phenotype_dictionary', 'phenotype_summary_long');
 end
 
 function loaded = load_phenotypes(filename)

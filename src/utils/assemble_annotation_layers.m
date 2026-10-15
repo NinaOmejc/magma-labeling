@@ -57,10 +57,13 @@ function annotations = assemble_annotation_layers( ...
         end
     end
 
-    working_events_reviewed = normalize_event_types_and_meta( ...
-        merge_events(reviewed_parts), config.fs);
+    working_events_reviewed = normalize_review_events(reviewed_parts, config.fs);
     mask_reviewed = events_to_time_mask(working_events_reviewed, N, config);
     events_reviewed = label_mask_to_events(mask_reviewed, label_names, config.fs);
+    % Preserve the authoritative breath list even if sigh mask samples touch.
+    events_reviewed = events_reviewed(~strcmp({events_reviewed.type}, 'sigh'));
+    sigh_events = working_events_reviewed(strcmp({working_events_reviewed.type}, 'sigh'));
+    events_reviewed = normalize_review_events({events_reviewed, sigh_events}, config.fs);
 
     annotations = struct( ...
         'label_names', {label_names}, ...

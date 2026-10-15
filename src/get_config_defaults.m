@@ -15,7 +15,18 @@ function config = get_config_defaults()
     config.fs = 200;                                                                                   % native/master sampling frequency (Hz) for all aligned physiological signals
     config.data_columns = {'ECG1', 'ECG2', 'SpO₂', 'Resp-Lungs', 'Blood Pressure', 'Resp-Diaphragm'};  % column names in raw data
     config.input_filename_pattern = 'ECG1_ECG2_SpO2_RespL_BP_RespD_fs200_Sub{subject}_Pom{measure}_DeTr_Norm.dat'; % The generic name of the data files
-    config.labels = get_labels();                                          % canonical label names and indices
+    config.labels = get_labels();
+    % Group analysis reads saved results only. Empty subjects discovers all saved IDs.
+    config.group = struct();
+    config.group.subjects = [];
+    config.group.measurements = [1 2];
+    config.group.exclude_subjects = config.remove_subjects;
+    config.group.control_subjects = [];
+    config.group.patient_subjects = [];
+    config.group.paired_measurements = [1 2];
+    config.group.plot_layer = 'automatic';
+    config.group.plot_label_histograms = true;
+    config.group.plot_stratified_histograms = true;
     config.make_figs_visible = 'on';                                      % create figures hidden during batch runs, so they dont pop up (for faster run)
     config.overwrite_results = true;                                      % *** Recompute even if label output already exists
     config.overwrite_features = false;                                     % *** Recompute respiratory features even if "*_features.mat" exists
@@ -51,8 +62,8 @@ function config = get_config_defaults()
     config.problems.missing_lung_belt = [];
 
     %---- RESPIRATION / BREATHING AMPLITUDE EXTRACTION SETTINGS ----
-    config.resp.min_peak_dist_sec = 1.0;    % *** Peak selection; min time between breaths (tune if needed)
-    config.resp.min_peak_prom     = 0.25;    % *** Peak selection; key knob: increase to reduce extra peaks. But then this alters also apnea detection, where the amplitudes are extremely small. Trade-off...
+    config.resp.min_peak_dist_sec = 1.5;    % *** Peak selection; min time between breaths (tune if needed)
+    config.resp.min_peak_prom     = 0.5;    % *** Peak selection; key knob: increase to reduce extra peaks. But then this alters also apnea detection, where the amplitudes are extremely small. Trade-off...
     config.resp.min_peak_height   = -1.0;   % only peaks that have standardized amplitude above "min_peak_height" = -1.0 are allowed.
     config.resp.smooth_sec       = 0.25;    % Pre-processing; light smoothing (seconds); set to 0 to disable
     config.resp.trough_method = 'min';      % Trough selection; 'prctile' or 'min' (default)
@@ -256,7 +267,7 @@ function config = get_config_defaults()
     config.LabelEdit.reviewer_role = 'researcher'; % flexible non-identifying role stored with the review round
     config.LabelEdit.reviewer_id = '';           % optional reviewer identifier; may remain empty
     config.LabelEdit.notes = '';                 % optional free-text review notes
-    config.LabelEdit.window_sec = 400;           % *** visible time span for manual label GUI scrolling
+    config.LabelEdit.window_sec = 600;           % visible time span for manual label GUI scrolling
     config.LabelEdit.min_interval_sec = 1;       % minimum drag interval accepted as a manual event
     config.LabelEdit.filename_suffix = '_manual_label_events.mat';
 

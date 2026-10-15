@@ -12,7 +12,7 @@ config = get_config_defaults();
 config.path_data_in = 'D:\Projects\MAGMA\raw_data';
 config.path_results_out = 'D:\Projects\MAGMA\data_analysis\statistical_labeling';
 config.fs = 200;
-config.subjects = [40:142];
+config.subjects = [40];
 config.remove_subjects = [3 30 91 135];
 config.measurements = [1 2];
 config.subjects(ismember(config.subjects, config.remove_subjects)) = [];
@@ -21,10 +21,10 @@ config.subjects(ismember(config.subjects, config.remove_subjects)) = [];
 config.problems.missing_lung_belt = [ ...                  % known [subject, measurement] recordings without a usable lung belt (e.g. first 20 subjects have a broken belt)
     (1:20)', ones(20, 1); ...
     (1:20)', 2 * ones(20, 1); ...
-    23, 1; 23, 2; ...
-    33, 1; 33, 2; ...
-    35, 1; 35, 2; ...
-    40, 1; 40, 2; ...
+    % 23, 1; 23, 2; ...
+    % 33, 1; 33, 2; ...
+    % 35, 1; 35, 2; ...
+    % 40, 1; 40, 2; ...
     ];
 
 
@@ -32,7 +32,7 @@ config.problems.missing_lung_belt = [ ...                  % known [subject, mea
 config.overwrite_results = false;       % If true, recompute even if "*_results.mat" output already exists.
 config.overwrite_features = false;      % If true, recompute respiratory features even if "*_features.mat" already exists.
 config.verbosity = 2;                   % 1 = concise progress, 2 = detailed progress.
-config.execution.mode = 'analyze';      % 'analyze', 'analyze_and_review', or 'review_only'.
+config.execution.mode = 'review_only';      % 'analyze', 'analyze_and_review', or 'review_only'.
 
 % LABEL SELECTION
 config.execution.selected_labels = {};
@@ -66,7 +66,8 @@ config.LabelMask.do_plot = true;                            % generate a label-m
 % MANUAL REVIEW
 config.resp.manual_control = true;                          % separately review respiratory peaks/troughs before label detection; cached after confirmation
 config.LabelEdit.start_from = 'automatic';
-config.LabelEdit.reviewer_role = 'researcher';
+config.LabelEdit.reviewer_role = 'clinican';
+config.LabelEdit.window_sec = 600;                           % visible time span for manual label GUI scrolling
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % RUN THE MAIN SCRIPT

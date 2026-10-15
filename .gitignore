@@ -20,3 +20,11 @@ test_data/*.csv
 !example/data/
 !example/data/*.dat
 example/output/
+
+# Confidential integrated metadata (keep production outputs outside the repo)
+metadata_outputs/
+src/metadata/outputs/
+MAGMA_master_database*.xlsx
+MAGMA_master_database*_audit.csv
+visit_order_overrides*.csv
+study_status_overrides*.csv

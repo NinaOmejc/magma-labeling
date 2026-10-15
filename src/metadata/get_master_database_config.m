@@ -1,0 +1,56 @@
+function config = get_master_database_config(group_file, collaborator_file, output_dir, stress_test_file)
+% GET_MASTER_DATABASE_CONFIG Explicit, source-specific metadata import schemas.
+% This configuration is independent of the physiological analysis pipeline.
+    arguments
+        group_file (1,1) string
+        collaborator_file (1,1) string
+        output_dir (1,1) string
+        stress_test_file (1,1) string = ""
+    end
+    config.output_dir = output_dir;
+    config.output_basename = 'MAGMA_master_database';
+    config.visit_order_overrides_file = fullfile(output_dir, 'visit_order_overrides.csv');
+    config.study_status_overrides_file = fullfile(output_dir, 'study_status_overrides.csv');
+    config.export_mat = true;
+    config.mat_version = '-v7'; % compact native tables; use -v7.3 for very large snapshots
+    config.format_workbook = true;
+    config.source_precedence = strings(0,1); % highest priority first; empty rejects conflicts
+    config.source_precedence_reason = '';   % required when precedence is configured
+    config.participant_fields = {'dob', 'sex'}; % verified stable characteristics only
+    config.baseline_content_start = 'dob';
+    config.baseline_content_end = 'fh_sib_cvd';
+    config.study_date_formats = {'yyyy-MM-dd'}; % never infer dates from numeric IDs
+
+    config.sources = [ ...
+        schema('collaborator_m1', collaborator_file, 'Measurement_1', 'Physiology', 2, 1, 'Subject', '', '', 1, '', '', true), ...
+        schema('collaborator_m2', collaborator_file, 'Measurement_2', 'Physiology', 2, 1, 'Subject', '', '', 2, '', '', true), ...
+        schema('collaborator_questionnaire', collaborator_file, 'Questionnaire', 'Questionnaire', 2, 1, 'Sub_code', '', '', NaN, 'grp', 'dt_study', false), ...
+        schema('magma_labels', group_file, 'Label_burden', 'Label_burden', 1, 0, 'subject', 'recording_id', 'measure', NaN, 'subject_group', '', false), ...
+        schema('magma_phenotypes', group_file, 'Phenotypes', 'Phenotypes', 1, 0, 'subject', 'recording_id', 'measure', NaN, 'subject_group', '', false)];
+    config.repeat_mapping = schema('repeat_mapping', collaborator_file, ...
+        'Repeat measurements_mapping ID', 'Repeat_ID_mapping', 1, 0, '', '', '', NaN, '', '', false);
+    config.repeat_mapping.parent_column = 'first measurement ID';
+    config.repeat_mapping.child_column = 'repeated measurement ID';
+    config.references = struct( ...
+        'name', {'Questionnaire_dictionary', 'Drug_mapping_key', 'Job_mapping_key', 'ICD10_mapping_key', 'Source_exclusions'}, ...
+        'file', repmat({char(collaborator_file)},1,5), ...
+        'sheet', {'Questionnaire_data dictionary', 'Drug_mapping key', 'Job_mapping key', 'NA - icd10_chapters_pl', 'Not analyzed patients'});
+    if strlength(stress_test_file)>0
+        stress = schema('stress_tests', stress_test_file, 'Stress_tests', ...
+            'StressTest', 1, 0, 'Sub_code', '', '', NaN, '', '', false);
+        config.sources(end+1) = stress;
+        config.references(end+1) = struct('name','StressTest_single_measurement', ...
+            'file',char(stress_test_file),'sheet','IDs with 1 measurement only');
+        config.references(end+1) = struct('name','StressTest_inconsistencies', ...
+            'file',char(stress_test_file),'sheet','Data inconsistencies');
+    end
+end
+
+function s = schema(id, file, sheet, target, header, category, subject, recording, measure, fixed, group, date, prefixes)
+    s = struct('source_id', id, 'file', char(file), 'sheet', sheet, ...
+        'target', target, 'header_row', header, 'category_row', category, ...
+        'first_data_row', header+1, 'subject_column', subject, ...
+        'recording_column', recording, 'measure_column', measure, ...
+        'fixed_measure', fixed, 'group_column', group, 'study_date_column', date, ...
+        'category_prefixes', prefixes, 'column_map', {cell(0,2)});
+end

@@ -1,4 +1,4 @@
-function group_table = build_group_label_table(config_or_results_path)
+function [group_table, cohort] = build_group_label_table(config_or_results_path, export_workbooks)
 % BUILD_GROUP_LABEL_TABLE Aggregate recording result files for cohort analysis.
 %
 % Inputs:
@@ -9,9 +9,10 @@ function group_table = build_group_label_table(config_or_results_path)
 %                 recording duration, per-label availability/burden/event/review
 %                 summaries, belt/reference QC, overlap, and numeric detector
 %                 summaries. Dynamic per-label fields use canonical short names.
-% Also writes group_label_summary CSV/MAT, fixed recording-level phenotype summaries,
-% measure-comparability metadata, per-event durations, compact candidate-event
-% QC, and cohort QC summaries.
+% Writes two workbooks and one internal MAT cache. Pass false as the second
+% input to defer workbook export until descriptive tables are ready.
+
+    if nargin < 2, export_workbooks = true; end
 
     if nargin < 1 || isempty(config_or_results_path)
         config = get_config_defaults();
@@ -48,26 +49,23 @@ function group_table = build_group_label_table(config_or_results_path)
         group_table = struct2table([rows{:}], 'AsArray', true);
     end
 
-    out_csv = fullfile(out_dir, 'group_label_summary.csv');
-    out_mat = fullfile(out_dir, 'group_label_summary.mat');
-    writetable(group_table, out_csv);
-    save(out_mat, 'group_table');
-    build_group_phenotype_tables(group_table, out_dir);
-    write_measure_comparability_table(out_dir);
+    cohort = struct();
+    cohort.phenotypes = build_group_phenotype_tables(group_table);
+    cohort.measure_comparability = build_measure_comparability_table();
     event_duration_table = build_group_event_duration_table(files);
     candidate_event_qc = build_group_candidate_event_table(files);
     cohort_qc = build_cohort_qc_summary( ...
         group_table, canonical_labels, event_duration_table, candidate_event_qc);
-    save(fullfile(out_dir, 'cohort_qc_summary.mat'), 'cohort_qc');
-    if ~isempty(cohort_qc.by_label)
-        writetable(cohort_qc.by_label, ...
-            fullfile(out_dir, 'cohort_label_qc_summary.csv'));
+    cohort.qc = cohort_qc;
+    cohort.event_durations = event_duration_table;
+    cohort.candidate_events = candidate_event_qc;
+    cache_dir = fullfile(out_dir, '_cache');
+    if ~isfolder(cache_dir), mkdir(cache_dir); end
+    save(fullfile(cache_dir, 'group_analysis_data.mat'), 'group_table', 'cohort');
+    if export_workbooks
+        paths = write_group_workbooks(results_path, group_table, cohort);
+        log_message(config, 1, 'Saved group label summary: %s', paths{1});
     end
-    writetable(event_duration_table, ...
-        fullfile(out_dir, 'cohort_event_durations.csv'));
-    writetable(candidate_event_qc, ...
-        fullfile(out_dir, 'cohort_candidate_events.csv'));
-    log_message(config, 1, 'Saved group label summary: %s', out_csv);
 end
 
 function row = result_file_to_summary_row(result_file, config, canonical_labels)
@@ -472,9 +470,9 @@ function row = add_belt_reference_fields(row, resp_ref, belt_name)
         get_struct_value(belt, 'reference_action', '')));
 end
 
-function out_csv = write_measure_comparability_table(out_dir)
-% WRITE_MEASURE_COMPARABILITY_TABLE Write measure comparability table.
-% Creates group_measure_comparability.csv with measure_family, comparability,
+function comparability_table = build_measure_comparability_table()
+% BUILD_MEASURE_COMPARABILITY_TABLE Describe measure comparability.
+% Includes measure_family, comparability,
 % units_or_scale, and interpretation columns distinguishing absolute measures,
 % within-record normalized ratios, and uncalibrated raw belt amplitudes.
 
@@ -528,8 +526,6 @@ function out_csv = write_measure_comparability_table(out_dir)
         "Do not compare raw belt magnitude between subjects"];
 
     comparability_table = table(measure_family, comparability, units_or_scale, interpretation);
-    out_csv = fullfile(out_dir, 'group_measure_comparability.csv');
-    writetable(comparability_table, out_csv);
 end
 
 function value = get_struct_value(s, name, default_value)
@@ -727,14 +723,18 @@ function files = filter_result_files(files, config)
 
     subjects = get_group_filter(config, 'subjects');
     measures = get_group_filter(config, 'measurements');
+    excluded = get_group_filter(config, 'exclude_subjects');
 
-    if isempty(subjects) && isempty(measures)
+    if isempty(subjects) && isempty(measures) && isempty(excluded)
         return;
     end
 
     keep = true(size(files));
     for i = 1:numel(files)
         [subject, measure] = parse_subject_measure(fullfile(files(i).folder, files(i).name));
+        if ismember(subject, excluded)
+            keep(i) = false;
+        end
         if ~isempty(subjects) && ~ismember(subject, subjects)
             keep(i) = false;
         end

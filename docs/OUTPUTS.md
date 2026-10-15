@@ -240,45 +240,65 @@ summaries use only explicitly reviewed and physiologically assessable regions.
 
 ## Group-level outputs
 
-Group outputs are written to:
+Run `run('src/main_group.m')` to summarize saved `*_results.mat` files.
+The output directory now contains two workbooks and the retained plots:
 
 ```text
 <config.path_results_out>/group_analysis/
+    group_summary.xlsx
+    group_details.xlsx
+    descriptive_overview/
+        group_label_burden_histograms_automatic.png
+        group_label_burden_histograms_automatic_Control.png
+        group_label_burden_histograms_automatic_Patient.png
+        group_label_burden_histograms_automatic_Control_Patient.png
+    _cache/
+        group_analysis_data.mat
 ```
 
-The broad label and QC outputs remain:
+Group-specific plots require matching Control or Patient metadata; the
+combined plot requires both. Histogram bars show the percentage of assessable
+subjects within each cohort and measurement; the workbook retains raw counts.
+The layout and 5-percentage-point bins are unchanged. All other group plot
+generation, including the complete diagnostic overview, has been removed. The plot extension follows
+`config.plot_format`.
 
-```text
-group_label_summary.csv
-group_label_summary.mat
-cohort_qc_summary.mat
-cohort_label_qc_summary.csv
-cohort_event_durations.csv
-cohort_candidate_events.csv
-group_measure_comparability.csv
-```
+Each workbook starts with an Index sheet describing its tables and row counts.
 
-Dedicated phenotype outputs are:
+| Workbook | Worksheets | Meaning |
+|---|---|---|
+| `group_summary.xlsx` | Label_burden | One recording and label per row, automatic and reviewed burdens, availability, review coverage, and event counts. Fractions remain 0–1. |
+| | Phenotypes | The 22 schema-ordered raw features per recording, with an explicit automatic/reviewed layer column. |
+| | Descriptive | Labels and features together, with variable type, annotation layer, units, measurement, sample count, median, IQR, and quantiles. |
+| | Paired_summary | Labels and features together, with both measurement IDs and valid-pair counts. Label changes use percentage points; feature changes retain their units. |
+| `group_details.xlsx` | Recordings, Cohort_label_QC | Full recording summaries and cohort label QC. |
+| | Event_durations, Candidate_events | Accepted event durations and candidate acceptance/rejection details. |
+| | Phenotype_QC, Feature_dictionary, Measure_comparability | Values, availability, coverage, missing reasons, definitions, and interpretation. |
+| | Paired_changes, Subject_groups | Subject-matched values, availability flags, changes, valid-pair flags, and metadata provenance. |
+| | Label_counts, Label_bins | Exact counts and bins for each generated histogram, combined with an All/Control/Patient cohort column. |
+| | Manifest | Current output paths, cohort counts, selected layer, metadata source, and paired measurements. |
 
-```text
-phenotype_summary_automatic.csv
-phenotype_summary_reviewed.csv
-phenotype_availability_automatic.csv
-phenotype_availability_reviewed.csv
-phenotype_coverage_automatic.csv
-phenotype_coverage_reviewed.csv
-phenotype_dictionary.csv
-phenotype_summary_long.csv
-phenotype_summary.mat
-```
+`build_group_label_table` alone exports the recording-level sheets; the
+descriptive, paired, histogram, and manifest sheets are added by `main_group`.
+Workbooks are rebuilt on rerun so old sheets and rows do not persist. No
+separate group CSVs are generated. `_cache/group_analysis_data.mat` preserves
+the complete MATLAB tables, including the wide availability and coverage
+matrices, for code use.
 
-The wide summary, availability, and coverage files begin with:
+`config.group.plot_layer` selects the descriptive and paired table layer.
+Reviewed summaries use only explicitly reviewed, physiologically assessable
+regions. They never fill uncovered regions from automatic annotations. A
+finite zero indicates assessed absence; NaN in MATLAB and blank numerical
+cells in Excel indicate missing or unavailable evidence. Plotting is retained
+only for the automatic layer.
 
-```text
-recording_id, subject, measure, subject_group, analysis_id
-```
+Histogram zeros remain in the first bin; unavailable observations are omitted.
+Subjects with unknown group remain in the all-subject histogram and are
+omitted from the Control/Patient splits. Group membership comes from
+Questionnaire `grp` (0=Control, 1=Patient) or explicit group lists.
 
-and then contain the 21 schema-ordered fields. `recording_id` uses
-`Sub<subject>_M<measure>`. `phenotype_dictionary.csv` documents every field;
-`phenotype_summary_long.csv` contains one row per recording, annotation layer,
-and numeric-summary field.
+Labels can overlap, so burdens should not be summed to 100%. The 22 phenotype
+features are signal-derived numerical descriptions, not diagnoses. Respiratory
+belt magnitudes are not calibrated tidal volumes. Pair differences are
+exploratory descriptions; M1 to M2 compares pre-exercise and post-exercise
+recordings before rehabilitation. No hypothesis tests or clustering are run.

@@ -1,11 +1,13 @@
-function fig = plot_label_mask(label_mask, label_names, config, availability_reason)
+function fig = plot_label_mask(label_mask, label_names, config, availability_reason, events, automatic_mask, automatic_events)
 % PLOT_LABEL_MASK Render detected label states as a time-by-label raster.
 %
 % Inputs:
 %   label_mask  - Nsample x Nlabel logical matrix on the native sample grid.
 %   label_names - Nlabel cell array of canonical short label names.
 %   config      - Pipeline settings supplying fs, label metadata, and plot options.
-%   availability_reason - Optional per-label reasons; not_computed rows are gray.
+%   availability_reason - Original detector availability, independent of review.
+%   config.LabelMask.review_coverage - Optional explicit Nsample x Nlabel coverage.
+%   config.LabelMask.assessable_mask - Optional native-sample physiological support.
 %
 % Outputs:
 %   fig - Figure handle while plotting; empty after save_figure or when disabled.
@@ -35,7 +37,34 @@ function fig = plot_label_mask(label_mask, label_names, config, availability_rea
     end
     not_computed = strcmp(availability_reason, 'not_computed');
     display_mask = double(label_mask');
-    display_mask(not_computed, :) = 2;
+    sigh_row = find(strcmp(label_names, 'sigh'), 1);
+    discrete_sigh = nargin >= 5;
+    if discrete_sigh
+        display_mask(sigh_row, :) = 0;
+    end
+    reviewed_plot = isfield(config.LabelMask, 'review_coverage');
+    if reviewed_plot
+        if ~isequal(size(config.LabelMask.review_coverage), size(label_mask))
+            error('MAGMA:LabelMask:CoverageAlignment', ...
+                'review_coverage must align with label_mask.');
+        end
+        % Zeros outside explicit coverage are unknown, never accepted negatives.
+        display_mask(~logical(config.LabelMask.review_coverage')) = 2;
+        unassessable = repmat(~ismember(availability_reason(:), ...
+            {'available', 'unreviewed', 'not_computed'}), 1, n_samples);
+        if isfield(config.LabelMask, 'assessable_mask')
+            if ~isequal(size(config.LabelMask.assessable_mask), size(label_mask))
+                error('MAGMA:LabelMask:AssessabilityAlignment', ...
+                    'assessable_mask must align with label_mask.');
+            end
+            unassessable = unassessable | ~logical(config.LabelMask.assessable_mask');
+        end
+        display_mask(unassessable) = 4;
+        % Computation status comes from the detector metadata and takes precedence.
+        display_mask(not_computed, :) = 3;
+    else
+        display_mask(not_computed, :) = 2;
+    end
 
     t_sec = (0:n_samples-1) / config.fs;
     row_labels = resolve_row_labels(label_names, config, n_labels);
@@ -46,6 +75,9 @@ function fig = plot_label_mask(label_mask, label_names, config, availability_rea
         'Position', [80 80 1500 fig_height], ...
         'Visible', config.make_figs_visible, ...
         'Color', 'w');
+    if isfield(config, 'fig_width') && isfield(config, 'fig_height')
+        fig.Position(3:4) = [config.fig_width config.fig_height];
+    end
 
     ax = axes('Parent', fig);
     imagesc(ax, t_sec, 1:n_labels, display_mask);
@@ -66,18 +98,78 @@ function fig = plot_label_mask(label_mask, label_names, config, availability_rea
 
     xlabel(ax, 'Time (s)');
     ylabel(ax, 'Dysfunction');
-    title(ax, sprintf('Detected Dysfunction Mask | Subject %d | Measurement %d', config.subject, config.measure));
+    heading = 'Detected Dysfunction Mask';
+    base_name = 'label_mask';
+    if isfield(config.LabelMask, 'title'), heading = config.LabelMask.title; end
+    if isfield(config.LabelMask, 'basename'), base_name = config.LabelMask.basename; end
+    title(ax, sprintf('%s | Subject %d | Measurement %d', heading, config.subject, config.measure));
 
     cmap = build_label_mask_colormap(config);
+    state_labels = {'Absent', 'Present', 'Not computed'};
+    if reviewed_plot
+        cmap = [1 1 1; 0.78 0.12 0.12; 0.88 0.88 0.88; 0.35 0.35 0.35];
+        state_labels = {'Reviewed negative', 'Reviewed positive', 'Unreviewed', 'Not computed'};
+        if any(display_mask(:) == 4)
+            cmap(end+1, :) = [0.94 0.83 0.60];
+            state_labels{end+1} = 'Unassessable';
+        end
+    end
     colormap(ax, cmap);
-    caxis(ax, [-0.5 2.5]);
+    ax.CLim = [-0.5 size(cmap, 1)-0.5];
 
     cb = colorbar(ax);
-    cb.Ticks = [0 1 2];
-    cb.TickLabels = {'Absent', 'Present', 'Not computed'};
+    cb.Ticks = 0:size(cmap, 1)-1;
+    cb.TickLabels = state_labels;
+    cb.FontSize = 10;
     ylabel(cb, 'Label state');
 
     hold(ax, 'on');
+    automatic_color = [0.15 0.35 0.75];
+    legend_handles = gobjects(0);
+    legend_labels = {};
+    if nargin >= 6 && ~isempty(automatic_mask)
+        for row = 1:n_labels
+            if row == sigh_row || not_computed(row), continue; end
+            change = diff([false; logical(automatic_mask(:, row)); false]);
+            first = find(change == 1); last = find(change == -1)-1;
+            for i = 1:numel(first)
+                rectangle(ax, 'Position', [(first(i)-1)/config.fs, row-0.32, ...
+                    (last(i)-first(i)+1)/config.fs, 0.64], ...
+                    'FaceColor', 'none', 'EdgeColor', automatic_color, ...
+                    'LineStyle', '--', 'LineWidth', 1.6, ...
+                    'HandleVisibility', 'off', 'Tag', 'AutomaticDetectionOutline');
+            end
+        end
+        legend_handles(end+1) = plot(ax, nan, nan, '--', ...
+            'Color', automatic_color, 'LineWidth', 1.6);
+        legend_labels{end+1} = 'Automatic detection (blue dashed outline)';
+    end
+    if discrete_sigh
+        allowed_samples = repmat(~not_computed(sigh_row), 1, n_samples);
+        if reviewed_plot
+            allowed_samples = display_mask(sigh_row, :) < 2;
+        end
+        draw_sigh_event_markers(ax, events, sigh_row, cmap(2, :), true, ...
+            config.fs, allowed_samples, 5);
+        legend_handles(end+1) = plot(ax, nan, nan, 'o', 'LineStyle', 'none', ...
+            'MarkerSize', 5, 'MarkerEdgeColor', cmap(2, :), 'MarkerFaceColor', cmap(2, :));
+        legend_labels{end+1} = 'Automatic sigh (filled red dot)';
+        if reviewed_plot
+            legend_labels{end} = 'Reviewed sigh (filled red dot)';
+        end
+        if nargin >= 7
+            if reviewed_plot
+                allowed_samples = display_mask(sigh_row, :) ~= 3 & display_mask(sigh_row, :) ~= 4;
+            end
+            % A larger hollow marker stays visible around an overlapping red dot.
+            draw_sigh_event_markers(ax, automatic_events, sigh_row, automatic_color, ...
+                false, config.fs, allowed_samples, 8);
+            legend_handles(end+1) = plot(ax, nan, nan, 'o', 'LineStyle', 'none', ...
+                'MarkerSize', 8, 'MarkerEdgeColor', automatic_color, ...
+                'MarkerFaceColor', 'none', 'LineWidth', 1.4);
+            legend_labels{end+1} = 'Automatic sigh (hollow blue dot)';
+        end
+    end
     for y = 1.5:1:(n_labels - 0.5)
         plot(ax, xlim(ax), [y, y], '-', ...
             'Color', [0.45 0.45 0.45], 'LineWidth', 1.0, 'HandleVisibility', 'off');
@@ -89,8 +181,45 @@ function fig = plot_label_mask(label_mask, label_names, config, availability_rea
     ax.GridAlpha = 0.12;
     ax.MinorGridAlpha = 0.08;
 
-    save_figure(config, 'label_mask');
+    % Reserve margins for long row names, state labels, and the separate key.
+    drawnow;
+    ax.Units = 'normalized';
+    left = max(0.13, ax.TightInset(1) + 0.02);
+    bottom = 0.12 + 0.04 * ~isempty(legend_handles);
+    ax.Position = [left bottom 0.82-left 0.90-bottom];
+    cb.Units = 'normalized';
+    cb.Position = [0.84 bottom 0.014 0.90-bottom];
+    if ~isempty(legend_handles)
+        key = legend(ax, legend_handles, legend_labels, ...
+            'Orientation', 'horizontal', 'Location', 'southoutside', ...
+            'Box', 'off', 'FontSize', 10, 'AutoUpdate', 'off');
+        key.Units = 'normalized';
+        key.Position(1) = max(0.02, min(0.98-key.Position(3), ...
+            left + (ax.Position(3)-key.Position(3))/2));
+        key.Position(2) = 0.02;
+    end
+
+    save_figure(config, base_name);
     fig = [];
+end
+
+function draw_sigh_event_markers(ax, events, row, color, filled, fs, allowed_samples, marker_size)
+    if isempty(events), return; end
+    types = canonicalize_label_names({events.type});
+    sighs = events(strcmp(types, 'sigh'));
+    if isempty(sighs), return; end
+    % Point events use their actual peak. Historical intervals have only a
+    % representative midpoint, and their old raster files remain untouched.
+    peaks = (([sighs.start_idx]+[sighs.end_idx])/2-1)/fs;
+    samples = round(([sighs.start_idx]+[sighs.end_idx])/2);
+    valid = samples >= 1 & samples <= numel(allowed_samples);
+    valid(valid) = allowed_samples(samples(valid));
+    peaks = peaks(valid);
+    if isempty(peaks), return; end
+    face = 'none'; if filled, face = color; end
+    plot(ax, peaks, repmat(row, size(peaks)), 'o', 'LineStyle', 'none', ...
+        'MarkerSize', marker_size, 'MarkerEdgeColor', color, 'MarkerFaceColor', face, ...
+        'LineWidth', 1.4, 'HandleVisibility', 'off', 'Tag', 'SighEventMarkers');
 end
 
 function label_names = validate_canonical_label_order(label_names, n_labels)

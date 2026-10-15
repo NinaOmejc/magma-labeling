@@ -1,6 +1,8 @@
-function results = review_existing_results(data, existing, config)
+function [results, cancelled] = review_existing_results(data, existing, config)
 % REVIEW_EXISTING_RESULTS Add a review round without rerunning analysis.
+% cancelled is true for X; results then remains the unchanged existing struct.
 
+    cancelled = false;
     required = {'events_automatic', 'mask_automatic', 'label_names', ...
         'label_available', 'label_availability_reason', ...
         'label_assessable_mask', 'resp_cycles', 'resp_features', ...
@@ -31,6 +33,11 @@ function results = review_existing_results(data, existing, config)
     automatic_event_sets = split_automatic_events(existing.events_automatic);
     [reviewed_event_sets, manual_edit_info] = manual_edit_label_events( ...
         data, existing.resp_cycles, config, automatic_event_sets);
+    if isfield(manual_edit_info, 'cancelled') && manual_edit_info.cancelled
+        results = existing;
+        cancelled = true;
+        return;
+    end
     annotations = assemble_annotation_layers(automatic_event_sets, ...
         reviewed_event_sets, manual_edit_info, size(data, 1), config);
 
