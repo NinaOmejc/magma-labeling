@@ -1,10 +1,10 @@
 function combined = combine_periodic_belt_evidence( ...
     t_sec, lungs_evaluable, lungs_positive, diaph_evaluable, ...
     diaph_positive, min_duration_sec, N, fs)
-% COMBINE_PERIODIC_BELT_EVIDENCE Apply MAGMA's dynamic two-belt AND rule.
-% At each supported time both evaluable belts must be positive; when only one
-% belt is evaluable, that belt determines the result. The rule is a MAGMA
-% design choice rather than part of either cited periodic-breathing method.
+% COMBINE_PERIODIC_BELT_EVIDENCE Apply MAGMA's dynamic two-belt OR rule.
+% A positive evaluable belt is sufficient; with neither belt evaluable, the
+% result is unavailable. The rule is a MAGMA design choice rather than part
+% of either cited periodic-breathing method.
 
     t_sec = t_sec(:);
     lungs_evaluable = logical(lungs_evaluable(:));
@@ -22,7 +22,7 @@ function combined = combine_periodic_belt_evidence( ...
     both = lungs_evaluable & diaph_evaluable;
     evaluable = lungs_evaluable | diaph_evaluable;
     positive = ...
-        (both & lungs_positive & diaph_positive) | ...
+        (both & (lungs_positive | diaph_positive)) | ...
         (lungs_evaluable & ~diaph_evaluable & lungs_positive) | ...
         (~lungs_evaluable & diaph_evaluable & diaph_positive);
     positive = positive & evaluable;

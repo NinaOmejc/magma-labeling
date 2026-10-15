@@ -200,7 +200,7 @@ function testEAMIDoesNotEvaluateAcrossNaNRegions(testCase)
     verifyTrue(testCase, all(isnan(diagnostics.lungs.eami(unsupported))));
 end
 
-function testEAMIBothBeltsMustAgree(testCase)
+function testEAMIEitherEvaluableBeltIsSufficient(testCase)
     config = periodic_config(10);
     t = (0:1 / config.fs:420)';
     lungs = strong_modulated_carrier(t);
@@ -210,7 +210,7 @@ function testEAMIBothBeltsMustAgree(testCase)
 
     verifyTrue(testCase, diagnostics.lungs.available);
     verifyTrue(testCase, diagnostics.diaph.available);
-    verifyEmpty(testCase, diagnostics.combined.events);
+    verifyNotEmpty(testCase, diagnostics.combined.events);
 end
 
 function testEAMISingleAvailableBeltDeterminesResult(testCase)
