@@ -863,7 +863,7 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed] = run_ed
         if max_val <= 0
             steps = [1 1];
         else
-            steps = [min(1 / max_val, 0.05) min(visible_sec / max_val, 1)];
+            steps = [min(0.9 * visible_sec / max_val, 1) min(visible_sec / max_val, 1)];
         end
     end
 
