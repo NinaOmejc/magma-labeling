@@ -10,7 +10,10 @@ function config = get_config_defaults()
     config.path_data_in = 'D:\Projects\MAGMA\raw_data';                                                % *** folder with raw input .dat files
     config.path_results_out = 'D:\Projects\MAGMA\data_analysis\statistical_labeling';               % *** root output folder
     config.subjects = 1;                                                                                % *** subjects to analyze
-    config.remove_subjects = [3 30 91];                                                                % *** subjects to not analyze
+    config.exclude_recordings = [ ... % [subject, measurement]; omit only these recordings
+        3 1; 3 2; 3 3; 3 4; ...
+        30 1; 30 2; 30 3; 30 4; ...
+        91 1; 91 2; 91 3; 91 4];
     config.measurements = [1];                                                                       % *** measurements to analyze - 1: pre-rehab-pre-stress, 2: pre-rehab-post-stress, 3:post-rehab-pre-stress, 4:post-rehab-post-stress
     config.fs = 200;                                                                                   % native/master sampling frequency (Hz) for all aligned physiological signals
     config.data_columns = {'ECG1', 'ECG2', 'SpO₂', 'Resp-Lungs', 'Blood Pressure', 'Resp-Diaphragm'};  % column names in raw data
@@ -20,7 +23,6 @@ function config = get_config_defaults()
     config.group = struct();
     config.group.subjects = [];
     config.group.measurements = [1 2];
-    config.group.exclude_subjects = config.remove_subjects;
     config.group.control_subjects = [];
     config.group.patient_subjects = [];
     config.group.paired_measurements = [1 2];
@@ -285,8 +287,5 @@ function config = get_config_defaults()
     config.HDF5.compression_level = 4;
     config.HDF5.upstream_input_preprocessing = ...
         'external / not fully documented';
-
-    % Apply the default recording exclusion list.
-    config.subjects(ismember(config.subjects, config.remove_subjects)) = [];
 
 end

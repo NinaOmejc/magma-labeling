@@ -154,7 +154,10 @@ function data = build_group_descriptive_tables(config, group_table, phenotypes)
         if ~isempty(match), discovered_subjects(i) = str2double(match{1}); end
     end
     discovered_subjects = unique(discovered_subjects(isfinite(discovered_subjects)));
-    excluded = double(config.group.exclude_subjects(:));
+    excluded = [];
+    if isfield(config.group, 'exclude_subjects')
+        excluded = double(config.group.exclude_subjects(:));
+    end
     data.excluded_subjects = intersect(discovered_subjects, excluded);
     data.n_recordings = height(group_table);
     data.metadata_source = metadata_source;

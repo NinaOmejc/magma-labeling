@@ -13,9 +13,12 @@ config.path_data_in = 'D:\Projects\MAGMA\raw_data';
 config.path_results_out = 'D:\Projects\MAGMA\data_analysis\statistical_labeling';
 config.fs = 200;
 config.subjects = [40];
-config.remove_subjects = [3 30 91 135];
+config.exclude_recordings = [ ... % [subject, measurement]; omit only these recordings
+    3 1; 3 2; 3 3; 3 4; ...
+    30 1; 30 2; 30 3; 30 4; ...
+    91 1; 91 2; 91 3; 91 4; ...
+    135 1; 135 2; 135 3; 135 4];
 config.measurements = [1 2];
-config.subjects(ismember(config.subjects, config.remove_subjects)) = [];
 
 %---- PROBLEMS ----
 config.problems.missing_lung_belt = [ ...                  % known [subject, measurement] recordings without a usable lung belt (e.g. first 20 subjects have a broken belt)

@@ -724,16 +724,19 @@ function files = filter_result_files(files, config)
     subjects = get_group_filter(config, 'subjects');
     measures = get_group_filter(config, 'measurements');
     excluded = get_group_filter(config, 'exclude_subjects');
+    excluded_recordings = resolve_excluded_recordings(config);
 
-    if isempty(subjects) && isempty(measures) && isempty(excluded)
+    if isempty(subjects) && isempty(measures) && isempty(excluded) && isempty(excluded_recordings)
         return;
     end
 
     keep = true(size(files));
     for i = 1:numel(files)
         [subject, measure] = parse_subject_measure(fullfile(files(i).folder, files(i).name));
-        if ismember(subject, excluded)
+        if ismember(subject, excluded) || ismember([subject measure], excluded_recordings, 'rows')
             keep(i) = false;
+            log_message(config, 1, 'Skipping excluded recording: Sub %d | Measurement: %d', ...
+                subject, measure);
         end
         if ~isempty(subjects) && ~ismember(subject, subjects)
             keep(i) = false;

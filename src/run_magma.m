@@ -4,6 +4,7 @@ function run_magma(base_config)
 % A non-empty selection runs only those detectors and merges their outputs into
 % an existing result when present.
 
+    excluded_recordings = resolve_excluded_recordings(base_config);
     if ~isfield(base_config, 'execution') || ...
             ~isstruct(base_config.execution)
         base_config.execution = struct();
@@ -29,6 +30,11 @@ function run_magma(base_config)
             config = base_config;
             config.subject = base_config.subjects(isub);
             config.measure = base_config.measurements(imeasure);
+            if ismember([config.subject config.measure], excluded_recordings, 'rows')
+                log_message(config, 1, 'Skipping excluded recording: Sub %d | Measurement: %d', ...
+                    config.subject, config.measure);
+                continue;
+            end
 
             [data_raw, config, do_analysis] = load_raw_data(config);
             if ~do_analysis

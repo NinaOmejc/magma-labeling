@@ -15,10 +15,19 @@ config.path_data_in
 config.path_results_out
 config.subjects
 config.measurements
+config.exclude_recordings = [3 1; 3 2; 23 1]; % [] to exclude none
 config.fs
 config.data_columns
 config.input_filename_pattern
 ```
+
+`exclude_recordings` is an N-by-2 matrix of `[subject, measurement]` pairs.
+Both recording analysis and group analysis omit matching pairs; other measurements
+for the subject remain eligible. IDs must be finite integers: subject >= 0
+(0 is allowed for synthetic recordings), measurement in 1:4. Invalid lists
+raise `MAGMA:Config:InvalidExcludedRecordings` before recording data is loaded.
+The default lists explicitly cover M1-M4 for the previously excluded subjects.
+`config.problems.missing_lung_belt` remains a separate signal-availability setting.
 
 ## Recalculation and plotting
 
@@ -286,7 +295,7 @@ before calling `run`:
 config = get_config_defaults();
 config.group.subjects = [];             % discover all saved subject IDs
 config.group.measurements = [1 2];      % M1 and M2
-config.group.exclude_subjects = config.remove_subjects;
+config.exclude_recordings = [23 1];     % omit M1 only; M2 remains eligible
 config.group.control_subjects = [];     % optional metadata
 config.group.patient_subjects = [];     % optional metadata
 config.group.paired_measurements = [1 2];

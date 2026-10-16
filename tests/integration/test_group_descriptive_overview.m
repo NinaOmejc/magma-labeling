@@ -154,9 +154,27 @@ function testNoPlotsReviewedLayerAndWorkbookRefresh(testCase)
     verifyTrue(testCase, all(summary.annotation_layer == "reviewed"));
 end
 
+function testRecordingExclusionPreservesOtherMeasurements(testCase)
+    [root, cleanup] = saved_cohort(); %#ok<ASGLU>
+    config = cohort_config(root);
+    config.exclude_recordings = [1 1; 3 1];
+    % Excluded files must be filtered before loading, even when unreadable.
+    excluded_file = fullfile(root, 'Sub1_M1', 'Sub1_M1_results.mat');
+    fid = fopen(excluded_file, 'w'); fwrite(fid, 'excluded test fixture'); fclose(fid);
+    [group_table, cohort] = build_group_label_table(config, false);
+    verifyEqual(testCase, height(group_table), 4);
+    verifyFalse(testCase, any(ismember([group_table.subject group_table.measure], ...
+        config.exclude_recordings, 'rows')));
+    verifyTrue(testCase, any(group_table.subject == 1 & group_table.measure == 2));
+    data = build_group_descriptive_tables(config, group_table, cohort.phenotypes);
+    verifyEqual(testCase, data.recording_present(data.subjects == 1, :), [false true]);
+    verifyEqual(testCase, data.valid_measurement_pairs, 1);
+end
+
 function config = cohort_config(root)
     config = get_config_defaults();
     config.path_results_out = root;
+    config.exclude_recordings = [];
     config.make_figs_visible = 'off';
     config.plot_format = 'png';
     config.group.subjects = [];
@@ -236,4 +254,3 @@ function info = result_file_info(root)
     info = sortrows(table(string({files.name})', [files.bytes]', ...
         [files.datenum]', 'VariableNames', {'name','bytes','datenum'}));
 end
-

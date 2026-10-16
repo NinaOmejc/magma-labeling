@@ -14,9 +14,6 @@ if ~isfield(config, 'group')
 end
 if ~isfield(config.group, 'subjects'), config.group.subjects = []; end
 if ~isfield(config.group, 'measurements'), config.group.measurements = [1 2]; end
-if ~isfield(config.group, 'exclude_subjects')
-    config.group.exclude_subjects = config.remove_subjects;
-end
 if ~isfield(config.group, 'control_subjects'), config.group.control_subjects = []; end
 if ~isfield(config.group, 'patient_subjects'), config.group.patient_subjects = []; end
 if ~isfield(config.group, 'paired_measurements'), config.group.paired_measurements = [1 2]; end
