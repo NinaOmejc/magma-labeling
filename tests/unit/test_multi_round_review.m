@@ -157,6 +157,8 @@ function testSavedLatestReviewedStateLoadsWithoutChangingAutomatic(testCase)
     manual_label_automatic_event_sets = automatic;
     manual_label_event_sets = active_sets;
     manual_label_review_mask = scope;
+    round1.phenotypes_reviewed = struct('snapshot_marker', 'round 1');
+    round1.phenotype_numeric_summary_reviewed = struct('snapshot_marker', 1);
     manual_label_review_history = round1;
     manual_label_active_round_id = 1;
     manual_label_review_provenance = struct();
@@ -181,6 +183,16 @@ function testSavedLatestReviewedStateLoadsWithoutChangingAutomatic(testCase)
     verifyEqual(testCase, info.review_provenance.latest_reviewer_role, 'researcher');
     verifyEqual(testCase, info.review_history(1).mask, round1.mask);
     verifyEqual(testCase, info.loaded_schema_version, 5);
+    verifyEqual(testCase, info.review_history(1).phenotypes_reviewed, round1.phenotypes_reviewed);
+    verifyEqual(testCase, info.review_history(1).phenotype_numeric_summary_reviewed, ...
+        round1.phenotype_numeric_summary_reviewed);
+    % Older MAT checkpoints without the new fields still normalize and load.
+    manual_label_review_history = rmfield(round1, ...
+        {'phenotypes_reviewed', 'phenotype_numeric_summary_reviewed'});
+    save(edit_file, 'manual_label_review_history', '-append');
+    [~, legacy_info] = manual_edit_label_events(zeros(N,6), struct(), config, automatic);
+    verifyEmpty(testCase, legacy_info.review_history(1).phenotypes_reviewed);
+    verifyEmpty(testCase, legacy_info.review_history(1).phenotype_numeric_summary_reviewed);
 end
 
 function testLatestReviewedRequiresAnExistingReview(testCase)

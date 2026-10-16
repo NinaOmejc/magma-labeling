@@ -59,6 +59,7 @@ function run_magma(base_config)
                     continue;
                 end
                 plot_reviewed_label_masks(results, config);
+                plot_phenotype_summary(results.phenotypes, config, results.review_history);
                 save_recording_results(results, data_raw, data, config);
                 log_message(config, 1, ...
                     ['Successfully finished manual review for: Sub %d | ' ...
@@ -143,7 +144,7 @@ function run_magma(base_config)
                 config, resp_cycles, resp_ref, session_reference, ...
                 resp_features, label_results);
             plot_reviewed_label_masks(results, config);
-            plot_phenotype_summary(results.phenotypes, config);
+            plot_phenotype_summary(results.phenotypes, config, results.review_history);
             save_recording_results(results, data_raw, data, config);
             log_message(config, 1, ...
                 ['Successfully finished label detection for: Sub %d | ' ...

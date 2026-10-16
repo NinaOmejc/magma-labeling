@@ -1048,6 +1048,14 @@ function testRecordingResultUsesDeduplicatedOutputSchema(testCase)
     verifyFalse(testCase, isfield(results, 'input_config'));
     verifyEqual(testCase, results.config.input_config.description, ...
         'resolved test input');
+    verifyEqual(testCase, results.phenotypes, fixture.phenotypes);
+    verifyEqual(testCase, results.review_history(1).phenotypes_reviewed, ...
+        fixture.phenotypes.reviewed);
+    config.execution.partial_rerun = true;
+    partial = build_recording_results(config, fixture.resp_cycles, ...
+        fixture.resp_ref, fixture.session_reference, fixture.resp_features, labels);
+    verifyEqual(testCase, partial.review_history, labels.review_history, ...
+        'A selected rerun must not attach changed evidence to an older round.');
 end
 
 function testSharedRunnerSavesBaseConfigurationBeforeRecordingMutation(testCase)

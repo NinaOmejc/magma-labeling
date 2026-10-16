@@ -95,6 +95,7 @@ function [results, cancelled] = review_existing_results(data, existing, config)
         results.label_burden_reviewed, ...
         results.label_overlap_summary_reviewed, ...
         results.label_evidence_summary_reviewed);
+    results = attach_review_phenotypes(results);
     results.analysis_id = config.execution.analysis_id;
     % The saved configuration describes the immutable automatic analysis.
     % Reviewer identity and source analysis are carried by the review round.

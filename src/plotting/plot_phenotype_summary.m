@@ -1,9 +1,10 @@
-function fig = plot_phenotype_summary(phenotypes, config)
+function fig = plot_phenotype_summary(phenotypes, config, review_history)
 % PLOT_PHENOTYPE_SUMMARY Render the final recording-level phenotype values.
 %
 % Inputs:
 %   phenotypes - Completed phenotype bundle from build_recording_results.
 %   config     - Pipeline settings supplying figure and output options.
+%   review_history - Optional immutable rounds; each gets a numeric column.
 %
 % Output:
 %   fig - Figure handle while plotting; empty after save_figure or when disabled.
@@ -22,14 +23,8 @@ function fig = plot_phenotype_summary(phenotypes, config)
     automatic = require_numeric_summary(phenotypes, 'automatic');
     schema = get_phenotype_feature_schema();
 
-    show_reviewed = isfield(config.PhenotypeSummary, 'show_reviewed') && ...
-        config.PhenotypeSummary.show_reviewed;
-    reviewed = [];
-    if show_reviewed && isfield(phenotypes, 'reviewed') && ...
-            isstruct(phenotypes.reviewed) && ...
-            isfield(phenotypes.reviewed, 'numeric_summary')
-        reviewed = require_numeric_summary(phenotypes, 'reviewed');
-    end
+    if nargin < 3, review_history = struct([]); end
+    [reviews, round_ids] = review_summaries(review_history);
 
     sections = phenotype_sections();
     feature_order = collect_feature_order(schema, sections);
@@ -38,12 +33,13 @@ function fig = plot_phenotype_summary(phenotypes, config)
             'Phenotype-summary layout must contain every schema feature exactly once.');
     end
 
-    n_groups = sum(cellfun(@(item) numel(item.groups), sections));
+    n_groups = numel(sections{1}.groups); % Only literature profiles need group headings.
     n_rows = 1 + numel(sections) + n_groups + schema.n_features + 1;
-    fig_height = max(900, 32 * n_rows);
+    fig_height = max(780, 24 * n_rows);
+    fig_width = 860 + 160 * numel(reviews);
     fig = figure( ...
         'Units', 'pixels', ...
-        'Position', [60 40 1500 fig_height], ...
+        'Position', [60 40 fig_width fig_height], ...
         'Visible', config.make_figs_visible, ...
         'Color', 'w');
     ax = axes('Parent', fig, 'Position', [0.025 0.025 0.95 0.95]);
@@ -53,8 +49,7 @@ function fig = plot_phenotype_summary(phenotypes, config)
     ylim(ax, [0 n_rows + 2.6]);
     set(ax, 'YDir', 'reverse');
 
-    has_reviewed = ~isempty(reviewed);
-    columns = table_columns(has_reviewed);
+    columns = table_columns(numel(reviews), fig_width);
     y = 0.65;
     text(ax, 0.5, y, sprintf( ...
         'Phenotype Summary | Subject %d | Measurement %d', ...
@@ -63,7 +58,7 @@ function fig = plot_phenotype_summary(phenotypes, config)
         'FontSize', 14, 'Interpreter', 'none');
 
     y = y + 1.35;
-    draw_header(ax, y, columns, has_reviewed);
+    draw_header(ax, y, columns, round_ids);
     y = y + 1;
 
     for section_index = 1:numel(sections)
@@ -76,12 +71,14 @@ function fig = plot_phenotype_summary(phenotypes, config)
 
         for group_index = 1:numel(section.groups)
             group_key = section.groups{group_index};
-            text(ax, 0.035, y, phenotype_group_title(group_key), ...
-                'FontWeight', 'bold', 'Color', [0.12 0.20 0.28], ...
-                'Interpreter', 'none');
-            line(ax, [0.03 0.98], [y + 0.43 y + 0.43], ...
-                'Color', [0.82 0.84 0.86], 'LineWidth', 0.6);
-            y = y + 1;
+            if section_index == 1
+                text(ax, 0.035, y, phenotype_group_title(group_key), ...
+                    'FontWeight', 'bold', 'Color', [0.12 0.20 0.28], ...
+                    'Interpreter', 'none');
+                line(ax, [0.03 0.98], [y + 0.43 y + 0.43], ...
+                    'Color', [0.82 0.84 0.86], 'LineWidth', 0.6);
+                y = y + 1;
+            end
 
             if strcmp(group_key, 'forced_abdominal_expiration')
                 text(ax, 0.055, y, 'Not assessable from current signals', ...
@@ -94,7 +91,7 @@ function fig = plot_phenotype_summary(phenotypes, config)
             feature_indices = find(strcmp(schema.phenotype_group, group_key));
             for feature_index = feature_indices
                 draw_feature_row(ax, y, feature_index, schema, automatic, ...
-                    reviewed, columns, has_reviewed);
+                    reviews, columns);
                 y = y + 1;
             end
         end
@@ -160,52 +157,61 @@ function feature_order = collect_feature_order(schema, sections)
     end
 end
 
-function columns = table_columns(has_reviewed)
-% TABLE_COLUMNS Resolve stable table positions for one or two value layers.
+function [reviews, round_ids] = review_summaries(history)
+% REVIEW_SUMMARIES Read snapshots in round order without recomputing history.
 
-    columns = struct();
-    columns.feature = 0.055;
-    columns.unit = 0.66;
-    if has_reviewed
-        columns.automatic = 0.82;
-        columns.reviewed = 0.94;
-    else
-        columns.automatic = 0.91;
-        columns.reviewed = NaN;
+    reviews = {};
+    round_ids = [];
+    if isempty(history), return; end
+    [round_ids, order] = sort([history.round_id]);
+    reviews = cell(1, numel(order));
+    for i = 1:numel(order)
+        entry = history(order(i));
+        if isfield(entry, 'phenotype_numeric_summary_reviewed') && ...
+                ~isempty(entry.phenotype_numeric_summary_reviewed)
+            reviews{i} = entry.phenotype_numeric_summary_reviewed;
+        elseif isfield(entry, 'phenotypes_reviewed') && ~isempty(entry.phenotypes_reviewed)
+            reviews{i} = entry.phenotypes_reviewed.numeric_summary;
+        end
+        if ~isempty(reviews{i}), validate_compact_phenotype_features(reviews{i}); end
     end
 end
 
-function draw_header(ax, y, columns, has_reviewed)
+function columns = table_columns(n_reviews, fig_width)
+% TABLE_COLUMNS Keep label/value spacing stable as review columns are added.
+
+    columns = struct();
+    columns.feature = 0.045;
+    columns.values = (700 + 160 * (0:n_reviews)) / fig_width;
+end
+
+function draw_header(ax, y, columns, round_ids)
 % DRAW_HEADER Render table column names.
 
     line(ax, [0.03 0.98], [y + 0.43 y + 0.43], ...
         'Color', [0.45 0.48 0.50], 'LineWidth', 1.0);
     text(ax, columns.feature, y, 'Measure', 'FontWeight', 'bold');
-    text(ax, columns.unit, y, 'Unit', ...
-        'HorizontalAlignment', 'center', 'FontWeight', 'bold');
-    text(ax, columns.automatic, y, 'Automatic', ...
-        'HorizontalAlignment', 'right', 'FontWeight', 'bold');
-    if has_reviewed
-        text(ax, columns.reviewed, y, 'Reviewed', ...
+    headers = [{'Automatic'}, arrayfun(@(id) sprintf('Review %d', id), ...
+        round_ids, 'UniformOutput', false)];
+    for i = 1:numel(headers)
+        text(ax, columns.values(i), y, headers{i}, ...
             'HorizontalAlignment', 'right', 'FontWeight', 'bold');
     end
 end
 
-function draw_feature_row(ax, y, index, schema, automatic, reviewed, columns, has_reviewed)
+function draw_feature_row(ax, y, index, schema, automatic, reviews, columns)
 % DRAW_FEATURE_ROW Render existing values without rescaling or imputation.
 
-    text(ax, columns.feature, y, schema.display_name{index}, ...
+    label = schema.display_name{index};
+    if strcmp(schema.feature_role{index}, 'label_based')
+        label = [phenotype_group_title(schema.phenotype_group{index}) ' burden'];
+    end
+    text(ax, columns.feature, y, sprintf('%s (%s)', label, display_unit(schema.units{index})), ...
         'Interpreter', 'none');
-    text(ax, columns.unit, y, display_unit(schema.units{index}), ...
-        'HorizontalAlignment', 'center', 'Color', [0.35 0.35 0.35], ...
-        'Interpreter', 'none');
-    [value_text, value_color] = display_value(automatic, index);
-    text(ax, columns.automatic, y, value_text, ...
-        'HorizontalAlignment', 'right', 'Color', value_color, ...
-        'Interpreter', 'none');
-    if has_reviewed
-        [value_text, value_color] = display_value(reviewed, index);
-        text(ax, columns.reviewed, y, value_text, ...
+    summaries = [{automatic}, reviews];
+    for i = 1:numel(summaries)
+        [value_text, value_color] = display_value(summaries{i}, index);
+        text(ax, columns.values(i), y, value_text, ...
             'HorizontalAlignment', 'right', 'Color', value_color, ...
             'Interpreter', 'none');
     end
@@ -215,7 +221,7 @@ function [value_text, value_color] = display_value(summary, index)
 % DISPLAY_VALUE Distinguish not computed, unavailable, and measured values.
 
     value_color = [0 0 0];
-    if strcmp(summary.missing_reason{index}, 'not_computed')
+    if isempty(summary) || strcmp(summary.missing_reason{index}, 'not_computed')
         value_text = 'Not computed';
         value_color = [0.45 0.45 0.45];
     elseif ~summary.available(index)

@@ -262,7 +262,6 @@ function config = get_config_defaults()
 
     config.PhenotypeSummary = struct();           % recording-level numeric phenotype summary figure
     config.PhenotypeSummary.do_plot = true;       % generate the phenotype summary after the final bundle is assembled
-    config.PhenotypeSummary.show_reviewed = true;% optionally add reviewed numeric-summary values when available
     
     %---- MANUAL LABEL EVENT EDITING
     config.LabelEdit = struct();

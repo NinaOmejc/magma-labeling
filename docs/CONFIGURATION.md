@@ -46,12 +46,14 @@ The recording-level phenotype summary figure is controlled separately:
 
 ```matlab
 config.PhenotypeSummary.do_plot = true;
-config.PhenotypeSummary.show_reviewed = false;
 ```
 
-By default it shows the automatic 22-feature numeric summary. Set
-`show_reviewed` to `true` to add a reviewed column when a reviewed numeric
-summary is present; automatic values are never substituted for reviewed values.
+The single `phenotype_summary.png` shows Automatic and automatically adds
+Review 1, Review 2, etc. from saved per-round phenotype snapshots, in round
+order. It is refreshed after successful review in both review-only and combined
+analysis/review runs. There is no separate reviewed-figure switch or filename.
+Legacy rounds without stored phenotype values show Not computed; their values
+are not reconstructed or substituted from the latest round.
 
 `config.verbosity = 1` prints concise progress, including important skip and
 signal-availability messages. Set it to `2` for detailed pipeline-stage and

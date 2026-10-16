@@ -26,10 +26,32 @@ bundle is also presented as:
 Sub<subject>_M<measurement>_phenotype_summary.png
 ```
 
-The figure displays the existing fixed 22-feature numeric summary grouped by
-phenotype. It does not recompute, normalize, score, or impute phenotype values.
-Unavailable values are shown explicitly, and forced abdominal expiration is
-marked as not assessable from the current signals.
+This single figure is refreshed after each successful review. It displays
+Automatic plus Review 1, Review 2, etc. using immutable review-round snapshots
+in round order; the latest round is the last review column. No round-specific
+phenotype image is created. Units are included in measure labels, literature
+profiles retain compact group headings, and each label-based profile has one
+burden row. It does not recompute, normalize, score, or impute phenotype values.
+Unavailable values remain explicit; older rounds without snapshots show Not
+computed. Forced abdominal expiration remains not assessable from current signals.
+
+The authoritative MAT results and manual-review checkpoint retain these optional
+fields on each `review_history` / `manual_label_review_history` entry:
+
+```matlab
+results.review_history(k).round_id
+results.review_history(k).phenotypes_reviewed
+results.review_history(k).phenotype_numeric_summary_reviewed
+```
+
+The first phenotype field stores that round's complete reviewed phenotype layer;
+the second stores its fixed numeric summary. Snapshots are attached after the
+reviewed phenotype layer is built. Existing snapshots are preserved, including
+during selected-label reruns. Older histories without these fields still load;
+only the active round can gain a newly computed snapshot. Cancelled reviews
+leave the saved history and figure unchanged. Top-level `results.phenotypes`
+continues to hold the current automatic/reviewed bundle. This adds no new HDF5
+history paths and leaves existing label-mask figure naming unchanged.
 
 The MAT file is the authoritative MATLAB result. The HDF5 file uses schema
 `magma_ml_hdf5_v16` as a portable recording-level representation.

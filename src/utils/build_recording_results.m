@@ -74,6 +74,10 @@ function results = build_recording_results( ...
     results.label_evidence_summary_reviewed = label_results.evidence_reviewed;
     results.phenotypes = label_results.phenotypes;
     results.manual_label_edit = label_results.manual_label_edit;
+    % A selected-label rerun must not fill an older round with changed evidence.
+    if ~get_config_value(config, 'execution', 'partial_rerun', false)
+        results = attach_review_phenotypes(results);
+    end
     if ~isfield(config, 'execution') || ~isstruct(config.execution)
         config.execution = struct();
     end

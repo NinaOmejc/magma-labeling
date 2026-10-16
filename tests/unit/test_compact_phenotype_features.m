@@ -289,3 +289,99 @@ function [data, features, diagnostics, spo2_ref, config] = evidence_fixture()
     data = zeros(10, 6);
     spo2_ref = struct('median_percent', NaN);
 end
+
+function testReviewPhenotypeSnapshotsAreImmutableAndCheckpointed(testCase)
+    output_dir = tempname; mkdir(output_dir);
+    cleanup = onCleanup(@() remove_snapshot_test_dir(output_dir));
+    [burden, overlap, evidence] = compact_fixture(10, true(10, 11));
+    phenotypes = build_db_phenotype_evidence_bundle( ...
+        burden, overlap, evidence, burden, overlap, evidence);
+    manual_label_review_history = struct('round_id', {3, 7});
+    checkpoint_marker = 'preserve other checkpoint variables';
+    edit_file = fullfile(output_dir, 'review.mat');
+    save(edit_file, 'manual_label_review_history', 'checkpoint_marker');
+    results = struct('review_history', manual_label_review_history, ...
+        'review_provenance', struct('latest_round_id', 7), ...
+        'phenotypes', phenotypes, 'manual_label_edit', struct('edit_file', edit_file));
+    results = attach_review_phenotypes(results);
+    verifyEqual(testCase, results.phenotypes, phenotypes);
+    verifyEmpty(testCase, results.review_history(1).phenotypes_reviewed);
+    snapshot = results.review_history(2).phenotypes_reviewed;
+    verifyEqual(testCase, snapshot, phenotypes.reviewed);
+    verifyEqual(testCase, results.review_history(2).phenotype_numeric_summary_reviewed, ...
+        phenotypes.reviewed.numeric_summary);
+    saved = load(edit_file);
+    verifyEqual(testCase, saved.checkpoint_marker, checkpoint_marker);
+    verifyEqual(testCase, saved.manual_label_review_history, results.review_history);
+    verifyEqual(testCase, results.manual_label_edit.review_history, results.review_history);
+
+    results.phenotypes.reviewed.numeric_summary.values(1) = 0.25;
+    results = attach_review_phenotypes(results);
+    verifyEqual(testCase, results.review_history(2).phenotypes_reviewed, snapshot);
+    next = results.review_history(1); next.round_id = 8;
+    results.review_history(end + 1) = next;
+    results.review_provenance.latest_round_id = 8;
+    results.manual_label_edit.cancelled = true;
+    before_cancel = results;
+    verifyEqual(testCase, attach_review_phenotypes(results), before_cancel);
+    results.manual_label_edit.cancelled = false;
+    results = attach_review_phenotypes(results);
+    verifyEqual(testCase, results.review_history(2).phenotypes_reviewed, snapshot);
+    verifyEqual(testCase, results.review_history(3).phenotype_numeric_summary_reviewed.values(1), 0.25);
+end
+
+function testCompactFigureUsesOrderedReviewColumnsAndOneFilename(testCase)
+    output_dir = tempname; mkdir(output_dir);
+    cleanup = onCleanup(@() remove_snapshot_test_dir(output_dir));
+    config = make_test_config(output_dir);
+    config.PhenotypeSummary.do_plot = true;
+    config.plot_format = 'fig';
+    [burden, overlap, evidence] = compact_fixture(10, true(10, 11));
+    phenotypes = build_db_phenotype_evidence_bundle( ...
+        burden, overlap, evidence, burden, overlap, evidence);
+    latest = phenotypes.reviewed.numeric_summary;
+    latest.values(1) = 0.75;
+    earlier = latest; earlier.values(1) = 0.25;
+    earlier.values(2) = NaN; earlier.available(2) = false;
+    earlier.missing_reason{2} = 'not_computed';
+    latest.values(3) = NaN; latest.available(3) = false;
+    latest.missing_reason{3} = 'unavailable';
+    history = struct('round_id', {2, 1, 3}, ...
+        'phenotype_numeric_summary_reviewed', {latest, earlier, []});
+    plot_phenotype_summary(phenotypes, config, history);
+    filename = fullfile(output_dir, sprintf('Sub%d_M%d_phenotype_summary.fig', ...
+        config.subject, config.measure));
+    fig = openfig(filename, 'invisible');
+    cleanup_fig = onCleanup(@() close(fig));
+    labels = findall(fig, 'Type', 'text');
+    strings = get(labels, 'String');
+    verifyFalse(testCase, any(strcmp(strings, 'Unit')));
+    verifyTrue(testCase, any(strcmp(strings, 'Median respiratory rate (breaths/min)')));
+    verifyTrue(testCase, any(strcmp(strings, 'Apneic breathing burden (fraction)')));
+    verifyFalse(testCase, any(strcmp(strings, 'Apneic breathing')));
+    verifyTrue(testCase, any(strcmp(strings, 'Not assessable from current signals')));
+    verifyTrue(testCase, any(strcmp(strings, 'Unavailable')));
+    verifyTrue(testCase, any(strcmp(strings, 'Not computed')));
+    for name = {'Automatic', 'Review 1', 'Review 2', 'Review 3'}
+        verifyTrue(testCase, any(strcmp(strings, name{1})));
+    end
+    first = labels(strcmp(strings, 'Review 1')); second = labels(strcmp(strings, 'Review 2'));
+    verifyLessThan(testCase, first.Position(1), second.Position(1));
+    earlier_value = labels(strcmp(strings, '0.25')); latest_value = labels(strcmp(strings, '0.75'));
+    verifyEqual(testCase, earlier_value.Position(1), first.Position(1));
+    verifyEqual(testCase, latest_value.Position(1), second.Position(1));
+    clear cleanup_fig;
+
+    % Reuse the same filename after review; without history only Automatic appears.
+    plot_phenotype_summary(phenotypes, config);
+    fig = openfig(filename, 'invisible');
+    cleanup_auto = onCleanup(@() close(fig));
+    strings = get(findall(fig, 'Type', 'text'), 'String');
+    verifyFalse(testCase, any(startsWith(strings, 'Review ')));
+    verifyEqual(testCase, numel(dir(fullfile(output_dir, '*.fig'))), 1);
+end
+
+function remove_snapshot_test_dir(folder)
+    assert(startsWith(folder, tempdir) && ~strcmp(folder, tempdir));
+    rmdir(folder, 's');
+end
