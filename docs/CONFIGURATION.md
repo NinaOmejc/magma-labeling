@@ -336,3 +336,173 @@ the two remaining plot switches to false for tables only. `plot_layer` selects
 the descriptive and paired table layer; selecting `reviewed` generates tables
 without plots. The diagnostic overview and other descriptive plots have been
 removed. See [OUTPUTS.md](OUTPUTS.md) for the worksheet layout.
+
+## Portable machine-local paths
+
+`get_config_defaults.m` initializes both roots with the author's Windows paths.
+`main_single.m` calls it and **overwrites both roots again**. Setting `config`
+in the workspace before running `main_single.m` therefore does not override
+its settings. No path inference happens later in `run_magma`.
+
+Keep a personal launcher outside the repository, using the public runner:
+
+```matlab
+repo = 'C:\path\to\magma-labeling'; % this computer's checkout
+addpath(genpath(fullfile(repo, 'src')));
+config = get_config_defaults();
+config.path_data_in = fullfile('C:\', 'MAGMA data', 'raw');
+config.path_results_out = fullfile('C:\', 'MAGMA data', 'results');
+config.subjects = 21;       % choose the intended recording(s)
+config.measurements = 1;
+% Copy your intended scientific, plotting, execution and review settings here.
+run_magma(config);
+```
+
+On macOS/Linux, use an appropriate absolute root, for example
+`fullfile('/home', 'user', 'MAGMA data', 'results')`. Paths may be character
+vectors or string scalars. Use an explicitly chosen local folder while
+investigating; never copy another collaborator's drive letters blindly.
+This launcher avoids editing or inheriting somebody else's machine paths.
+It does not require a different execution mode or disabling any plots.
+
+## PNG export investigation and diagnostic
+
+### Source trace and established findings
+
+1. `get_config_defaults` initializes `path_results_out`; `main_single` replaces
+   it. Direct callers such as `example/demo.m` can also override it.
+2. `run_magma` checks/creates that root and saves `analysis_configuration.mat`
+   **before** iterating over recordings or adding `subject` and `measure`.
+3. `load_raw_data` derives `sub_results_path` as
+   `fullfile(config.path_results_out, ['Sub' num2str(subject) '_M' num2str(measure)])`.
+   This always replaces any preexisting `sub_results_path`. Input loading uses
+   `fullfile` too. Feature caches and recording results share this subfolder.
+4. `run_selected_label_detectors` calls shallow detection first when selected.
+   `detect_shallow_breathing` passes the fixed ASCII stem `shallow_breathing`
+   to `plot_amplitude_state_diagnostic`. It creates four tiled panels with
+   full-length raw belts, scatter points, support patches and outside legends.
+5. `save_figure` builds `Sub%d_M%d_shallow_breathing.png` with `fullfile`, checks
+   the parent folder, then calls `exportgraphics(fig, fullpath, 'Resolution', dpi)`.
+   PNG and 150 DPI are the defaults. An explicit fourth argument overrides
+   the destination; it is not used by shallow detection. Configured figure
+   width/height override screen-based sizing. This stem does not request a
+   `.fig` sidecar. The figure closes after a successful export.
+
+Before this patch, output-folder `mkdir` results were unchecked and no write
+probe was performed. A failure could surface later as an unhelpful export
+error. Also, `[config.path_results_out filesep ...]` and the equivalent input
+join work with character vectors but create a string array for a string
+scalar root. This was reproduced on R2025a: a 1-by-3 string array, versus one
+path from `fullfile`. That bug would usually fail before label detection;
+it is **not established as the clinician's cause**.
+
+The patch uses `fullfile` for those two joins, verifies directory creation
+and an actual temporary write before root/recording output and figure saving,
+and adds the destination and parent to export exceptions while retaining the
+original exception as a cause. Missing plot directories now raise an error.
+Plot naming, DPI and exporter remain unchanged. Detection, preprocessing,
+review annotations, MAT save calls and HDF5 export are unchanged.
+
+A successful configuration MAT save establishes access to the **root at that
+time**, not the recording subdirectory, a particular PNG, or the native PNG
+writer. If earlier PNGs in that same recording folder succeeded, a persistent
+root/path failure becomes less likely. Check their actual timestamps.
+
+Unproven causes include recording-folder ACLs; an existing PNG locked or
+read-only; a target occupied by a directory; interrupted network/mapped-drive
+access; synchronization/security software; path length or native filename
+encoding; and a figure-specific export/resource problem. Hardcoded paths
+alone do not prove any of these. Screen size, total plotted samples and DPI
+can make the shallow figure more demanding on a different machine.
+
+### Run the standalone diagnostic on both computers
+
+Send **only `src/diagnose_png_export.m`** to the clinician if convenient. It
+has no dependencies on MAGMA, raw data, toolboxes, or the full analysis.
+Put it in MATLAB's current folder or add its containing folder to the path.
+Use the configuration snapshot from the failing run and the actual failing
+subject/measurement (21 and 1 below are examples):
+
+```matlab
+saved = load('C:\actual\results\analysis_configuration.mat', 'config');
+subject = 21; measurement = 1; % replace with the failing recording IDs
+% tempname produces a fresh log path, so an earlier report is not overwritten.
+logfile = [tempname '.txt'];
+diary(logfile);
+report = diagnose_png_export(saved.config, subject, measurement);
+diary off;
+fprintf('Diagnostic log: %s\n', logfile);
+```
+
+Do not run `main_single` to obtain the configuration. If the snapshot is
+unavailable, supply a struct with the **exact** results root from the failing
+run, and its `plot_dpi` if configured:
+
+```matlab
+config = struct('path_results_out', 'C:\actual\results');
+report = diagnose_png_export(config, 21, 1);
+```
+
+On the working computer, use its own output root and the same recording IDs
+and export settings. Compare the two logs: exact MATLAB release/build
+(R2025a versus R2025b as well as update/build), OS, renderer/device/details,
+DPI, resolved folders, target existence/open status, path lengths/Unicode,
+and each simple/four-panel output/temp result and exception. If available,
+also note which earlier PNGs were successfully saved by the failed run.
+
+The diagnostic prints the exact production destination but never exports to
+it. An existing target is inspected with `fileattrib` and opened `r+` then
+closed **without writing or truncating**. Fresh PNG probe stems have the same
+length as the production stem; failures also try a shorter fresh name.
+Folder probes check creation, writing and closing a small file. All probe
+files and newly created empty directories are removed, including on export
+failure; cleanup problems are printed. The caller's diary log is retained.
+Synthetic figures are hidden, at 640x360 and 1000x700 pixels. PNG validity is
+checked with `imfinfo`. No global renderer or execution setting is changed.
+
+If the original failed figure remains open, optionally test it directly:
+
+```matlab
+failed_figure = get(groot, 'CurrentFigure'); % select the actual failed figure
+report = diagnose_png_export(saved.config, subject, measurement, failed_figure);
+```
+
+This is optional; it exports that figure to fresh names in both locations,
+leaves it open, and requires no rerun. It may take longer for a large figure.
+The small synthetic test alone cannot rule out a problem with the real figure.
+
+| Observation | Interpretation and next step |
+| --- | --- |
+| A: invalid path, a path component is a file, unresolved drive/share | Correct that machine's configured absolute root; check actual drive/share availability. |
+| B: folder creation or temporary write/close fails | Read the recorded mkdir/fopen error; choose or grant access to the intended output folder. Attribute flags alone are not a write test. |
+| C: target exists and `r+` fails, while fresh exports pass | Target-specific access/lock/read-only problem. Check its attributes and applications/sync using it. An `r+` success cannot exclude transient or exporter-specific locking. |
+| Output export fails but identical temp export passes | Destination-specific/native file-opening issue. Compare short-name retry; repeat using a short, local ASCII output root to isolate length/encoding/network/sync. Spaces and Unicode alone are not evidence of a defect. |
+| D: simple PNG fails even in a folder with a successful write probe in `tempdir` | Exporter/environment or native path handling needs investigation. Capture the full exception; repeat with a short local ASCII root if tempdir itself has a complex path. This does not by itself identify the GPU. |
+| E: simple passes but four-panel or retained figure fails | Figure/layout/size/resource-dependent candidate. Compare both locations, figure dimensions, object counts, DPI and graphics details. Only the retained figure tests the real figure's complexity. |
+| Everything passes | Failure not reproduced. A transient lock/access change or actual-figure problem remains possible; do not claim a path or compatibility cause. |
+
+Both computers reportedly use MATLAB 2025, so a missing export API is not the
+leading explanation. MathWorks documents `exportgraphics` as introduced in
+[R2020a](https://www.mathworks.com/help/matlab/ref/exportgraphics.html).
+The diagnostic records older-release missing-function exceptions too, without
+adding a production fallback. It queries
+[rendererinfo](https://www.mathworks.com/help/matlab/ref/rendererinfo.html)
+using an axes argument, supported before the no-argument form.
+A `print`/other compatibility fallback should only be proposed after a
+repeatable exporter-specific failure, with matching DPI, naming, crop,
+background and layout checked. None is currently justified.
+
+Remaining clinician evidence: the diagnostic log, the original complete
+exception if it differs, exact failing subject/measurement and target path,
+whether the location is local/mapped/UNC/OneDrive or otherwise synchronized,
+and whether that PNG already existed or was open in another program. No raw
+physiological data is needed. A read-only or intermittent cause needs an
+appropriate local access correction; the patch cannot repair ACLs or locks.
+
+Lightweight developer validation (no full pipeline):
+
+```matlab
+addpath(genpath('src'));
+results = runtests('tests/unit/test_png_export.m');
+assertSuccess(results);
+```

@@ -64,8 +64,8 @@ function save_figure(config, base_name, save_matfig, output_path)
         fullpath = char(string(output_path));
     else
         if ~isfield(config,'sub_results_path') || isempty(config.sub_results_path)
-            warning('No results_path defined. Plot not saved.');
-            return;
+            error('MAGMA:Plot:MissingResultsDirectory', ...
+                'config.sub_results_path is required to save figure "%s".', base_name);
         end
 
         fname = sprintf('Sub%d_M%d_%s.%s', ...
@@ -77,9 +77,10 @@ function save_figure(config, base_name, save_matfig, output_path)
     end
 
     out_dir = fileparts(fullpath);
-    if ~isempty(out_dir) && ~isfolder(out_dir)
-        mkdir(out_dir);
+    if isempty(out_dir)
+        out_dir = pwd;
     end
+    ensure_output_directory(out_dir);
 
     [full_dir, full_stem, ~] = fileparts(fullpath);
     fig_sidecar_path = fullfile(full_dir, [full_stem '.fig']);
@@ -101,7 +102,15 @@ function save_figure(config, base_name, save_matfig, output_path)
             drawnow;
         end
         dpi = resolve_plot_dpi(config);
-        exportgraphics(fig, fullpath, 'Resolution', dpi);
+        try
+            exportgraphics(fig, fullpath, 'Resolution', dpi);
+        catch cause
+            failure = MException('MAGMA:Plot:ExportFailed', ...
+                'Cannot export figure to "%s" (directory "%s"): %s', ...
+                fullpath, out_dir, cause.message);
+            failure = addCause(failure, cause);
+            throw(failure);
+        end
     end
 
     % Close figure after saving

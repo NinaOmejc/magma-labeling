@@ -12,12 +12,12 @@ config = get_config_defaults();
 config.path_data_in = 'D:\Projects\MAGMA\raw_data';
 config.path_results_out = 'D:\Projects\MAGMA\data_analysis\statistical_labeling';
 config.fs = 200;
-config.subjects = [40];
+config.subjects = [21];
 config.exclude_recordings = [ ... % [subject, measurement]; omit only these recordings
-    3 1; 3 2; 3 3; 3 4; ...
-    30 1; 30 2; 30 3; 30 4; ...
-    91 1; 91 2; 91 3; 91 4; ...
-    135 1; 135 2; 135 3; 135 4];
+    3 1; 3 2;...
+    30 1; 30 2;  ...
+    91 1; 91 2; ...
+    135 1; 135 2; ];
 config.measurements = [1 2];
 
 %---- PROBLEMS ----
@@ -51,7 +51,7 @@ config.resp.plot_amp_method_comparison = false; % save an optional comparison of
 % PLOTTING
 config.make_figs_visible = 'off';                           % If 'off' plots are only saved, and not shown, which increases the speed.
 config.plot_raw_data = false;                               % save an overview plot of raw signals
-config.reference.do_plot = false;                            % save respiratory-reference QC figure
+config.reference.do_plot = true;                            % save respiratory-reference QC figure
 config.shallow.do_plot = true;                              % save shallow breathing diagnostic plot
 config.deep.do_plot = true;                                 % save deep breathing diagnostic plot
 config.slow.do_plot  = true;                                % save slow breathing diagnostic plot
@@ -69,7 +69,7 @@ config.LabelMask.do_plot = true;                            % generate a label-m
 % MANUAL REVIEW
 config.resp.manual_control = true;                          % separately review respiratory peaks/troughs before label detection; cached after confirmation
 config.LabelEdit.start_from = 'automatic';
-config.LabelEdit.reviewer_role = 'clinican';
+config.LabelEdit.reviewer_role = 'researcher';
 config.LabelEdit.window_sec = 600;                           % visible time span for manual label GUI scrolling
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

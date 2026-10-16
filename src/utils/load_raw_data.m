@@ -10,7 +10,8 @@ function [data, config, do_analysis] = load_raw_data(config)
     [config, input_config] = resolve_signal_channels(config);
 
     % PREPARE OUTPUT FOLDER
-    config.sub_results_path = [config.path_results_out filesep 'Sub' num2str(config.subject) '_M' num2str(config.measure)];
+    config.sub_results_path = fullfile(config.path_results_out, ...
+        ['Sub' num2str(config.subject) '_M' num2str(config.measure)]);
     config.sub_results_filename = ['Sub' num2str(config.subject) '_M' num2str(config.measure) '_results.mat'];
     config.sub_features_filename = ['Sub' num2str(config.subject) '_M' num2str(config.measure) '_features.mat'];
 
@@ -54,18 +55,16 @@ function [data, config, do_analysis] = load_raw_data(config)
             return
         end
     else
-        if ~isfolder(config.sub_results_path)
-            mkdir(config.sub_results_path);
-        end
         log_message(config, 1, ...
             'Successfully loaded data: Sub %d | Measurement: %d', ...
             config.subject, config.measure);
     end
+    ensure_output_directory(config.sub_results_path);
 
     % LOAD DATA
     filename = resolve_input_filename(config);
     
-    full_fname = [config.path_data_in filesep filename];
+    full_fname = fullfile(config.path_data_in, filename);
     if exist(full_fname, 'file')
         data = load(full_fname);
     elseif exist(strrep(full_fname, '.dat', '_Glue.dat'), 'file')

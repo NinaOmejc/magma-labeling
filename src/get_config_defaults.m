@@ -8,12 +8,13 @@ function config = get_config_defaults()
 
     config = struct;                                                                                   % main configuration container
     config.path_data_in = 'D:\Projects\MAGMA\raw_data';                                                % *** folder with raw input .dat files
-    config.path_results_out = 'D:\Projects\MAGMA\data_analysis\statistical_labeling';               % *** root output folder
+    config.path_results_out = 'D:\Projects\MAGMA\data_analysis\statistical_labeling';                   % *** root output folder
     config.subjects = 1;                                                                                % *** subjects to analyze
-    config.exclude_recordings = [ ... % [subject, measurement]; omit only these recordings
-        3 1; 3 2; 3 3; 3 4; ...
-        30 1; 30 2; 30 3; 30 4; ...
-        91 1; 91 2; 91 3; 91 4];
+    config.exclude_recordings = [ ...                                                                   % [subject, measurement]; omit only these recordings
+        3 1; 3 2; ...
+        30 1; 30 2; ...
+        91 1; 91 2; ...
+        135 1; 135 2];
     config.measurements = [1];                                                                       % *** measurements to analyze - 1: pre-rehab-pre-stress, 2: pre-rehab-post-stress, 3:post-rehab-pre-stress, 4:post-rehab-post-stress
     config.fs = 200;                                                                                   % native/master sampling frequency (Hz) for all aligned physiological signals
     config.data_columns = {'ECG1', 'ECG2', 'SpO₂', 'Resp-Lungs', 'Blood Pressure', 'Resp-Diaphragm'};  % column names in raw data
@@ -261,7 +262,7 @@ function config = get_config_defaults()
 
     config.PhenotypeSummary = struct();           % recording-level numeric phenotype summary figure
     config.PhenotypeSummary.do_plot = true;       % generate the phenotype summary after the final bundle is assembled
-    config.PhenotypeSummary.show_reviewed = false;% optionally add reviewed numeric-summary values when available
+    config.PhenotypeSummary.show_reviewed = true;% optionally add reviewed numeric-summary values when available
     
     %---- MANUAL LABEL EVENT EDITING
     config.LabelEdit = struct();
@@ -277,7 +278,7 @@ function config = get_config_defaults()
     % MAT remains authoritative and is not replaced. HDF5 contains native
     % numeric/text datasets plus a separate export-only lower-rate ML timeline.
     config.HDF5 = struct();
-    config.HDF5.enabled = true;
+    config.HDF5.enabled = false;
     config.HDF5.filename_suffix = '_results.h5';
     config.HDF5.include_raw_signals = false;
     config.HDF5.include_preprocessed_signals = true;

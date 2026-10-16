@@ -18,9 +18,7 @@ function run_magma(base_config)
              'execution.mode = review_only.']);
     end
 
-    if ~isfolder(base_config.path_results_out)
-        mkdir(base_config.path_results_out);
-    end
+    ensure_output_directory(base_config.path_results_out);
     config = base_config;
     save(fullfile(base_config.path_results_out, ...
         'analysis_configuration.mat'), 'config');
