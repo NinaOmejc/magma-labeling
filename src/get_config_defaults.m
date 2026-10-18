@@ -83,6 +83,7 @@ function config = get_config_defaults()
 
     % manual control of respiratory cycles (independent of execution.mode)
     config.resp.manual_control = true;          % allow peak edits and independent movement of existing troughs before label detection
+    config.resp.recheck_cached = false;        % reopen saved landmarks/artifacts; Cancel skips this recording
     config.resp.manual_window_sec = 300;        % visible time span for manual breath GUI scrolling
     
     %---- SESSION PHYSIOLOGICAL REFERENCE ----

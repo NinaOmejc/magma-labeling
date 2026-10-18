@@ -248,8 +248,8 @@ function testDedicatedPhenotypeTablesUseFixedSchemaAndProvenance(testCase)
     label_available = true(1, 11);
     mask_automatic = false(20, 11);
     config = struct('fs', 10);
-    automatic = compact_output(schema, 1:22);
-    reviewed = compact_output(schema, 101:122);
+    automatic = compact_output(schema, [1:22 0.25 1]);
+    reviewed = compact_output(schema, [101:122 0.75 0]);
     phenotypes = struct( ...
         'automatic', struct('numeric_summary', automatic), ...
         'reviewed', struct('numeric_summary', reviewed));
@@ -273,21 +273,21 @@ function testDedicatedPhenotypeTablesUseFixedSchemaAndProvenance(testCase)
     verifyEqual(testCase, auto.Properties.VariableNames, expected_columns);
     verifyEqual(testCase, auto.recording_id, "Sub1_M2");
     verifyEqual(testCase, auto.analysis_id, "analysis_fixture");
-    verifyEqual(testCase, table2array(auto(:, 6:end)), 1:22);
-    verifyEqual(testCase, table2array(review(:, 6:end)), 101:122);
-    verifyEqual(testCase, table2array(availability(:, 6:end)), ones(1, 22));
-    verifyEqual(testCase, dictionary.feature_index, (1:22)');
+    verifyEqual(testCase, table2array(auto(:, 6:end)), [1:22 0.25 1]);
+    verifyEqual(testCase, table2array(review(:, 6:end)), [101:122 0.75 0]);
+    verifyEqual(testCase, table2array(availability(:, 6:end)), ones(1, 24));
+    verifyEqual(testCase, dictionary.feature_index, (1:24)');
     verifyEqual(testCase, dictionary.feature_name, ...
         string(schema.feature_names(:)));
     qc = readtable(fullfile(out_dir, 'group_details.xlsx'), 'Sheet', 'Phenotype_QC');
-    verifyEqual(testCase, height(qc), 44);
+    verifyEqual(testCase, height(qc), 48);
     verifyTrue(testCase, isfile(fullfile(out_dir, '_cache', 'group_analysis_data.mat')));
 end
 
 function compact = compact_output(schema, values)
 % COMPACT_OUTPUT Create one valid saved compact-vector fixture.
 
-    compact = struct('version', 'magma_phenotype_numeric_summary_v3', ...
+    compact = struct('version', 'magma_phenotype_numeric_summary_v4', ...
         'schema_version', schema.version, 'n_features', schema.n_features, ...
         'feature_names', {schema.feature_names}, 'values', double(values), ...
         'available', true(1, schema.n_features), ...

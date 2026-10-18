@@ -125,7 +125,7 @@ function testSelectedPhaseAvailabilityAndAssessabilityPropagate(testCase)
     verifyEqual(testCase, reason, {'available'});
     verifyTrue(testCase, any(assessable));
     verifyFalse(testCase, all(assessable));
-    verifyEqual(testCase, info.version, 'label_assessability_v2');
+    verifyEqual(testCase, info.version, 'label_assessability_v3');
 end
 
 function testUnavailableSelectedMethodDoesNotFallBack(testCase)

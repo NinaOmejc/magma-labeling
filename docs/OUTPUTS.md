@@ -50,19 +50,21 @@ reviewed phenotype layer is built. Existing snapshots are preserved, including
 during selected-label reruns. Older histories without these fields still load;
 only the active round can gain a newly computed snapshot. Cancelled reviews
 leave the saved history and figure unchanged. Top-level `results.phenotypes`
-continues to hold the current automatic/reviewed bundle. This adds no new HDF5
-history paths and leaves existing label-mask figure naming unchanged.
+continues to hold the current automatic/reviewed bundle. HDF5 preserves these immutable snapshots under each review round; existing
+label-mask figure naming is unchanged.
 
 The MAT file is the authoritative MATLAB result. The HDF5 file uses schema
-`magma_ml_hdf5_v16` as a portable recording-level representation.
+`magma_ml_hdf5_v18` as a portable recording-level representation.
 
 ## Recording-level thoracic observation
 
-Both manual editors share **Minimal / absent thoracic excursion (belt present)**.
-This is an observation, not a diagnosis, missing sensor, label, or phenotype score.
-Unchecked legacy recordings default to `not_assessed`; checking stores `observed`,
-and clearing an established observation stores `not_observed`. Cancel/X discards
-uncommitted checkbox changes. No valid thoracic peaks are needed to annotate it.
+Both manual editors share **Minimal or absent thoracic excursion**.
+This recording observation is not a diagnosis, missing sensor, or new time-resolved
+label. It supplies the clinician feature of the new recording-level phenotype.
+The GUI offers **Not observed** (default) and **Observed**. Acceptance stores
+`not_observed` or `observed`, including an explicit negative from a previously
+`not_assessed` recording. Cancel/X preserves the old metadata. Legacy or never
+assessed recordings retain `not_assessed`; their clinician numeric value stays NaN. No valid thoracic peaks are needed to annotate it.
 
 `results.mat` and the feature cache store top-level `recording_observations`:
 
@@ -97,8 +99,12 @@ Older MAT/HDF5 files without these fields remain readable.
 When established before detection, thoracic cycles, references, raw apnea fallback,
 periodic evidence, and cross-belt polarity/phase evidence are excluded. Abdominal
 evidence remains usable, and the thoracic trace remains available for display.
-Clearing the observation restores thoracic extraction while preserving abdominal
-landmarks. Existing missing-lung-belt behavior and the 11-label schema are unchanged.
+Existing thoracic and abdominal landmarks remain intact while the observation
+gates active evidence. Clearing it makes retained thoracic landmarks eligible
+again; it never regenerates reviewed peaks/troughs. If a formerly suppressed cache
+contains no thoracic landmarks, an explicit feature review/re-extraction is needed
+to establish them. No deleted landmarks can be reconstructed from old empty caches.
+Existing missing-lung-belt behavior and the 11-label schema are unchanged.
 
 A late label-editor annotation changes metadata, not previously computed automatic
 events/masks. Respiratory polarity/features/references, respiratory labels, dependent
@@ -120,8 +126,36 @@ Implementation file map (under `src/` unless stated otherwise):
 | Raw and two-belt detector gates | `label_detection/detect_apnea.m`, `compute_eami_periodic_breathing.m`, `compute_guyot_periodic_breathing.m`, `compute_respiratory_asynchrony_metrics.m`, `compute_respiratory_phase_offset_metrics.m` |
 | Polarity evidence | `utils/correct_respiratory_belt_polarity.m`, `utils/determine_absolute_respiratory_polarity.m` |
 | Execution and result/review persistence | `run_magma.m`, `utils/build_recording_results.m`, `utils/save_recording_results.m`, `utils/review_existing_results.m`, `utils/create_manual_review_round.m` |
+| New spectral descriptor | `feature_extraction/compute_thoracic_respiratory_rhythmicity.m` |
+| Phenotype schema and recording features | `utils/get_phenotype_feature_schema.m`, `build_compact_phenotype_features.m`, `build_db_phenotype_evidence.m`, `build_db_phenotype_evidence_bundle.m`, `build_thoracic_excursion_phenotype.m`, `attach_thoracic_excursion_phenotype.m`, `align_phenotype_numeric_summary.m` |
+| Cache protection and backup | `utils/has_reviewed_respiration_landmarks.m`, `utils/backup_recording_mat_files.m`, `utils/build_sigh_breath_candidates.m` |
+| Figure and group export | `plotting/plot_phenotype_summary.m`, `group/build_group_label_table.m`, `group/build_group_phenotype_tables.m`, `group/collect_group_workbook_tables.m` |
 | HDF5 | `export/write_recording_observation_hdf5.m`, `export/export_results_hdf5.m` |
-| Documentation and focused tests | `docs/CONFIGURATION.md`, `docs/OUTPUTS.md`, `tests/unit/test_thoracic_observation.m`, `tests/unit/test_stage6_freeze.m` (repository-relative) |
+| Documentation and focused tests | `docs/CONFIGURATION.md`, `docs/OUTPUTS.md`, `tests/unit/test_thoracic_observation.m`, `tests/unit/test_thoracic_phenotype_features.m`, `tests/unit/test_stage6_freeze.m` and the existing phenotype/group regression fixtures (repository-relative) |
+
+The new phenotype lives at
+`phenotypes.{automatic,reviewed}.recording_level.minimal_thoracic_excursion`.
+Its numeric-summary positions are **23** `thoracic_respiratory_rhythmicity`
+and **24** `minimal_thoracic_excursion_clinician`; positions 1-22 are unchanged.
+Signal QC/provenance is stored at `results.respiratory_signal_qc.thoracic`,
+and HDF5 exports it under `/diagnostics/respiratory_signal_qc/thoracic`.
+The compact QC contains no waveform or PSD arrays. HDF5 also preserves each saved
+review numeric snapshot, including legacy 22-value snapshots, under
+`/review/history/round_NNNNNN/phenotype_numeric_summary_reviewed`.
+Read-side alignment pads a copy of an old 22-value summary with unavailable NaNs;
+old files and immutable history entries are not rewritten.
+
+Group `Phenotypes`, `Phenotype_QC`, matrices and the feature dictionary include
+all 24 features. `Recordings` additionally exposes
+`minimal_thoracic_excursion_status`, `minimal_thoracic_excursion_clinician`,
+`thoracic_respiratory_rhythmicity`,
+`thoracic_respiratory_rhythmicity_available`,
+`thoracic_respiratory_rhythmicity_missing_reason` and
+`recording_observation_pending_reanalysis`. Those observation columns describe
+current metadata; automatic matrix feature 24 describes the analysis snapshot.
+Technical missingness is explicit, never a numeric zero.
+
+See [the scientific definition and safe rerun procedure](PHENOTYPES.md#thoracic-excursion-phenotype-and-rhythmicity).
 
 ## Two output levels
 
@@ -184,7 +218,7 @@ available != phenotype present
 available != clinical diagnosis
 ```
 
-Each `numeric_summary` has the same fixed 22 values in the same schema order
+Each `numeric_summary` has the same fixed 24 values in the same schema order
 and contains:
 
 ```text
@@ -276,7 +310,7 @@ The public hierarchy is:
 /meta
 ```
 
-Schema v16 provides two signal levels. `/signals/preprocessed` remains the
+Schema v17 provides two signal levels. `/signals/preprocessed` remains the
 authoritative processed signal on the native recording timeline in `/time`;
 optional `/signals/raw` is unchanged. `/signals/ml/data` is an additional,
 export-only, anti-aliased lower-rate copy with its own exactly aligned timeline
@@ -356,8 +390,8 @@ Each workbook starts with an Index sheet describing its tables and row counts.
 
 | Workbook | Worksheets | Meaning |
 |---|---|---|
-| `group_summary.xlsx` | Label_burden | One recording and label per row, automatic and reviewed burdens, availability, review coverage, and event counts. Fractions remain 0–1. |
-| | Phenotypes | The 22 schema-ordered raw features per recording, with an explicit automatic/reviewed layer column. |
+| `group_summary.xlsx` | Label_burden | One recording and label per row, automatic and reviewed burdens, availability, review coverage, and event counts. Fractions remain 0Ã¢â‚¬â€œ1. |
+| | Phenotypes | The 24 schema-ordered raw features per recording, with an explicit automatic/reviewed layer column. |
 | | Descriptive | Labels and features together, with variable type, annotation layer, units, measurement, sample count, median, IQR, and quantiles. |
 | | Paired_summary | Labels and features together, with both measurement IDs and valid-pair counts. Label changes use percentage points; feature changes retain their units. |
 | `group_details.xlsx` | Recordings, Cohort_label_QC | Full recording summaries and cohort label QC. |
@@ -386,8 +420,17 @@ Subjects with unknown group remain in the all-subject histogram and are
 omitted from the Control/Patient splits. Group membership comes from
 Questionnaire `grp` (0=Control, 1=Patient) or explicit group lists.
 
-Labels can overlap, so burdens should not be summed to 100%. The 22 phenotype
+Labels can overlap, so burdens should not be summed to 100%. The 24 phenotype
 features are signal-derived numerical descriptions, not diagnoses. Respiratory
 belt magnitudes are not calibrated tidal volumes. Pair differences are
 exploratory descriptions; M1 to M2 compares pre-exercise and post-exercise
 recordings before rehabilitation. No hypothesis tests or clustering are run.
+
+## Respiratory artifact annotations
+
+The additive version-9 feature-cache fields, artifact revision/provenance,
+analysis revision, and HDF5 v18 observation datasets are documented in
+[Rechecking respiratory features](RESPIRATORY_ARTIFACTS.md). Raw waveforms and
+reviewed landmark positions remain intact. Artifact-contaminated samples are
+excluded through `label_assessable_mask`; a false label bit there is not an
+assessed physiological negative.

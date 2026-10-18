@@ -11,6 +11,8 @@ function resp_ref = compute_respiratory_reference( ...
 %   change_time_difference_sec/change_ratio_log_difference - Cross-belt diagnostics.
 %   agreement_quality - Overall cross-belt reference agreement state.
 
+    [data,resp_cycles,artifact_state] = respiratory_artifact_view(data,resp_cycles,config);
+    config.respiratory_artifact_state = artifact_state;
     cfg = respiratory_reference_config(config);
     validate_session_reference(session_reference);
     if ~isfield(config, 'channels')

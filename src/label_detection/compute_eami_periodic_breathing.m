@@ -6,8 +6,10 @@ function diagnostics = compute_eami_periodic_breathing(data, config)
 % belts dynamically and uses twice the configured energy-window duration as
 % the sustained event requirement.
 
+    data = respiratory_artifact_view(data,struct(),config);
     cfg = validate_eami_config(config.periodic.eami, config.fs);
     N = size(data, 1);
+    artifacts = respiratory_artifact_state(struct(),config,N);
     recording_end_t = max(0, (N - 1) / config.fs);
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
@@ -18,12 +20,12 @@ function diagnostics = compute_eami_periodic_breathing(data, config)
     if ~lungs_ignored && ~minimal_thoracic_excursion(config) && ...
             valid_channel(config.channels.lungs_idx, size(data, 2))
         lungs = compute_eami_belt( ...
-            data(:, config.channels.lungs_idx), N, config.fs, cfg);
+            data(:, config.channels.lungs_idx), N, config.fs, cfg, artifacts.lungs);
     end
     diaph = empty_eami_belt(recording_end_t, cfg);
     if valid_channel(config.channels.diaph_idx, size(data, 2))
         diaph = compute_eami_belt( ...
-            data(:, config.channels.diaph_idx), N, config.fs, cfg);
+            data(:, config.channels.diaph_idx), N, config.fs, cfg, artifacts.diaph);
     end
 
     min_event_duration_sec = 2 * cfg.energy_win_sec;
@@ -64,7 +66,7 @@ function diagnostics = compute_eami_periodic_breathing(data, config)
         'combined', combined);
 end
 
-function diagnostics = compute_eami_belt(raw_signal, N, fs, cfg)
+function diagnostics = compute_eami_belt(raw_signal, N, fs, cfg, artifacts)
 % COMPUTE_EAMI_BELT Filter one raw belt and compute centered eAMI windows.
 
     recording_end_t = max(0, (N - 1) / fs);
@@ -95,6 +97,9 @@ function diagnostics = compute_eami_belt(raw_signal, N, fs, cfg)
     for start_index = 1:last_start
         idx = start_index:start_index + n_window_samples - 1;
         center_index = start_index + center_offset;
+        if ~respiratory_artifact_window_valid(artifacts,signal_t_sec(idx(end)),cfg.energy_win_sec,fs)
+            continue;
+        end
         resp_window = resp_filtered(idx);
         am_window = amplitude_envelope(idx);
         if any(~isfinite(resp_window)) || any(~isfinite(am_window))

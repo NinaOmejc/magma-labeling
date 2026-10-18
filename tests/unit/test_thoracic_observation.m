@@ -117,6 +117,28 @@ function testFeatureGuiWorksWithNoPeaksAndCancelDoesNotSave(testCase)
     verifyEqual(testCase, recording_observation('load', config).status, 'observed');
 end
 
+function testGuiDefaultNegativeIsExplicitlyCommittedOnlyOnAcceptance(testCase)
+    [config,cleanup] = fixture(); %#ok<ASGLU>
+    config.execution.mode = 'review_only';
+    cycles = struct('lungs',empty_respiration_feature('lungs'),'diaph',empty_respiration_feature('diaph'));
+    data = zeros(40,6);
+    cycles.lungs.x0 = data(:,4); cycles.diaph.x0 = data(:,6);
+    driver = gui_driver(false,false,'Cancel');
+    cleanup_timer = onCleanup(@() stop_driver(driver));
+    manual_edit_respiration_features(data,cycles.lungs,cycles.diaph,config);
+    verifyEqual(testCase,recording_observation('load',config).status,'not_assessed');
+    clear cleanup_timer;
+    defs = manual_label_definitions(); sets = struct();
+    for i = 1:numel(defs), sets.(defs(i).field) = empty_events(); end
+    driver = gui_driver(false,false,'Done');
+    cleanup_timer = onCleanup(@() stop_driver(driver)); %#ok<NASGU>
+    [~,info] = manual_edit_label_events(data,cycles,config,sets);
+    verifyEqual(testCase,reshape(driver.UserData.options,1,[]),{'Not observed','Observed'});
+    verifyEqual(testCase,info.recording_observations.status,'not_observed');
+    verifyEqual(testCase,info.review_history(end).recording_observation_change.before.status,'not_assessed');
+    verifyEqual(testCase,info.review_history(end).recording_observation_change.after.status,'not_observed');
+end
+
 function testLabelGuiSharesFlagAndRecordsOnlyAcceptedChanges(testCase)
     [config, cleanup] = fixture(); %#ok<ASGLU>
     config.execution.mode = 'review_only';
@@ -276,11 +298,12 @@ function drive_gui(driver, expected, target, button)
         finish = findall(fig, 'Style', 'pushbutton', 'String', button);
         if isempty(finish), return; end
     end
-    state.seen = logical(get(control, 'Value')); driver.UserData = state;
+    state.seen = get(control, 'Value') == 2;
+    state.options = get(control,'String'); driver.UserData = state;
     if state.seen ~= expected || ~strcmp(get(control, 'Enable'), 'on')
         stop(driver); close(fig); return; % Fail the outer assertions without hanging uiwait.
     end
-    set(control, 'Value', target); callback = get(control, 'Callback'); callback(control, []);
+    set(control, 'Value', 1+target); callback = get(control, 'Callback'); callback(control, []);
     stop(driver);
     if strcmp(button, 'Cancel')
         close(fig);

@@ -550,7 +550,7 @@ function testCompleteAndPartialAssessability(testCase)
     verifyFalse(testCase, mask(4, strcmp(names,'desat')));
     verifyFalse(testCase, mask(1, strcmp(names,'async')));
     verifyTrue(testCase, all(mask(:, strcmp(names,'rapid'))));
-    verifyEqual(testCase, info.version, 'label_assessability_v2');
+    verifyEqual(testCase, info.version, 'label_assessability_v3');
 
     unavailable = true(1,11); unavailable(strcmp(names,'thoracic')) = false;
     complete = compute_label_assessable_mask( ...
@@ -748,7 +748,7 @@ function testHdf5RoundTripPreservesOrderMasksNaNsAndRespiration(testCase)
     verifyFalse(testCase, hdf5_path_exists(filename, ...
         '/respiration/diagnostic_signals'));
     verifyEqual(testCase, read_hdf5_text(filename, ...
-        '/meta/export_schema_version'), {'magma_ml_hdf5_v16'});
+        '/meta/export_schema_version'), {'magma_ml_hdf5_v18'});
     layers = {'automatic', 'reviewed'};
     canonical_phenotypes = {'hyperventilation_like', ...
         'periodic_deep_sighing', 'thoracic_dominant_breathing', ...
@@ -805,11 +805,11 @@ function testHdf5RoundTripPreservesOrderMasksNaNsAndRespiration(testCase)
         '/phenotypes/automatic/numeric_summary/feature_names'), ...
         schema.feature_names);
     verifyNumElements(testCase, h5read(filename, ...
-        '/phenotypes/automatic/numeric_summary/values'), 22);
+        '/phenotypes/automatic/numeric_summary/values'), 24);
     verifyNumElements(testCase, h5read(filename, ...
-        '/phenotypes/automatic/numeric_summary/available'), 22);
+        '/phenotypes/automatic/numeric_summary/available'), 24);
     verifyNumElements(testCase, h5read(filename, ...
-        '/phenotypes/reviewed/numeric_summary/coverage_fraction'), 22);
+        '/phenotypes/reviewed/numeric_summary/coverage_fraction'), 24);
     verifyEqual(testCase, h5read(filename, '/review/history/number_of_rounds'), 1);
     verifyEqual(testCase, read_hdf5_text(filename, ...
         '/review/history/round_000001/reviewer_role'), {'researcher'});
@@ -839,6 +839,21 @@ function testHdf5RoundTripPreservesThoracicObservationAndReviewChange(testCase)
     results.analysis_recording_observations = before;
     results.review_history(1).recording_observations = current;
     results.review_history(1).recording_observation_change = struct('before', before, 'after', current);
+    results.respiratory_signal_qc.thoracic = struct('version','test_qc_v1', ...
+        'thoracic_respiratory_rhythmicity',0.75,'available',true,'missing_reason','', ...
+        'valid_coverage_fraction',1,'analysis_observation_revision',0,'scope','recording');
+    results.phenotypes = attach_thoracic_excursion_phenotype(results.phenotypes,results);
+    snapshot = results.phenotypes.reviewed.numeric_summary;
+    legacy = snapshot;
+    for field = {'feature_names','values','available','coverage_fraction','missing_reason','phenotype_group','feature_role','units'}
+        legacy.(field{1}) = legacy.(field{1})(1:22);
+    end
+    legacy.n_features = 22; legacy.version = 'magma_phenotype_numeric_summary_v3';
+    legacy.schema_version = 'magma_phenotype_numeric_summary_schema_v3';
+    results.review_history(1).phenotype_numeric_summary_reviewed = legacy;
+    results.review_history(2) = results.review_history(1);
+    results.review_history(2).round_id = 2;
+    results.review_history(2).phenotype_numeric_summary_reviewed = snapshot;
     filename = [tempname '.h5'];
     cleanup = onCleanup(@() delete_if_present(filename)); %#ok<NASGU>
     export_results_hdf5(filename, results, zeros(20,6), zeros(20,6));
@@ -854,6 +869,16 @@ function testHdf5RoundTripPreservesThoracicObservationAndReviewChange(testCase)
     verifyEqual(testCase, read_hdf5_text(filename, [base 'recording_observations/status']), {'observed'});
     verifyEqual(testCase, read_hdf5_text(filename, [base 'recording_observation_change/before/status']), {'not_assessed'});
     verifyEqual(testCase, read_hdf5_text(filename, [base 'recording_observation_change/after/status']), {'observed'});
+    verifyEqual(testCase,h5read(filename, ...
+        '/diagnostics/respiratory_signal_qc/thoracic/thoracic_respiratory_rhythmicity'),0.75);
+    automatic = h5read(filename,'/phenotypes/automatic/numeric_summary/values');
+    reviewed = h5read(filename,'/phenotypes/reviewed/numeric_summary/values');
+    verifyEqual(testCase,automatic(23),0.75); verifyTrue(testCase,isnan(automatic(24)));
+    verifyEqual(testCase,reviewed(23:24),reshape([0.75 1],size(reviewed(23:24))));
+    verifyNumElements(testCase,h5read(filename, ...
+        '/review/history/round_000001/phenotype_numeric_summary_reviewed/values'),22);
+    verifyEqual(testCase,h5read(filename, ...
+        '/review/history/round_000002/phenotype_numeric_summary_reviewed/values'),snapshot.values);
 end
 
 function testHdf5MlExportKeepsNativeAndAddsFilteredCanonicalBundle(testCase)
@@ -888,7 +913,7 @@ function testHdf5MlExportKeepsNativeAndAddsFilteredCanonicalBundle(testCase)
     verifyEqual(testCase, h5read(filename, '/signals/ml/source_fs'), 200);
     verifyEqual(testCase, read_hdf5_text(filename, ...
         '/signals/ml/channel_names'), ...
-        {'Resp-Diaphragm', 'Resp-Lungs', 'SpO₂'});
+        {'Resp-Diaphragm', 'Resp-Lungs', 'SpOâ‚‚'});
     verifyEqual(testCase, read_hdf5_text(filename, ...
         '/signals/ml/channel_roles'), {'diaph', 'lungs', 'spo2'});
     verifyEqual(testCase, h5read(filename, ...
@@ -941,7 +966,7 @@ end
 function testHdf5MlExportOmitsMissingLungsWithoutSubstitution(testCase)
     config = make_test_config();
     config.data_columns = ...
-        {'ECG1', 'ECG2', 'SpO₂', 'Blood Pressure', 'Resp-Diaphragm'};
+        {'ECG1', 'ECG2', 'SpOâ‚‚', 'Blood Pressure', 'Resp-Diaphragm'};
     config = resolve_signal_channels(config);
     N = 401;
     raw = zeros(N, numel(config.data_columns));
@@ -956,7 +981,7 @@ function testHdf5MlExportOmitsMissingLungsWithoutSubstitution(testCase)
 
     verifySize(testCase, h5read(filename, '/signals/ml/data'), [21 2]);
     verifyEqual(testCase, read_hdf5_text(filename, ...
-        '/signals/ml/channel_names'), {'Resp-Diaphragm', 'SpO₂'});
+        '/signals/ml/channel_names'), {'Resp-Diaphragm', 'SpOâ‚‚'});
     verifyEqual(testCase, read_hdf5_text(filename, ...
         '/signals/ml/channel_roles'), {'diaph', 'spo2'});
     verifyEqual(testCase, h5read(filename, ...
@@ -1079,9 +1104,12 @@ function testRecordingResultUsesDeduplicatedOutputSchema(testCase)
     verifyFalse(testCase, isfield(results, 'input_config'));
     verifyEqual(testCase, results.config.input_config.description, ...
         'resolved test input');
-    verifyEqual(testCase, results.phenotypes, fixture.phenotypes);
-    verifyEqual(testCase, results.review_history(1).phenotypes_reviewed, ...
-        fixture.phenotypes.reviewed);
+    verifyEqual(testCase, results.phenotypes.automatic.literature_based, fixture.phenotypes.automatic.literature_based);
+    verifyEqual(testCase, results.phenotypes.reviewed.label_based, fixture.phenotypes.reviewed.label_based);
+    verifyEqual(testCase, results.phenotypes.automatic.numeric_summary.values(1:22), ...
+        fixture.phenotypes.automatic.numeric_summary.values(1:22));
+    verifyEqual(testCase, results.review_history(1).phenotypes_reviewed.numeric_summary.values(1:22), ...
+        fixture.phenotypes.reviewed.numeric_summary.values(1:22));
     config.execution.partial_rerun = true;
     partial = build_recording_results(config, fixture.resp_cycles, ...
         fixture.resp_ref, fixture.session_reference, fixture.resp_features, labels);

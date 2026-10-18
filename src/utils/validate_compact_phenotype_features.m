@@ -14,6 +14,15 @@ function validate_compact_phenotype_features(compact)
         error('MAGMA:PhenotypeFeatures:InvalidCompactFeatures', ...
             'numeric_summary is missing: %s.', strjoin(missing, ', '));
     end
+    if compact.n_features == 22 && strcmp(compact.schema_version, ...
+            'magma_phenotype_numeric_summary_schema_v3')
+        % Validate the historical contract as stored; callers pad only a copy.
+        schema.version = 'magma_phenotype_numeric_summary_schema_v3';
+        schema.n_features = 22;
+        for field = {'feature_names','phenotype_group','feature_role','units'}
+            schema.(field{1}) = schema.(field{1})(1:22);
+        end
+    end
     if compact.n_features ~= schema.n_features
         error('MAGMA:PhenotypeFeatures:InvalidCompactFeatures', ...
             'numeric_summary.n_features must equal %d.', schema.n_features);
@@ -56,6 +65,12 @@ function validate_compact_phenotype_features(compact)
             error('MAGMA:PhenotypeFeatures:InvalidCompactFeatures', ...
                 '%s does not match the fixed schema.', text_fields{i});
         end
+    end
+    if schema.n_features == 24 && ...
+            (any(compact.values(23:24) < 0 | compact.values(23:24) > 1) || ...
+            (isfinite(compact.values(24)) && ~ismember(compact.values(24),[0 1])))
+        error('MAGMA:PhenotypeFeatures:InvalidCompactFeatures', ...
+            'Rhythmicity must be 0-1 or NaN; clinician assessment must be 0, 1, or NaN.');
     end
     if any(compact.available & ~isfinite(compact.values))
         error('MAGMA:PhenotypeFeatures:InvalidCompactFeatures', ...

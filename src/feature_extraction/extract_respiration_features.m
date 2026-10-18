@@ -38,7 +38,8 @@ function resp_cycles = extract_respiration_features(data, config)
         edit_diaph = is_editable_resp_signal(resp_cycles.diaph);
 
         thoracic_present = ~isempty(idx_lungs) && ~is_lung_belt_ignored(config);
-        if edit_lungs || edit_diaph || thoracic_present
+        abdominal_trace_present = ~isempty(idx_diaph) && ~isempty(resp_cycles.diaph.x0);
+        if edit_lungs || edit_diaph || thoracic_present || abdominal_trace_present
             lungs_before = resp_cycles.lungs;
             diaph_before = resp_cycles.diaph;
             [edited_lungs, edited_diaph, review_confirmed, observation] = ...
@@ -52,7 +53,8 @@ function resp_cycles = extract_respiration_features(data, config)
                     (edit_lungs && respiration_breath_landmarks_changed( ...
                         lungs_before, resp_cycles.lungs)) || ...
                     (edit_diaph && respiration_breath_landmarks_changed( ...
-                        diaph_before, resp_cycles.diaph));
+                        diaph_before, resp_cycles.diaph)) || ...
+                    ~isempty(edited_lungs.artifact_intervals_idx) || ~isempty(edited_diaph.artifact_intervals_idx);
                 if manual_edits_made
                     review_status = 'manual_reviewed_edited';
                 else

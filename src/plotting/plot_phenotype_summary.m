@@ -1,4 +1,4 @@
-function fig = plot_phenotype_summary(phenotypes, config, review_history)
+function fig = plot_phenotype_summary(phenotypes, config, review_history, recording_context)
 % PLOT_PHENOTYPE_SUMMARY Render the final recording-level phenotype values.
 %
 % Inputs:
@@ -9,9 +9,10 @@ function fig = plot_phenotype_summary(phenotypes, config, review_history)
 % Output:
 %   fig - Figure handle while plotting; empty after save_figure or when disabled.
 %
-% The figure is a presentation of existing numeric_summary values only. It
+% The figure presents existing numeric_summary values; recording QC is shared. It
 % deliberately performs no phenotype, burden, overlap, or score calculation.
 
+    if nargin < 4, recording_context = struct(); end
     fig = [];
     if nargin < 2 || isempty(config) || ...
             ~isfield(config, 'PhenotypeSummary') || ...
@@ -34,7 +35,7 @@ function fig = plot_phenotype_summary(phenotypes, config, review_history)
     end
 
     n_groups = numel(sections{1}.groups); % Only literature profiles need group headings.
-    n_rows = 1 + numel(sections) + n_groups + schema.n_features + 1;
+    n_rows = 1 + numel(sections) + n_groups + schema.n_features + 4;
     fig_height = max(780, 24 * n_rows);
     fig_width = 860 + 160 * numel(reviews);
     fig = figure( ...
@@ -97,6 +98,20 @@ function fig = plot_phenotype_summary(phenotypes, config, review_history)
         end
     end
 
+    y = y + 0.4;
+    text(ax,0.025,y,'Rhythmicity is shared recording-level spectral QC; label review does not recalculate it.', ...
+        'Interpreter','none','Color',[0.35 0.35 0.35]);
+    artifacts_pending = isfield(recording_context,'respiratory_artifact_state') && ...
+        recording_context.respiratory_artifact_state.pending_reanalysis;
+    if artifacts_pending || (isfield(recording_context,'recording_observations') && ...
+            recording_context.recording_observations.pending_reanalysis)
+        text(ax,0.5,1.3,'PENDING REANALYSIS: automatic results retain their original analysis evidence.', ...
+            'HorizontalAlignment','center','Color',[0.75 0.2 0.05],'Interpreter','none');
+    end
+    if ~automatic.available(23)
+        text(ax,0.025,y+1,['Thoracic rhythmicity: ' strrep(automatic.missing_reason{23},'_',' ')], ...
+            'Interpreter','none','Color',[0.35 0.35 0.35]);
+    end
     hold(ax, 'off');
     figure(fig);
     save_figure(config, 'phenotype_summary');
@@ -113,8 +128,7 @@ function summary = require_numeric_summary(phenotypes, layer_name)
         error('MAGMA:PhenotypeSummary:MissingNumericSummary', ...
             'phenotypes.%s.numeric_summary is required.', layer_name);
     end
-    summary = phenotypes.(layer_name).numeric_summary;
-    validate_compact_phenotype_features(summary);
+    summary = align_phenotype_numeric_summary(phenotypes.(layer_name).numeric_summary);
 end
 
 function sections = phenotype_sections()
@@ -137,7 +151,9 @@ function sections = phenotype_sections()
                 'shallow_breathing', ...
                 'slow_breathing', ...
                 'irregular_breathing', ...
-                'desaturation'}})};
+                'desaturation'}}), ...
+        struct('title','Minimal or absent thoracic excursion', ...
+            'groups',{{'minimal_thoracic_excursion'}})};
 end
 
 function feature_order = collect_feature_order(schema, sections)
@@ -173,7 +189,7 @@ function [reviews, round_ids] = review_summaries(history)
         elseif isfield(entry, 'phenotypes_reviewed') && ~isempty(entry.phenotypes_reviewed)
             reviews{i} = entry.phenotypes_reviewed.numeric_summary;
         end
-        if ~isempty(reviews{i}), validate_compact_phenotype_features(reviews{i}); end
+        if ~isempty(reviews{i}), reviews{i} = align_phenotype_numeric_summary(reviews{i}); end
     end
 end
 
@@ -211,6 +227,15 @@ function draw_feature_row(ax, y, index, schema, automatic, reviews, columns)
     summaries = [{automatic}, reviews];
     for i = 1:numel(summaries)
         [value_text, value_color] = display_value(summaries{i}, index);
+        if index == 23 && i > 1 && ~isempty(summaries{i}) && summaries{i}.available(index)
+            value_text = 'Recording QC'; value_color = [0.35 0.35 0.35];
+        elseif index == 24
+            value_text = 'Not assessed';
+            if ~isempty(summaries{i}) && summaries{i}.available(index)
+                value_text = 'Not observed (0)';
+                if summaries{i}.values(index) == 1, value_text = 'Observed (1)'; end
+            end
+        end
         text(ax, columns.values(i), y, value_text, ...
             'HorizontalAlignment', 'right', 'Color', value_color, ...
             'Interpreter', 'none');
@@ -256,6 +281,8 @@ function title_text = phenotype_group_title(group_key)
             title_text = 'Thoracic-dominant breathing';
         case 'thoracoabdominal_asynchrony'
             title_text = 'Thoraco-abdominal asynchrony';
+        case 'minimal_thoracic_excursion'
+            title_text = 'Minimal or absent thoracic excursion';
         case 'forced_abdominal_expiration'
             title_text = 'Forced abdominal expiration';
         case 'apneic_breathing'

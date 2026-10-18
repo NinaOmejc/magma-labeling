@@ -5,10 +5,10 @@ MAGMA separates two analysis levels:
 1. **Level 1 — time-resolved physiological labels and evidence.** Labels,
    events, assessability masks, breath evidence, and detector diagnostics.
 2. **Level 2 — recording-level phenotype and respiratory-pattern evidence.**
-   Detailed profiles and a fixed 22-value numeric summary are provided for
+   Detailed profiles and a fixed 24-value numeric summary are provided for
    automatic and reviewed annotation layers.
 
-Level 2 contains two groups:
+Level 2 contains three groups:
 
 - **Literature-based dysfunctional-breathing phenotypes:**
   hyperventilation-like respiratory pattern, periodic deep sighing,
@@ -17,9 +17,11 @@ Level 2 contains two groups:
 - **Additional MAGMA label-derived respiratory patterns:** apneic breathing,
   periodic breathing, shallow breathing, slow breathing, irregular breathing,
   and desaturation.
+- **Recording-level minimal or absent thoracic excursion:** independent spectral
+  rhythmicity and clinician assessment, with separate provenance.
 
 A phenotype is **not one number**, no binary clinical diagnosis is produced,
-and the eleven recording-level profiles are not mutually exclusive. The detailed
+and the twelve recording-level profiles are not mutually exclusive. The detailed
 Level-2 evidence contains more information than the fixed numeric summary.
 
 ## Five literature-based phenotypes
@@ -146,7 +148,7 @@ pattern rather than a diagnosis.
 
 The phenotype summary schema is the sole authority for names, order, units,
 roles, display names, and source descriptions. The public `numeric_summary`
-structure contains 22 selected numeric measures derived from the Level-2
+structure contains 24 selected numeric measures derived from the Level-2
 phenotype and respiratory-pattern evidence.
 
 | # | Feature name | Units |
@@ -173,15 +175,120 @@ phenotype and respiratory-pattern evidence.
 | 20 | `pattern_slow_fraction` | fraction |
 | 21 | `pattern_irregular_fraction` | fraction |
 | 22 | `pattern_desaturation_fraction` | fraction |
+| 23 | `thoracic_respiratory_rhythmicity` | dimensionless (0-1) |
+| 24 | `minimal_thoracic_excursion_clinician` | binary_assessment (0/1/NaN) |
 
-The first 16 variables represent the literature-based phenotypes. The final six
-are additional label-based respiratory-pattern burdens. Forced abdominal
+The first 16 variables represent the literature-based phenotypes; positions 17-22
+are the unchanged additional label-based respiratory-pattern burdens. Positions
+23-24 belong to the new recording-level thoracic-excursion phenotype. Forced abdominal
 expiration contributes zero variables.
 
 Deep breathing, rapid breathing, and sighing remain fully available at Level 1
 and contribute to the literature-based phenotypes without separate Level-2
 profiles. Irregular breathing intentionally contributes to periodic deep
 sighing and also appears as an independent label-based Level-2 profile.
+
+## Thoracic excursion phenotype and rhythmicity
+
+The new phenotype is **Minimal or absent thoracic excursion**. Its two features
+are independent descriptions, not a thresholded diagnosis or an asynchrony subtype.
+
+`thoracic_respiratory_rhythmicity` is the median of valid-window ratios
+
+```text
+Q = thoracic Welch power within f_AB +/- max(0.03 Hz, 0.20*f_AB)
+    / thoracic Welch power over 0.05-2 Hz
+```
+
+Both integration bands are clipped to 0.05-2 Hz. Windows are 120 s with 50%
+overlap. The abdominal frequency reference is the median reciprocal interval
+between existing abdominal peaks, using their authoritative sample indices.
+Reviewed peaks are used when available; no new peaks are detected for this metric.
+Each window requires at least six eligible intervals (0.5-20 s), 70% reference
+time coverage, 80% valid intervals and relative frequency IQR <= 0.5.
+
+Signals are local copies of the existing preprocessed thoracic and abdominal
+traces. Each needs 95% finite coverage, with no gap longer than 1 s. Only shorter
+gaps are interpolated. Constant signals and numerical flatlines after detrending
+are unavailable. Obvious transients exceeding 20 robust MAD standard deviations
+reject the window; rejection counts/reasons are retained. These are transparent
+signal-QC heuristics, not clinical classification criteria. Remaining artifacts
+can still influence the index. Thoracic data are locally linearly detrended,
+FIR anti-aliased to min(native fs, 10 Hz), and analyzed with 40-s Hamming Welch
+segments with 50% overlap. PSD integrals interpolate at band edges. Q is bounded
+to [0,1]; the saved value is the median of valid Q windows.
+
+High Q means concentrated respiratory-frequency content. It does not measure
+calibrated rib-cage excursion, tidal volume, or a validated probability of minimal
+excursion. Low Q can reflect irregular breathing, coupling problems, noise or
+artifacts. No amplitude comparison between independently normalized belts and no
+binary threshold is applied. Even a very small coherent thoracic oscillation can
+have high Q. No thoracic peaks are required, including when extraction is suppressed.
+
+This is an exploratory MAGMA adaptation motivated by periodic/nonperiodic RIP
+assessment in [Robles-Rubio et al. (2020)](https://doi.org/10.1371/journal.pone.0238402).
+Their AUREA nonperiodic-power algorithm is different; the present ratio is not
+their published exact metric and has no claimed clinical validation.
+
+`minimal_thoracic_excursion_clinician` reuses the authoritative observation:
+`observed=1`, explicitly `not_observed=0`, and `not_assessed=NaN`. The two-state
+GUI defaults visually to Not observed; acceptance records that assessment with
+timestamp, actual configured reviewer role, source and revision. Cancel/X leaves
+metadata unchanged. Set `config.LabelEdit.reviewer_role = 'clinician'` for a
+clinician's session. Legacy/never-assessed records and disabled controls for a
+technically missing belt do not silently become assessed negatives.
+
+The method/version, parameters, reference provenance, observation revision,
+availability, missing reason, total/valid window counts, valid-window fraction,
+and valid time coverage are saved in `respiratory_signal_qc.thoracic`.
+Technical absence returns NaN with `thoracic_belt_technically_missing` or
+`thoracic_channel_missing`. Insufficient abdominal reference, flatline, finite
+coverage and transient-artifact failures have separate reasons. Zero remains a
+finite, available concentration value, never a missing-sensor marker.
+
+These two features are recording-scoped independently of manual label coverage.
+Automatic feature 24 uses `analysis_recording_observations`; Review N uses that
+round's saved observation. The same saved signal QC supplies feature 23 in both
+matrices, with scope/provenance explicit. The figure shows its value once and
+identifies review entries as Recording QC. Label-only review never recomputes the
+spectral value. Legacy 22-feature snapshots remain unchanged and are padded with
+unavailable NaNs only in plotting/table views. A pending-reanalysis banner keeps
+old automatic values distinguishable from a newer clinician assessment.
+
+## Safe reanalysis with reviewed feature preservation
+
+Close both editors. Load your normal base configuration and keep its native
+sampling/channel/amplitude settings. Before any batch rerun, copy and verify the
+selected recordings' MAT originals to a **fresh backup directory outside their
+recording folders**:
+
+```matlab
+manifest = backup_recording_mat_files(config, backup_directory);
+assert(all([manifest.verified]));
+config.execution.mode = 'analyze';
+config.execution.selected_labels = {};
+config.overwrite_results = true;
+config.overwrite_features = false;
+```
+
+The backup contains feature caches, authoritative MAT results, review checkpoints,
+observation sidecars and a manifest. Each copy is loaded and compared against its
+original to verify restoration. Retain this backup after reanalysis.
+
+First use a copy of the config with `subjects=33` and `measurements=1`. Compare
+both belts' saved `peak_idx`, `trough_idx`, `trough_overrides` (when present),
+and complete belt structs against the verified backup before expanding the
+subject list. An isolated output copy is recommended for this first real-recording
+check. Do not combine this operation with new manual landmark editing. A valid
+reviewed cache is reused during full and selected reruns. Incompatible reviewed
+metadata or landmarks raise an error before repair/re-extraction; restore a
+compatible backup or resolve the incompatibility explicitly. Thoracic suppression
+retains landmark history and only gates active evidence.
+
+The new metric performs no feature-cache I/O. Targeted tests cover a complete
+synthetic full-analysis rerun, backup restoration, unchanged reviewed belt structs,
+technical/physiological distinctions, cancellation, legacy histories, MAT/group
+and HDF5 consistency. No real cohort or batch reanalysis is run by these tests.
 
 ## Availability, zero, and coverage
 
@@ -203,8 +310,9 @@ cross-subject normalization, imputation, or transformation of these outputs.
 The automatic and reviewed layers are always separate:
 
 - **automatic** uses the full physiologically assessable recording;
-- **reviewed** uses only explicitly reviewed *and* physiologically assessable
-  regions.
+- **reviewed** label-derived features (1-22) use only explicitly reviewed *and*
+  physiologically assessable regions. Features 23-24 retain their independent
+  recording-level scopes described above.
 
 Recording-scope rate, excursion, CoV, balance, and phase medians obey the same
 layer scope. A reviewed median therefore never incorporates an unreviewed
@@ -228,8 +336,8 @@ selected for the fixed numeric summary.
 
 ## Scientific interpretation limitations
 
-Nijmegen Questionnaire, ETCO2/capnography, CPET/ergospirometry, clinical
-observations, and other clinical variables remain external to the signal-derived
-22-value summary and are not used to create MAGMA Level-2 evidence. They are
-not pipeline inputs and are not stored as placeholders. Relevant scientific
+Nijmegen Questionnaire, ETCO2/capnography, CPET/ergospirometry, and other clinical
+variables remain external to the original signal-derived 22 measures. The recording-level thoracic observation is the explicit exception:
+it is included as feature 24 with distinct clinician provenance. Those other
+clinical variables are not pipeline inputs and are not stored as placeholders. Relevant scientific
 caveats are expressed only through each profile's `limitations` field.

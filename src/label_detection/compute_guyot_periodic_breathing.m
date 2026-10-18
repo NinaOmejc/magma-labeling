@@ -5,6 +5,8 @@ function diagnostics = compute_guyot_periodic_breathing( ...
 % h/fm classification are retained, while the configured frequency band and
 % breath front-end are MAGMA adaptations using reviewed peak_t and canonical amp.
 
+    [data,resp_cycles,artifact_state] = respiratory_artifact_view(data,resp_cycles,config);
+    config.respiratory_artifact_state = artifact_state;
     cfg = validate_guyot_config(config.periodic.guyot);
     N = size(data, 1);
     recording_end_t = max(0, (N - 1) / config.fs);
@@ -83,6 +85,22 @@ function diagnostics = compute_guyot_belt( ...
     diagnostics.envelope = reconstruction.envelope;
     diagnostics.envelope_evaluable_mask = reconstruction.evaluable_mask;
     diagnostics.long_gap_mask = reconstruction.long_gap_mask;
+    masks = respiratory_artifact_masks(breaths,N,fs);
+    % Interpolated values between retained breaths on opposite sides of a
+    % technical gap are unavailable, including the short flanking segments.
+    ranges = masks.evidence_intervals_idx;
+    kept = round(reconstruction.breath_t(:)*fs)+1;
+    for k = 1:size(ranges,1)
+        left = kept(find(kept<ranges(k,1),1,'last'));
+        right = kept(find(kept>ranges(k,2),1,'first'));
+        if ~isempty(left), ranges(k,1) = min(ranges(k,1),left+1); end
+        if ~isempty(right), ranges(k,2) = max(ranges(k,2),right-1); end
+    end
+    masks.evidence_intervals_idx = ranges;
+    clean = respiratory_artifact_window_valid(ranges,diagnostics.envelope_t,0,fs);
+    diagnostics.envelope(~clean) = NaN;
+    diagnostics.envelope_evaluable_mask(~clean) = false;
+    diagnostics.long_gap_mask(~clean) = false;
 
     n_window_samples = round(cfg.window_sec * cfg.resample_hz) + 1;
     step_samples = max(1, round(cfg.step_sec * cfg.resample_hz));
@@ -104,6 +122,9 @@ function diagnostics = compute_guyot_belt( ...
         idx = starts(i):starts(i) + n_window_samples - 1;
         diagnostics.window_center_t(i) = mean( ...
             diagnostics.envelope_t(idx([1 end])));
+        if ~respiratory_artifact_window_valid(masks.evidence_intervals_idx,diagnostics.envelope_t(idx(end)),cfg.window_sec,fs)
+            continue;
+        end
         if ~all(diagnostics.envelope_evaluable_mask(idx)) || ...
                 any(~isfinite(diagnostics.envelope(idx)))
             continue;

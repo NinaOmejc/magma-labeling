@@ -1,11 +1,12 @@
 function compact = build_compact_phenotype_features( ...
-    label_burden, overlaps, label_evidence)
+    label_burden, overlaps, label_evidence, recording_context)
 % BUILD_COMPACT_PHENOTYPE_FEATURES Build the fixed recording-level numeric summary.
 % Inputs are the Level-1 burden/overlap/evidence summaries for one annotation
-% layer. The 22 summary values follow get_phenotype_feature_schema exactly.
+% layer. The 24 summary values follow get_phenotype_feature_schema exactly.
 % NaN is retained for unavailable or insufficiently supported evidence; no
 % imputation, scaling, or cross-recording normalization occurs here.
 
+    if nargin < 4, recording_context = struct(); end
     schema = get_phenotype_feature_schema();
     N = schema.n_features;
     values = nan(1, N);
@@ -96,8 +97,14 @@ function compact = build_compact_phenotype_features( ...
     set_burden(21, irregular, 'irregular');
     set_burden(22, desat, 'desat');
 
+    thoracic_group = build_thoracic_excursion_phenotype(recording_context);
+    values(23:24) = thoracic_group.values;
+    available(23:24) = thoracic_group.available;
+    coverage(23:24) = thoracic_group.coverage_fraction;
+    missing_reason(23:24) = thoracic_group.missing_reason;
+
     compact = struct( ...
-        'version', 'magma_phenotype_numeric_summary_v3', ...
+        'version', 'magma_phenotype_numeric_summary_v4', ...
         'schema_version', schema.version, ...
         'n_features', schema.n_features, ...
         'feature_names', {schema.feature_names}, ...

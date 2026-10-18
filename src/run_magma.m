@@ -18,6 +18,11 @@ function run_magma(base_config)
              'execution.mode = review_only.']);
     end
 
+    if get_config_value(base_config,'resp','recheck_cached',false) && ...
+            (~isempty(selected_labels) || (isfield(base_config,'overwrite_features') && base_config.overwrite_features))
+        error('MAGMA:Respiration:RecheckConfiguration', ...
+            'Cached feature recheck requires selected_labels={} and overwrite_features=false.');
+    end
     ensure_output_directory(base_config.path_results_out);
     config = base_config;
     save(fullfile(base_config.path_results_out, ...
@@ -28,12 +33,20 @@ function run_magma(base_config)
             config = base_config;
             config.subject = base_config.subjects(isub);
             config.measure = base_config.measurements(imeasure);
+            stem = sprintf('Sub%d_M%d',config.subject,config.measure);
+            config.sub_results_path = fullfile(config.path_results_out,stem);
+            config.sub_results_filename = [stem '_results.mat'];
+            config.sub_features_filename = [stem '_features.mat'];
             if ismember([config.subject config.measure], excluded_recordings, 'rows')
                 log_message(config, 1, 'Skipping excluded recording: Sub %d | Measurement: %d', ...
                     config.subject, config.measure);
                 continue;
             end
 
+            config.respiratory_artifact_state = respiratory_artifact_checkpoint('load',config);
+            if config.respiratory_artifact_state.pending_reanalysis && ~isempty(selected_labels)
+                error('MAGMA:Respiration:FullReanalysisRequired','Respiratory feature edits require a full analysis; clear selected_labels.');
+            end
             config.recording_observations = recording_observation('load', config);
             if config.recording_observations.pending_reanalysis && ~isempty(selected_labels)
                 error('MAGMA:Observation:FullReanalysisRequired', ...
@@ -41,6 +54,9 @@ function run_magma(base_config)
             end
             [data_raw, config, do_analysis] = load_raw_data(config);
             if ~do_analysis
+                if config.respiratory_artifact_state.pending_reanalysis
+                    log_message(config,1,'Pending respiratory feature reanalysis: set overwrite_results=true and clear selected_labels.');
+                end
                 if config.recording_observations.pending_reanalysis
                     log_message(config, 1, 'Pending thoracic-observation reanalysis: set overwrite_results=true to recompute.');
                 end
@@ -67,8 +83,8 @@ function run_magma(base_config)
                     continue;
                 end
                 plot_reviewed_label_masks(results, config);
-                plot_phenotype_summary(results.phenotypes, config, results.review_history);
-                save_recording_results(results, data_raw, data, config);
+                results = save_recording_results(results, data_raw, data, config);
+                plot_phenotype_summary(results.phenotypes, config, results.review_history, results);
                 log_message(config, 1, ...
                     ['Successfully finished manual review for: Sub %d | ' ...
                      'Measurement: %d'], config.subject, config.measure);
@@ -96,18 +112,41 @@ function run_magma(base_config)
                     config.subject, config.measure);
             end
 
+            if ~selective && result_exists
+                existing_results = load(result_file); % Also protect reviewed cycles on full reruns.
+            end
             config.execution.analysis_id = create_analysis_id(config);
             config.execution.partial_rerun = selective && result_exists;
             config.execution.updated_labels = selected_labels;
 
             [data, config] = preprocess_data(data_raw, config);
 
-            [resp_cycles, reused_cycles] = reusable_resp_cycles( ...
-                existing_results, data, config);
-            if ~reused_cycles
-                resp_cycles = load_or_extract_respiratory_cycles(data, config);
+            feature_cancelled = false;
+            cache_file = fullfile(config.sub_results_path, config.sub_features_filename);
+            if get_config_value(config,'resp','recheck_cached',false) && ~isfile(cache_file)
+                error('MAGMA:Respiration:RecheckCacheMissing','Restore the reviewed feature cache before rechecking: %s',cache_file);
+            end
+            if isfile(cache_file)
+                [resp_cycles,feature_cancelled] = load_or_extract_respiratory_cycles(data, config);
+            else
+                [resp_cycles, reused_cycles] = reusable_resp_cycles(existing_results, data, config);
+                if ~reused_cycles
+                    if reviewed_cycles(existing_results) && ~config.overwrite_features
+                        error('MAGMA:Respiration:ReviewedFeatureCacheMismatch', ...
+                            'Saved reviewed cycles are incompatible. Restore their cache; no landmarks were regenerated.');
+                    end
+                    [resp_cycles,feature_cancelled] = load_or_extract_respiratory_cycles(data, config);
+                end
             end
 
+            if feature_cancelled
+                log_message(config,1,'Respiratory feature review cancelled; cache unchanged and recording reanalysis skipped.');
+                continue;
+            end
+            config.respiratory_artifact_state = respiratory_artifact_state(resp_cycles,config,size(data,1));
+            if selective && config.respiratory_artifact_state.pending_reanalysis
+                error('MAGMA:Respiration:FullReanalysisRequired','Respiratory feature edits require full reanalysis.');
+            end
             previous_revision = config.recording_observations.revision;
             config.recording_observations = recording_observation('load', config);
             if selective && config.recording_observations.pending_reanalysis
@@ -119,11 +158,16 @@ function run_magma(base_config)
                 % Reapply preprocessing; cache alignment preserves reviewed landmarks.
                 requested_overwrite = isfield(config, 'overwrite_features') && config.overwrite_features;
                 config.overwrite_features = false; % The just-reviewed cache is already fresh.
+                recheck_requested = get_config_value(config,'resp','recheck_cached',false);
+                config.resp.recheck_cached = false;
                 [data, config] = preprocess_data(data_raw, config);
                 resp_cycles = load_or_extract_respiratory_cycles(data, config);
                 config.overwrite_features = requested_overwrite;
+                config.resp.recheck_cached = recheck_requested;
             end
             [resp_cycles, ~] = apply_thoracic_observation(resp_cycles, data, config);
+            signal_qc = struct('thoracic', ...
+                compute_thoracic_respiratory_rhythmicity(data, resp_cycles, config));
             session_reference = get_session_reference_interval( ...
                 size(data, 1), config);
             resp_ref = compute_respiratory_reference( ...
@@ -166,15 +210,19 @@ function run_magma(base_config)
 
             results = build_recording_results( ...
                 config, resp_cycles, resp_ref, session_reference, ...
-                resp_features, label_results);
+                resp_features, label_results, signal_qc);
             plot_reviewed_label_masks(results, config);
-            plot_phenotype_summary(results.phenotypes, config, results.review_history);
-            save_recording_results(results, data_raw, data, config);
+            results = save_recording_results(results, data_raw, data, config);
+            plot_phenotype_summary(results.phenotypes, config, results.review_history, results);
             log_message(config, 1, ...
                 ['Successfully finished label detection for: Sub %d | ' ...
                  'Measurement: %d'], config.subject, config.measure);
         end
     end
+end
+
+function tf = reviewed_cycles(existing)
+    tf = isfield(existing,'resp_cycles') && has_reviewed_respiration_landmarks(existing.resp_cycles);
 end
 
 function [resp_cycles, reused] = reusable_resp_cycles(existing, data, config)

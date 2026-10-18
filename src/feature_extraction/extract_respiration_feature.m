@@ -33,6 +33,7 @@ function b = extract_respiration_feature(x, config, basename)
 
     b = struct();
     b.basename = basename;
+    b.artifact_intervals_idx = zeros(0,2);
     b.ok = false;
 
     if config.resp.smooth_sec > 0

@@ -19,6 +19,7 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events( ...
 
     observation = recording_observation('load', config);
     config.recording_observations = observation;
+    config.respiratory_artifact_state = respiratory_artifact_checkpoint('load',config);
     label_defs = manual_label_definitions();
     N = size(data, 1);
     fs = config.fs;
@@ -119,8 +120,13 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events( ...
     callback = @(value) save_review_observation(value, observation, edit_file, ...
         automatic_event_sets, reviewed_event_sets, review_history, active_round_id, ...
         label_defs, config, N, fs);
+    requested = observation_checked;
+    resolved = resolve_signal_channels(config);
+    if isempty(resolved.channels.lungs_idx) || is_lung_belt_ignored(config)
+        requested = observation.status; % Disabled selector cannot create an assessment.
+    end
     [observation, review_history] = recording_observation('set', config, ...
-        observation_checked, 'manual_label_gui', observation.revision, callback, edit_file);
+        requested, 'manual_label_gui', observation.revision, callback, edit_file);
     edit_info.recording_observations = observation;
     log_message(config, 1, ...
         'Saved manual label review round: %s', edit_file);
@@ -825,6 +831,16 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
     ylabel(ax2, 'Resp-Diaphragm'); xlabel(ax2, 'Time (s)'); grid(ax2, 'on');
     set_global_ylim_from_channel(ax2, data, idx_diaph);
 
+    artifacts = config.respiratory_artifact_state;
+    shade_respiratory_artifacts(ax1,artifacts.lungs,fs);
+    shade_respiratory_artifacts(ax2,artifacts.diaph,fs);
+    if ~isempty(artifacts.lungs) || ~isempty(artifacts.diaph) || artifacts.pending_reanalysis
+        log_message(config,1,'Orange shading: excluded respiratory artifacts. To edit, set resp.recheck_cached=true and rerun a full analysis.');
+        suffix = '';
+        if artifacts.pending_reanalysis, suffix = ' (pending reanalysis)'; end
+        title(ax1,['Manual labels: lungs | orange = excluded artifacts' suffix]);
+        title(ax2,['Manual labels: diaphragm | edit artifacts via resp.recheck_cached' suffix]);
+    end
     ax = [ax1 ax2];
     for i = 1:numel(ax)
         set(ax(i), 'ButtonDownFcn', @(~,~) begin_drag(ax(i)));
@@ -837,12 +853,15 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
 
     ax2.Position(2) = ax2.Position(2) + 0.065;
     ax2.Position(4) = ax2.Position(4) - 0.065;
-    observation_checkbox = uicontrol(fh, 'Style', 'checkbox', 'Units', 'normalized', ...
-        'Position', [0.10 0.055 0.85 0.027], ...
-        'String', 'Minimal / absent thoracic excursion (belt present)', ...
-        'Tag', 'minimal_thoracic_excursion', 'Value', observation_checked, ...
+    uicontrol(fh, 'Style','text','Units','normalized', ...
+        'Position',[0.10 0.055 0.58 0.027], 'HorizontalAlignment','left', ...
+        'String','Minimal or absent thoracic excursion');
+    observation_selector = uicontrol(fh, 'Style', 'popupmenu', 'Units', 'normalized', ...
+        'Position', [0.70 0.055 0.25 0.027], ...
+        'String', {'Not observed','Observed'}, ...
+        'Tag', 'minimal_thoracic_excursion', 'Value', 1+observation_checked, ...
         'Callback', @(~,~) update_observation_notice());
-    if isempty(idx_lungs) || is_lung_belt_ignored(config), set(observation_checkbox, 'Enable', 'off'); end
+    if isempty(idx_lungs) || is_lung_belt_ignored(config), set(observation_selector, 'Enable', 'off'); end
     observation_notice = uicontrol(fh, 'Style', 'text', 'Units', 'normalized', ...
         'Position', [0.10 0.085 0.86 0.028], 'HorizontalAlignment', 'left');
     update_observation_notice();
@@ -1232,9 +1251,11 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
     end
 
     function update_observation_notice()
-        changed = logical(get(observation_checkbox, 'Value')) ~= ...
-            strcmp(config.recording_observations.status, 'observed');
+        changed = (get(observation_selector, 'Value') == 2) ~= ...
+            strcmp(config.recording_observations.status, 'observed') || ...
+            strcmp(config.recording_observations.status,'not_assessed');
         message = 'Recording-level observation; not a diagnosis or an event label.';
+        changed = changed && strcmp(get(observation_selector,'Enable'),'on');
         if changed || config.recording_observations.pending_reanalysis
             message = ['Reanalysis required: respiratory features, respiratory labels and phenotype summaries. ' ...
                 'Existing automatic labels are retained.'];
@@ -1246,7 +1267,7 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
     % FINISH_EDITING Resume execution while retaining the working annotations.
 
         if isgraphics(fh)
-            observation_checked = logical(get(observation_checkbox, 'Value'));
+            observation_checked = (get(observation_selector, 'Value') == 2);
             committed = true;
             finished = true;
             uiresume(fh);

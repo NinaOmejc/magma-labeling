@@ -7,6 +7,7 @@ function rea = compute_respiratory_asynchrony_metrics(data, resp_cycles, session
 % transformed, and summarized on the pipeline time grid. rea follows the schema
 % documented by empty_rea_metrics and adds master_n_samples.
 
+    [data,resp_cycles,artifact_state] = respiratory_artifact_view(data,resp_cycles,config);
     N = size(data, 1);
     t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';
 
@@ -43,12 +44,9 @@ function rea = compute_respiratory_asynchrony_metrics(data, resp_cycles, session
         return;
     end
 
-    [lungs_sig, lungs_ok] = prepare_resp_signal_local(data(:, idx_lungs));
-    [diaph_sig, diaph_ok] = prepare_resp_signal_local(data(:, idx_diaph));
-    if ~lungs_ok || ~diaph_ok
-        rea.skip_code = 5;
-        return;
-    end
+    % Transform artifact-free blocks separately; never interpolate across artifacts.
+    clean = respiratory_artifact_window_valid([artifact_state.lungs;artifact_state.diaph],(0:N-1)'/config.fs,0,config.fs);
+    edges = diff([false;clean;false]); starts = find(edges==1); stops = find(edges==-1)-1;
 
     rea.reference_mask = get_reference_mask_local(t_grid, session_reference);
     if ~isstruct(session_reference) || ~isfield(session_reference, 'available') || ...
@@ -64,48 +62,60 @@ function rea = compute_respiratory_asynchrony_metrics(data, resp_cycles, session
     cleanup_visibility = onCleanup(@() restore_figure_visibility(old_default_visibility, figures_before, target_visibility));
     set(groot, 'defaultFigureVisible', target_visibility);
 
-    try
-        [lungs_pc, diaph_pc, fs_pc] = resample_respiration_for_analysis( ...
-            lungs_sig, diaph_sig, config.fs, rea.analysis_fs);
-        rea.analysis_fs = fs_pc;
-        rea.analysis_n_samples = numel(lungs_pc);
-        rea.analysis_duration_sec = max(0, rea.analysis_n_samples - 1) / fs_pc;
-        fmax = min(rea.fmax_hz, 0.95 * fs_pc / 2);
-        if rea.fmin_hz >= fmax
-            rea.skip_code = 6;
-            return;
+    for block = 1:numel(starts)
+        [lungs_sig,lungs_ok] = prepare_resp_signal_local(data(starts(block):stops(block),idx_lungs));
+        [diaph_sig,diaph_ok] = prepare_resp_signal_local(data(starts(block):stops(block),idx_diaph));
+        if ~lungs_ok || ~diaph_ok, rea.skip_code = 5; continue; end
+        try
+            [lungs_pc, diaph_pc, fs_pc] = resample_respiration_for_analysis( ...
+                lungs_sig, diaph_sig, config.fs, rea.analysis_fs);
+            rea.analysis_fs = fs_pc;
+            rea.analysis_n_samples = rea.analysis_n_samples + numel(lungs_pc);
+            rea.analysis_duration_sec = max(0, rea.analysis_n_samples - 1) / fs_pc;
+            fmax = min(rea.fmax_hz, 0.95 * fs_pc / 2);
+            if rea.fmin_hz >= fmax
+                rea.skip_code = 6;
+                continue;
+            end
+
+            [WT_lungs, freq] = wtI(lungs_pc, fs_pc, ...
+                'fmin', rea.fmin_hz, 'fmax', fmax, 'f0', rea.f0, ...
+                'Plot', 'off', 'Display', 'off', 'CutEdges', 'on', 'Padding', 'none');
+            [WT_diaph, freq_diaph] = wtI(diaph_pc, fs_pc, ...
+                'fmin', rea.fmin_hz, 'fmax', fmax, 'f0', rea.f0, ...
+                'Plot', 'off', 'Display', 'off', 'CutEdges', 'on', 'Padding', 'none');
+
+            [WT_lungs, WT_diaph, freq] = align_wavelet_outputs_local(WT_lungs, WT_diaph, freq, freq_diaph);
+            if isempty(freq) || isempty(WT_lungs) || isempty(WT_diaph)
+                rea.skip_code = 7;
+                continue;
+            end
+
+            TPC = tlphcoh(WT_lungs, WT_diaph, freq, fs_pc, rea.tlphcoh_cycles);
+        catch ME
+            rea.error_message = ME.message; rea.skip_code = 8;
+            continue;
         end
+        t_pc = (0:size(TPC, 2)-1)' / fs_pc + (starts(block)-1)/config.fs;
+        coh_high = mean_phase_coherence_in_band_local(TPC, freq > rea.mid_high_cut_hz);
+        coh_mid = mean_phase_coherence_in_band_local(TPC, freq >= rea.low_mid_cut_hz & freq <= rea.mid_high_cut_hz);
+        coh_low = mean_phase_coherence_in_band_local(TPC, freq < rea.low_mid_cut_hz);
 
-        [WT_lungs, freq] = wtI(lungs_pc, fs_pc, ...
-            'fmin', rea.fmin_hz, 'fmax', fmax, 'f0', rea.f0, ...
-            'Plot', 'off', 'Display', 'off', 'CutEdges', 'on', 'Padding', 'none');
-        [WT_diaph, freq_diaph] = wtI(diaph_pc, fs_pc, ...
-            'fmin', rea.fmin_hz, 'fmax', fmax, 'f0', rea.f0, ...
-            'Plot', 'off', 'Display', 'off', 'CutEdges', 'on', 'Padding', 'none');
+        values = interp1(t_pc, coh_high, t_grid, 'linear', nan);
+        valid = isfinite(values); rea.phase_coherence_high(valid) = values(valid);
+        values = interp1(t_pc, coh_mid, t_grid, 'linear', nan);
+        valid = isfinite(values); rea.phase_coherence_mid(valid) = values(valid);
+        values = interp1(t_pc, coh_low, t_grid, 'linear', nan);
+        valid = isfinite(values); rea.phase_coherence_low(valid) = values(valid);
 
-        [WT_lungs, WT_diaph, freq] = align_wavelet_outputs_local(WT_lungs, WT_diaph, freq, freq_diaph);
-        if isempty(freq) || isempty(WT_lungs) || isempty(WT_diaph)
-            rea.skip_code = 7;
-            return;
+    end
+    if ~any(isfinite(rea.phase_coherence_high) | isfinite(rea.phase_coherence_mid) | isfinite(rea.phase_coherence_low))
+        if rea.skip_code == 0, rea.skip_code = 8; end
+        if ~isempty(rea.error_message)
+            warning('MAGMA:RespiratoryAsynchrony:Skipped','Respiratory asynchrony metrics skipped: %s',rea.error_message);
         end
-
-        TPC = tlphcoh(WT_lungs, WT_diaph, freq, fs_pc, rea.tlphcoh_cycles);
-    catch ME
-        rea.skip_code = 8;
-        rea.error_message = ME.message;
-        warning('MAGMA:RespiratoryAsynchrony:Skipped', ...
-            'Respiratory asynchrony metrics skipped: %s', ME.message);
         return;
     end
-
-    t_pc = (0:size(TPC, 2)-1)' / fs_pc;
-    coh_high = mean_phase_coherence_in_band_local(TPC, freq > rea.mid_high_cut_hz);
-    coh_mid = mean_phase_coherence_in_band_local(TPC, freq >= rea.low_mid_cut_hz & freq <= rea.mid_high_cut_hz);
-    coh_low = mean_phase_coherence_in_band_local(TPC, freq < rea.low_mid_cut_hz);
-
-    rea.phase_coherence_high = interp1(t_pc, coh_high, t_grid, 'linear', nan);
-    rea.phase_coherence_mid = interp1(t_pc, coh_mid, t_grid, 'linear', nan);
-    rea.phase_coherence_low = interp1(t_pc, coh_low, t_grid, 'linear', nan);
 
     [rea.thresholds, rea.references, rea.reference_valid_counts] = ...
         phase_coherence_thresholds_local(rea, rea.reference_mask);

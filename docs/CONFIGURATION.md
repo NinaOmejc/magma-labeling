@@ -29,14 +29,18 @@ raise `MAGMA:Config:InvalidExcludedRecordings` before recording data is loaded.
 The default lists explicitly cover M1-M4 for the previously excluded subjects.
 `config.problems.missing_lung_belt` remains a separate signal-availability setting.
 
-The two manual editors also offer **Minimal / absent thoracic excursion (belt
-present)**. Use this recording-level observation when the belt is present but
+The two manual editors also offer **Minimal or absent thoracic excursion**. Use this recording-level observation when the belt is present but
 reliable thoracic breaths cannot be extracted. It does not edit
 `config.problems.missing_lung_belt` or create a new label. Its saved state is shared
-by subject **and** measurement; old files default to `not_assessed`.
+by subject **and** measurement. The selector has exactly two options, **Not observed**
+(the visible default) and **Observed**. Accepting the editor records the selected
+assessment; Cancel/X does not commit it. Existing unassessed metadata remains
+`not_assessed` until acceptance. A technically missing belt disables the selector
+and does not create a negative assessment.
 `config.LabelEdit.reviewer_role` supplies the observation's reviewer provenance
 in either editor. See [the observation schema and reanalysis workflow](OUTPUTS.md#recording-level-thoracic-observation)
-for pending-output handling after a late annotation.
+for pending-output handling after a late annotation. The two associated numeric
+phenotype features are documented in [PHENOTYPES.md](PHENOTYPES.md#thoracic-excursion-phenotype-and-rhythmicity).
 
 ## Recalculation and plotting
 
@@ -99,7 +103,7 @@ their common orientation using a temporary average of the separately
 standardized belts. Within each complete breath, time above the midpoint
 between its peak and neighboring troughs measures whether high peaks are
 narrow or broad. Narrow highs in at least 65% of breaths keep the orientation;
-broad highs in at least 65% flip both belts. A 0.45–0.55 midpoint-dwell band
+broad highs in at least 65% flip both belts. A 0.45â€“0.55 midpoint-dwell band
 leaves near-symmetric shapes unchanged. The shared I:E ratio remains a
 diagnostic; one usable belt falls back to its own I:E ratio. The settings are:
 
@@ -180,8 +184,8 @@ config.reference.post_end_min   = 22;
 
 Thus:
 
-- M1/M3 use 3–6 min;
-- M2/M4 use 19–22 min.
+- M1/M3 use 3â€“6 min;
+- M2/M4 use 19â€“22 min.
 
 The interval is never automatically moved to a different part of the recording.
 
@@ -318,7 +322,7 @@ run('src/main_group.m');
 
 Set `subjects` to numeric IDs for a subset. Empty `subjects` discovers
 all saved IDs; exclusions still apply. `measurements` can be any distinct
-subset of 1–4. Set `paired_measurements` to two distinct values in 1–4,
+subset of 1â€“4. Set `paired_measurements` to two distinct values in 1â€“4,
 such as `[3 4]` or `[1 3]`, and include both in `measurements`.
 Pairs match by subject ID. Subjects without both recordings remain in the
 `group_details.xlsx` Paired_changes sheet with an invalid-pair flag. Missing control/patient metadata are
@@ -517,3 +521,11 @@ addpath(genpath('src'));
 results = runtests('tests/unit/test_png_export.m');
 assertSuccess(results);
 ```
+
+## Rechecking respiratory features
+
+`config.resp.recheck_cached = false` reuses compatible caches as before. Set it
+to `true` with `overwrite_results=true`, `overwrite_features=false`, analyze
+mode, and `execution.selected_labels={}` to reopen existing saved landmarks
+and artifact intervals. Cancel skips that recording without replacing the
+cache. See [the safe recheck workflow](RESPIRATORY_ARTIFACTS.md).

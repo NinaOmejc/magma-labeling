@@ -18,6 +18,7 @@ function [events, diagnostics, candidate_events] = detect_periodic_breathing( ..
             primary_method);
     end
 
+    config.respiratory_artifact_state = respiratory_artifact_state(resp_cycles,config,size(data,1));
     eami = compute_eami_periodic_breathing(data, config);
     guyot = compute_guyot_periodic_breathing(data, resp_cycles, config);
     switch primary_method

@@ -42,6 +42,8 @@ function [results, cancelled] = review_existing_results(data, existing, config)
         reviewed_event_sets, manual_edit_info, size(data, 1), config);
 
     results = existing;
+    results.respiratory_artifact_state = respiratory_artifact_checkpoint('load',config);
+    if ~isfield(results,'analysis_respiratory_artifact_revision'), results.analysis_respiratory_artifact_revision = 0; end
     results.events_reviewed = annotations.events_reviewed;
     results.mask_reviewed = annotations.mask_reviewed;
     results.review_coverage_mask = annotations.review_coverage_mask;
@@ -99,6 +101,10 @@ function [results, cancelled] = review_existing_results(data, existing, config)
         results.label_burden_reviewed, ...
         results.label_overlap_summary_reviewed, ...
         results.label_evidence_summary_reviewed);
+    if isfield(existing,'phenotypes') && isfield(existing.phenotypes,'automatic')
+        results.phenotypes.automatic = existing.phenotypes.automatic;
+    end
+    results.phenotypes = attach_thoracic_excursion_phenotype(results.phenotypes, results);
     results = attach_review_phenotypes(results);
     results.analysis_id = config.execution.analysis_id;
     % The saved configuration describes the immutable automatic analysis.

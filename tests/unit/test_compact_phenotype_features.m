@@ -3,7 +3,7 @@ function tests = test_compact_phenotype_features
     tests = functiontests(localfunctions);
 end
 
-function testSchemaHasExactlyFixedUniqueTwentyTwoFeatures(testCase)
+function testSchemaAppendsTwoFeaturesWithoutChangingTheOriginalTwentyTwo(testCase)
     schema = get_phenotype_feature_schema();
     expected = { ...
         'db_hyperventilation_rapid_fraction', ...
@@ -25,10 +25,11 @@ function testSchemaHasExactlyFixedUniqueTwentyTwoFeatures(testCase)
         'pattern_apnea_fraction', 'pattern_periodic_fraction', ...
         'pattern_shallow_fraction', 'pattern_slow_fraction', ...
         'pattern_irregular_fraction', ...
-        'pattern_desaturation_fraction'};
-    verifyEqual(testCase, schema.n_features, 22);
+        'pattern_desaturation_fraction', ...
+        'thoracic_respiratory_rhythmicity','minimal_thoracic_excursion_clinician'};
+    verifyEqual(testCase, schema.n_features, 24);
     verifyEqual(testCase, schema.feature_names, expected);
-    verifyEqual(testCase, numel(unique(schema.feature_names)), 22);
+    verifyEqual(testCase, numel(unique(schema.feature_names)), 24);
     verifyEqual(testCase, nnz(strcmp(schema.feature_role, 'literature_based')), 16);
     verifyEqual(testCase, nnz(strcmp(schema.feature_role, 'label_based')), 6);
     verifyFalse(testCase, any(contains(schema.feature_names, 'forced_abdominal')));

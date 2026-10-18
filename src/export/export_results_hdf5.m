@@ -9,7 +9,7 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
 %   signals_raw          - Nsample x Nchannel raw physiological signal matrix.
 %   signals_preprocessed - Nsample x Nchannel processed signal matrix.
 %
-% The v16 file stores native signals/time under /signals and /time, plus an
+% The v17 file stores native signals/time under /signals and /time, plus an
 % export-only lower-rate ML signal bundle under /signals/ml; reviewed breath
 % cycles under /breaths; derived respiration under /respiration; detector
 % evidence under /diagnostics; automatic/reviewed label layers under /labels;
@@ -19,7 +19,7 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
 
     filename = char(string(filename));
     validate_export_inputs(filename, results, signals_raw, signals_preprocessed);
-    export_schema_version = 'magma_ml_hdf5_v16';
+    export_schema_version = 'magma_ml_hdf5_v18';
     out_dir = fileparts(filename);
     if ~isempty(out_dir) && ~isfolder(out_dir)
         mkdir(out_dir);
@@ -62,6 +62,9 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
     write_value(filename, '/respiration', results.resp_features, options);
     write_value(filename, '/diagnostics', ...
         results.detector_diagnostics, options);
+    if isfield(results,'respiratory_signal_qc')
+        write_value(filename, '/diagnostics/respiratory_signal_qc', results.respiratory_signal_qc, options);
+    end
     write_value(filename, '/references/session', ...
         results.session_reference, options);
     write_value(filename, '/references/respiration/lungs', ...
@@ -140,6 +143,12 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
     observation_config.subject = results.subject; observation_config.measure = results.measure;
     observation = recording_observation('default', observation_config);
     analysis = observation;
+    if isfield(results,'respiratory_artifact_state')
+        write_respiratory_artifact_hdf5(filename,results.respiratory_artifact_state);
+    end
+    if isfield(results,'analysis_respiratory_artifact_revision')
+        write_numeric(filename,'/observations/analysis_respiratory_artifact_revision',results.analysis_respiratory_artifact_revision,options);
+    end
     if isfield(results, 'recording_observations'), observation = results.recording_observations; end
     if isfield(results, 'analysis_recording_observations'), analysis = results.analysis_recording_observations; end
     write_recording_observation_hdf5(filename, observation, analysis);
@@ -498,7 +507,8 @@ function write_review_history(filename, path, history, options)
             write_text(filename, [round_path '/schema_version'], ...
                 history(i).schema_version);
         end
-        observation_fields = {'recording_observations','recording_observation_change'};
+        observation_fields = {'recording_observations','recording_observation_change', ...
+            'phenotypes_reviewed','phenotype_numeric_summary_reviewed'};
         for k = 1:numel(observation_fields)
             field = observation_fields{k};
             if isfield(history, field) && ~isempty(history(i).(field))

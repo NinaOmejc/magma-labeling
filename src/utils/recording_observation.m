@@ -34,23 +34,31 @@ function [observation, extra] = recording_observation(action, config, varargin)
     review_file = ''; review_backup = ''; review_existed = false;
     switch action
         case 'set'
-            checked = logical(varargin{1});
+            requested = varargin{1};
+            if islogical(requested) || isnumeric(requested)
+                status = 'not_observed';
+                if logical(requested), status = 'observed'; end
+            else
+                status = char(string(requested));
+            end
+            if ~ismember(status, {'observed','not_observed','not_assessed'})
+                error('MAGMA:Observation:Status', 'Invalid observation status: %s', status);
+            end
             if numel(varargin) >= 3 && observation.revision ~= varargin{3}
                 error('MAGMA:Observation:ChangedDuringReview', ...
                     'Observation changed in another session. Reopen this recording before saving.');
             end
             if numel(varargin) >= 4, callback = varargin{4}; end
             if numel(varargin) >= 5, review_file = varargin{5}; end
-            if checked == strcmp(observation.status, 'observed')
+            if strcmp(status, observation.status)
                 if ~isempty(callback), extra = callback(observation); end
                 return;
             end
-            if checked && is_lung_belt_ignored(config)
+            if strcmp(status,'observed') && is_lung_belt_ignored(config)
                 error('MAGMA:Observation:MissingBelt', ...
                     'A belt-present observation cannot be established for a configured missing thoracic belt.');
             end
-            observation.status = 'not_observed';
-            if checked, observation.status = 'observed'; end
+            observation.status = status;
             observation.timestamp = char(datetime('now', 'TimeZone', 'UTC', ...
                 'Format', 'yyyy-MM-dd HH:mm:ss.SSS XXX'));
             observation.reviewer_role = get_config_value(config, 'LabelEdit', 'reviewer_role', 'researcher');

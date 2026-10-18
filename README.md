@@ -1,6 +1,6 @@
 # MAGMA Physiological Event Labeling
 
-MATLAB framework for extracting respiratory features and generating weak physiological labels from thoracic and abdominal respiratory belts and SpO₂ recordings.
+MATLAB framework for extracting respiratory features and generating weak physiological labels from thoracic and abdominal respiratory belts and SpOâ‚‚ recordings.
 
 The framework detects 11 elementary patterns:
 
@@ -11,7 +11,7 @@ Labels are independent and may overlap. They describe signal-derived physiologic
 MAGMA has two scientific output levels: Level 1 contains the time-resolved
 labels and their supporting evidence; Level 2 contains recording-level
 phenotypes and patterns. The five literature-based and six label-based Level-2
-profiles are descriptive, may coexist, and are accompanied by a fixed 22-value
+profiles are descriptive, may coexist, and are accompanied by a fixed 24-value
 numeric summary.
 
 ## Documentation
@@ -27,7 +27,7 @@ Default signal order:
 
 1. ECG1
 2. ECG2
-3. SpO₂
+3. SpOâ‚‚
 4. Thoracic respiratory belt (`Resp-Lungs`)
 5. Blood pressure
 6. Abdominal respiratory belt (`Resp-Diaphragm`)
@@ -63,15 +63,15 @@ The pipeline:
 The main recording outputs are
 `Sub<subject>_M<measurement>_results.mat` and
 `Sub<subject>_M<measurement>_results.h5`. The respiratory-feature cache keeps
-the `_features.mat` suffix. See [Outputs](docs/OUTPUTS.md) for the HDF5 v15
+the `_features.mat` suffix. See [Outputs](docs/OUTPUTS.md) for the HDF5 v18
 hierarchy and group-output filenames.
 
 ## Respiratory reference
 
 Amplitude-dependent labels use a fixed recording-specific reference:
 
-- M1/M3: 3–6 min
-- M2/M4: 19–22 min
+- M1/M3: 3â€“6 min
+- M2/M4: 19â€“22 min
 
 Respiratory-belt amplitudes are relative, not calibrated tidal volume. Thoracic and abdominal belts are therefore normalized independently.
 
@@ -89,6 +89,11 @@ Reviewed coverage is stored explicitly, so unreviewed data are not interpreted a
 
 In respiratory review, blue dots are editable trough landmarks between red
 peaks. They are not explicit hold boundaries.
+
+Respiratory review also supports independent per-belt **Mark artifact** intervals.
+Use `config.resp.recheck_cached = true` to reopen saved reviewed landmarks.
+See [Rechecking respiratory features](docs/RESPIRATORY_ARTIFACTS.md) for the
+backup, cancellation, reanalysis, and revision workflow.
 
 ## Tests
 

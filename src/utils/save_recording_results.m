@@ -1,4 +1,4 @@
-function save_recording_results(results, data_raw, data, config)
+function results = save_recording_results(results, data_raw, data, config)
 % SAVE_RECORDING_RESULTS Save one recording to MAT and optional HDF5 files.
 %
 % Inputs:
@@ -14,6 +14,12 @@ function save_recording_results(results, data_raw, data, config)
     if ~isfield(results, 'analysis_recording_observations')
         results.analysis_recording_observations = recording_observation('default', config);
     end
+    results.respiratory_artifact_state = respiratory_artifact_checkpoint('load',config);
+    if ~isfield(results,'analysis_respiratory_artifact_revision'), results.analysis_respiratory_artifact_revision = 0; end
+    full_analysis = ~strcmp(execution_mode(config),'review_only') && isempty(resolve_selected_labels(config));
+    if full_analysis && results.analysis_respiratory_artifact_revision ~= results.respiratory_artifact_state.revision
+        error('MAGMA:Respiration:ArtifactRevisionChanged','Feature annotations changed during analysis; rerun this recording.');
+    end
     save(fullfile(config.sub_results_path, config.sub_results_filename), ...
         '-struct', 'results');
     if get_config_value(config, 'HDF5', 'enabled', true)
@@ -25,5 +31,7 @@ function save_recording_results(results, data_raw, data, config)
     end
     if ~strcmp(execution_mode(config), 'review_only') && isempty(resolve_selected_labels(config))
         recording_observation('complete', config, results.analysis_recording_observations.revision);
+        results.respiratory_artifact_state = respiratory_artifact_checkpoint('complete',config,results.analysis_respiratory_artifact_revision);
     end
+    results.recording_observations = recording_observation('load', config);
 end

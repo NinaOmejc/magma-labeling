@@ -112,6 +112,38 @@ function row = result_file_to_summary_row(result_file, config, canonical_labels)
             'evidence_reviewed');
     end
     row = add_authoritative_trace_summaries(row, loaded);
+    thoracic = build_thoracic_excursion_phenotype(loaded);
+    row.thoracic_respiratory_rhythmicity = thoracic.values(1);
+    row.thoracic_respiratory_rhythmicity_available = thoracic.available(1);
+    row.thoracic_respiratory_rhythmicity_missing_reason = thoracic.missing_reason{1};
+    row.minimal_thoracic_excursion_clinician = thoracic.values(2);
+    row.minimal_thoracic_excursion_status = 'not_assessed';
+    row.respiratory_artifact_revision = 0; row.analysis_respiratory_artifact_revision = 0;
+    row.respiratory_artifact_pending_reanalysis = false;
+    if isfield(loaded,'respiratory_artifact_state')
+        row.respiratory_artifact_revision = loaded.respiratory_artifact_state.revision;
+        row.respiratory_artifact_pending_reanalysis = loaded.respiratory_artifact_state.pending_reanalysis;
+    end
+    feature_file = fullfile(fileparts(result_file),[row.recording_id '_features.mat']);
+    if isfile(feature_file) && ismember('respiratory_artifact_state',who('-file',feature_file))
+        current = load(feature_file,'respiratory_artifact_state');
+        state = current.respiratory_artifact_state;
+        if state.subject ~= row.subject || state.measurement ~= row.measure
+            error('MAGMA:Respiration:ArtifactIdentity','Artifact identity mismatch: %s',feature_file);
+        end
+        row.respiratory_artifact_revision = state.revision;
+        row.respiratory_artifact_pending_reanalysis = state.pending_reanalysis;
+    end
+    if isfield(loaded,'analysis_respiratory_artifact_revision')
+        row.analysis_respiratory_artifact_revision = loaded.analysis_respiratory_artifact_revision;
+    end
+    row.respiratory_artifact_pending_reanalysis = row.respiratory_artifact_pending_reanalysis || ...
+        row.respiratory_artifact_revision ~= row.analysis_respiratory_artifact_revision;
+    row.recording_observation_pending_reanalysis = false;
+    if isfield(loaded,'recording_observations')
+        row.minimal_thoracic_excursion_status = loaded.recording_observations.status;
+        row.recording_observation_pending_reanalysis = loaded.recording_observations.pending_reanalysis;
+    end
 
 end
 

@@ -12,7 +12,7 @@ function books = collect_group_workbook_tables(group_table, cohort, data)
         'Label_burden', label_burden_table(group_table), ...
             'One recording and label per row. Burdens and review coverage are fractions (0 to 1).';
         'Phenotypes', [automatic; reviewed], ...
-            '22 raw features per recording. Automatic and reviewed rows are identified separately.'};
+            '24 raw features per recording. Automatic and reviewed rows are identified separately.'};
     books.details = {
         'Recordings', group_table, 'Full recording summaries, including detector and reference QC.';
         'Cohort_label_QC', cohort.qc.by_label, 'Cohort event and candidate QC by label.';

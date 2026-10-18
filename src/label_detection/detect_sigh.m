@@ -151,6 +151,8 @@ function [events, diagnostics] = detect_sigh( ...
                  '''global_ratio_outlier'', or ''legacy_60s'' (received ''%s'').'], ...
                 method);
     end
+    [sigh_lungs,diagnostics.lungs] = gate_artifact_sigh(lungs,sigh_lungs,diagnostics.lungs,method,rolling_window_breaths,legacy_prev_win_sec,fs);
+    [sigh_diaph,diagnostics.diaph] = gate_artifact_sigh(diaph,sigh_diaph,diagnostics.diaph,method,rolling_window_breaths,legacy_prev_win_sec,fs);
     diagnostics.available = diagnostics.lungs.available || ...
         diagnostics.diaph.available;
 
@@ -1115,4 +1117,26 @@ function add_axis_legend(ax, handles, labels)
         return;
     end
     legend(ax, handles, labels, 'Location', 'eastoutside');
+end
+
+function [flags,diagnostics] = gate_artifact_sigh(belt,flags,diagnostics,method,window_breaths,legacy_sec,fs)
+    if ~isfield(belt,'artifact_intervals_idx') || isempty(belt.artifact_intervals_idx), return; end
+    t = belt.peak_t(:); clean = true(size(t));
+    for i = 1:numel(t)
+        first = t(i); last = t(i);
+        if strcmp(method,'rolling_median_2x')
+            half = floor(window_breaths/2);
+            center = max(half+1,min(numel(t)-half,i));
+            first = t(max(1,center-half)); last = t(min(numel(t),center+half));
+        elseif strcmp(method,'legacy_60s'), first = first-legacy_sec; end
+        clean(i) = respiratory_artifact_window_valid(belt.artifact_intervals_idx,last,last-first,fs);
+    end
+    flags = flags & clean;
+    for field = {'evaluable_mask','sigh_flags'}
+        if isfield(diagnostics,field{1}), diagnostics.(field{1}) = diagnostics.(field{1}) & clean; end
+    end
+    for field = {'sigh_baseline','sigh_ratio'}
+        if isfield(diagnostics,field{1}), diagnostics.(field{1})(~clean) = NaN; end
+    end
+    if isfield(diagnostics,'evaluable_mask'), diagnostics.available = any(diagnostics.evaluable_mask); end
 end

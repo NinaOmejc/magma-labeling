@@ -1,5 +1,5 @@
 function evidence = build_db_phenotype_evidence( ...
-    label_burden, overlaps, label_evidence, source_provenance)
+    label_burden, overlaps, label_evidence, source_provenance, recording_context)
 % BUILD_DB_PHENOTYPE_EVIDENCE Build detailed phenotypes and numeric summary.
 % Inputs describe one automatic or reviewed annotation layer. Outputs organize
 % literature-based and label-based evidence without diagnoses,
@@ -9,9 +9,10 @@ function evidence = build_db_phenotype_evidence( ...
         source_provenance = 'automatic_labels';
     end
     source_provenance = char(string(source_provenance));
+    if nargin < 5, recording_context = struct(); end
 
     evidence = struct();
-    evidence.version = 'magma_phenotypes_v7';
+    evidence.version = 'magma_phenotypes_v8';
     evidence.source_provenance = source_provenance;
     evidence.levels = struct( ...
         'level_1', 'time-resolved physiological labels and evidence', ...
@@ -263,8 +264,10 @@ function evidence = build_db_phenotype_evidence( ...
     evidence.literature_based = add_provenance( ...
         literature_based, source_provenance);
     evidence.label_based = add_provenance(label_based, source_provenance);
+    evidence.recording_level.minimal_thoracic_excursion = ...
+        build_thoracic_excursion_phenotype(recording_context);
     evidence.numeric_summary = build_compact_phenotype_features( ...
-        label_burden, overlaps, label_evidence);
+        label_burden, overlaps, label_evidence, recording_context);
 end
 
 function entry = burden_entry(burden, name)

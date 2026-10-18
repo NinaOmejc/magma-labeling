@@ -10,6 +10,8 @@ function metrics = compute_respiratory_phase_offset_metrics(data, resp_cycles, c
 % No polarity optimization, time shift, raw absolute-value transform, breath
 % redetection, or session-reference phase normalization is applied.
 
+    [data,resp_cycles,artifact_state] = respiratory_artifact_view(data,resp_cycles,config);
+    config.respiratory_artifact_state = artifact_state;
     N = size(data, 1);
     t_grid = (0:config.grid_step_sec:(N - 1) / config.fs)';
     metrics = empty_phase_offset_metrics(t_grid, config);

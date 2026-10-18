@@ -213,14 +213,14 @@ function [root, cleanup] = saved_cohort()
             mask_reviewed(1:2, 4) = true;
         end
         config = struct('fs', 10);
-        automatic = compact(schema, subject/10 + measure/100 + (1:22)/1000);
+        automatic = compact(schema, [subject/10 + measure/100 + (1:22)/1000, 0.5, 0]);
         automatic.values(1) = rapid_count/10;
         if subject == 2 && measure == 2
             automatic.available(11:13) = false;
             automatic.values(11:13) = nan;
             automatic.coverage_fraction(11:13) = 0;
         end
-        reviewed = compact(schema, nan(1, 22));
+        reviewed = compact(schema, nan(1, 24));
         reviewed.available(:) = false;
         reviewed.coverage_fraction(:) = 0;
         if subject == 1 && measure == 1
@@ -239,7 +239,7 @@ end
 
 function value = compact(schema, values)
     available = isfinite(values);
-    value = struct('version', 'magma_phenotype_numeric_summary_v3', ...
+    value = struct('version', 'magma_phenotype_numeric_summary_v4', ...
         'schema_version', schema.version, 'n_features', schema.n_features, ...
         'feature_names', {schema.feature_names}, 'values', double(values), ...
         'available', logical(available), ...

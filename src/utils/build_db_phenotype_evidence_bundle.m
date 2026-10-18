@@ -1,14 +1,15 @@
 function bundle = build_db_phenotype_evidence_bundle( ...
     automatic_burden, automatic_overlap, automatic_evidence, ...
-    reviewed_burden, reviewed_overlap, reviewed_evidence)
+    reviewed_burden, reviewed_overlap, reviewed_evidence, recording_context)
 % BUILD_DB_PHENOTYPE_EVIDENCE_BUNDLE Build parallel automatic/reviewed profiles.
 % Each input triplet is label burden, overlap, and detector-evidence summary for
 % one annotation layer. bundle fields are version; automatic and reviewed
 % phenotype evidence with explicit annotation/detector scopes; event-specific
 % measures follow each layer while full-record detector QC may be shared.
 
+    if nargin < 7, recording_context = struct(); end
     bundle = struct();
-    bundle.version = 'magma_phenotype_bundle_v7';
+    bundle.version = 'magma_phenotype_bundle_v8';
     bundle.automatic = build_db_phenotype_evidence( ...
         automatic_burden, automatic_overlap, automatic_evidence, 'automatic_labels');
     bundle.reviewed = build_db_phenotype_evidence( ...
@@ -22,4 +23,5 @@ function bundle = build_db_phenotype_evidence_bundle( ...
     bundle.provenance_note = [ ...
         'automatic and reviewed profiles are descriptive signal-derived evidence; ' ...
         'no profile is a diagnosis'];
+    bundle = attach_thoracic_excursion_phenotype(bundle, recording_context);
 end

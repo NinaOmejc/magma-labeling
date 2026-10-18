@@ -311,7 +311,7 @@ function testPhenotypeEvidenceUsesGroupedNonDiagnosticSchema(testCase)
     bundle = build_db_phenotype_evidence_bundle( ...
         burden, overlaps, label_evidence, burden, overlaps, label_evidence);
     verifyEqual(testCase, bundle.version, ...
-        'magma_phenotype_bundle_v7');
+        'magma_phenotype_bundle_v8');
     verifyTrue(testCase, isfield(bundle, 'automatic'));
     verifyTrue(testCase, isfield(bundle, 'reviewed'));
     verifyTrue(testCase, isfield(bundle.automatic, 'literature_based'));

@@ -11,11 +11,14 @@ function resp_features = compute_respiratory_features(data, resp_cycles, resp_re
 %   belt_availability/both_belts_available - Usable timing-evidence flags.
 %   thoracoabdominal_balance - Cross-belt amplitude-balance evidence.
 
+    [data,resp_cycles,artifact_state] = respiratory_artifact_view(data,resp_cycles,config);
+    config.respiratory_artifact_state = artifact_state;
     N = size(data, 1);
     t_grid = (0:config.grid_step_sec:(N-1)/config.fs)';
     cfg = evidence_config(config);
 
     resp_features = struct();
+    resp_features.respiratory_artifact_state = artifact_state;
     resp_features.time_sec = t_grid;
     resp_features.grid_step_sec = config.grid_step_sec;
     resp_features.rate_windows_sec = struct( ...
@@ -29,9 +32,9 @@ function resp_features = compute_respiratory_features(data, resp_cycles, resp_re
     lungs_source = get_belt(resp_cycles, 'lungs');
     if minimal_thoracic_excursion(config), lungs_source = []; end
     resp_features.lungs = build_belt_evidence( ...
-        lungs_source, get_belt(resp_ref, 'lungs'), lungs_ignored, t_grid, cfg, config);
+        lungs_source, get_belt(resp_ref, 'lungs'), lungs_ignored, t_grid, cfg, config, N);
     resp_features.diaph = build_belt_evidence( ...
-        get_belt(resp_cycles, 'diaph'), get_belt(resp_ref, 'diaph'), false, t_grid, cfg, config);
+        get_belt(resp_cycles, 'diaph'), get_belt(resp_ref, 'diaph'), false, t_grid, cfg, config, N);
 
     if minimal_thoracic_excursion(config)
         resp_features.lungs.reference_quality = 'minimal_thoracic_excursion';
@@ -43,7 +46,7 @@ function resp_features = compute_respiratory_features(data, resp_cycles, resp_re
     resp_features.thoracoabdominal_balance = build_thoracoabdominal_balance(resp_features.lungs, resp_features.diaph, t_grid, cfg);
 end
 
-function belt = build_belt_evidence(source, reference, ignored, t_grid, cfg, config)
+function belt = build_belt_evidence(source, reference, ignored, t_grid, cfg, config, N)
 % BUILD_BELT_EVIDENCE Derive rate, amplitude, and irregularity evidence for one belt.
 % source is one respiratory-cycle struct; reference is its respiratory
 % amplitude-reference struct; ignored disables all evidence. t_grid is in
@@ -59,6 +62,9 @@ function belt = build_belt_evidence(source, reference, ignored, t_grid, cfg, con
     % Preserve cycle alignment from resp_cycles: selected amp(i) belongs to
     % peak i, with method-specific NaNs at undefined boundaries; trough i lies
     % between peaks i and i+1, and ibi(i)/rr_bpm(i) span those same peaks.
+    masks = respiratory_artifact_masks(source,N,config.fs);
+    belt.artifact_intervals_idx = masks.evidence_intervals_idx;
+    belt.artifact_fs = config.fs;
     belt.peak_idx = get_field(source, 'peak_idx', []);
     belt.peak_t = get_field(source, 'peak_t', []);
     belt.trough_idx = get_field(source, 'trough_idx', []);
@@ -78,7 +84,7 @@ function belt = build_belt_evidence(source, reference, ignored, t_grid, cfg, con
             (belt.trough_idx(valid_trough_idx) - 1) / config.fs;
     end
 
-    belt.available = is_valid_breath_signal(source, false) && ~belt.ignored;
+    belt.available = is_valid_breath_signal(source, false) && ~belt.ignored && any(masks.ibi_valid);
     belt.amplitude_available = is_valid_breath_signal(source, true) && belt.available;
 
     [belt.ibi, belt.ibi_source] = interval_values(source, 'ibi', belt.peak_idx, belt.peak_t, config.fs);
@@ -107,6 +113,8 @@ function belt = build_belt_evidence(source, reference, ignored, t_grid, cfg, con
         belt.rate_rapid_window_bpm = respiratory_rate_trace(belt.peak_t, t_grid, cfg.rapid_win_sec);
     end
 
+    belt.rate_slow_window_bpm(~respiratory_artifact_window_valid(belt.artifact_intervals_idx,t_grid,cfg.slow_win_sec,config.fs)) = NaN;
+    belt.rate_rapid_window_bpm(~respiratory_artifact_window_valid(belt.artifact_intervals_idx,t_grid,cfg.rapid_win_sec,config.fs)) = NaN;
     if belt.session_amplitude_available
         % A complete window passes when it contains at least one valid breath
         % and every valid session-normalized amplitude is below threshold.
@@ -116,6 +124,10 @@ function belt = build_belt_evidence(source, reference, ignored, t_grid, cfg, con
             apnea_amplitude_window_mask( ...
                 belt.peak_t, belt.amp_ratio_session, t_grid, ...
                 cfg.apnea_win_sec, cfg.apnea_ratio_threshold);
+        valid = respiratory_artifact_window_valid(belt.artifact_intervals_idx,t_grid,cfg.apnea_win_sec,config.fs);
+        belt.apnea_amplitude_endpoint_mask = belt.apnea_amplitude_endpoint_mask & valid;
+        belt.apnea_amplitude_evaluable_endpoint_mask = belt.apnea_amplitude_evaluable_endpoint_mask & valid;
+        belt.apnea_amplitude_state_mask = analysis_window_endpoints_to_state_mask(belt.apnea_amplitude_endpoint_mask,t_grid,cfg.apnea_win_sec);
     end
 
     if belt.available
@@ -124,6 +136,10 @@ function belt = build_belt_evidence(source, reference, ignored, t_grid, cfg, con
         [belt.irregularity.window_mask, belt.irregularity.cov, ...
             belt.irregularity.robust_cov, belt.irregularity.endpoint_mask] = compute_irregularity_metrics( ...
                 irregular_input, t_grid, cfg.irregularity_win_sec, cfg.cov_thr);
+        valid = respiratory_artifact_window_valid(belt.artifact_intervals_idx,t_grid,cfg.irregularity_win_sec,config.fs);
+        belt.irregularity.cov(~valid) = NaN; belt.irregularity.robust_cov(~valid) = NaN;
+        belt.irregularity.endpoint_mask = belt.irregularity.endpoint_mask & valid;
+        belt.irregularity.window_mask = analysis_window_endpoints_to_state_mask(belt.irregularity.endpoint_mask,t_grid,cfg.irregularity_win_sec);
 
         % slow breathing features
         belt.rate_slow_endpoint_mask = isfinite(belt.rate_slow_window_bpm) & belt.rate_slow_window_bpm <= cfg.slow_rr_threshold;
@@ -169,6 +185,10 @@ function balance = build_thoracoabdominal_balance(lungs, diaph, t_grid, cfg)
             continue;
         end
 
+        if ~respiratory_artifact_window_valid(lungs.artifact_intervals_idx,window_end,cfg.thoracic_balance_win_sec,lungs.artifact_fs) || ...
+                ~respiratory_artifact_window_valid(diaph.artifact_intervals_idx,window_end,cfg.thoracic_balance_win_sec,diaph.artifact_fs)
+            continue;
+        end
         thoracic_values = values_in_window( ...
             lungs.peak_t, lungs.amp_ratio_session, window_start, window_end);
         abdominal_values = values_in_window( ...
@@ -235,6 +255,7 @@ function belt = empty_belt_evidence(t_grid)
 % ratios directly.
 
     belt = struct( ...
+        'artifact_intervals_idx', zeros(0,2), 'artifact_fs', 1, ...
         'available', false, ...
         'amplitude_available', false, ...
         'session_amplitude_available', false, ...

@@ -1,6 +1,6 @@
 function results = build_recording_results( ...
     config, resp_cycles, resp_ref, session_reference, ...
-    resp_features, label_results)
+    resp_features, label_results, signal_qc)
 % BUILD_RECORDING_RESULTS Package authoritative recording outputs for saving.
 %
 % Inputs:
@@ -37,7 +37,9 @@ function results = build_recording_results( ...
 %     config - Complete resolved run configuration, including config.input_config.
 %     upstream_input_preprocessing - Text describing preprocessing before MAGMA.
 
+    if nargin < 7, signal_qc = struct(); end
     results = struct();
+    results.respiratory_signal_qc = signal_qc;
     results.subject = config.subject;
     results.measure = config.measure;
     results.events_automatic = label_results.events_automatic;
@@ -60,6 +62,11 @@ function results = build_recording_results( ...
     results.label_reviewed_assessable_mask = ...
         label_results.reviewed_assessable_mask;
     results.resp_cycles = resp_cycles;
+    results.respiratory_artifact_state = respiratory_artifact_state(resp_cycles,config,size(label_results.mask_automatic,1));
+    results.analysis_respiratory_artifact_revision = results.respiratory_artifact_state.revision;
+    if isfield(results.resp_cycles,'artifact_annotation')
+        results.resp_cycles.artifact_annotation.pending_reanalysis = false;
+    end
     results.resp_ref = resp_ref;
     results.session_reference = session_reference;
     results.spo2_ref = label_results.spo2_ref;
@@ -80,7 +87,7 @@ function results = build_recording_results( ...
         results.analysis_recording_observations.affected_labels = {};
         results.analysis_recording_observations.affected_outputs = {};
     end
-    results.phenotypes = label_results.phenotypes;
+    results.phenotypes = attach_thoracic_excursion_phenotype(label_results.phenotypes, results);
     results.manual_label_edit = label_results.manual_label_edit;
     % A selected-label rerun must not fill an older round with changed evidence.
     if ~get_config_value(config, 'execution', 'partial_rerun', false)

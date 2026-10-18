@@ -1,9 +1,10 @@
-function resp_cycles = load_or_extract_respiratory_cycles(data, config)
+function [resp_cycles, cancelled] = load_or_extract_respiratory_cycles(data, config)
 % LOAD_OR_EXTRACT_RESPIRATORY_CYCLES Reuse a compatible cycle cache or extract anew.
 % data is Nsample-by-Nchannel input data. config identifies the recording,
 % sampling, channel layout, cache location, and overwrite policy. The
 % returned lungs/diaph cycle structs include provenance.loaded_from_cache.
 
+    cancelled = false;
     recording_observations = recording_observation('load', config);
     config.recording_observations = recording_observations;
     cache_file = feature_cache_file(config);
@@ -31,9 +32,9 @@ function resp_cycles = load_or_extract_respiratory_cycles(data, config)
                          '(%s). %s'], ...
                         strjoin(repaired_belts, ', '), strjoin(repair_notes, ' '));
                 end
-                if observation_changed || ~isempty(repaired_belts)
-                    save(cache_file, 'resp_cycles', 'feature_cache_meta', 'recording_observations');
-                end
+                [resp_cycles,cancelled] = accept_cached_features(resp_cycles,cached, ...
+                    feature_cache_meta,data,config,cache_file,observation_changed || ~isempty(repaired_belts));
+                if cancelled, return; end
                 resp_cycles.provenance.loaded_from_cache = true;
                 log_message(config, 1, ...
                     'Loaded cached respiratory cycle extraction results: %s', cache_file);
@@ -45,6 +46,10 @@ function resp_cycles = load_or_extract_respiratory_cycles(data, config)
         end
         if is_amplitude_method_only_cache_mismatch( ...
                 cached, size(data,1), cache_version, config)
+            if get_config_value(config,'resp','recheck_cached',false)
+                error('MAGMA:Respiration:RecheckAmplitudeMismatch', ...
+                    'Recheck preserves the saved amplitude method. Set resp.amp_method to %s before reopening %s.',cached.feature_cache_meta.amp_method,cache_file);
+            end
             resp_cycles = cached_resp_cycles(cached);
             [resp_cycles, ~] = apply_thoracic_observation(resp_cycles, data, config);
             [resp_cycles, landmarks_valid, repaired_belts, repair_notes] = ...
@@ -67,7 +72,9 @@ function resp_cycles = load_or_extract_respiratory_cycles(data, config)
                          '(%s). %s'], strjoin(repaired_belts, ', '), ...
                         strjoin(repair_notes, ' '));
                 end
-                save(cache_file, 'resp_cycles', 'feature_cache_meta', 'recording_observations');
+                [resp_cycles,cancelled] = accept_cached_features(resp_cycles,cached, ...
+                    feature_cache_meta,data,config,cache_file,true);
+                if cancelled, return; end
                 resp_cycles.provenance.loaded_from_cache = true;
                 log_message(config, 1, ...
                     ['Loaded cached respiratory cycles and reselected the ' ...
@@ -79,12 +86,10 @@ function resp_cycles = load_or_extract_respiratory_cycles(data, config)
                  'without changing reviewed peaks. Recomputing: %s'], cache_file);
         end
 
-        if isfield(cached, 'resp_cycles') && ...
-                isstruct(cached.resp_cycles) && ...
-                isfield(cached.resp_cycles, 'provenance') && ...
-                isstruct(cached.resp_cycles.provenance) && ...
-                isfield(cached.resp_cycles.provenance, 'manual_review_performed') && ...
-                isequal(cached.resp_cycles.provenance.manual_review_performed, true)
+        if get_config_value(config,'resp','recheck_cached',false)
+            error('MAGMA:Respiration:RecheckCacheMismatch','Cannot recheck incompatible cache; no saved landmarks were regenerated: %s',cache_file);
+        end
+        if isfield(cached,'resp_cycles') && has_reviewed_respiration_landmarks(cached.resp_cycles)
             error('MAGMA:Respiration:ReviewedFeatureCacheMismatch', ...
                 ['Reviewed respiratory feature cache is incompatible and ' ...
                  'will not be overwritten: %s. Inspect the cache or set ' ...
@@ -98,6 +103,8 @@ function resp_cycles = load_or_extract_respiratory_cycles(data, config)
              'config.overwrite_features is true: %s'], cache_file);
     end
 
+    previous_state = respiratory_artifact_checkpoint('load',config);
+    replacing_cache = isfile(cache_file);
     resp_cycles = extract_respiration_features(data, config);
     recording_observations = recording_observation('load', config);
     config.recording_observations = recording_observations;
@@ -128,9 +135,96 @@ function resp_cycles = load_or_extract_respiratory_cycles(data, config)
         mkdir(cache_dir);
     end
 
-    save(cache_file, 'resp_cycles', 'feature_cache_meta', 'recording_observations');
+    state = respiratory_artifact_state(resp_cycles,config,size(data,1));
+    if replacing_cache || ~isempty(state.lungs) || ~isempty(state.diaph)
+        state.revision = previous_state.revision+1; state.pending_reanalysis = true;
+        state.timestamp = char(datetime('now','TimeZone','UTC','Format','yyyy-MM-dd HH:mm:ss.SSS XXX'));
+        state.reviewer_role = get_config_value(config,'LabelEdit','reviewer_role','researcher');
+        state.annotation_source = 'respiration_feature_gui';
+        if ~resp_cycles.provenance.manual_review_performed
+            state.reviewer_role = 'system'; state.annotation_source = 'respiratory_feature_extraction';
+        end
+    end
+    resp_cycles.artifact_annotation = artifact_metadata(state);
+    payload = struct('resp_cycles',resp_cycles,'feature_cache_meta',feature_cache_meta, ...
+        'recording_observations',recording_observations,'respiratory_artifact_state',state);
+    atomic_save_mat(cache_file,payload);
+    respiratory_artifact_checkpoint('publish',config,state);
     log_message(config, 1, ...
         'Saved respiratory cycle extraction results: %s', cache_file);
+end
+
+function [cycles,cancelled] = accept_cached_features(cycles,cached,meta,data,config,filename,dirty)
+% Recheck the saved cycles before any migration/write, so Cancel is byte-safe.
+    original = cached.resp_cycles;
+    cancelled = false;
+    N = size(data,1);
+    for key = {'lungs','diaph'}
+        name = key{1};
+        if ~isfield(cycles.(name),'artifact_intervals_idx')
+            cycles.(name).artifact_intervals_idx = zeros(0,2); dirty = true;
+        end
+        cycles.(name).artifact_intervals_idx = normalize_respiratory_artifacts(cycles.(name).artifact_intervals_idx,N);
+    end
+    state = respiratory_artifact_state(cycles,config,N);
+    cycles.artifact_annotation = artifact_metadata(state);
+    if get_config_value(config,'resp','recheck_cached',false)
+        backup_dir = fullfile(fileparts(filename),'feature_review_backups');
+        ensure_output_directory(backup_dir);
+        [~,base] = fileparts(filename);
+        [~,unique_name] = fileparts(tempname(backup_dir));
+        backup = fullfile(backup_dir,[base '_' unique_name '.mat']);
+        [ok,message] = copyfile(filename,backup);
+        if ~ok || ~isequaln(load(filename),load(backup))
+            error('MAGMA:Respiration:BackupFailed','Cannot verify feature backup %s: %s',backup,message);
+        end
+        log_message(config,1,'Respiratory feature backup: %s',backup);
+        [~,~,accepted] = manual_edit_respiration_features(data,cycles.lungs,cycles.diaph, ...
+            config,@commit_review,filename);
+        if ~accepted, cycles = original; cancelled = true; return; end
+        % The cache callback ran within the observation transaction.
+        saved = load(filename); cycles = saved.resp_cycles;
+        respiratory_artifact_checkpoint('publish',config,saved.respiratory_artifact_state);
+    elseif dirty || ~isfield(cached,'respiratory_artifact_state')
+        cached.resp_cycles = cycles; cached.feature_cache_meta = meta;
+        cached.recording_observations = config.recording_observations;
+        cached.respiratory_artifact_state = state;
+        atomic_save_mat(filename,cached);
+    end
+
+    function result = commit_review(lungs,diaph,observation)
+        current = respiratory_artifact_checkpoint('load',config);
+        if current.revision ~= state.revision
+            error('MAGMA:Respiration:ChangedDuringReview','Respiratory features changed in another session; reopen before saving.');
+        end
+        changed = respiration_breath_landmarks_changed(cycles.lungs,lungs) || ...
+            respiration_breath_landmarks_changed(cycles.diaph,diaph) || ...
+            ~isequal(cycles.lungs.artifact_intervals_idx,lungs.artifact_intervals_idx) || ...
+            ~isequal(cycles.diaph.artifact_intervals_idx,diaph.artifact_intervals_idx);
+        cycles.lungs = lungs; cycles.diaph = diaph;
+        cycles.provenance.manual_review_performed = true;
+        cycles.provenance.manual_edits_made = cycles.provenance.manual_edits_made || changed;
+        cycles.provenance.review_status = 'manual_reviewed_unchanged';
+        if cycles.provenance.manual_edits_made, cycles.provenance.review_status = 'manual_reviewed_edited'; end
+        if changed
+            state.revision = state.revision + 1;
+            state.timestamp = char(datetime('now','TimeZone','UTC','Format','yyyy-MM-dd HH:mm:ss.SSS XXX'));
+            state.reviewer_role = get_config_value(config,'LabelEdit','reviewer_role','researcher');
+            state.annotation_source = 'respiration_feature_gui';
+            state.pending_reanalysis = true;
+        end
+        cycles.artifact_annotation = artifact_metadata(state);
+        state = respiratory_artifact_state(cycles,config,N);
+        cached.resp_cycles = cycles; cached.feature_cache_meta = meta;
+        cached.recording_observations = observation;
+        cached.respiratory_artifact_state = state;
+        atomic_save_mat(filename,cached);
+        result = state;
+    end
+end
+
+function metadata = artifact_metadata(state)
+    metadata = rmfield(state,{'subject','measurement','lungs','diaph','lungs_evidence','diaph_evidence'});
 end
 
 function ok = is_amplitude_method_only_cache_mismatch( ...
@@ -302,6 +396,12 @@ function [resp_cycles, valid, repaired_belts, repair_notes] = ...
             validate_respiration_cycle_landmarks(belt);
         if belt_valid
             continue;
+        end
+        if has_reviewed_respiration_landmarks(resp_cycles)
+            error('MAGMA:Respiration:ReviewedFeatureCacheMismatch', ...
+                ['Reviewed %s landmarks are incompatible: %s. No landmarks were changed. ' ...
+                 'Restore a compatible backup or explicitly review/recompute the features.'], ...
+                name, original_message);
         end
         if ~isfield(belt, 'x0') || isempty(belt.x0) || ...
                 ~isfield(belt, 'peak_idx')

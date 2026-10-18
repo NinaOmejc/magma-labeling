@@ -6,7 +6,7 @@ respiratory phenotype and pattern evidence.
 - **Level 1 — time-resolved physiological labels and evidence:** signal-derived
   respiratory or physiological patterns, events, assessability, and diagnostics.
 - **Level 2 — recording-level respiratory phenotype and pattern evidence:**
-  detailed evidence profiles plus a fixed 22-value numeric summary.
+  detailed evidence profiles plus a fixed 24-value numeric summary.
 
 Neither Level 1 nor Level 2 should be interpreted as a clinical diagnosis. Labels may overlap, and several phenotype patterns may coexist in the same recording or participant.
 
@@ -141,7 +141,7 @@ Level 1 answers **"what respiratory/physiological pattern is present and when?"*
 Level 2 answers **"how much evidence does this recording contain for a
 literature-based phenotype or additional label-derived pattern?"** Detailed profiles
 retain the supporting evidence, while `numeric_summary` provides the fixed raw
-22-value recording-level summary.
+24-value recording-level summary.
 
 Examples:
 

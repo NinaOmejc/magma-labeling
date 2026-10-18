@@ -72,8 +72,7 @@ function layer = read_layer(layer, row, loaded, layer_name, schema)
     if ~isstruct(source) || ~isfield(source, 'numeric_summary')
         return;
     end
-    summary = source.numeric_summary;
-    validate_compact_phenotype_features(summary);
+    summary = align_phenotype_numeric_summary(source.numeric_summary);
     if ~isequal(summary.feature_names, schema.feature_names)
         error('MAGMA:Group:PhenotypeFeatureOrder', ...
             'Saved numeric-summary order differs from the fixed schema.');
@@ -86,7 +85,7 @@ function layer = read_layer(layer, row, loaded, layer_name, schema)
 end
 
 function T = feature_table(identifiers, values, schema)
-% FEATURE_TABLE Append exactly 22 contiguous fixed-order feature columns.
+% FEATURE_TABLE Append exactly 24 contiguous fixed-order feature columns.
 
     T = identifiers;
     for i = 1:schema.n_features
@@ -104,8 +103,9 @@ function T = feature_dictionary(schema)
     feature_role = string(schema.feature_role(:));
     units = string(schema.units(:));
     source_description = string(schema.source_description(:));
+    feature_scope = string(schema.feature_scope(:));
     T = table(feature_index, feature_name, display_name, phenotype_group, ...
-        feature_role, units, source_description);
+        feature_role, units, source_description, feature_scope);
 end
 
 function T = long_table(identifiers, layer, schema, annotation_layer)

@@ -1,4 +1,4 @@
-function [b_l, b_d, review_confirmed, recording_observations] = manual_edit_respiration_features(data, b_l, b_d, config)
+function [b_l, b_d, review_confirmed, recording_observations] = manual_edit_respiration_features(data, b_l, b_d, config, commit_callback, checkpoint_file)
 % MANUAL_EDIT_RESPIRATION_FEATURES Edit respiratory cycles and explicitly confirm review.
 %
 % Inputs:
@@ -14,6 +14,8 @@ function [b_l, b_d, review_confirmed, recording_observations] = manual_edit_resp
 %                      cancellation restores both complete pre-session structs.
 %   recording_observations - Shared recording-level observation after acceptance.
 
+    if nargin < 5, commit_callback = []; end
+    if nargin < 6, checkpoint_file = ''; end
     recording_observations = recording_observation('load', config);
     resolved = resolve_signal_channels(config);
     thoracic_present = ~isempty(resolved.channels.lungs_idx) && ~is_lung_belt_ignored(config);
@@ -24,6 +26,12 @@ function [b_l, b_d, review_confirmed, recording_observations] = manual_edit_resp
     pre_session_diaph = b_d;
     review_confirmed = false;
     observation_value = strcmp(recording_observations.status, 'observed');
+    if ~isfield(b_l,'artifact_intervals_idx'), b_l.artifact_intervals_idx = zeros(0,2); end
+    if ~isfield(b_d,'artifact_intervals_idx'), b_d.artifact_intervals_idx = zeros(0,2); end
+    b_l.artifact_intervals_idx = normalize_respiratory_artifacts(b_l.artifact_intervals_idx,N);
+    b_d.artifact_intervals_idx = normalize_respiratory_artifacts(b_d.artifact_intervals_idx,N);
+    artifact_drag = struct('belt','','ax',[],'start',NaN);
+    artifact_preview = gobjects(0);
     edit_mode = 'peaks';
     selected_belt = '';
     selected_left_peak = NaN;
@@ -37,12 +45,13 @@ function [b_l, b_d, review_confirmed, recording_observations] = manual_edit_resp
 
     edit_lungs = is_editable_resp_signal(b_l) && ~is_lung_belt_ignored(config);
     edit_diaph = is_editable_resp_signal(b_d);
-    if ~edit_lungs && ~edit_diaph && ~thoracic_present
+    abdominal_trace_present = ~isempty(resolved.channels.diaph_idx) && isfield(b_d,'x0') && ~isempty(b_d.x0);
+    if ~edit_lungs && ~edit_diaph && ~thoracic_present && ~abdominal_trace_present
         return;
     end
 
     fh = figure('Units','pixels','Position', near_fullscreen_figure_position(), ...
-        'Visible', 'on', 'CloseRequestFcn', @(~,~) cancel_review());
+        'Visible', 'on', 'Tag','respiration_feature_review', 'CloseRequestFcn', @(~,~) cancel_review());
 
     ax1 = subplot(2,1,1); hold(ax1, 'on');
     [pL, pkL, trL] = plot_belt_panel(ax1, t_raw, b_l, ...
@@ -65,13 +74,16 @@ function [b_l, b_d, review_confirmed, recording_observations] = manual_edit_resp
 
     ax2.Position(2) = ax2.Position(2) + 0.045;
     ax2.Position(4) = ax2.Position(4) - 0.045;
-    observation_checkbox = uicontrol(fh, 'Style', 'checkbox', ...
-        'Units', 'normalized', 'Position', [0.05 0.078 0.91 0.028], ...
-        'String', 'Minimal / absent thoracic excursion (belt present)', ...
+    uicontrol(fh, 'Style','text','Units','normalized', ...
+        'Position',[0.05 0.078 0.58 0.028], 'HorizontalAlignment','left', ...
+        'String','Minimal or absent thoracic excursion');
+    observation_selector = uicontrol(fh, 'Style', 'popupmenu', ...
+        'Units', 'normalized', 'Position', [0.65 0.078 0.31 0.028], ...
+        'String', {'Not observed','Observed'}, ...
         'Tag', 'minimal_thoracic_excursion', ...
-        'Value', strcmp(recording_observations.status, 'observed'), ...
+        'Value', 1+strcmp(recording_observations.status, 'observed'), ...
         'Callback', @(~,~) observation_changed());
-    if ~thoracic_present, set(observation_checkbox, 'Enable', 'off'); end
+    if ~thoracic_present, set(observation_selector, 'Enable', 'off'); end
     status_text = uicontrol(fh, 'Style', 'text', 'Units', 'normalized', ...
         'Position', [0.05 0.046 0.91 0.025], ...
         'HorizontalAlignment', 'left', ...
@@ -81,10 +93,10 @@ function [b_l, b_d, review_confirmed, recording_observations] = manual_edit_resp
         'SliderStep',[min(1/max(1,t_raw(end)-window_sec),0.05) 0.2], ...
         'Callback', @(src,~) set_xlim(src.Value));
     uicontrol(fh, 'Style', 'popupmenu', ...
-        'String', {'Edit peaks', 'Move trough'}, ...
+        'String', {'Edit peaks', 'Move trough', 'Mark artifact'}, 'Tag','respiration_edit_mode', ...
         'Units', 'normalized', 'Position', [0.50 0.008 0.20 0.038], ...
         'Callback', @(src,~) change_edit_mode(src));
-    uicontrol(fh, 'Style', 'pushbutton', 'String', 'Reviewed', ...
+    uicontrol(fh, 'Style', 'pushbutton', 'String', 'Reviewed', 'Tag','respiration_review_done', ...
         'Units', 'normalized', 'Position', [0.72 0.008 0.24 0.038], ...
         'Callback', @(~,~) confirm_review());
 
@@ -95,22 +107,31 @@ function [b_l, b_d, review_confirmed, recording_observations] = manual_edit_resp
         'LineWidth', 1.5, 'MarkerEdgeColor', [0 0.7 0.9], ...
         'HitTest', 'off', 'PickableParts', 'none', 'HandleVisibility', 'off');
 
-    if edit_lungs
+    if ~isempty(pL) && ~is_lung_belt_ignored(config)
         set(pL, 'HitTest','on', 'PickableParts','visible', ...
             'ButtonDownFcn', @(~,evt) edit_peak(evt, ax1, 'lungs', 'trace'));
+    end
+    if edit_lungs
         set(pkL, 'HitTest','on', 'PickableParts','visible', ...
             'ButtonDownFcn', @(~,evt) edit_peak(evt, ax1, 'lungs', 'peak'));
         set(trL, 'HitTest','on', 'PickableParts','visible', ...
             'ButtonDownFcn', @(~,evt) select_trough(evt, ax1, 'lungs'));
     end
-    if edit_diaph
+    if ~isempty(pD)
         set(pD, 'HitTest','on', 'PickableParts','visible', ...
             'ButtonDownFcn', @(~,evt) edit_peak(evt, ax2, 'diaph', 'trace'));
+    end
+    if edit_diaph
         set(pkD, 'HitTest','on', 'PickableParts','visible', ...
             'ButtonDownFcn', @(~,evt) edit_peak(evt, ax2, 'diaph', 'peak'));
         set(trD, 'HitTest','on', 'PickableParts','visible', ...
             'ButtonDownFcn', @(~,evt) select_trough(evt, ax2, 'diaph'));
     end
+    set(ax1,'Tag','respiration_lungs','ButtonDownFcn',@(~,evt) edit_peak(evt,ax1,'lungs','trace'));
+    set(ax2,'Tag','respiration_diaph','ButtonDownFcn',@(~,evt) edit_peak(evt,ax2,'diaph','trace'));
+    set(fh,'WindowButtonMotionFcn',@(~,~) update_artifact_drag(), ...
+        'WindowButtonUpFcn',@(~,evt) finish_artifact_drag(evt));
+    refresh_artifacts();
     set_trough_pickability(false);
 
     if edit_lungs && edit_diaph
@@ -152,13 +173,17 @@ function [b_l, b_d, review_confirmed, recording_observations] = manual_edit_resp
         b_l = pre_session_lungs;
         b_d = pre_session_diaph;
     else
+        requested = observation_value;
+        if ~thoracic_present, requested = recording_observations.status; end
+        callback = [];
+        if ~isempty(commit_callback), callback = @(obs) commit_callback(b_l,b_d,obs); end
         recording_observations = recording_observation('set', config, ...
-            observation_value, 'respiration_feature_gui', ...
-            recording_observations.revision);
+            requested, 'respiration_feature_gui', ...
+            recording_observations.revision, callback, checkpoint_file);
     end
 
     function observation_changed()
-        if get(observation_checkbox, 'Value')
+        if get(observation_selector, 'Value') == 2
             show_status('Thoracic breath evidence will be excluded; valid abdominal evidence remains usable.', false);
         else
             show_status('Thoracic evidence will be eligible after re-extraction. Existing results require reanalysis.', false);
@@ -181,7 +206,9 @@ function [b_l, b_d, review_confirmed, recording_observations] = manual_edit_resp
             return;
         end
 
-        observation_value = logical(get(observation_checkbox, 'Value'));
+        b_l.artifact_intervals_idx = normalize_respiratory_artifacts(b_l.artifact_intervals_idx,N);
+        b_d.artifact_intervals_idx = normalize_respiratory_artifacts(b_d.artifact_intervals_idx,N);
+        observation_value = get(observation_selector, 'Value') == 2;
         review_confirmed = true;
         if isgraphics(fh)
             uiresume(fh);
@@ -196,7 +223,7 @@ function [b_l, b_d, review_confirmed, recording_observations] = manual_edit_resp
         message = '';
         issue = struct();
         belt_name = '';
-        if edit_lungs && ~get(observation_checkbox, 'Value')
+        if edit_lungs && get(observation_selector, 'Value') ~= 2
             [valid, message, issue] = ...
                 validate_respiration_cycle_landmarks(b_l);
             belt_name = 'Resp-Lungs';
@@ -247,7 +274,13 @@ function [b_l, b_d, review_confirmed, recording_observations] = manual_edit_resp
     % CHANGE_EDIT_MODE Switch between the existing peak workflow and trough movement.
 
         clear_trough_selection();
-        if get(src, 'Value') == 2
+        artifact_drag.belt = '';
+        if isgraphics(artifact_preview), delete(artifact_preview); end
+        if get(src,'Value') == 3
+            edit_mode = 'artifact';
+            set_trough_pickability(false);
+            show_status('Mark artifact: drag on one belt; click an orange interval to remove it. Reviewed saves; X discards.',false);
+        elseif get(src, 'Value') == 2
             edit_mode = 'trough';
             set_trough_pickability(true);
             show_status('Move trough: select a blue dot, then click its corrected location.', false);
@@ -256,6 +289,7 @@ function [b_l, b_d, review_confirmed, recording_observations] = manual_edit_resp
             set_trough_pickability(false);
             show_status('Peak editing: click the trace to add or a red peak to remove.', false);
         end
+        refresh_artifacts();
     end
 
     function set_trough_pickability(can_pick)
@@ -277,7 +311,13 @@ function [b_l, b_d, review_confirmed, recording_observations] = manual_edit_resp
     % EDIT_PEAK Add a nearby local maximum or remove a selected breath peak.
     % belt selects lungs/diaphragm and target distinguishes trace from peak clicks.
 
-        if strcmp(belt, 'lungs') && get(observation_checkbox, 'Value'), return; end
+        if strcmp(edit_mode,'artifact')
+            if strcmp(belt,'lungs') && is_lung_belt_ignored(config), return; end
+            if ~strcmp(get(fh,'SelectionType'),'normal'), return; end
+            artifact_drag = struct('belt',belt,'ax',ax,'start',get_click_time(evt,ax));
+            return;
+        end
+        if strcmp(belt, 'lungs') && get(observation_selector, 'Value') == 2, return; end
         if ~strcmp(get(fh, 'SelectionType'), 'normal')
             return;
         end
@@ -317,6 +357,52 @@ function [b_l, b_d, review_confirmed, recording_observations] = manual_edit_resp
         drawnow;
     end
 
+    function refresh_artifacts()
+        delete(findall([ax1 ax2],'Tag','respiratory_artifact'));
+        if strcmp(edit_mode,'artifact')
+            shade_respiratory_artifacts(ax1,b_l.artifact_intervals_idx,fs,@(i,~) remove_artifact('lungs',i));
+            shade_respiratory_artifacts(ax2,b_d.artifact_intervals_idx,fs,@(i,~) remove_artifact('diaph',i));
+        else
+            shade_respiratory_artifacts(ax1,b_l.artifact_intervals_idx,fs);
+            shade_respiratory_artifacts(ax2,b_d.artifact_intervals_idx,fs);
+        end
+    end
+
+    function remove_artifact(belt,i)
+        if ~strcmp(edit_mode,'artifact'), return; end
+        if strcmp(belt,'lungs'), b_l.artifact_intervals_idx(i,:) = [];
+        else, b_d.artifact_intervals_idx(i,:) = []; end
+        refresh_artifacts();
+        show_status('Artifact removed. Existing breath landmarks are unchanged.',false);
+    end
+
+    function update_artifact_drag()
+        if isempty(artifact_drag.belt), return; end
+        if isgraphics(artifact_preview), delete(artifact_preview); end
+        stop = get_click_time([],artifact_drag.ax);
+        if ~isfinite(stop) || ~isfinite(artifact_drag.start), return; end
+        range = normalize_respiratory_artifacts(round([artifact_drag.start stop]*fs)+1,N);
+        artifact_preview = shade_respiratory_artifacts(artifact_drag.ax,range,fs);
+        set(artifact_preview,'Tag','respiratory_artifact_preview');
+    end
+
+    function finish_artifact_drag(evt)
+        if isempty(artifact_drag.belt), return; end
+        stop = get_click_time(evt,artifact_drag.ax);
+        if isfinite(stop) && isfinite(artifact_drag.start)
+            range = round([artifact_drag.start stop]*fs)+1;
+            if strcmp(artifact_drag.belt,'lungs')
+                b_l.artifact_intervals_idx = normalize_respiratory_artifacts([b_l.artifact_intervals_idx;range],N);
+            else
+                b_d.artifact_intervals_idx = normalize_respiratory_artifacts([b_d.artifact_intervals_idx;range],N);
+            end
+        end
+        artifact_drag.belt = '';
+        if isgraphics(artifact_preview), delete(artifact_preview); end
+        refresh_artifacts();
+        show_status('Artifact marked; breath landmarks are preserved. Reviewed saves; X discards.',false);
+    end
+
     function [b, invalidated] = update_breath_peaks(b, t_click, target)
     % UPDATE_BREATH_PEAKS Modify peak indices and recompute dependent breath fields.
     % t_click is seconds; a peak target removes the closest existing peak,
@@ -352,7 +438,7 @@ function [b_l, b_d, review_confirmed, recording_observations] = manual_edit_resp
     function select_trough(evt, ax, belt)
     % SELECT_TROUGH Select the existing trough and its surrounding peak samples.
 
-        if strcmp(belt, 'lungs') && get(observation_checkbox, 'Value'), return; end
+        if strcmp(belt, 'lungs') && get(observation_selector, 'Value') == 2, return; end
         if ~strcmp(edit_mode, 'trough') || ...
                 ~strcmp(get(fh, 'SelectionType'), 'normal')
             return;
