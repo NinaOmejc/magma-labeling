@@ -825,6 +825,37 @@ function testHdf5RoundTripPreservesOrderMasksNaNsAndRespiration(testCase)
         {'explicitly_viewed_or_edited_regions_per_label'});
 end
 
+function testHdf5RoundTripPreservesThoracicObservationAndReviewChange(testCase)
+    config = stage6_config();
+    results = export_fixture(config, 20);
+    config.subject = results.subject; config.measure = results.measure;
+    before = recording_observation('default', config);
+    current = before;
+    current.status = 'observed'; current.revision = 1;
+    current.pending_reanalysis = true;
+    current.reviewer_role = 'clinician';
+    current.annotation_source = 'manual_label_gui';
+    results.recording_observations = current;
+    results.analysis_recording_observations = before;
+    results.review_history(1).recording_observations = current;
+    results.review_history(1).recording_observation_change = struct('before', before, 'after', current);
+    filename = [tempname '.h5'];
+    cleanup = onCleanup(@() delete_if_present(filename)); %#ok<NASGU>
+    export_results_hdf5(filename, results, zeros(20,6), zeros(20,6));
+    text = read_hdf5_text(filename, '/observations/recording_json');
+    saved = jsondecode(text{1});
+    verifyEqual(testCase, saved.current.status, 'observed');
+    verifyEqual(testCase, saved.current.reviewer_role, 'clinician');
+    verifyEqual(testCase, saved.current.subject, results.subject);
+    verifyEqual(testCase, saved.current.measurement, results.measure);
+    verifyEqual(testCase, saved.analysis.revision, 0);
+    verifyTrue(testCase, saved.derived_results_pending_reanalysis);
+    base = '/review/history/round_000001/';
+    verifyEqual(testCase, read_hdf5_text(filename, [base 'recording_observations/status']), {'observed'});
+    verifyEqual(testCase, read_hdf5_text(filename, [base 'recording_observation_change/before/status']), {'not_assessed'});
+    verifyEqual(testCase, read_hdf5_text(filename, [base 'recording_observation_change/after/status']), {'observed'});
+end
+
 function testHdf5MlExportKeepsNativeAndAddsFilteredCanonicalBundle(testCase)
     config = make_test_config();
     N = 4001;

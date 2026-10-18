@@ -30,6 +30,10 @@ function metrics = compute_respiratory_phase_offset_metrics(data, resp_cycles, c
         return;
     end
 
+    if minimal_thoracic_excursion(config)
+        metrics.availability_reason = 'minimal_thoracic_excursion';
+        return;
+    end
     lungs_raw = data(:, idx_lungs);
     diaph_raw = data(:, idx_diaph);
     pair_valid = isfinite(lungs_raw) & isfinite(diaph_raw);

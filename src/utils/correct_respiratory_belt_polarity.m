@@ -56,6 +56,12 @@ function [data, trend, config] = correct_respiratory_belt_polarity( ...
         return;
     end
 
+    if minimal_thoracic_excursion(config)
+        qc.reason = 'minimal_thoracic_excursion';
+        config.preprocessing.belt_polarity_qc = qc;
+        return;
+    end
+
     idx_lungs = channels.lungs_idx;
     idx_diaph = channels.diaph_idx;
     if ~valid_channel_index(idx_lungs, size(data, 2)) || ...

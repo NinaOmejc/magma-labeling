@@ -50,6 +50,10 @@ function [results, cancelled] = review_existing_results(data, existing, config)
     results.review_history = annotations.review_history;
     results.review_provenance = annotations.review_provenance;
     results.manual_label_edit = manual_edit_info;
+    results.recording_observations = manual_edit_info.recording_observations;
+    if ~isfield(results, 'analysis_recording_observations')
+        results.analysis_recording_observations = recording_observation('default', config);
+    end
 
     % Rebuild layer summaries from immutable automatic outputs so older saved
     % analyses gain the current phenotype-summary semantics without rerunning

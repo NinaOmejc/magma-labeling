@@ -17,6 +17,8 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events( ...
 %                         coverage, reviewed/changed names, status_by_label,
 %                         review_history, and review_provenance.
 
+    observation = recording_observation('load', config);
+    config.recording_observations = observation;
     label_defs = manual_label_definitions();
     N = size(data, 1);
     fs = config.fs;
@@ -25,6 +27,7 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events( ...
     do_manual_review = manual_review_enabled(config);
     edit_file = manual_edit_file(config, cfg);
     edit_info = init_edit_info(edit_file);
+    edit_info.recording_observations = observation;
     reviewed_event_sets = automatic_event_sets;
     loaded_event_sets = [];
     review_history = empty_review_history();
@@ -83,7 +86,7 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events( ...
         start_event_sets.sigh, sigh_candidates, sigh_panel_peaks, fs);
     edited_event_sets.sigh = start_event_sets.sigh;
     new_coverage = false(N, numel(label_defs));
-    [edited_event_sets, ~, new_coverage, committed] = run_editor( ...
+    [edited_event_sets, ~, new_coverage, committed, observation_checked] = run_editor( ...
         data, resp_cycles, config, edited_event_sets, automatic_event_sets, ...
         start_event_sets, label_defs, cfg, {}, new_coverage);
     edit_info.editor_opened = true;
@@ -113,8 +116,12 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events( ...
     reviewed_event_sets = new_event_sets;
     active_round_id = new_round.round_id;
 
-    save_manual_event_sets(edit_file, automatic_event_sets, reviewed_event_sets, ...
-        review_history, active_round_id, label_defs, config, N, fs);
+    callback = @(value) save_review_observation(value, observation, edit_file, ...
+        automatic_event_sets, reviewed_event_sets, review_history, active_round_id, ...
+        label_defs, config, N, fs);
+    [observation, review_history] = recording_observation('set', config, ...
+        observation_checked, 'manual_label_gui', observation.revision, callback, edit_file);
+    edit_info.recording_observations = observation;
     log_message(config, 1, ...
         'Saved manual label review round: %s', edit_file);
     edit_info = apply_active_round_info(edit_info, review_history, ...
@@ -122,6 +129,16 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events( ...
 end
 
 
+
+function history = save_review_observation(value, before, edit_file, automatic, ...
+    reviewed, history, active_id, defs, config, N, fs)
+    index = find([history.round_id] == active_id, 1, 'last');
+    history(index).recording_observations = value;
+    if value.revision ~= before.revision
+        history(index).recording_observation_change = struct('before', before, 'after', value);
+    end
+    save_manual_event_sets(edit_file, automatic, reviewed, history, active_id, defs, config, N, fs);
+end
 
 function cfg = label_edit_config(config)
 % LABEL_EDIT_CONFIG Resolve and validate manual-event editor policy.
@@ -562,7 +579,8 @@ function history = normalize_saved_review_history(saved_history, N, config)
         normalized(i).changed_labels = reshape(cellstr(string(source.changed_labels)), 1, []);
         normalized(i).reviewer_id = optional_text(source, 'reviewer_id');
         normalized(i).notes = optional_text(source, 'notes');
-        snapshot_fields = {'phenotypes_reviewed', 'phenotype_numeric_summary_reviewed'};
+        snapshot_fields = {'phenotypes_reviewed', 'phenotype_numeric_summary_reviewed', ...
+            'recording_observations', 'recording_observation_change'};
         for f = 1:numel(snapshot_fields)
             field = snapshot_fields{f};
             if isfield(source, field), normalized(i).(field) = source.(field); end
@@ -650,7 +668,8 @@ function value = review_round_template()
         'schema_version', 'manual_review_round_v1', ...
         'accepted_as_active', true, ...
         'phenotypes_reviewed', [], ...
-        'phenotype_numeric_summary_reviewed', []);
+        'phenotype_numeric_summary_reviewed', [], ...
+        'recording_observations', [], 'recording_observation_change', []);
 end
 
 function round_id = next_round_id(history)
@@ -739,7 +758,7 @@ function save_manual_event_sets(edit_file, automatic_event_sets, reviewed_event_
         'manual_label_review_provenance', 'manual_label_edit_meta');
 end
 
-function [event_sets, reviewed_fields, review_coverage_mask, committed] = run_editor( ...
+function [event_sets, reviewed_fields, review_coverage_mask, committed, observation_checked] = run_editor( ...
     data, resp_cycles, config, event_sets, auto_event_sets, start_event_sets, ...
     label_defs, cfg, reviewed_fields, review_coverage_mask)
 % RUN_EDITOR Edit one label at a time while recording viewed sample coverage.
@@ -784,6 +803,7 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed] = run_ed
     temp_patches = gobjects(0);
     committed = false;
     finished = false;
+    observation_checked = strcmp(config.recording_observations.status, 'observed');
     [sigh_breath_events, sigh_breath_peak_t, sigh_panel_peaks] = ...
         build_sigh_breath_candidates(resp_cycles, N, fs);
 
@@ -815,6 +835,17 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed] = run_ed
     sgtitle(['MANUAL LABEL EVENT EDITING' newline ...
         'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure)]);
 
+    ax2.Position(2) = ax2.Position(2) + 0.065;
+    ax2.Position(4) = ax2.Position(4) - 0.065;
+    observation_checkbox = uicontrol(fh, 'Style', 'checkbox', 'Units', 'normalized', ...
+        'Position', [0.10 0.055 0.85 0.027], ...
+        'String', 'Minimal / absent thoracic excursion (belt present)', ...
+        'Tag', 'minimal_thoracic_excursion', 'Value', observation_checked, ...
+        'Callback', @(~,~) update_observation_notice());
+    if isempty(idx_lungs) || is_lung_belt_ignored(config), set(observation_checkbox, 'Enable', 'off'); end
+    observation_notice = uicontrol(fh, 'Style', 'text', 'Units', 'normalized', ...
+        'Position', [0.10 0.085 0.86 0.028], 'HorizontalAlignment', 'left');
+    update_observation_notice();
     label_names = {label_defs(editable_label_indices).name};
     uicontrol(fh, 'Style', 'popupmenu', 'String', label_names, ...
         'Units', 'normalized', 'Position', [0.01 0.955 0.24 0.035], ...
@@ -1200,10 +1231,22 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed] = run_ed
         t = max(0, min(t_end, t));
     end
 
+    function update_observation_notice()
+        changed = logical(get(observation_checkbox, 'Value')) ~= ...
+            strcmp(config.recording_observations.status, 'observed');
+        message = 'Recording-level observation; not a diagnosis or an event label.';
+        if changed || config.recording_observations.pending_reanalysis
+            message = ['Reanalysis required: respiratory features, respiratory labels and phenotype summaries. ' ...
+                'Existing automatic labels are retained.'];
+        end
+        set(observation_notice, 'String', message);
+    end
+
     function finish_editing()
     % FINISH_EDITING Resume execution while retaining the working annotations.
 
         if isgraphics(fh)
+            observation_checked = logical(get(observation_checkbox, 'Value'));
             committed = true;
             finished = true;
             uiresume(fh);

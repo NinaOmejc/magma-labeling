@@ -34,8 +34,16 @@ function run_magma(base_config)
                 continue;
             end
 
+            config.recording_observations = recording_observation('load', config);
+            if config.recording_observations.pending_reanalysis && ~isempty(selected_labels)
+                error('MAGMA:Observation:FullReanalysisRequired', ...
+                    'Pending thoracic observation requires a full respiratory reanalysis; clear selected_labels.');
+            end
             [data_raw, config, do_analysis] = load_raw_data(config);
             if ~do_analysis
+                if config.recording_observations.pending_reanalysis
+                    log_message(config, 1, 'Pending thoracic-observation reanalysis: set overwrite_results=true to recompute.');
+                end
                 continue;
             end
 
@@ -100,6 +108,22 @@ function run_magma(base_config)
                 resp_cycles = load_or_extract_respiratory_cycles(data, config);
             end
 
+            previous_revision = config.recording_observations.revision;
+            config.recording_observations = recording_observation('load', config);
+            if selective && config.recording_observations.pending_reanalysis
+                error('MAGMA:Observation:FullReanalysisRequired', ...
+                    'The new thoracic observation requires a full analysis; clear selected_labels and rerun.');
+            end
+            if config.recording_observations.revision ~= previous_revision
+                % A landmark-review annotation also changes polarity evidence.
+                % Reapply preprocessing; cache alignment preserves reviewed landmarks.
+                requested_overwrite = isfield(config, 'overwrite_features') && config.overwrite_features;
+                config.overwrite_features = false; % The just-reviewed cache is already fresh.
+                [data, config] = preprocess_data(data_raw, config);
+                resp_cycles = load_or_extract_respiratory_cycles(data, config);
+                config.overwrite_features = requested_overwrite;
+            end
+            [resp_cycles, ~] = apply_thoracic_observation(resp_cycles, data, config);
             session_reference = get_session_reference_interval( ...
                 size(data, 1), config);
             resp_ref = compute_respiratory_reference( ...

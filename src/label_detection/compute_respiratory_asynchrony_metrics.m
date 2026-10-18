@@ -23,6 +23,11 @@ function rea = compute_respiratory_asynchrony_metrics(data, resp_cycles, session
         return;
     end
 
+    if minimal_thoracic_excursion(config)
+        rea.skip_code = 3;
+        rea.error_message = 'minimal_thoracic_excursion';
+        return;
+    end
     lungs_broken = is_lung_belt_ignored(config);
     if lungs_broken
         rea.skip_code = 2;

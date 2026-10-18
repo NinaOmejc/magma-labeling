@@ -11,7 +11,7 @@ function diagnostics = compute_guyot_periodic_breathing( ...
     lungs_ignored = is_lung_belt_ignored(config);
 
     lungs = empty_guyot_belt(recording_end_t, cfg);
-    if ~lungs_ignored && isfield(resp_cycles, 'lungs')
+    if ~lungs_ignored && ~minimal_thoracic_excursion(config) && isfield(resp_cycles, 'lungs')
         lungs = compute_guyot_belt( ...
             resp_cycles.lungs, recording_end_t, N, config.fs, cfg);
     end

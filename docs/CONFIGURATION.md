@@ -29,6 +29,15 @@ raise `MAGMA:Config:InvalidExcludedRecordings` before recording data is loaded.
 The default lists explicitly cover M1-M4 for the previously excluded subjects.
 `config.problems.missing_lung_belt` remains a separate signal-availability setting.
 
+The two manual editors also offer **Minimal / absent thoracic excursion (belt
+present)**. Use this recording-level observation when the belt is present but
+reliable thoracic breaths cannot be extracted. It does not edit
+`config.problems.missing_lung_belt` or create a new label. Its saved state is shared
+by subject **and** measurement; old files default to `not_assessed`.
+`config.LabelEdit.reviewer_role` supplies the observation's reviewer provenance
+in either editor. See [the observation schema and reanalysis workflow](OUTPUTS.md#recording-level-thoracic-observation)
+for pending-output handling after a late annotation.
+
 ## Recalculation and plotting
 
 ```matlab

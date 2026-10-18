@@ -1,4 +1,4 @@
-function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b_l, b_d, config)
+function [b_l, b_d, review_confirmed, recording_observations] = manual_edit_respiration_features(data, b_l, b_d, config)
 % MANUAL_EDIT_RESPIRATION_FEATURES Edit respiratory cycles and explicitly confirm review.
 %
 % Inputs:
@@ -12,13 +12,18 @@ function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b
 %                      troughs, amplitudes, IBIs, and rates recomputed after edits.
 %   review_confirmed - True only when the reviewer accepts the displayed cycles;
 %                      cancellation restores both complete pre-session structs.
+%   recording_observations - Shared recording-level observation after acceptance.
 
+    recording_observations = recording_observation('load', config);
+    resolved = resolve_signal_channels(config);
+    thoracic_present = ~isempty(resolved.channels.lungs_idx) && ~is_lung_belt_ignored(config);
     fs = config.fs;
     N = size(data, 1);
     t_raw = (0:N-1) / fs;
     pre_session_lungs = b_l;
     pre_session_diaph = b_d;
     review_confirmed = false;
+    observation_value = strcmp(recording_observations.status, 'observed');
     edit_mode = 'peaks';
     selected_belt = '';
     selected_left_peak = NaN;
@@ -32,7 +37,7 @@ function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b
 
     edit_lungs = is_editable_resp_signal(b_l) && ~is_lung_belt_ignored(config);
     edit_diaph = is_editable_resp_signal(b_d);
-    if ~edit_lungs && ~edit_diaph
+    if ~edit_lungs && ~edit_diaph && ~thoracic_present
         return;
     end
 
@@ -58,6 +63,15 @@ function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b
     linkaxes([ax1 ax2], 'x');
     xlim(ax1, [0 min(window_sec, t_raw(end))]);
 
+    ax2.Position(2) = ax2.Position(2) + 0.045;
+    ax2.Position(4) = ax2.Position(4) - 0.045;
+    observation_checkbox = uicontrol(fh, 'Style', 'checkbox', ...
+        'Units', 'normalized', 'Position', [0.05 0.078 0.91 0.028], ...
+        'String', 'Minimal / absent thoracic excursion (belt present)', ...
+        'Tag', 'minimal_thoracic_excursion', ...
+        'Value', strcmp(recording_observations.status, 'observed'), ...
+        'Callback', @(~,~) observation_changed());
+    if ~thoracic_present, set(observation_checkbox, 'Enable', 'off'); end
     status_text = uicontrol(fh, 'Style', 'text', 'Units', 'normalized', ...
         'Position', [0.05 0.046 0.91 0.025], ...
         'HorizontalAlignment', 'left', ...
@@ -105,9 +119,12 @@ function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b
     elseif edit_lungs
         belt_description = 'lungs';
         detailed_belt_message = '  Editing lungs belt only.';
-    else
+    elseif edit_diaph
         belt_description = 'diaphragm';
         detailed_belt_message = '  Editing diaphragm belt only.';
+    else
+        belt_description = 'observation only';
+        detailed_belt_message = '  No editable breath landmarks; the recording observation is available.';
     end
     log_message(config, 1, ...
         ['Manual breath review ON (%s): edit peaks or move existing ' ...
@@ -134,6 +151,18 @@ function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b
     if ~review_confirmed
         b_l = pre_session_lungs;
         b_d = pre_session_diaph;
+    else
+        recording_observations = recording_observation('set', config, ...
+            observation_value, 'respiration_feature_gui', ...
+            recording_observations.revision);
+    end
+
+    function observation_changed()
+        if get(observation_checkbox, 'Value')
+            show_status('Thoracic breath evidence will be excluded; valid abdominal evidence remains usable.', false);
+        else
+            show_status('Thoracic evidence will be eligible after re-extraction. Existing results require reanalysis.', false);
+        end
     end
 
     function confirm_review()
@@ -152,6 +181,7 @@ function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b
             return;
         end
 
+        observation_value = logical(get(observation_checkbox, 'Value'));
         review_confirmed = true;
         if isgraphics(fh)
             uiresume(fh);
@@ -166,7 +196,7 @@ function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b
         message = '';
         issue = struct();
         belt_name = '';
-        if edit_lungs
+        if edit_lungs && ~get(observation_checkbox, 'Value')
             [valid, message, issue] = ...
                 validate_respiration_cycle_landmarks(b_l);
             belt_name = 'Resp-Lungs';
@@ -200,6 +230,7 @@ function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b
     % CANCEL_REVIEW Reject this editing session and close the review figure.
 
         review_confirmed = false;
+        observation_value = strcmp(recording_observations.status, 'observed');
         if isgraphics(fh)
             uiresume(fh);
             delete(fh);
@@ -246,6 +277,7 @@ function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b
     % EDIT_PEAK Add a nearby local maximum or remove a selected breath peak.
     % belt selects lungs/diaphragm and target distinguishes trace from peak clicks.
 
+        if strcmp(belt, 'lungs') && get(observation_checkbox, 'Value'), return; end
         if ~strcmp(get(fh, 'SelectionType'), 'normal')
             return;
         end
@@ -320,6 +352,7 @@ function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b
     function select_trough(evt, ax, belt)
     % SELECT_TROUGH Select the existing trough and its surrounding peak samples.
 
+        if strcmp(belt, 'lungs') && get(observation_checkbox, 'Value'), return; end
         if ~strcmp(edit_mode, 'trough') || ...
                 ~strcmp(get(fh, 'SelectionType'), 'normal')
             return;
@@ -506,6 +539,10 @@ function [b_l, b_d, review_confirmed] = manual_edit_respiration_features(data, b
         trough_plot = gobjects(0);
 
         if ~can_edit
+            if isfield(b, 'x0') && ~isempty(b.x0)
+                n = min(numel(t), numel(b.x0));
+                signal_plot = plot(ax, t(1:n), b.x0(1:n), 'k');
+            end
             text(ax, 0.5, 0.5, unavailable_message, ...
                 'Units', 'normalized', 'HorizontalAlignment', 'center');
             title(ax, [title_text ': unavailable']);

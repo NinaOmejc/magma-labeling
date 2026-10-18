@@ -15,7 +15,8 @@ function diagnostics = compute_eami_periodic_breathing(data, config)
     lungs_ignored = is_lung_belt_ignored(config);
 
     lungs = empty_eami_belt(recording_end_t, cfg);
-    if ~lungs_ignored && valid_channel(config.channels.lungs_idx, size(data, 2))
+    if ~lungs_ignored && ~minimal_thoracic_excursion(config) && ...
+            valid_channel(config.channels.lungs_idx, size(data, 2))
         lungs = compute_eami_belt( ...
             data(:, config.channels.lungs_idx), N, config.fs, cfg);
     end

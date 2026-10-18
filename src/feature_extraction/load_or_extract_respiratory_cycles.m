@@ -4,6 +4,8 @@ function resp_cycles = load_or_extract_respiratory_cycles(data, config)
 % sampling, channel layout, cache location, and overwrite policy. The
 % returned lungs/diaph cycle structs include provenance.loaded_from_cache.
 
+    recording_observations = recording_observation('load', config);
+    config.recording_observations = recording_observations;
     cache_file = feature_cache_file(config);
     cache_version = current_feature_cache_version();
 
@@ -13,6 +15,8 @@ function resp_cycles = load_or_extract_respiratory_cycles(data, config)
         cached = load(cache_file);
         if is_valid_feature_cache(cached, size(data,1), cache_version, config)
             resp_cycles = cached_resp_cycles(cached);
+            feature_cache_meta = cached.feature_cache_meta;
+            [resp_cycles, observation_changed] = apply_thoracic_observation(resp_cycles, data, config);
             [resp_cycles, landmarks_valid, repaired_belts, repair_notes] = ...
                 repair_cached_cycle_landmarks(resp_cycles, config);
             if landmarks_valid
@@ -21,12 +25,14 @@ function resp_cycles = load_or_extract_respiratory_cycles(data, config)
                     feature_cache_meta.landmarks_repaired_on = char(datetime( ...
                         'now', 'Format', 'yyyy-MM-dd HH:mm:ss'));
                     feature_cache_meta.landmarks_repaired_belts = repaired_belts;
-                    save(cache_file, 'resp_cycles', 'feature_cache_meta');
                     warning('MAGMA:Respiration:CachedLandmarksRepaired', ...
                         ['Invalid cached trough landmarks were repaired from ' ...
                          'the saved belt signal without changing peak locations ' ...
                          '(%s). %s'], ...
                         strjoin(repaired_belts, ', '), strjoin(repair_notes, ' '));
+                end
+                if observation_changed || ~isempty(repaired_belts)
+                    save(cache_file, 'resp_cycles', 'feature_cache_meta', 'recording_observations');
                 end
                 resp_cycles.provenance.loaded_from_cache = true;
                 log_message(config, 1, ...
@@ -40,6 +46,7 @@ function resp_cycles = load_or_extract_respiratory_cycles(data, config)
         if is_amplitude_method_only_cache_mismatch( ...
                 cached, size(data,1), cache_version, config)
             resp_cycles = cached_resp_cycles(cached);
+            [resp_cycles, ~] = apply_thoracic_observation(resp_cycles, data, config);
             [resp_cycles, landmarks_valid, repaired_belts, repair_notes] = ...
                 repair_cached_cycle_landmarks(resp_cycles, config);
             if landmarks_valid
@@ -60,7 +67,7 @@ function resp_cycles = load_or_extract_respiratory_cycles(data, config)
                          '(%s). %s'], strjoin(repaired_belts, ', '), ...
                         strjoin(repair_notes, ' '));
                 end
-                save(cache_file, 'resp_cycles', 'feature_cache_meta');
+                save(cache_file, 'resp_cycles', 'feature_cache_meta', 'recording_observations');
                 resp_cycles.provenance.loaded_from_cache = true;
                 log_message(config, 1, ...
                     ['Loaded cached respiratory cycles and reselected the ' ...
@@ -92,6 +99,9 @@ function resp_cycles = load_or_extract_respiratory_cycles(data, config)
     end
 
     resp_cycles = extract_respiration_features(data, config);
+    recording_observations = recording_observation('load', config);
+    config.recording_observations = recording_observations;
+    [resp_cycles, ~] = apply_thoracic_observation(resp_cycles, data, config);
 
     [belt_polarity_checked, diaphragm_polarity_flipped] = ...
         belt_polarity_cache_provenance(config);
@@ -118,7 +128,7 @@ function resp_cycles = load_or_extract_respiratory_cycles(data, config)
         mkdir(cache_dir);
     end
 
-    save(cache_file, 'resp_cycles', 'feature_cache_meta');
+    save(cache_file, 'resp_cycles', 'feature_cache_meta', 'recording_observations');
     log_message(config, 1, ...
         'Saved respiratory cycle extraction results: %s', cache_file);
 end

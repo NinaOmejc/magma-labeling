@@ -56,6 +56,73 @@ history paths and leaves existing label-mask figure naming unchanged.
 The MAT file is the authoritative MATLAB result. The HDF5 file uses schema
 `magma_ml_hdf5_v16` as a portable recording-level representation.
 
+## Recording-level thoracic observation
+
+Both manual editors share **Minimal / absent thoracic excursion (belt present)**.
+This is an observation, not a diagnosis, missing sensor, label, or phenotype score.
+Unchecked legacy recordings default to `not_assessed`; checking stores `observed`,
+and clearing an established observation stores `not_observed`. Cancel/X discards
+uncommitted checkbox changes. No valid thoracic peaks are needed to annotate it.
+
+`results.mat` and the feature cache store top-level `recording_observations`:
+
+| Field | Meaning |
+| --- | --- |
+| `code`, `scope` | `minimal_thoracic_excursion`, `recording` |
+| `subject`, `measurement` | Recording identity, including measurement |
+| `status` | `not_assessed`, `observed`, or `not_observed` |
+| `timestamp`, `reviewer_role`, `annotation_source` | UTC change time, configured reviewer role, and editor source |
+| `revision` | Increasing annotation revision; unchanged saves do not increment it |
+| `pending_reanalysis`, `affected_labels`, `affected_outputs` | Explicit dependency invalidation after either establishing or clearing the observation |
+
+A compact `Sub<subject>_M<measurement>_recording_observations.mat` sidecar retains
+the shared state before results/cache creation. Keep it with the recording outputs.
+Updates check recording identity and revision, synchronize existing MAT/HDF5
+mirrors, and roll back failed writes. A `.pending.mat` journal blocks loading after
+an interrupted update; close both editors, resolve file access, then recover with
+`recording_observation('recover', config)` using that recording's resolved config.
+Conflicting mirrors or stale open editors produce explicit errors.
+
+`analysis_recording_observations` in results records the observation actually used
+for automatic analysis. Cached cycles also retain their extraction snapshot.
+Review rounds add `recording_observations` and, when changed,
+`recording_observation_change.before/after`; previous rounds and event edits remain.
+The optional HDF5 `/observations/recording_json` UTF-8 text column contains
+`current`, `analysis`, and `derived_results_pending_reanalysis`. Existing HDF5
+metadata is updated without rewriting signals, even if new HDF5 export is disabled;
+older HDF5 computed outputs stay marked stale until exported again. Observation
+snapshots/changes also accompany newly exported review rounds under `/review/history`.
+Older MAT/HDF5 files without these fields remain readable.
+
+When established before detection, thoracic cycles, references, raw apnea fallback,
+periodic evidence, and cross-belt polarity/phase evidence are excluded. Abdominal
+evidence remains usable, and the thoracic trace remains available for display.
+Clearing the observation restores thoracic extraction while preserving abdominal
+landmarks. Existing missing-lung-belt behavior and the 11-label schema are unchanged.
+
+A late label-editor annotation changes metadata, not previously computed automatic
+events/masks. Respiratory polarity/features/references, respiratory labels, dependent
+summaries, and phenotypes are marked pending. Explicitly run a full analysis with
+`config.execution.mode = 'analyze'`, `config.execution.selected_labels = {}`, and
+`config.overwrite_results = true`. Existing saved manual edits/history are retained;
+`overwrite_features` need not be enabled. Pending clears only after a successful
+full result save using the current revision. Review-only and selected-label runs
+cannot clear it; a pending recording rejects selected-label reruns. Export HDF5
+again to refresh its computed arrays if its export was disabled during reanalysis.
+
+Implementation file map (under `src/` unless stated otherwise):
+
+| Area | Files |
+| --- | --- |
+| Editors | `gui/manual_edit_respiration_features.m`, `gui/manual_edit_label_events.m` |
+| Shared state and analysis gate | `utils/recording_observation.m`, `utils/minimal_thoracic_excursion.m` |
+| Cycle cache and evidence | `feature_extraction/apply_thoracic_observation.m`, `extract_respiration_features.m`, `load_or_extract_respiratory_cycles.m`, `compute_respiratory_features.m`, `compute_respiratory_reference.m` |
+| Raw and two-belt detector gates | `label_detection/detect_apnea.m`, `compute_eami_periodic_breathing.m`, `compute_guyot_periodic_breathing.m`, `compute_respiratory_asynchrony_metrics.m`, `compute_respiratory_phase_offset_metrics.m` |
+| Polarity evidence | `utils/correct_respiratory_belt_polarity.m`, `utils/determine_absolute_respiratory_polarity.m` |
+| Execution and result/review persistence | `run_magma.m`, `utils/build_recording_results.m`, `utils/save_recording_results.m`, `utils/review_existing_results.m`, `utils/create_manual_review_round.m` |
+| HDF5 | `export/write_recording_observation_hdf5.m`, `export/export_results_hdf5.m` |
+| Documentation and focused tests | `docs/CONFIGURATION.md`, `docs/OUTPUTS.md`, `tests/unit/test_thoracic_observation.m`, `tests/unit/test_stage6_freeze.m` (repository-relative) |
+
 ## Two output levels
 
 Level 1 contains time-resolved physiological labels, accepted and candidate

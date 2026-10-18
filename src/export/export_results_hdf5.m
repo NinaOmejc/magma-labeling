@@ -136,6 +136,13 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
     if isfield(results, 'analysis_id')
         write_text(filename, '/meta/analysis_id', results.analysis_id);
     end
+    observation_config = results.config;
+    observation_config.subject = results.subject; observation_config.measure = results.measure;
+    observation = recording_observation('default', observation_config);
+    analysis = observation;
+    if isfield(results, 'recording_observations'), observation = results.recording_observations; end
+    if isfield(results, 'analysis_recording_observations'), analysis = results.analysis_recording_observations; end
+    write_recording_observation_hdf5(filename, observation, analysis);
     write_text(filename, '/meta/export_schema_version', export_schema_version);
     write_text(filename, '/meta/upstream_input_preprocessing', ...
         results.upstream_input_preprocessing);
@@ -490,6 +497,13 @@ function write_review_history(filename, path, history, options)
         if isfield(history, 'schema_version')
             write_text(filename, [round_path '/schema_version'], ...
                 history(i).schema_version);
+        end
+        observation_fields = {'recording_observations','recording_observation_change'};
+        for k = 1:numel(observation_fields)
+            field = observation_fields{k};
+            if isfield(history, field) && ~isempty(history(i).(field))
+                write_value(filename, [round_path '/' field], history(i).(field), options);
+            end
         end
         if isfield(history, 'accepted_as_active')
             write_numeric(filename, [round_path '/accepted_as_active'], ...

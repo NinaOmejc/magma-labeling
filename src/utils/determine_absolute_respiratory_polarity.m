@@ -84,6 +84,9 @@ function [data, trend, config] = determine_absolute_respiratory_polarity( ...
                 any(indices(1:i-1) == idx)
             continue;
         end
+        if strcmp(role, 'lungs') && minimal_thoracic_excursion(config)
+            continue;
+        end
         indices(i) = idx;
         if strcmp(role, 'lungs') && is_lung_belt_ignored(config)
             continue;

@@ -72,6 +72,14 @@ function results = build_recording_results( ...
     results.label_overlap_summary_reviewed = label_results.overlap_reviewed;
     results.label_evidence_summary_automatic = label_results.evidence_automatic;
     results.label_evidence_summary_reviewed = label_results.evidence_reviewed;
+    results.recording_observations = recording_observation('load', config);
+    results.analysis_recording_observations = recording_observation('default', config);
+    if isfield(config, 'recording_observations')
+        results.analysis_recording_observations = config.recording_observations;
+        results.analysis_recording_observations.pending_reanalysis = false;
+        results.analysis_recording_observations.affected_labels = {};
+        results.analysis_recording_observations.affected_outputs = {};
+    end
     results.phenotypes = label_results.phenotypes;
     results.manual_label_edit = label_results.manual_label_edit;
     % A selected-label rerun must not fill an older round with changed evidence.

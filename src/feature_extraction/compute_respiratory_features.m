@@ -26,11 +26,16 @@ function resp_features = compute_respiratory_features(data, resp_cycles, resp_re
 
     % compute on individual belts 
     lungs_ignored = is_lung_belt_ignored(config);
+    lungs_source = get_belt(resp_cycles, 'lungs');
+    if minimal_thoracic_excursion(config), lungs_source = []; end
     resp_features.lungs = build_belt_evidence( ...
-        get_belt(resp_cycles, 'lungs'), get_belt(resp_ref, 'lungs'), lungs_ignored, t_grid, cfg, config);
+        lungs_source, get_belt(resp_ref, 'lungs'), lungs_ignored, t_grid, cfg, config);
     resp_features.diaph = build_belt_evidence( ...
         get_belt(resp_cycles, 'diaph'), get_belt(resp_ref, 'diaph'), false, t_grid, cfg, config);
 
+    if minimal_thoracic_excursion(config)
+        resp_features.lungs.reference_quality = 'minimal_thoracic_excursion';
+    end
     % compute on both belts 
     resp_features.belt_availability = struct( ...
         'lungs', resp_features.lungs.available, 'diaph', resp_features.diaph.available);

@@ -10,15 +10,18 @@ function resp_cycles = extract_respiration_features(data, config)
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
     end
+    config.recording_observations = recording_observation('load', config);
     idx_lungs = config.channels.lungs_idx;
     idx_diaph = config.channels.diaph_idx;
 
+    thoracic_suppressed = minimal_thoracic_excursion(config);
     % ---- breath series (peaks + per-breath amplitudes) ----
     resp_cycles = struct();
-    if ~isempty(idx_lungs)
+    if ~isempty(idx_lungs) && ~thoracic_suppressed
         resp_cycles.lungs = extract_respiration_feature(data(:, idx_lungs), config, 'lungs');
     else
         resp_cycles.lungs = empty_respiration_feature('lungs');
+        if ~isempty(idx_lungs), resp_cycles.lungs.x0 = data(:, idx_lungs); end
     end
     if ~isempty(idx_diaph)
         resp_cycles.diaph = extract_respiration_feature(data(:, idx_diaph), config, 'diaph');
@@ -34,12 +37,14 @@ function resp_cycles = extract_respiration_features(data, config)
         edit_lungs = is_editable_resp_signal(resp_cycles.lungs) && ~is_lung_belt_ignored(config);
         edit_diaph = is_editable_resp_signal(resp_cycles.diaph);
 
-        if edit_lungs || edit_diaph
+        thoracic_present = ~isempty(idx_lungs) && ~is_lung_belt_ignored(config);
+        if edit_lungs || edit_diaph || thoracic_present
             lungs_before = resp_cycles.lungs;
             diaph_before = resp_cycles.diaph;
-            [edited_lungs, edited_diaph, review_confirmed] = ...
+            [edited_lungs, edited_diaph, review_confirmed, observation] = ...
                 manual_edit_respiration_features(data, resp_cycles.lungs, resp_cycles.diaph, config);
             if review_confirmed
+                config.recording_observations = observation;
                 resp_cycles.lungs = edited_lungs;
                 resp_cycles.diaph = edited_diaph;
                 manual_review_performed = true;
@@ -78,7 +83,9 @@ function resp_cycles = extract_respiration_features(data, config)
         'review_status', review_status, ...
         'manual_review_performed', manual_review_performed, ...
         'manual_edits_made', manual_edits_made, ...
-        'loaded_from_cache', false);
+        'loaded_from_cache', false, ...
+        'thoracic_extraction_suppressed', thoracic_suppressed);
+    [resp_cycles, ~] = apply_thoracic_observation(resp_cycles, data, config);
 end
 
 function save_final_respiration_feature_figure(b, config, basename)

@@ -19,7 +19,8 @@ function resp_ref = compute_respiratory_reference( ...
 
     lungs = get_belt_features(resp_cycles, 'lungs');
     lungs_ignored = is_lung_belt_ignored(config);
-    if lungs_ignored
+    thoracic_minimal = minimal_thoracic_excursion(config);
+    if lungs_ignored || thoracic_minimal
         lungs = [];
     end
 
@@ -30,11 +31,15 @@ function resp_ref = compute_respiratory_reference( ...
     resp_ref.lungs = analyze_belt(lungs, cfg, session_reference);
     resp_ref.diaph = analyze_belt(diaph, cfg, session_reference);
     resp_ref.lungs.raw = analyze_raw_belt( ...
-        data, config.channels.lungs_idx, session_reference, lungs_ignored, ...
+        data, config.channels.lungs_idx, session_reference, lungs_ignored || thoracic_minimal, ...
         cfg.raw_min_finite_fraction);
     resp_ref.diaph.raw = analyze_raw_belt( ...
         data, config.channels.diaph_idx, session_reference, false, ...
         cfg.raw_min_finite_fraction);
+    if thoracic_minimal
+        resp_ref.lungs.raw.quality = 'minimal_thoracic_excursion';
+        resp_ref.lungs.reference_quality = 'minimal_thoracic_excursion';
+    end
     resp_ref = add_belt_agreement(resp_ref, cfg);
 end
 
