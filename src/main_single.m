@@ -4,6 +4,10 @@
 % SETTINGS
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+% Add MAGMA source folders to the MATLAB path
+src_dir = fileparts(mfilename('fullpath'));
+addpath(genpath(src_dir));
+
 % Advanced scientific thresholds and processing defaults are defined in get_config_defaults.m.
 config = get_config_defaults();
 
@@ -11,31 +15,20 @@ config = get_config_defaults();
 % INPUT / OUTPUT
 config.path_data_in = 'D:\Projects\MAGMA\raw_data';
 config.path_results_out = 'D:\Projects\MAGMA\data_analysis\statistical_labeling';
-config.fs = 200;
 config.subjects = [21];
-config.exclude_recordings = [ ... % [subject, measurement]; omit only these recordings
-    3 1; 3 2;...
-    30 1; 30 2;  ...
-    91 1; 91 2; ...
-    135 1; 135 2; ];
-config.measurements = [1 2];
-
-%---- PROBLEMS ----
-config.problems.missing_lung_belt = [ ...                  % known [subject, measurement] recordings without a usable lung belt (e.g. first 20 subjects have a broken belt)
-    (1:20)', ones(20, 1); ...
-    (1:20)', 2 * ones(20, 1); ...
-    % 23, 1; 23, 2; ...
-    % 33, 1; 33, 2; ...
-    % 35, 1; 35, 2; ...
-    % 40, 1; 40, 2; ...
+config.measurements = [1];
+config.exclude_recordings = [ ...                   % [subject, measurement]; omit only these recordings
+      3 1;   3 2; ...
+     30 1;  30 2; ...
+     91 1;  91 2; ...
+    135 1; 135 2; ...
     ];
 
-
 % EXECUTION
-config.overwrite_results = false;       % If true, recompute even if "*_results.mat" output already exists.
+config.overwrite_results = true;       % If true, recompute even if "*_results.mat" output already exists.
 config.overwrite_features = false;      % If true, recompute respiratory features even if "*_features.mat" already exists.
-config.verbosity = 2;                   % 1 = concise progress, 2 = detailed progress.
-config.execution.mode = 'review_only';      % 'analyze', 'analyze_and_review', or 'review_only'.
+config.resp.recheck_cached = true;      % reopen saved landmarks/artifacts; Cancel skips this recording
+config.execution.mode = 'analyze';      % 'analyze', 'analyze_and_review', or 'review_only'.
 
 % LABEL SELECTION
 config.execution.selected_labels = {};
@@ -49,7 +42,6 @@ config.resp.amp_method = 'symmetric';  % Selected breath amplitude: 'expiratory'
 config.resp.plot_amp_method_comparison = false; % save an optional comparison of all three breath-amplitude definitions
 
 % PLOTTING
-config.make_figs_visible = 'off';                           % If 'off' plots are only saved, and not shown, which increases the speed.
 config.plot_raw_data = false;                               % save an overview plot of raw signals
 config.reference.do_plot = true;                            % save respiratory-reference QC figure
 config.shallow.do_plot = true;                              % save shallow breathing diagnostic plot
@@ -70,7 +62,8 @@ config.LabelMask.do_plot = true;                            % generate a label-m
 config.resp.manual_control = true;                          % separately review respiratory peaks/troughs before label detection; cached after confirmation
 config.LabelEdit.start_from = 'automatic';
 config.LabelEdit.reviewer_role = 'researcher';
-config.LabelEdit.window_sec = 600;                           % visible time span for manual label GUI scrolling
+config.LabelEdit.reviewer_id = '';                           % optional reviewer identifier; may remain empty
+config.LabelEdit.window_sec = 800;                           % visible time span for manual label GUI scrolling
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % RUN THE MAIN SCRIPT

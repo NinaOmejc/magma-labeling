@@ -1109,7 +1109,7 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
     function update_observation_notice()
         changed = ~strcmp(observation_states{get(observation_selector,'Value')}, ...
             config.recording_observations.status);
-        message = 'Recording-level observation; not a diagnosis or an event label.';
+        message = '';
         changed = changed && strcmp(get(observation_selector,'Enable'),'on');
         if changed || config.recording_observations.pending_reanalysis
             message = ['Reanalysis required: respiratory features, respiratory labels and phenotype summaries. ' ...

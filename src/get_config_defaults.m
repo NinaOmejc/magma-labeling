@@ -10,16 +10,18 @@ function config = get_config_defaults()
     config.path_data_in = 'D:\Projects\MAGMA\raw_data';                                                % *** folder with raw input .dat files
     config.path_results_out = 'D:\Projects\MAGMA\data_analysis\statistical_labeling';                   % *** root output folder
     config.subjects = 1;                                                                                % *** subjects to analyze
+    config.measurements = [1 2];                                                                       % *** measurements to analyze - 1: pre-rehab-pre-stress, 2: pre-rehab-post-stress, 3:post-rehab-pre-stress, 4:post-rehab-post-stress
     config.exclude_recordings = [ ...                                                                   % [subject, measurement]; omit only these recordings
-        3 1; 3 2; ...
-        30 1; 30 2; ...
-        91 1; 91 2; ...
-        135 1; 135 2];
-    config.measurements = [1];                                                                       % *** measurements to analyze - 1: pre-rehab-pre-stress, 2: pre-rehab-post-stress, 3:post-rehab-pre-stress, 4:post-rehab-post-stress
+          3 1;   3 2; ...
+         30 1;  30 2; ...
+         91 1;  91 2; ...
+        135 1; 135 2; ...
+        ];
     config.fs = 200;                                                                                   % native/master sampling frequency (Hz) for all aligned physiological signals
     config.data_columns = {'ECG1', 'ECG2', 'SpO₂', 'Resp-Lungs', 'Blood Pressure', 'Resp-Diaphragm'};  % column names in raw data
     config.input_filename_pattern = 'ECG1_ECG2_SpO2_RespL_BP_RespD_fs200_Sub{subject}_Pom{measure}_DeTr_Norm.dat'; % The generic name of the data files
     config.labels = get_labels();
+    
     % Group analysis reads saved results only. Empty subjects discovers all saved IDs.
     config.group = struct();
     config.group.subjects = [];
@@ -30,10 +32,12 @@ function config = get_config_defaults()
     config.group.plot_layer = 'automatic';
     config.group.plot_label_histograms = true;
     config.group.plot_stratified_histograms = true;
-    config.make_figs_visible = 'on';                                      % create figures hidden during batch runs, so they dont pop up (for faster run)
-    config.overwrite_results = true;                                      % *** Recompute even if label output already exists
+    
+    % execution
+    config.overwrite_results = false;                                      % *** Recompute even if label output already exists
     config.overwrite_features = false;                                     % *** Recompute respiratory features even if "*_features.mat" exists
-    config.verbosity = 1;                                                   % 1 = concise progress, 2 = detailed progress
+    config.verbosity = 2;                                                   % 1 = concise progress, 2 = detailed progress
+    config.make_figs_visible = 'off';                                      % create figures hidden during batch runs, so they dont pop up (for faster run)
     config.execution = struct();
     config.execution.mode = 'analyze';                                     % 'analyze', 'analyze_and_review', or 'review_only'
     config.execution.selected_labels = {};                                 % empty = normal full/overwrite behavior; non-empty = compute or rerun only these canonical labels
@@ -62,7 +66,10 @@ function config = get_config_defaults()
     
 
     %---- PROBLEMS ----
-    config.problems.missing_lung_belt = [];
+    config.problems.missing_lung_belt = [ ...                  % known [subject, measurement] recordings without a usable lung belt (e.g. first 20 subjects have a broken belt)
+        (1:20)', ones(20, 1); ...
+        (1:20)', 2 * ones(20, 1); ...
+        ];
 
     %---- RESPIRATION / BREATHING AMPLITUDE EXTRACTION SETTINGS ----
     config.resp.min_peak_dist_sec = 1.5;    % *** Peak selection; min time between breaths (tune if needed)
@@ -83,7 +90,7 @@ function config = get_config_defaults()
 
     % manual control of respiratory cycles (independent of execution.mode)
     config.resp.manual_control = true;          % allow peak edits and independent movement of existing troughs before label detection
-    config.resp.recheck_cached = false;        % reopen saved landmarks/artifacts; Cancel skips this recording
+    config.resp.recheck_cached = true;          % reopen saved landmarks/artifacts; Cancel skips this recording
     config.resp.manual_window_sec = 300;        % visible time span for manual breath GUI scrolling
     
     %---- SESSION PHYSIOLOGICAL REFERENCE ----
@@ -270,8 +277,8 @@ function config = get_config_defaults()
     config.LabelEdit.reviewer_role = 'researcher'; % flexible non-identifying role stored with the review round
     config.LabelEdit.reviewer_id = '';           % optional reviewer identifier; may remain empty
     config.LabelEdit.notes = '';                 % optional free-text review notes
-    config.LabelEdit.window_sec = 600;           % visible time span for manual label GUI scrolling
-    config.LabelEdit.min_interval_sec = 1;       % minimum drag interval accepted as a manual event
+    config.LabelEdit.window_sec = 800;           % visible time span for manual label GUI scrolling
+    config.LabelEdit.min_interval_sec = 30;       % minimum drag interval accepted as a manual event
     config.LabelEdit.filename_suffix = '_manual_label_events.mat';
 
     %---- PER-RECORDING HDF5 EXCHANGE EXPORT
@@ -286,7 +293,6 @@ function config = get_config_defaults()
     config.HDF5.ml_sampling_hz = 10;
     config.HDF5.signal_datatype = 'single';
     config.HDF5.compression_level = 4;
-    config.HDF5.upstream_input_preprocessing = ...
-        'external / not fully documented';
+    config.HDF5.upstream_input_preprocessing = 'external / not fully documented';
 
 end
