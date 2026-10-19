@@ -253,8 +253,9 @@ Automatic feature 24 uses `analysis_recording_observations`; Review N uses that
 round's saved observation. The same saved signal QC supplies feature 23 in both
 matrices, with scope/provenance explicit. The figure shows its value once and
 identifies review entries as Recording QC. Label-only review never recomputes the
-spectral value. Legacy 22-feature snapshots remain unchanged and are padded with
-unavailable NaNs only in plotting/table views. A pending-reanalysis banner keeps
+spectral value. Current results require all 24 features; old 22-feature results
+must be regenerated from reviewed feature caches without overwriting those
+features. A pending-reanalysis banner keeps
 old automatic values distinguishable from a newer clinician assessment.
 
 ## Safe reanalysis with reviewed feature preservation
@@ -289,7 +290,7 @@ retains landmark history and only gates active evidence.
 
 The new metric performs no feature-cache I/O. Targeted tests cover a complete
 synthetic full-analysis rerun, backup restoration, unchanged reviewed belt structs,
-technical/physiological distinctions, cancellation, legacy histories, MAT/group
+technical/physiological distinctions, cancellation, current review histories, MAT/group
 and HDF5 consistency. No real cohort or batch reanalysis is run by these tests.
 
 ## Availability, zero, and coverage

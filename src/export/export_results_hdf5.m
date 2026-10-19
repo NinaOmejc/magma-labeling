@@ -199,6 +199,15 @@ function validate_export_inputs(filename, results, raw, preprocessed)
             'Missing required result field(s): %s.', strjoin(missing, ', '));
     end
     validate_phenotype_bundle(results.phenotypes);
+    for k = 1:numel(results.review_history)
+        round = results.review_history(k);
+        if isfield(round,'phenotype_numeric_summary_reviewed') && ~isempty(round.phenotype_numeric_summary_reviewed)
+            validate_compact_phenotype_features(round.phenotype_numeric_summary_reviewed);
+        end
+        if isfield(round,'phenotypes_reviewed') && ~isempty(round.phenotypes_reviewed)
+            validate_compact_phenotype_features(round.phenotypes_reviewed.numeric_summary);
+        end
+    end
     if ~isnumeric(raw) || ~isnumeric(preprocessed) || ...
             size(raw, 1) ~= size(preprocessed, 1)
         error('MAGMA:HDF5:SignalAlignment', ...

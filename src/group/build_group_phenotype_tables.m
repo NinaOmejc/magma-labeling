@@ -48,14 +48,8 @@ function outputs = build_group_phenotype_tables(group_table)
 end
 
 function loaded = load_phenotypes(filename)
-% LOAD_PHENOTYPES Avoid warnings for result files without the public field.
-
-    contents = whos('-file', filename);
-    if any(strcmp({contents.name}, 'phenotypes'))
-        loaded = load(filename, 'phenotypes');
-    else
-        loaded = struct();
-    end
+% LOAD_PHENOTYPES Use the same current-schema reader as recording workflows.
+    loaded = recording_results('load',filename);
 end
 
 function layer = empty_layer(n_recordings, n_features)

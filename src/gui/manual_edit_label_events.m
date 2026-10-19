@@ -355,171 +355,40 @@ function edit_file = manual_edit_file(config, cfg)
 end
 
 function [loaded_sets, reviewed_fields, schema_version, review_coverage_mask, ...
-    review_history, active_round_id] = load_manual_event_sets( ...
-    edit_file, automatic_sets, label_defs, config, N, fs)
-% LOAD_MANUAL_EVENT_SETS Validate and migrate a saved manual-review file.
-%
-% Inputs:
-%   edit_file     - Review MAT-file path.
-%   automatic_sets - Current per-label automatic event-set struct.
-%   label_defs    - Editable label field/type definitions.
-%   config        - Expected subject and measurement metadata.
-%   N             - Recording sample count.
-%   fs            - Sampling frequency in hertz.
-%
-% Outputs:
-%   loaded_sets         - Active reviewed events mapped by canonical field.
-%   reviewed_fields     - Fields with any explicitly reviewed samples.
-%   schema_version      - Numeric saved-file schema, or NaN when unavailable.
-%   review_coverage_mask - Nsample x Neditable logical active-round coverage.
-%   review_history      - Normalized immutable review-round struct array.
-%   active_round_id     - Numeric identifier of the authoritative round.
-
-    loaded_sets = [];
-    reviewed_fields = {};
-    schema_version = NaN;
-    review_coverage_mask = false(N, numel(label_defs));
-    review_history = empty_review_history();
-    active_round_id = NaN;
-    try
-        loaded = load(edit_file);
-    catch ME
-        warning('MAGMA:ManualLabelEdit:LoadFailed', ...
-            'Could not load manual label edits from %s: %s', edit_file, ME.message);
-        return;
+    review_history, active_round_id] = load_manual_event_sets(edit_file, ~, label_defs, config, N, fs)
+% LOAD_MANUAL_EVENT_SETS Validate current schema-6 checkpoints and immutable rounds.
+    loaded = load(edit_file);
+    required = {'manual_label_edit_meta','manual_label_review_history', ...
+        'manual_label_active_round_id'};
+    if ~all(isfield(loaded,required)) || ...
+            ~isfield(loaded.manual_label_edit_meta,'schema_version') || ...
+            ~isequal(loaded.manual_label_edit_meta.schema_version,6)
+        error('MAGMA:ManualLabelEdit:ObsoleteSchema', ...
+            ['Manual-label review requires schema 6: %s. Archive the obsolete ' ...
+             'manual-label checkpoint and start a new review; keep the reviewed feature cache.'],edit_file);
     end
-
-    if ~isfield(loaded, 'manual_label_event_sets') || ~isfield(loaded, 'manual_label_edit_meta')
-        warning('MAGMA:ManualLabelEdit:InvalidFile', ...
-            'Ignoring manual label edit file without expected variables: %s', edit_file);
-        return;
-    end
-
     meta = loaded.manual_label_edit_meta;
-    if ~is_valid_manual_meta(meta, config, N, fs)
-        warning('MAGMA:ManualLabelEdit:MetaMismatch', ...
-            'Ignoring manual label edits because subject, measurement, sample count, or sampling rate changed: %s', edit_file);
-        return;
+    if ~is_valid_manual_meta(meta,config,N,fs) || ...
+            ~isfield(meta,'canonical_label_names') || ...
+            ~isequal(meta.canonical_label_names,get_labels('short'))
+        error('MAGMA:ManualLabelEdit:MetaMismatch', ...
+            'Manual-label checkpoint identity, sampling, or canonical labels do not match: %s',edit_file);
     end
-    if isfield(meta, 'schema_version') && isnumeric(meta.schema_version) && isscalar(meta.schema_version)
-        schema_version = meta.schema_version;
-    elseif isfield(meta, 'version') && isnumeric(meta.version) && isscalar(meta.version)
-        schema_version = meta.version;
+    schema_version = 6;
+    review_history = validate_saved_review_history(loaded.manual_label_review_history,N,config);
+    active_round_id = loaded.manual_label_active_round_id;
+    if isempty(review_history) || ~isnumeric(active_round_id) || ...
+            ~isscalar(active_round_id) || ~isfinite(active_round_id)
+        error('MAGMA:ManualLabelEdit:InvalidHistory','Invalid current review history: %s',edit_file);
     end
-
-    saved_sets = loaded.manual_label_event_sets;
-    if ~isstruct(saved_sets)
-        warning('MAGMA:ManualLabelEdit:InvalidFile', ...
-            'Ignoring manual label edit file with invalid event sets: %s', edit_file);
-        return;
+    active_index = find([review_history.round_id] == active_round_id,1,'last');
+    if isempty(active_index)
+        error('MAGMA:ManualLabelEdit:InvalidActiveRound', ...
+            'The active review round is missing from %s.',edit_file);
     end
-
-    % Field identity is authoritative across schema versions. Historical
-    % compound raw types inside a historical rapid field are migrated to
-    % canonical rapid without
-    % reconstructing former depth/desaturation modifiers. A field absent
-    % from an old file was never reviewed, so keep that label's current
-    % automatic events rather than treating absence as a negative edit.
-    loaded_sets = ensure_event_sets(automatic_sets, label_defs, fs, N);
-    saved_fields = fieldnames(saved_sets);
-    mapped_saved_fields = canonicalize_label_names(saved_fields);
-    for i = 1:numel(label_defs)
-        field = label_defs(i).field;
-        saved_index = find(strcmp(mapped_saved_fields, field), 1);
-        if isempty(saved_index)
-            continue;
-        end
-        migrated = sanitize_events(saved_sets.(saved_fields{saved_index}), fs, N);
-        for j = 1:numel(migrated)
-            migrated(j).type = label_defs(i).type;
-        end
-        loaded_sets.(field) = migrated;
-    end
-
-    % Versions 1 and 2 did not persist review coverage. Their intervals may
-    % migrate, but their absent scope cannot become a reviewed-negative claim.
-    if schema_version >= 3 && isfield(loaded, 'manual_label_review_mask') && ...
-            (isnumeric(loaded.manual_label_review_mask) || ...
-             islogical(loaded.manual_label_review_mask)) && ...
-            size(loaded.manual_label_review_mask, 1) == N && ...
-            isfield(meta, 'label_names') && ...
-            numel(meta.label_names) == size(loaded.manual_label_review_mask, 2)
-        saved_review_labels = canonicalize_label_names(meta.label_names);
-        saved_review_mask = logical(loaded.manual_label_review_mask);
-        for i = 1:numel(label_defs)
-            saved_index = find(strcmp(saved_review_labels, label_defs(i).type), 1);
-            if ~isempty(saved_index)
-                review_coverage_mask(:, i) = saved_review_mask(:, saved_index);
-            end
-        end
-        reviewed_fields = {label_defs(any(review_coverage_mask, 1)).field};
-    elseif schema_version >= 3 && isfield(loaded, 'manual_label_review_mask')
-        warning('MAGMA:ManualLabelEdit:MissingLabelIdentity', ...
-            ['Manual review coverage was not migrated because its saved ' ...
-             'label_names are missing or misaligned. Event edits remain migrated by field identity.']);
-    end
-
-    if isfield(loaded, 'manual_label_review_history') && ...
-            isstruct(loaded.manual_label_review_history) && ...
-            ~isempty(loaded.manual_label_review_history)
-        review_history = normalize_saved_review_history( ...
-            loaded.manual_label_review_history, N, config);
-        if ~isempty(review_history)
-            if isfield(loaded, 'manual_label_active_round_id') && ...
-                    isnumeric(loaded.manual_label_active_round_id) && ...
-                    isscalar(loaded.manual_label_active_round_id)
-                active_round_id = loaded.manual_label_active_round_id;
-            elseif isfield(meta, 'active_round_id') && ...
-                    isnumeric(meta.active_round_id) && isscalar(meta.active_round_id)
-                active_round_id = meta.active_round_id;
-            else
-                active_round_id = review_history(end).round_id;
-            end
-            active_index = find([review_history.round_id] == active_round_id, 1, 'last');
-            if isempty(active_index)
-                warning('MAGMA:ManualLabelEdit:InvalidActiveRound', ...
-                    'Saved active round is missing; using the most recent review round.');
-                active_index = numel(review_history);
-                active_round_id = review_history(active_index).round_id;
-            end
-            loaded_sets = event_sets_from_review_round( ...
-                review_history(active_index), label_defs, fs, N);
-            % Histories created before sigh joined the unified reviewer have
-            % no sigh state. Preserve the current automatic sigh layer until
-            % a unified round explicitly reviews it.
-            sigh_index = find(strcmp(get_labels('short'), 'sigh'), 1);
-            if strcmp(review_history(active_index).source_analysis_id, ...
-                    'legacy_unknown') && ...
-                    ~any(review_history(active_index).review_mask(:, sigh_index))
-                loaded_sets.sigh = automatic_sets.sigh;
-            end
-            review_coverage_mask = generic_coverage_from_round( ...
-                review_history(active_index), label_defs, N);
-            reviewed_fields = {label_defs(any(review_coverage_mask, 1)).field};
-            return;
-        end
-    end
-
-    % A pre-history file is represented as an immutable first round. When
-    % exact historical coverage was not stored, its review mask remains
-    % false rather than inventing reviewed-negative regions.
-    saved_timestamp = 'unknown';
-    if isfield(meta, 'saved_on') && ~isempty(meta.saved_on)
-        saved_timestamp = char(string(meta.saved_on));
-    end
-    legacy_meta = struct('round_id', 1, 'timestamp', saved_timestamp, ...
-        'reviewer_role', 'unknown', 'start_from', 'automatic', ...
-        'source_review_round', NaN, 'source_analysis_id', 'legacy_unknown', ...
-        'reviewer_id', '', ...
-        'notes', sprintf('Migrated from manual-review schema %g.', schema_version));
-    [~, legacy_round] = create_manual_review_round(loaded_sets, loaded_sets, ...
-        review_coverage_mask, config, legacy_meta);
-    [~, comparison] = create_manual_review_round(automatic_sets, loaded_sets, ...
-        review_coverage_mask, config, legacy_meta);
-    legacy_round.review_status = comparison.review_status;
-    legacy_round.changed_labels = comparison.changed_labels;
-    review_history = legacy_round;
-    active_round_id = 1;
+    loaded_sets = event_sets_from_review_round(review_history(active_index),label_defs,fs,N);
+    review_coverage_mask = generic_coverage_from_round(review_history(active_index),label_defs,N);
+    reviewed_fields = {label_defs(any(review_coverage_mask,1)).field};
 end
 
 function ok = is_valid_manual_meta(meta, config, N, fs)
@@ -532,30 +401,27 @@ function ok = is_valid_manual_meta(meta, config, N, fs)
         isfield(meta, 'fs') && isequal(meta.fs, fs);
 end
 
-function history = normalize_saved_review_history(saved_history, N, config)
-% NORMALIZE_SAVED_REVIEW_HISTORY Validate persisted rounds against current labels.
+function history = validate_saved_review_history(saved_history, N, config)
+% VALIDATE_SAVED_REVIEW_HISTORY Check current rounds without changing their values.
 % Each accepted round has unique id/provenance, canonical events, Nsample x 11
 % state and coverage masks, 11 statuses, changed labels, and optional reviewer data.
 
     history = empty_review_history();
-    required = {'round_id', 'timestamp', 'reviewer_role', 'start_from', ...
-        'source_review_round', 'events', 'mask', 'review_mask', ...
-        'review_status', 'changed_labels'};
+    required = fieldnames(review_round_template());
     if ~all(isfield(saved_history, required))
         warning('MAGMA:ManualLabelEdit:InvalidHistory', ...
-            'Saved review history is missing required fields; migrating the active state instead.');
+            'Saved review history is missing current required fields.');
         return;
     end
 
     L = numel(get_labels('short'));
-    normalized = repmat(review_round_template(), numel(saved_history), 1);
     for i = 1:numel(saved_history)
         source = saved_history(i);
         if ~isequal(size(source.mask), [N L]) || ...
                 ~isequal(size(source.review_mask), [N L]) || ...
                 numel(source.review_status) ~= L
             warning('MAGMA:ManualLabelEdit:InvalidHistory', ...
-                'Saved review round %d has misaligned masks or status; migrating the active state instead.', i);
+                'Saved review round %d has misaligned masks or status.', i);
             return;
         end
         if ~isnumeric(source.round_id) || ~isscalar(source.round_id) || ...
@@ -571,49 +437,19 @@ function history = normalize_saved_review_history(saved_history, N, config)
             return;
         end
 
-        normalized(i).round_id = round(source.round_id);
-        normalized(i).timestamp = char(string(source.timestamp));
-        normalized(i).reviewer_role = char(string(source.reviewer_role));
-        normalized(i).start_from = start_from;
-        normalized(i).source_review_round = source.source_review_round;
-        normalized(i).source_analysis_id = optional_text( ...
-            source, 'source_analysis_id', 'legacy_unknown');
-        normalized(i).events = normalize_review_events(source.events, config.fs);
-        normalized(i).mask = logical(source.mask);
-        normalized(i).review_mask = logical(source.review_mask);
-        normalized(i).review_status = reshape(cellstr(string(source.review_status)), 1, []);
-        normalized(i).changed_labels = reshape(cellstr(string(source.changed_labels)), 1, []);
-        normalized(i).reviewer_id = optional_text(source, 'reviewer_id');
-        normalized(i).notes = optional_text(source, 'notes');
-        snapshot_fields = {'phenotypes_reviewed', 'phenotype_numeric_summary_reviewed', ...
-            'recording_observations', 'recording_observation_change'};
-        for f = 1:numel(snapshot_fields)
-            field = snapshot_fields{f};
-            if isfield(source, field), normalized(i).(field) = source.(field); end
+        if ~isempty(source.phenotype_numeric_summary_reviewed)
+            validate_compact_phenotype_features(source.phenotype_numeric_summary_reviewed);
         end
-        normalized(i).schema_version = optional_text( ...
-            source, 'schema_version', 'manual_review_round_v1');
-        if isfield(source, 'accepted_as_active') && ...
-                isscalar(source.accepted_as_active)
-            normalized(i).accepted_as_active = logical(source.accepted_as_active);
+        if ~isempty(source.phenotypes_reviewed)
+            validate_compact_phenotype_features(source.phenotypes_reviewed.numeric_summary);
         end
     end
-    if numel(unique([normalized.round_id])) ~= numel(normalized)
+    if numel(unique([saved_history.round_id])) ~= numel(saved_history)
         warning('MAGMA:ManualLabelEdit:InvalidHistory', ...
             'Saved review history contains duplicate round ids.');
         return;
     end
-    history = normalized;
-end
-
-function value = optional_text(source, field, default_value)
-% OPTIONAL_TEXT Convert a nonempty struct field to text or return a fallback.
-
-    if nargin < 3, default_value = ''; end
-    value = default_value;
-    if isfield(source, field) && ~isempty(source.(field))
-        value = char(string(source.(field)));
-    end
+    history = saved_history;
 end
 
 function event_sets = event_sets_from_review_round(round_info, defs, fs, N)

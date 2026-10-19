@@ -11,7 +11,7 @@ function [observation, extra] = recording_observation(action, config, varargin)
     paths = observation_paths(config);
     if strcmp(action, 'recover')
         saved = load(paths.journal);
-        publish(paths, saved.old_observation);
+        publish(paths, saved.old_observation, config);
         restore_checkpoint(saved);
         save_state(paths.state, saved.old_observation);
         delete(paths.journal);
@@ -20,7 +20,7 @@ function [observation, extra] = recording_observation(action, config, varargin)
         observation = saved.old_observation;
         return;
     end
-    observation = load_state(paths, observation);
+    observation = load_state(paths, observation, config);
     if strcmp(action, 'load'), return; end
     ensure_output_directory(paths.folder);
     [ok, message, message_id] = mkdir(paths.lock);
@@ -28,7 +28,7 @@ function [observation, extra] = recording_observation(action, config, varargin)
         error('MAGMA:Observation:Busy', 'Observation update already in progress: %s %s', paths.lock, message);
     end
     cleanup_lock = onCleanup(@() rmdir(paths.lock));
-    observation = load_state(paths, observation);
+    observation = load_state(paths, observation, config);
     old_observation = observation;
     callback = [];
     review_file = ''; review_backup = ''; review_existed = false;
@@ -85,12 +85,12 @@ function [observation, extra] = recording_observation(action, config, varargin)
     end
     save(paths.journal, 'old_observation', 'review_file', 'review_backup', 'review_existed');
     try
-        publish(paths, observation);
+        publish(paths, observation, config);
         if ~isempty(callback), extra = callback(observation); end
         save_state(paths.state, observation); % Commit point, after every mirror/save succeeds.
     catch failure
         try
-            publish(paths, old_observation);
+            publish(paths, old_observation, config);
             restore_checkpoint(struct('review_file', review_file, ...
                 'review_backup', review_backup, 'review_existed', review_existed));
             save_state(paths.state, old_observation);
@@ -125,10 +125,11 @@ function paths = observation_paths(config)
     paths.state = fullfile(folder, [stem '_recording_observations.mat']);
     paths.journal = [paths.state '.pending.mat']; paths.lock = [paths.state '.lock'];
     paths.mat = unique({fullfile(folder, result_name), fullfile(folder, cache_name)}, 'stable');
+    paths.results = fullfile(folder,result_name);
     paths.hdf5 = fullfile(folder, [stem get_config_value(config, 'HDF5', 'filename_suffix', '_results.h5')]);
 end
 
-function observation = load_state(paths, observation)
+function observation = load_state(paths, observation, config)
     if isfile(paths.journal)
         error('MAGMA:Observation:IncompleteUpdate', ...
             ['Interrupted observation update: %s. Close both GUIs, fix any file-access ' ...
@@ -142,10 +143,14 @@ function observation = load_state(paths, observation)
     for i = 1:numel(paths.mat)
         file = paths.mat{i};
         if ~isfile(file), continue; end
-        names = who('-file', file);
-        requested = intersect(names, {'recording_observations','subject','measure','feature_cache_meta'});
-        if isempty(requested), continue; end
-        saved = load(file, requested{:});
+        if strcmp(file,paths.results)
+            saved = recording_results('existing',file,config);
+        else
+            names = who('-file', file);
+            requested = intersect(names, {'recording_observations','subject','measure','feature_cache_meta'});
+            if isempty(requested), continue; end
+            saved = load(file, requested{:});
+        end
         if all(isfield(saved, {'subject','measure'})) && (saved.subject ~= observation.subject || saved.measure ~= observation.measurement)
             error('MAGMA:Observation:IdentityMismatch', 'Recording identity mismatch: %s', file);
         end
@@ -182,9 +187,18 @@ function observation = load_state(paths, observation)
     end
 end
 
-function publish(paths, recording_observations)
+function publish(paths, recording_observations, config)
     for i = 1:numel(paths.mat)
-        if isfile(paths.mat{i}), save(paths.mat{i}, 'recording_observations', '-append'); end
+        file = paths.mat{i};
+        if ~isfile(file), continue; end
+        if strcmp(file,paths.results)
+            current = recording_results('existing',file,config);
+            if ~isempty(fieldnames(current))
+                recording_results('update',file,struct('recording_observations',recording_observations),current);
+            end
+        else
+            save(file, 'recording_observations', '-append');
+        end
     end
     if isfile(paths.hdf5), write_recording_observation_hdf5(paths.hdf5, recording_observations); end
 end

@@ -14,15 +14,6 @@ function validate_compact_phenotype_features(compact)
         error('MAGMA:PhenotypeFeatures:InvalidCompactFeatures', ...
             'numeric_summary is missing: %s.', strjoin(missing, ', '));
     end
-    if compact.n_features == 22 && strcmp(compact.schema_version, ...
-            'magma_phenotype_numeric_summary_schema_v3')
-        % Validate the historical contract as stored; callers pad only a copy.
-        schema.version = 'magma_phenotype_numeric_summary_schema_v3';
-        schema.n_features = 22;
-        for field = {'feature_names','phenotype_group','feature_role','units'}
-            schema.(field{1}) = schema.(field{1})(1:22);
-        end
-    end
     if compact.n_features ~= schema.n_features
         error('MAGMA:PhenotypeFeatures:InvalidCompactFeatures', ...
             'numeric_summary.n_features must equal %d.', schema.n_features);

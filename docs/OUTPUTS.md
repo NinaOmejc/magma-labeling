@@ -35,22 +35,25 @@ burden row. It does not recompute, normalize, score, or impute phenotype values.
 Unavailable values remain explicit; older rounds without snapshots show Not
 computed. Forced abdominal expiration remains not assessable from current signals.
 
-The authoritative MAT results and manual-review checkpoint retain these optional
-fields on each `review_history` / `manual_label_review_history` entry:
+The MAT file contains one hierarchical `results` variable. See
+[the current schema and complete field mapping](RESULTS_SCHEMA.md).
+The authoritative MAT review history retains each round's complete snapshot:
 
 ```matlab
-results.review_history(k).round_id
-results.review_history(k).phenotypes_reviewed
-results.review_history(k).phenotype_numeric_summary_reviewed
+results.review.history(k).round_id
+results.review.history(k).phenotypes_reviewed
+results.review.history(k).phenotypes_reviewed.numeric_summary
 ```
 
-The first phenotype field stores that round's complete reviewed phenotype layer;
-the second stores its fixed numeric summary. Snapshots are attached after the
+The phenotype field stores that round's complete reviewed phenotype layer,
+including its fixed numeric summary. Snapshots are attached after the
 reviewed phenotype layer is built. Existing snapshots are preserved, including
-during selected-label reruns. Older histories without these fields still load;
-only the active round can gain a newly computed snapshot. Cancelled reviews
+during selected-label reruns. Current schema-6 checkpoints retain optional empty
+snapshot values until the active round is completed. Cancelled reviews
 leave the saved history and figure unchanged. Top-level `results.phenotypes`
-continues to hold the current automatic/reviewed bundle. HDF5 preserves these immutable snapshots under each review round; existing
+continues to hold the current automatic/reviewed bundle. The redundant numeric
+snapshot alias is reconstructed only for the internal API and HDF5.
+HDF5 preserves these immutable snapshots under each review round; existing
 label-mask figure naming is unchanged.
 
 The MAT file is the authoritative MATLAB result. The HDF5 file uses schema
@@ -67,7 +70,8 @@ unassessed observation unchanged. An explicit assessment stores `not_observed`
 (0) or `observed` (1); `not_assessed` remains NaN. Cancel/X preserves the old
 metadata. Selecting Not assessed also allows reversing a previous assessment. No valid thoracic peaks are needed to annotate it.
 
-`results.mat` and the feature cache store top-level `recording_observations`:
+`results.qc.recording_observations` stores current observations in results;
+the unchanged feature-cache layout uses top-level `recording_observations`:
 
 | Field | Meaning |
 | --- | --- |
@@ -86,7 +90,7 @@ an interrupted update; close both editors, resolve file access, then recover wit
 `recording_observation('recover', config)` using that recording's resolved config.
 Conflicting mirrors or stale open editors produce explicit errors.
 
-`analysis_recording_observations` in results records the observation actually used
+`results.qc.analysis_recording_observations` records the observation actually used
 for automatic analysis. Cached cycles also retain their extraction snapshot.
 Review rounds add `recording_observations` and, when changed,
 `recording_observation_change.before/after`; previous rounds and event edits remain.
@@ -95,7 +99,7 @@ The optional HDF5 `/observations/recording_json` UTF-8 text column contains
 metadata is updated without rewriting signals, even if new HDF5 export is disabled;
 older HDF5 computed outputs stay marked stale until exported again. Observation
 snapshots/changes also accompany newly exported review rounds under `/review/history`.
-Older MAT/HDF5 files without these fields remain readable.
+Obsolete MAT layouts must be regenerated from reviewed feature caches.
 
 When established before detection, thoracic cycles, references, raw apnea fallback,
 periodic evidence, and cross-belt polarity/phase evidence are excluded. Abdominal
@@ -138,13 +142,12 @@ The new phenotype lives at
 `phenotypes.{automatic,reviewed}.recording_level.minimal_thoracic_excursion`.
 Its numeric-summary positions are **23** `thoracic_respiratory_rhythmicity`
 and **24** `minimal_thoracic_excursion_clinician`; positions 1-22 are unchanged.
-Signal QC/provenance is stored at `results.respiratory_signal_qc.thoracic`,
+Signal QC/provenance is stored at `results.qc.respiratory_signal.thoracic`,
 and HDF5 exports it under `/diagnostics/respiratory_signal_qc/thoracic`.
 The compact QC contains no waveform or PSD arrays. HDF5 also preserves each saved
-review numeric snapshot, including legacy 22-value snapshots, under
+current 24-value review numeric snapshot under
 `/review/history/round_NNNNNN/phenotype_numeric_summary_reviewed`.
-Read-side alignment pads a copy of an old 22-value summary with unavailable NaNs;
-old files and immutable history entries are not rewritten.
+Old 22-value summaries are rejected; no padding or result-layout migration occurs.
 
 Group `Phenotypes`, `Phenotype_QC`, matrices and the feature dictionary include
 all 24 features. `Recordings` additionally exposes

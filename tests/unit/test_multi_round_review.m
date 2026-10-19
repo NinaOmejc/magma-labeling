@@ -157,15 +157,16 @@ function testSavedLatestReviewedStateLoadsWithoutChangingAutomatic(testCase)
     manual_label_automatic_event_sets = automatic;
     manual_label_event_sets = active_sets;
     manual_label_review_mask = scope;
-    round1.phenotypes_reviewed = struct('snapshot_marker', 'round 1');
-    round1.phenotype_numeric_summary_reviewed = struct('snapshot_marker', 1);
+    bundle = build_db_phenotype_evidence_bundle(struct(),struct(),struct(),struct(),struct(),struct());
+    round1.phenotypes_reviewed = bundle.reviewed;
+    round1.phenotype_numeric_summary_reviewed = bundle.reviewed.numeric_summary;
     manual_label_review_history = round1;
     manual_label_active_round_id = 1;
     manual_label_review_provenance = struct();
-    manual_label_edit_meta = struct('version', 5, 'schema_version', 5, ...
+    manual_label_edit_meta = struct('version', 6, 'schema_version', 6, ...
         'subject', config.subject, 'measure', config.measure, ...
         'n_samples', N, 'fs', config.fs, ...
-        'label_names', {{defs.type}}, 'active_round_id', 1);
+        'label_names', {{defs.type}}, 'canonical_label_names',{get_labels('short')}, 'active_round_id', 1);
     edit_file = fullfile(output_dir, sprintf('Sub%d_M%d%s', ...
         config.subject, config.measure, config.LabelEdit.filename_suffix));
     save(edit_file, 'manual_label_automatic_event_sets', ...
@@ -182,17 +183,16 @@ function testSavedLatestReviewedStateLoadsWithoutChangingAutomatic(testCase)
     verifyEqual(testCase, info.review_provenance.latest_round_id, 1);
     verifyEqual(testCase, info.review_provenance.latest_reviewer_role, 'researcher');
     verifyEqual(testCase, info.review_history(1).mask, round1.mask);
-    verifyEqual(testCase, info.loaded_schema_version, 5);
+    verifyEqual(testCase, info.loaded_schema_version, 6);
     verifyEqual(testCase, info.review_history(1).phenotypes_reviewed, round1.phenotypes_reviewed);
     verifyEqual(testCase, info.review_history(1).phenotype_numeric_summary_reviewed, ...
         round1.phenotype_numeric_summary_reviewed);
-    % Older MAT checkpoints without the new fields still normalize and load.
+    % Missing current history fields are rejected rather than migrated.
     manual_label_review_history = rmfield(round1, ...
         {'phenotypes_reviewed', 'phenotype_numeric_summary_reviewed'});
     save(edit_file, 'manual_label_review_history', '-append');
-    [~, legacy_info] = manual_edit_label_events(zeros(N,6), struct(), config, automatic);
-    verifyEmpty(testCase, legacy_info.review_history(1).phenotypes_reviewed);
-    verifyEmpty(testCase, legacy_info.review_history(1).phenotype_numeric_summary_reviewed);
+    verifyError(testCase,@() manual_edit_label_events(zeros(N,6),struct(),config,automatic), ...
+        'MAGMA:ManualLabelEdit:InvalidHistory');
 end
 
 function testLatestReviewedRequiresAnExistingReview(testCase)

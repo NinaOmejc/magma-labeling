@@ -7,7 +7,8 @@ function [results, cancelled] = review_existing_results(data, existing, config)
         'label_available', 'label_availability_reason', ...
         'label_assessable_mask', 'resp_cycles', 'resp_features', ...
         'spo2_ref', 'detector_diagnostics', 'label_burden_automatic', ...
-        'label_overlap_summary_automatic', 'label_evidence_summary_automatic'};
+        'label_overlap_summary_automatic', 'label_evidence_summary_automatic', ...
+        'analysis_id','analysis_recording_observations','analysis_respiratory_artifact_revision','phenotypes'};
     missing = required(~isfield(existing, required));
     if ~isempty(missing)
         error('MAGMA:Execution:InvalidAutomaticResults', ...
@@ -29,7 +30,7 @@ function [results, cancelled] = review_existing_results(data, existing, config)
             'Existing automatic results do not match the requested recording or sampling rate.');
     end
 
-    config.execution.analysis_id = existing_analysis_id(existing, config);
+    config.execution.analysis_id = existing.analysis_id;
     automatic_event_sets = split_automatic_events(existing.events_automatic);
     [reviewed_event_sets, manual_edit_info] = manual_edit_label_events( ...
         data, existing.resp_cycles, config, automatic_event_sets);
@@ -44,7 +45,6 @@ function [results, cancelled] = review_existing_results(data, existing, config)
     results = existing;
     results.respiratory_artifact_state = respiratory_artifact_checkpoint('load',config);
     results.resp_cycles = migrate_respiratory_artifacts(results.resp_cycles,size(data,1),results.respiratory_artifact_state);
-    if ~isfield(results,'analysis_respiratory_artifact_revision'), results.analysis_respiratory_artifact_revision = 0; end
     results.events_reviewed = annotations.events_reviewed;
     results.mask_reviewed = annotations.mask_reviewed;
     results.review_coverage_mask = annotations.review_coverage_mask;
@@ -54,28 +54,8 @@ function [results, cancelled] = review_existing_results(data, existing, config)
     results.review_provenance = annotations.review_provenance;
     results.manual_label_edit = manual_edit_info;
     results.recording_observations = manual_edit_info.recording_observations;
-    if ~isfield(results, 'analysis_recording_observations')
-        results.analysis_recording_observations = recording_observation('default', config);
-    end
 
-    % Rebuild layer summaries from immutable automatic outputs so older saved
-    % analyses gain the current phenotype-summary semantics without rerunning
-    % any detector or changing any Level-1 event definition.
-    results.label_burden_automatic = compute_recording_label_burden( ...
-        existing.mask_automatic, existing.label_names, ...
-        existing.label_available, existing.events_automatic, config.fs, ...
-        existing.label_assessable_mask);
-    results.label_overlap_summary_automatic = compute_label_overlap_summary( ...
-        existing.mask_automatic, existing.label_names, ...
-        existing.label_available, config.fs, existing.label_assessable_mask, ...
-        existing.events_automatic);
-    results.label_evidence_summary_automatic = build_label_evidence_summary( ...
-        existing.label_names, existing.label_available, ...
-        existing.label_availability_reason, data, existing.resp_features, ...
-        existing.spo2_ref, existing.detector_diagnostics, ...
-        results.label_burden_automatic, config, existing.mask_automatic, ...
-        existing.events_automatic, existing.label_assessable_mask);
-
+    % Current automatic evidence and summaries are immutable during review.
     [reviewed_assessable, reviewed_available, reviewed_reason] = ...
         compute_reviewed_label_availability(existing.label_available, ...
             existing.label_availability_reason, ...
@@ -102,10 +82,8 @@ function [results, cancelled] = review_existing_results(data, existing, config)
         results.label_burden_reviewed, ...
         results.label_overlap_summary_reviewed, ...
         results.label_evidence_summary_reviewed);
-    if isfield(existing,'phenotypes') && isfield(existing.phenotypes,'automatic')
-        results.phenotypes.automatic = existing.phenotypes.automatic;
-    end
     results.phenotypes = attach_thoracic_excursion_phenotype(results.phenotypes, results);
+    results.phenotypes.automatic = existing.phenotypes.automatic;
     results = attach_review_phenotypes(results);
     results.analysis_id = config.execution.analysis_id;
     % The saved configuration describes the immutable automatic analysis.
@@ -135,21 +113,5 @@ function event_sets = split_automatic_events(events)
             end
             event_sets.(defs(i).field) = selected(:);
         end
-    end
-end
-
-function analysis_id = existing_analysis_id(existing, config)
-% EXISTING_ANALYSIS_ID Reuse saved run identity or create a compact fallback.
-
-    analysis_id = '';
-    if isfield(existing, 'analysis_id') && ~isempty(existing.analysis_id)
-        analysis_id = char(string(existing.analysis_id));
-    elseif isfield(existing, 'config') && isfield(existing.config, 'execution') && ...
-            isfield(existing.config.execution, 'analysis_id') && ...
-            ~isempty(existing.config.execution.analysis_id)
-        analysis_id = char(string(existing.config.execution.analysis_id));
-    end
-    if isempty(analysis_id)
-        analysis_id = create_analysis_id(config);
     end
 end

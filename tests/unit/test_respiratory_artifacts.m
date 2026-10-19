@@ -192,8 +192,8 @@ function testReopenAddRemoveCommitAndRevisionMirrors(testCase)
     original.recording_observations.review_note = 'preserve observations';
     save(filename,'-struct','original');
     result_file = fullfile(c.sub_results_path,c.sub_results_filename);
-    mask_automatic = logical([0 1;1 0]); review_history = struct('round_id',7,'snapshot',[4 5]); %#ok<NASGU>
-    save(result_file,'mask_automatic','review_history');
+    mask_automatic = false(size(data,1),11); mask_automatic(2,1) = true; review_history = struct('round_id',7,'snapshot',[4 5]); %#ok<NASGU>
+    config = c; save_result_fixture(result_file,'mask_automatic','review_history','config');
     h5 = fullfile(c.sub_results_path,'Sub999_M1_results.h5'); h5create(h5,'/sentinel',1); h5write(h5,'/sentinel',42);
     c.resp.recheck_cached = true;
     driver = gui_driver('accept',cycles); timer_cleanup = onCleanup(@() stop_driver(driver)); %#ok<NASGU>
@@ -217,7 +217,7 @@ function testReopenAddRemoveCommitAndRevisionMirrors(testCase)
     state = respiratory_artifact_checkpoint('load',c);
     verifyEqual(testCase,state.revision,1); verifyTrue(testCase,state.pending_reanalysis);
     verifyEqual(testCase,state.subject,999); verifyEqual(testCase,state.measurement,1);
-    saved = load(result_file); verifyEqual(testCase,saved.mask_automatic,mask_automatic);
+    saved = recording_results('load',result_file); verifyEqual(testCase,saved.mask_automatic,mask_automatic);
     verifyEqual(testCase,saved.review_history,review_history); verifyEqual(testCase,saved.respiratory_artifact_state,state);
     exported = read_artifact_h5(h5);
     verifyEqual(testCase,exported.revision,state.revision); verifyEqual(testCase,h5read(h5,'/sentinel'),42);
@@ -307,7 +307,7 @@ function testFullSyntheticReanalysisUsesCommittedRevision(testCase)
     c = rmfield(c,{'sub_results_path','sub_features_filename','sub_results_filename'});
     driver = gui_driver('accept',cycles); timer_cleanup = onCleanup(@() stop_driver(driver)); %#ok<NASGU>
     run_magma(c); verifyEmpty(testCase,driver.UserData.error);
-    result = load(fullfile(target,'Sub999_M1_results.mat')); cache = load(fullfile(target,'Sub999_M1_features.mat'));
+    result = recording_results('load',fullfile(target,'Sub999_M1_results.mat')); cache = load(fullfile(target,'Sub999_M1_features.mat'));
     verifyEqual(testCase,result.analysis_respiratory_artifact_revision,1);
     verifyFalse(testCase,cache.respiratory_artifact_state.pending_reanalysis);
     verifyFalse(testCase,result.respiratory_artifact_state.pending_reanalysis);

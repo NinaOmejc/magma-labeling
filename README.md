@@ -20,6 +20,7 @@ numeric summary.
 - [Label definitions](docs/LABELS.md)
 - [Phenotypes](docs/PHENOTYPES.md)
 - [Outputs](docs/OUTPUTS.md)
+- [MAT results hierarchy and field mapping](docs/RESULTS_SCHEMA.md)
 
 ## Input
 
@@ -63,7 +64,8 @@ The pipeline:
 The main recording outputs are
 `Sub<subject>_M<measurement>_results.mat` and
 `Sub<subject>_M<measurement>_results.h5`. The respiratory-feature cache keeps
-the `_features.mat` suffix. See [Outputs](docs/OUTPUTS.md) for the HDF5 v18
+the `_features.mat` suffix. MAT files contain one hierarchical `results` variable.
+See [Outputs](docs/OUTPUTS.md) for the HDF5 v19
 hierarchy and group-output filenames.
 
 ## Respiratory reference

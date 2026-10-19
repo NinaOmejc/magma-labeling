@@ -30,8 +30,11 @@ function state = respiratory_artifact_checkpoint(action,config,varargin)
     else
         result_file = fullfile(folder,result_name);
         if isfile(result_file)
-            names = intersect(who('-file',result_file),{'resp_cycles','respiratory_artifact_state'});
-            if ~isempty(names), cached = load(result_file,names{:}); end
+            cached = recording_results('existing',result_file,config);
+            if ~isempty(fieldnames(cached)) && ...
+                    (cached.subject ~= config.subject || cached.measure ~= config.measure)
+                cached = struct(); % A copied config can still name another recording's result.
+            end
             if isfield(cached,'respiratory_artifact_state'), state = cached.respiratory_artifact_state; end
         end
     end
@@ -66,27 +69,20 @@ function state = respiratory_artifact_checkpoint(action,config,varargin)
     % Mirror current annotations; physiological labels and history stay unchanged.
     result_file = fullfile(folder,result_name);
     if isfile(result_file)
-        mirror = struct('respiratory_artifact_state',state);
-        names = who('-file',result_file);
-        selected = intersect(names,{'resp_cycles','analysis_respiratory_artifact_revision'});
-        previous = struct();
-        if ~isempty(selected), previous = load(result_file,selected{:}); end
-        if isfield(previous,'resp_cycles')
-            previous.resp_cycles.artifact_intervals_idx = state.artifact_intervals_idx;
-            mirror.resp_cycles = migrate_respiratory_artifacts(previous.resp_cycles);
-            mirror.resp_cycles.artifact_annotation = annotation_metadata(state);
+        previous = recording_results('existing',result_file,config);
+        if ~isempty(fieldnames(previous))
+            mirror = struct('respiratory_artifact_state',state);
+            if isfield(previous,'resp_cycles')
+                cycles = previous.resp_cycles;
+                cycles.artifact_intervals_idx = state.artifact_intervals_idx;
+                mirror.resp_cycles = migrate_respiratory_artifacts(cycles);
+                mirror.resp_cycles.artifact_annotation = annotation_metadata(state);
+            end
+            context = previous; context.respiratory_artifact_state = state;
+            N = size(previous.mask_automatic,1);
+            mirror.respiratory_artifact_qc = respiratory_artifact_qc(context,N,config.fs);
+            recording_results('update',result_file,mirror,previous);
         end
-        context = previous; context.respiratory_artifact_state = state;
-        N = 0;
-        if isfield(cached,'feature_cache_meta') && isfield(cached.feature_cache_meta,'n_samples')
-            N = cached.feature_cache_meta.n_samples;
-        end
-        if N == 0
-            variables = whos('-file',result_file,'mask_automatic');
-            if ~isempty(variables), N = variables.size(1); end
-        end
-        mirror.respiratory_artifact_qc = respiratory_artifact_qc(context,N,config.fs);
-        save(result_file,'-struct','mirror','-append');
     end
     h5 = fullfile(folder,[stem get_config_value(config,'HDF5','filename_suffix','_results.h5')]);
     if isfile(h5)

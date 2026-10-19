@@ -67,7 +67,7 @@ function run_magma(base_config)
                 config.sub_results_path, config.sub_results_filename);
             result_exists = isfile(result_file);
             if strcmp(mode, 'review_only')
-                existing_results = load(result_file);
+                existing_results = recording_results('load',result_file);
                 review_config = config;
                 if isfield(existing_results, 'config') && ...
                         isfield(existing_results.config, 'detrend')
@@ -99,7 +99,7 @@ function run_magma(base_config)
                     config.subject, config.measure);
                 log_message(config, 1, 'Selected labels: %s', ...
                     strjoin(selected_labels, ', '));
-                existing_results = load(result_file);
+                existing_results = recording_results('load',result_file);
             elseif selective
                 log_message(config, 1, ...
                     'Running selected labels for Sub %d | Measurement %d', ...
@@ -113,7 +113,7 @@ function run_magma(base_config)
             end
 
             if ~selective && result_exists
-                existing_results = load(result_file); % Also protect reviewed cycles on full reruns.
+                existing_results = recording_results('existing',result_file,config);
             end
             config.execution.analysis_id = create_analysis_id(config);
             config.execution.partial_rerun = selective && result_exists;

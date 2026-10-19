@@ -1,10 +1,10 @@
-function atomic_save_mat(filename, payload)
+function atomic_save_mat(filename, payload, varargin)
 % ATOMIC_SAVE_MAT Stage a MAT payload beside its destination before replacement.
     folder = fileparts(filename);
     ensure_output_directory(folder);
     staged = [tempname(folder) '.mat'];
     cleanup = onCleanup(@() remove_staged(staged));
-    save(staged,'-struct','payload');
+    save(staged,'-struct','payload',varargin{:});
     [ok,message] = movefile(staged,filename,'f');
     if ~ok, error('MAGMA:Persistence:ReplaceFailed','Cannot replace %s: %s',filename,message); end
 end

@@ -445,50 +445,19 @@ function testUnreviewedDiffersFromReviewedNegative(testCase)
     verifySize(testCase, annotations.review_coverage_mask, [20 11]);
 end
 
-function testManualV3CoverageMigratesByLabelIdentity(testCase)
-    output_dir = tempname;
-    mkdir(output_dir);
-    cleanup = onCleanup(@() rmdir(output_dir,'s'));
-    config = stage6_config();
-    config.sub_results_path = output_dir;
-    config.path_results_out = output_dir;
-    config.execution.mode = 'analyze';
-    defs = manual_label_definitions();
+function testObsoleteManualReviewCheckpointIsRejectedWithoutSaving(testCase)
+    folder = tempname; mkdir(folder);
+    cleanup = onCleanup(@() rmdir(folder,'s')); %#ok<NASGU>
+    config = stage6_config(); config.sub_results_path = folder; config.path_results_out = folder;
+    config.execution.mode = 'analyze'; defs = manual_label_definitions();
     automatic = empty_event_sets(defs);
-    automatic.deep = make_event_fixture('deep_breathing_lungs',10,20,config.fs);
-    manual_label_automatic_event_sets = automatic;
-    manual_label_event_sets = struct('deepB', empty_events());
-    N = 300;
-    historical_names = {'shallowB','irregB','slowB','rapidB','asyncB', ...
-        'desat','apnea','CSR','deepB','thorDomB'};
-    manual_label_review_mask = false(N,numel(historical_names));
-    old_deep_index = strcmp(historical_names,'deepB');
-    manual_label_review_mask(51:150,old_deep_index) = true;
-    manual_label_edit_meta = struct('version',3,'schema_version',3, ...
-        'subject',config.subject,'measure',config.measure,'n_samples',N, ...
-        'fs',config.fs,'reviewed_fields',{{'deepB'}}, ...
-        'label_names',{historical_names});
-    filename = fullfile(output_dir,sprintf('Sub%d_M%d%s',config.subject, ...
-        config.measure,config.LabelEdit.filename_suffix));
-    save(filename,'manual_label_automatic_event_sets','manual_label_event_sets', ...
-        'manual_label_review_mask','manual_label_edit_meta');
-
-    [reviewed, info] = manual_edit_label_events( ...
-        zeros(N,6), struct(), config, automatic);
-    new_deep_index = strcmp({defs.field},'deep');
-    verifyNotEmpty(testCase, automatic.deep);
-    verifyEmpty(testCase, reviewed.deep);
-    verifyEqual(testCase, info.review_coverage_mask(:,new_deep_index), ...
-        manual_label_review_mask(:,old_deep_index));
-    verifyEqual(testCase, info.status_by_label.deep,'reviewed_rejected');
-    verifyNumElements(testCase, info.review_history, 1);
-    verifyEqual(testCase, info.review_history(1).reviewer_role, 'unknown');
-    verifyEqual(testCase, info.review_history(1).start_from, 'automatic');
-    verifyEqual(testCase, info.review_history(1).review_mask(:, ...
-        strcmp({config.labels.short}, 'deep')), ...
-        manual_label_review_mask(:,old_deep_index));
+    manual_label_edit_meta = struct('schema_version',3);
+    filename = fullfile(folder,sprintf('Sub%d_M%d%s',config.subject,config.measure,config.LabelEdit.filename_suffix));
+    save(filename,'manual_label_edit_meta'); before = load(filename);
+    verifyError(testCase,@() manual_edit_label_events(zeros(300,6),struct(),config,automatic), ...
+        'MAGMA:ManualLabelEdit:ObsoleteSchema');
+    verifyEqual(testCase,load(filename),before);
 end
-
 function testAutomaticSighCandidatesSurviveWithoutReview(testCase)
     config = stage6_config();
     config.sigh.method = 'global_ratio_outlier';
@@ -844,13 +813,7 @@ function testHdf5RoundTripPreservesThoracicObservationAndReviewChange(testCase)
         'valid_coverage_fraction',1,'analysis_observation_revision',0,'scope','recording');
     results.phenotypes = attach_thoracic_excursion_phenotype(results.phenotypes,results);
     snapshot = results.phenotypes.reviewed.numeric_summary;
-    legacy = snapshot;
-    for field = {'feature_names','values','available','coverage_fraction','missing_reason','phenotype_group','feature_role','units'}
-        legacy.(field{1}) = legacy.(field{1})(1:22);
-    end
-    legacy.n_features = 22; legacy.version = 'magma_phenotype_numeric_summary_v3';
-    legacy.schema_version = 'magma_phenotype_numeric_summary_schema_v3';
-    results.review_history(1).phenotype_numeric_summary_reviewed = legacy;
+    results.review_history(1).phenotype_numeric_summary_reviewed = snapshot;
     results.review_history(2) = results.review_history(1);
     results.review_history(2).round_id = 2;
     results.review_history(2).phenotype_numeric_summary_reviewed = snapshot;
@@ -876,7 +839,7 @@ function testHdf5RoundTripPreservesThoracicObservationAndReviewChange(testCase)
     verifyEqual(testCase,automatic(23),0.75); verifyTrue(testCase,isnan(automatic(24)));
     verifyEqual(testCase,reviewed(23:24),reshape([0.75 1],size(reviewed(23:24))));
     verifyNumElements(testCase,h5read(filename, ...
-        '/review/history/round_000001/phenotype_numeric_summary_reviewed/values'),22);
+        '/review/history/round_000001/phenotype_numeric_summary_reviewed/values'),24);
     verifyEqual(testCase,h5read(filename, ...
         '/review/history/round_000002/phenotype_numeric_summary_reviewed/values'),snapshot.values);
 end
@@ -913,7 +876,7 @@ function testHdf5MlExportKeepsNativeAndAddsFilteredCanonicalBundle(testCase)
     verifyEqual(testCase, h5read(filename, '/signals/ml/source_fs'), 200);
     verifyEqual(testCase, read_hdf5_text(filename, ...
         '/signals/ml/channel_names'), ...
-        {'Resp-Diaphragm', 'Resp-Lungs', 'SpOâ‚‚'});
+        {'Resp-Diaphragm', 'Resp-Lungs', 'SpO₂'});
     verifyEqual(testCase, read_hdf5_text(filename, ...
         '/signals/ml/channel_roles'), {'diaph', 'lungs', 'spo2'});
     verifyEqual(testCase, h5read(filename, ...
@@ -1001,7 +964,7 @@ end
 function testHdf5MlExportOmitsMissingLungsWithoutSubstitution(testCase)
     config = make_test_config();
     config.data_columns = ...
-        {'ECG1', 'ECG2', 'SpOâ‚‚', 'Blood Pressure', 'Resp-Diaphragm'};
+        {'ECG1', 'ECG2', 'SpO₂', 'Blood Pressure', 'Resp-Diaphragm'};
     config = resolve_signal_channels(config);
     N = 401;
     raw = zeros(N, numel(config.data_columns));
@@ -1016,7 +979,7 @@ function testHdf5MlExportOmitsMissingLungsWithoutSubstitution(testCase)
 
     verifySize(testCase, h5read(filename, '/signals/ml/data'), [21 2]);
     verifyEqual(testCase, read_hdf5_text(filename, ...
-        '/signals/ml/channel_names'), {'Resp-Diaphragm', 'SpOâ‚‚'});
+        '/signals/ml/channel_names'), {'Resp-Diaphragm', 'SpO₂'});
     verifyEqual(testCase, read_hdf5_text(filename, ...
         '/signals/ml/channel_roles'), {'diaph', 'spo2'});
     verifyEqual(testCase, h5read(filename, ...

@@ -8,7 +8,7 @@ function testMirrorsIdentityReversalAndRollback(testCase)
     subject = config.subject; measure = config.measure;
     mask_automatic = true(4, 11);
     result_file = fullfile(config.sub_results_path, config.sub_results_filename);
-    save(result_file, 'subject', 'measure', 'mask_automatic');
+    save_result_fixture(result_file, 'subject', 'measure', 'mask_automatic', 'config');
     marker = 'preserve reviewed landmarks';
     cache_file = fullfile(config.sub_results_path, config.sub_features_filename);
     save(cache_file, 'marker');
@@ -21,7 +21,7 @@ function testMirrorsIdentityReversalAndRollback(testCase)
     verifyEqual(testCase, observed.annotation_source, 'manual_label_gui');
     verifyEqual(testCase, observed.scope, 'recording');
     verifyNotEmpty(testCase, observed.timestamp);
-    verifyEqual(testCase, load(result_file).mask_automatic, mask_automatic);
+    verifyEqual(testCase, recording_results('load',result_file).mask_automatic, mask_automatic);
     verifyEqual(testCase, load(cache_file).marker, marker);
     assert_mirrors(testCase, config, observed, hdf5);
     other = config; other.measure = 2;
@@ -262,7 +262,7 @@ function testPendingClearsOnlyForSavedFullAnalysisAtCurrentRevision(testCase)
     current = recording_observation('load', config);
     verifyFalse(testCase, current.pending_reanalysis);
     verifyEmpty(testCase, current.affected_labels);
-    saved = load(fullfile(config.sub_results_path, config.sub_results_filename));
+    saved = recording_results('load',fullfile(config.sub_results_path, config.sub_results_filename));
     verifyEqual(testCase, saved.recording_observations, current);
     verifyEqual(testCase, saved.mask_automatic, results.mask_automatic);
     % Disabled HDF5 export leaves its older computed outputs explicitly stale.
@@ -298,10 +298,10 @@ function filename = seed_review(config, automatic, active, history, coverage, de
     manual_label_review_history = history;
     manual_label_active_round_id = history.round_id;
     manual_label_review_provenance = struct();
-    manual_label_edit_meta = struct('version', 5, 'schema_version', 5, ...
+    manual_label_edit_meta = struct('version', 6, 'schema_version', 6, ...
         'subject', config.subject, 'measure', config.measure, ...
         'n_samples', size(coverage,1), 'fs', config.fs, ...
-        'label_names', {{defs.type}}, 'active_round_id', history.round_id);
+        'label_names', {{defs.type}}, 'canonical_label_names',{get_labels('short')}, 'active_round_id', history.round_id);
     filename = fullfile(config.sub_results_path, sprintf('Sub%d_M%d%s', ...
         config.subject, config.measure, config.LabelEdit.filename_suffix));
     save(filename, 'manual_label_automatic_event_sets', 'manual_label_event_sets', ...
@@ -323,7 +323,7 @@ function [config, cleanup] = fixture()
 end
 
 function assert_mirrors(testCase, config, value, hdf5)
-    result = load(fullfile(config.sub_results_path, config.sub_results_filename));
+    result = recording_results('load',fullfile(config.sub_results_path, config.sub_results_filename));
     cache = load(fullfile(config.sub_results_path, config.sub_features_filename));
     verifyEqual(testCase, result.recording_observations, value);
     verifyEqual(testCase, cache.recording_observations, value);

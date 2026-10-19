@@ -90,7 +90,7 @@ function row = result_file_to_summary_row(result_file, config, canonical_labels)
 % result_file supplies saved results; config supplies grouping/fallback settings;
 % canonical_labels fixes the label-summary column order and names.
 
-    loaded = load(result_file);
+    loaded = recording_results('load',result_file);
 
     row = struct();
     row.result_file = result_file;
@@ -316,29 +316,14 @@ function row = add_annotation_provenance_summaries(row, loaded, config, canonica
 end
 
 function available = saved_label_availability(loaded, saved_labels)
-% SAVED_LABEL_AVAILABILITY Resolve one availability flag per saved label.
-% Uses explicit label_available when aligned, then the resolved nested input
-% configuration. A top-level input_config branch reads older result files only.
-
-    available = true(1, numel(saved_labels));
-    if isfield(loaded, 'label_available') && ...
-            (isnumeric(loaded.label_available) || islogical(loaded.label_available)) && ...
-            numel(loaded.label_available) == numel(saved_labels)
-        available = logical(loaded.label_available(:)');
-    elseif isfield(loaded, 'config') && isstruct(loaded.config) && ...
-            isfield(loaded.config, 'input_config') && ...
-            isstruct(loaded.config.input_config) && ...
-            isfield(loaded.config.input_config, 'running_labels')
-        running_labels = canonicalize_label_names( ...
-            loaded.config.input_config.running_labels);
-        available = ismember(saved_labels, running_labels);
-    elseif isfield(loaded, 'input_config') && isstruct(loaded.input_config) && ...
-            isfield(loaded.input_config, 'running_labels')
-        running_labels = canonicalize_label_names(loaded.input_config.running_labels);
-        available = ismember(saved_labels, running_labels);
+% SAVED_LABEL_AVAILABILITY Validate explicit current result availability.
+    if ~isfield(loaded,'label_available') || ...
+            ~(isnumeric(loaded.label_available) || islogical(loaded.label_available)) || ...
+            numel(loaded.label_available) ~= numel(saved_labels)
+        error('MAGMA:Group:LabelAvailability','Current results require availability aligned with the 11 labels.');
     end
+    available = logical(loaded.label_available(:)');
 end
-
 function mask = get_saved_mask(loaded, field)
 % GET_SAVED_MASK Return saved mask.
 % Returns the numeric/logical sample x label array stored at field, or empty.
@@ -613,21 +598,13 @@ function value = get_loaded_value(loaded, field_name, default_value)
     end
 end
 
-function fs = get_results_fs(loaded, config)
-% GET_RESULTS_FS Return results fs.
-% Prefers loaded.config.fs, then config.fs, with a 1-Hz legacy fallback.
-
-    fs = nan;
-    if isfield(loaded, 'config') && isfield(loaded.config, 'fs')
-        fs = loaded.config.fs;
-    elseif isfield(config, 'fs')
-        fs = config.fs;
-    end
-    if ~isfinite(fs) || fs <= 0
-        fs = 1;
+function fs = get_results_fs(loaded, ~)
+% GET_RESULTS_FS Require the saved native rate; never fabricate a 1-Hz rate.
+    fs = loaded.config.fs;
+    if ~isnumeric(fs) || ~isscalar(fs) || ~isfinite(fs) || fs <= 0
+        error('MAGMA:Group:SamplingRate','Current results require a finite positive native sampling rate.');
     end
 end
-
 function row = add_event_counts(row, events, canonical_labels)
 % ADD_EVENT_COUNTS Add event counts.
 % Adds events_<label>_count for available labels and NaN for unavailable labels.
@@ -886,7 +863,7 @@ function event_table = build_group_event_duration_table(files)
     duration_sec = zeros(0,1);
     for i = 1:numel(files)
         filename = fullfile(files(i).folder, files(i).name);
-        loaded = load(filename);
+        loaded = recording_results('load',filename);
         fs = get_results_fs(loaded, struct());
         [file_subject, file_measure] = parse_subject_measure(filename);
         layers = {'automatic','reviewed'};
@@ -944,7 +921,7 @@ function candidate_table = build_group_candidate_event_table(files)
 
     for file_index = 1:numel(files)
         filename = fullfile(files(file_index).folder, files(file_index).name);
-        loaded = load(filename);
+        loaded = recording_results('load',filename);
         if ~isfield(loaded, 'candidate_events') || ...
                 ~isstruct(loaded.candidate_events)
             continue;

@@ -59,14 +59,13 @@ function testFlatlineArtifactsGapsAndInsufficientReferenceAreExplicit(testCase)
     verifyEqual(testCase,qc.missing_reason,'insufficient_abdominal_reference');
 end
 
-function testLegacySummaryAndAutomaticSnapshotRemainIndependent(testCase)
+function testCurrentSummaryAndAutomaticSnapshotRemainIndependent(testCase)
     [config,data,cycles,cleanup] = fixture(); %#ok<ASGLU>
     bundle = build_db_phenotype_evidence_bundle(struct(),struct(),struct(),struct(),struct(),struct());
     legacy = legacy_summary(bundle.automatic.numeric_summary);
-    validate_compact_phenotype_features(legacy);
-    aligned = align_phenotype_numeric_summary(legacy);
-    verifyEqual(testCase,aligned.n_features,24); verifyTrue(testCase,all(isnan(aligned.values(23:24))));
-    history = struct('round_id',1,'phenotype_numeric_summary_reviewed',legacy);
+    verifyError(testCase,@() validate_compact_phenotype_features(legacy),'MAGMA:PhenotypeFeatures:InvalidCompactFeatures');
+    verifyError(testCase,@() align_phenotype_numeric_summary(legacy),'MAGMA:PhenotypeFeatures:InvalidCompactFeatures');
+    history = struct('round_id',1,'phenotype_numeric_summary_reviewed',bundle.reviewed.numeric_summary);
     before_history = history;
     context.respiratory_signal_qc.thoracic = compute_thoracic_respiratory_rhythmicity(data,cycles,config);
     context.analysis_recording_observations = recording_observation('default',config);
@@ -132,9 +131,9 @@ function testLateObservationDoesNotOverwriteSavedSpectralValues(testCase)
     original.phenotypes = build_db_phenotype_evidence_bundle(struct(),struct(),struct(), ...
         struct(),struct(),struct(),original);
     file = fullfile(config.sub_results_path,config.sub_results_filename);
-    save(file,'-struct','original');
+    save_result_fixture(file,'-struct','original');
     recording_observation('set',config,true,'manual_label_gui',0);
-    saved = load(file);
+    saved = recording_results('load',file);
     verifyEqual(testCase,saved.respiratory_signal_qc,original.respiratory_signal_qc);
     verifyEqual(testCase,saved.phenotypes,original.phenotypes);
     verifyTrue(testCase,saved.recording_observations.pending_reanalysis);
@@ -181,14 +180,14 @@ function testFullSyntheticRerunPreservesBothReviewedBeltsAndBackups(testCase)
     after = load(file);
     verifyEqual(testCase,after.resp_cycles.lungs,expected.resp_cycles.lungs);
     verifyEqual(testCase,after.resp_cycles.diaph,expected.resp_cycles.diaph);
-    result = load(fullfile(root,'Sub999_M1','Sub999_M1_results.mat'));
+    result = recording_results('load',fullfile(root,'Sub999_M1','Sub999_M1_results.mat'));
     verifyEqual(testCase,result.resp_cycles.lungs,cycles.lungs);
     verifyEqual(testCase,result.resp_cycles.diaph,cycles.diaph);
     verifyEqual(testCase,result.phenotypes.automatic.numeric_summary.n_features,24);
     verifyTrue(testCase,result.respiratory_signal_qc.thoracic.available);
 end
 
-function testGroupMatricesIncludeNewValuesAndLegacyNaNs(testCase)
+function testGroupMatricesRequireCurrentValues(testCase)
     [config,data,cycles,cleanup] = fixture(); %#ok<ASGLU>
     b = build_db_phenotype_evidence_bundle(struct(),struct(),struct(),struct(),struct(),struct());
     ctx.respiratory_signal_qc.thoracic = compute_thoracic_respiratory_rhythmicity(data,cycles,config);
@@ -196,18 +195,17 @@ function testGroupMatricesIncludeNewValuesAndLegacyNaNs(testCase)
     ctx.recording_observations.status = 'observed';
     ctx.analysis_recording_observations = ctx.recording_observations;
     phenotypes = attach_thoracic_excursion_phenotype(b,ctx);
-    current = fullfile(config.path_results_out,'current.mat'); save(current,'phenotypes');
-    phenotypes.automatic.numeric_summary = legacy_summary(phenotypes.automatic.numeric_summary);
-    phenotypes.reviewed.numeric_summary = legacy_summary(phenotypes.reviewed.numeric_summary);
-    legacy = fullfile(config.path_results_out,'legacy.mat'); save(legacy,'phenotypes');
+    current = fullfile(config.path_results_out,'current.mat'); save_result_fixture(current,'phenotypes','config');
+    obsolete = fullfile(config.path_results_out,'obsolete.mat'); save(obsolete,'phenotypes');
     group_table = table(["Sub999_M1";"Sub999_M2"],[999;999],[1;2], ...
-        ["Unknown";"Unknown"],["new";"old"],string({current;legacy}), ...
+        ["Unknown";"Unknown"],["new";"old"],string({current;current}), ...
         'VariableNames',{'recording_id','subject','measure','subject_group','analysis_id','result_file'});
     tables = build_group_phenotype_tables(group_table);
     verifyEqual(testCase,height(tables.dictionary),24);
     verifyEqual(testCase,tables.summary_automatic.minimal_thoracic_excursion_clinician(1),1);
-    verifyTrue(testCase,isnan(tables.summary_automatic.minimal_thoracic_excursion_clinician(2)));
-    verifyTrue(testCase,isnan(tables.summary_automatic.thoracic_respiratory_rhythmicity(2)));
+    verifyEqual(testCase,tables.summary_automatic.minimal_thoracic_excursion_clinician(2),1);
+    group_table.result_file(2) = string(obsolete);
+    verifyError(testCase,@() build_group_phenotype_tables(group_table),'MAGMA:Results:ObsoleteSchema');
 end
 
 function value = legacy_summary(value)

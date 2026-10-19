@@ -4,9 +4,9 @@ Use this workflow for an existing recording whose breath landmarks have
 already been reviewed. Compatible version-9 caches retain every saved
 peak, trough, trough override, amplitude method and polarity alignment.
 Legacy per-belt artifact lists are unioned, merging overlaps and touching spans.
-Missing artifact fields in older compatible caches open as empty intervals;
-older results without annotation metadata remain distinguishable from a
-confirmed empty annotation in QC and ML exports.
+Missing artifact fields in older compatible caches open as empty intervals.
+QC and ML metadata distinguish absent annotation information from a confirmed
+empty annotation; obsolete MAT result layouts must be regenerated.
 An incompatible cache raises an error during recheck without regenerating it.
 Keep `config.resp.amp_method` equal to the saved cache method when reopening.
 
@@ -84,11 +84,13 @@ Migrating nonempty legacy annotations changes their scientific scope to both
 belts. Saving that migration increments the artifact revision and marks derived
 outputs pending reanalysis. Cancel leaves the original legacy cache untouched.
 
-The feature cache is authoritative. Existing `results.mat` receives the
-current compact `respiratory_artifact_state` immediately after a committed
-feature review, together with shared `resp_cycles.artifact_intervals_idx` and
-a `respiratory_artifact_qc` snapshot. Its `analysis_respiratory_artifact_revision` records the
-revision used for automatic analysis (legacy files imply 0). Labels and
+The feature cache is authoritative. Current `results.mat` receives annotation
+metadata under `results.qc.respiratory_artifacts` immediately after a committed
+feature review, together with shared
+`results.respiration.cycles.artifact_intervals_idx` and a
+`results.qc.artifact_coverage` snapshot. `results.qc.analysis_artifact_revision` records the
+revision used for automatic analysis. Obsolete result layouts must be regenerated
+from the protected feature cache. Labels and
 historical reviews are not rewritten by this metadata update. Pending state
 or unequal current/analysis revisions indicates that a full rerun is needed.
 A selective rerun is rejected while feature reanalysis is pending. Pending

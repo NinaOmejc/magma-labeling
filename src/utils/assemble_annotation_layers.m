@@ -96,17 +96,12 @@ end
 
 function coverage = generic_review_coverage(info, index, N, n_labels)
 % GENERIC_REVIEW_COVERAGE Read one label's Nsample review coverage.
-% A correctly sized review_coverage_mask is preferred; legacy full-record
-% review scope expands to all samples.
+% Only explicitly saved, aligned sample coverage establishes reviewed scope.
 
     coverage = false(N,1);
     if isfield(info, 'review_coverage_mask') && ...
             isequal(size(info.review_coverage_mask), [N n_labels])
         coverage = logical(info.review_coverage_mask(:,index));
-    elseif isfield(info, 'review_scope') && ...
-            strcmp(char(string(info.review_scope)), ...
-                'full_record_per_explicitly_reviewed_label')
-        coverage(:) = true;
     end
 end
 
