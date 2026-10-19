@@ -8,6 +8,7 @@ function fig = plot_label_mask(label_mask, label_names, config, availability_rea
 %   availability_reason - Original detector availability, independent of review.
 %   config.LabelMask.review_coverage - Optional explicit Nsample x Nlabel coverage.
 %   config.LabelMask.assessable_mask - Optional native-sample physiological support.
+%   config.LabelMask.artifact_context - Saved current artifact state/cycles.
 %
 % Outputs:
 %   fig - Figure handle while plotting; empty after save_figure or when disabled.
@@ -43,6 +44,20 @@ function fig = plot_label_mask(label_mask, label_names, config, availability_rea
         display_mask(sigh_row, :) = 0;
     end
     reviewed_plot = isfield(config.LabelMask, 'review_coverage');
+    context = struct();
+    if isfield(config,'respiratory_artifact_state'), context.respiratory_artifact_state = config.respiratory_artifact_state; end
+    if isfield(config.LabelMask,'artifact_context'), context = config.LabelMask.artifact_context; end
+    [artifact_qc,artifacts] = respiratory_artifact_qc(context,n_samples,config.fs);
+    assessable = true(size(label_mask));
+    if isfield(config.LabelMask,'assessable_mask')
+        if ~isequal(size(config.LabelMask.assessable_mask),size(label_mask))
+            error('MAGMA:LabelMask:AssessabilityAlignment','assessable_mask must align with label_mask.');
+        end
+        assessable = logical(config.LabelMask.assessable_mask);
+    end
+    respiratory_rows = ~strcmp(label_names,'desat');
+    ranges = artifacts.artifact_intervals_idx;
+    for i = 1:size(ranges,1), assessable(ranges(i,1):ranges(i,2),respiratory_rows) = false; end
     if reviewed_plot
         if ~isequal(size(config.LabelMask.review_coverage), size(label_mask))
             error('MAGMA:LabelMask:CoverageAlignment', ...
@@ -52,23 +67,20 @@ function fig = plot_label_mask(label_mask, label_names, config, availability_rea
         display_mask(~logical(config.LabelMask.review_coverage')) = 2;
         unassessable = repmat(~ismember(availability_reason(:), ...
             {'available', 'unreviewed', 'not_computed'}), 1, n_samples);
-        if isfield(config.LabelMask, 'assessable_mask')
-            if ~isequal(size(config.LabelMask.assessable_mask), size(label_mask))
-                error('MAGMA:LabelMask:AssessabilityAlignment', ...
-                    'assessable_mask must align with label_mask.');
-            end
-            unassessable = unassessable | ~logical(config.LabelMask.assessable_mask');
-        end
+        unassessable = unassessable | ~assessable';
         display_mask(unassessable) = 4;
         % Computation status comes from the detector metadata and takes precedence.
         display_mask(not_computed, :) = 3;
     else
+        unavailable = ~ismember(availability_reason,{'available','unreviewed','not_computed'});
+        assessable(:,unavailable) = false;
+        display_mask(~assessable') = 3;
         display_mask(not_computed, :) = 2;
     end
 
     t_sec = (0:n_samples-1) / config.fs;
     row_labels = resolve_row_labels(label_names, config, n_labels);
-    fig_height = max(420, 120 + 48 * n_labels);
+    fig_height = max(455, 155 + 48 * n_labels);
 
     fig = figure( ...
         'Units', 'pixels', ...
@@ -86,15 +98,19 @@ function fig = plot_label_mask(label_mask, label_names, config, availability_rea
     else
         xlim(ax, [0, 1 / max(config.fs, 1)]);
     end
-    ylim(ax, [0.5, n_labels + 0.5]);
+    artifact_y = n_labels + 0.95;
+    ylim(ax, [0.5, n_labels + 1.35]);
     set(ax, ...
-        'YTick', 1:n_labels, ...
-        'YTickLabel', row_labels, ...
+        'YTick', [1:n_labels artifact_y], ...
+        'YTickLabel', [row_labels; {'Respiratory artifact'}], ...
         'YDir', 'reverse', ...
         'TickDir', 'out', ...
         'Layer', 'top', ...
         'Box', 'off', ...
         'FontSize', 11);
+    % Fixed recording-time locations preserve absolute ticks when zooming.
+    set(ax, 'XTick', 0:200:t_sec(end), 'XMinorTick', 'on');
+    ax.XAxis.MinorTickValues = setdiff(50:50:t_sec(end), ax.XTick);
 
     xlabel(ax, 'Time (s)');
     ylabel(ax, 'Dysfunction');
@@ -106,6 +122,10 @@ function fig = plot_label_mask(label_mask, label_names, config, availability_rea
 
     cmap = build_label_mask_colormap(config);
     state_labels = {'Absent', 'Present', 'Not computed'};
+    if ~reviewed_plot && any(display_mask(:) == 3)
+        cmap(end+1,:) = [0.94 0.83 0.60];
+        state_labels{end+1} = 'Unassessable';
+    end
     if reviewed_plot
         cmap = [1 1 1; 0.78 0.12 0.12; 0.88 0.88 0.88; 0.35 0.35 0.35];
         state_labels = {'Reviewed negative', 'Reviewed positive', 'Unreviewed', 'Not computed'};
@@ -145,7 +165,7 @@ function fig = plot_label_mask(label_mask, label_names, config, availability_rea
         legend_labels{end+1} = 'Automatic detection (blue dashed outline)';
     end
     if discrete_sigh
-        allowed_samples = repmat(~not_computed(sigh_row), 1, n_samples);
+        allowed_samples = ~not_computed(sigh_row) & assessable(:,sigh_row)';
         if reviewed_plot
             allowed_samples = display_mask(sigh_row, :) < 2;
         end
@@ -174,6 +194,22 @@ function fig = plot_label_mask(label_mask, label_names, config, availability_rea
         plot(ax, xlim(ax), [y, y], '-', ...
             'Color', [0.45 0.45 0.45], 'LineWidth', 1.0, 'HandleVisibility', 'off');
     end
+    artifact_color = [0.53 0.35 0.72];
+    rectangle(ax,'Position',[0 artifact_y-0.15 max(n_samples/config.fs,eps) 0.30], ...
+        'FaceColor','w','EdgeColor',[0.80 0.80 0.80],'HandleVisibility','off', ...
+        'Tag','RespiratoryArtifactTimeline');
+    for i = 1:size(ranges,1)
+        rectangle(ax,'Position',[(ranges(i,1)-1)/config.fs artifact_y-0.15 ...
+            (ranges(i,2)-ranges(i,1)+1)/config.fs 0.30], ...
+            'FaceColor',artifact_color,'EdgeColor','none','HandleVisibility','off', ...
+            'Tag','RespiratoryArtifactInterval');
+    end
+    if ~artifact_qc.respiratory_artifact_annotation_known
+        text(ax,0,artifact_y,'Artifact metadata unavailable','FontSize',8, ...
+            'Color',[0.4 0.4 0.4],'Interpreter','none');
+    end
+    legend_handles(end+1) = patch(ax,NaN,NaN,artifact_color,'EdgeColor','none');
+    legend_labels{end+1} = 'Respiratory artifact (excluded)';
     hold(ax, 'off');
 
     ax.XGrid = 'on';

@@ -150,10 +150,11 @@ function testAcceptFeatureGuiWithoutAssessingPreservesUnassessed(testCase)
     before = recording_observation('load',config);
     driver = gui_driver('not_assessed',[],'Reviewed');
     cleanup_timer = onCleanup(@() stop_driver(driver)); %#ok<NASGU>
-    [after_lungs,after_diaph,accepted,observation] = manual_edit_respiration_features(data,lungs,diaph,config);
+    [after_lungs,after_diaph,accepted,observation,artifacts] = manual_edit_respiration_features(data,lungs,diaph,config);
     verifyTrue(testCase,accepted); verifyEqual(testCase,driver.UserData.status,'not_assessed');
     verifyEqual(testCase,observation,before); verifyEqual(testCase,recording_observation('load',config),before);
-    verifyEqual(testCase,after_lungs,lungs); verifyEqual(testCase,after_diaph,diaph);
+    verifyEqual(testCase,after_lungs,rmfield(lungs,'artifact_intervals_idx')); verifyEqual(testCase,after_diaph,diaph);
+    verifyEqual(testCase,artifacts,[40 60]);
     phenotype = build_thoracic_excursion_phenotype(struct('recording_observations',observation));
     verifyTrue(testCase,isnan(phenotype.values(2))); verifyFalse(testCase,phenotype.available(2));
 end

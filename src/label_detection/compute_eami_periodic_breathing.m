@@ -20,12 +20,12 @@ function diagnostics = compute_eami_periodic_breathing(data, config)
     if ~lungs_ignored && ~minimal_thoracic_excursion(config) && ...
             valid_channel(config.channels.lungs_idx, size(data, 2))
         lungs = compute_eami_belt( ...
-            data(:, config.channels.lungs_idx), N, config.fs, cfg, artifacts.lungs);
+            data(:, config.channels.lungs_idx), N, config.fs, cfg, artifacts.artifact_intervals_idx);
     end
     diaph = empty_eami_belt(recording_end_t, cfg);
     if valid_channel(config.channels.diaph_idx, size(data, 2))
         diaph = compute_eami_belt( ...
-            data(:, config.channels.diaph_idx), N, config.fs, cfg, artifacts.diaph);
+            data(:, config.channels.diaph_idx), N, config.fs, cfg, artifacts.artifact_intervals_idx);
     end
 
     min_event_duration_sec = 2 * cfg.energy_win_sec;

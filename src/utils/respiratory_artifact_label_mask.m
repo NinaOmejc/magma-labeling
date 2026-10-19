@@ -1,12 +1,12 @@
 function mask = respiratory_artifact_label_mask(features,labels,N,config,diagnostics)
 % RESPIRATORY_ARTIFACT_LABEL_MASK Technical assessability, separate from labels.
-% Single-belt labels retain the other usable belt. Cross-belt labels require
-% simultaneous valid evidence. Existing estimator windows determine gap guards.
+% Shared artifacts exclude both belts. Existing estimator windows determine guards.
     if nargin < 5, diagnostics = struct(); end
     mask = true(N,numel(labels));
     if ~isfield(features,'respiratory_artifact_state'), return; end
-    state = features.respiratory_artifact_state;
-    if isempty(state.lungs) && isempty(state.diaph), return; end
+    config.respiratory_artifact_state = features.respiratory_artifact_state;
+    state = respiratory_artifact_state(struct(),config,N);
+    if isempty(state.artifact_intervals_idx), return; end
     resolved = resolve_signal_channels(config);
     for j = 1:numel(labels)
         label = labels{j};
@@ -51,7 +51,7 @@ function mask = respiratory_artifact_label_mask(features,labels,N,config,diagnos
             if b == 1 && (is_lung_belt_ignored(config) || minimal_thoracic_excursion(config)), usable = false; end
             if ~usable, continue; end
             valid(:,b) = true;
-            ranges = state.([key '_evidence']);
+            ranges = state.evidence_intervals_idx;
             if strcmp(label,'sigh') && ~isempty(ranges)
                 % A centered baseline uses the configured number of original
                 % breath positions, including invalid positions at the gap.

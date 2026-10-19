@@ -45,7 +45,7 @@ function rea = compute_respiratory_asynchrony_metrics(data, resp_cycles, session
     end
 
     % Transform artifact-free blocks separately; never interpolate across artifacts.
-    clean = respiratory_artifact_window_valid([artifact_state.lungs;artifact_state.diaph],(0:N-1)'/config.fs,0,config.fs);
+    clean = respiratory_artifact_window_valid(artifact_state.artifact_intervals_idx,(0:N-1)'/config.fs,0,config.fs);
     edges = diff([false;clean;false]); starts = find(edges==1); stops = find(edges==-1)-1;
 
     rea.reference_mask = get_reference_mask_local(t_grid, session_reference);

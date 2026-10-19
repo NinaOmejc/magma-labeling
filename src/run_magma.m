@@ -204,9 +204,11 @@ function run_magma(base_config)
                 log_message(config, 1, 'Manual review cancelled; no new result or review plots saved.');
                 continue;
             end
+            plot_config = config;
+            plot_config.LabelMask.assessable_mask = label_results.assessable_mask;
             plot_label_mask( ...
                 label_results.mask_automatic, label_results.label_names, ...
-                config, label_results.availability_reason);
+                plot_config, label_results.availability_reason);
 
             results = build_recording_results( ...
                 config, resp_cycles, resp_ref, session_reference, ...
@@ -262,7 +264,9 @@ function [resp_cycles, reused] = reusable_resp_cycles(existing, data, config)
             return;
         end
     end
-    resp_cycles = existing.resp_cycles;
+    legacy_state = struct();
+    if isfield(existing,'respiratory_artifact_state'), legacy_state = existing.respiratory_artifact_state; end
+    resp_cycles = migrate_respiratory_artifacts(existing.resp_cycles,size(data,1),legacy_state);
     [resp_cycles, amplitude_ok] = select_reused_amplitude( ...
         resp_cycles, existing, config);
     if ~amplitude_ok

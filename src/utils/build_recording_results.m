@@ -61,8 +61,8 @@ function results = build_recording_results( ...
         label_results.reviewed_availability_reason;
     results.label_reviewed_assessable_mask = ...
         label_results.reviewed_assessable_mask;
-    results.resp_cycles = resp_cycles;
     results.respiratory_artifact_state = respiratory_artifact_state(resp_cycles,config,size(label_results.mask_automatic,1));
+    results.resp_cycles = migrate_respiratory_artifacts(resp_cycles,size(label_results.mask_automatic,1),results.respiratory_artifact_state);
     results.analysis_respiratory_artifact_revision = results.respiratory_artifact_state.revision;
     if isfield(results.resp_cycles,'artifact_annotation')
         results.resp_cycles.artifact_annotation.pending_reanalysis = false;

@@ -787,6 +787,19 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
 %   review_coverage_mask - Updated sample-by-editable-label review coverage.
 %   committed           - True only for Done; closing X discards the pending round.
 
+    fh = figure('Units', 'pixels', 'Position', near_fullscreen_figure_position(), 'Visible', 'on', ...
+        'Name', 'Manual label event editor', 'NumberTitle', 'off');
+    % Keep cleanup outside the workspace retained by nested GUI callbacks.
+    figure_cleanup = onCleanup(@() delete_editor_figure(fh)); %#ok<NASGU>
+    [event_sets, reviewed_fields, review_coverage_mask, committed, observation_status] = ...
+        run_editor_gui(fh, data, resp_cycles, config, event_sets, auto_event_sets, ...
+        start_event_sets, label_defs, cfg, reviewed_fields, review_coverage_mask);
+end
+
+function [event_sets, reviewed_fields, review_coverage_mask, committed, observation_status] = ...
+    run_editor_gui(fh, data, resp_cycles, config, event_sets, auto_event_sets, ...
+    start_event_sets, label_defs, cfg, reviewed_fields, review_coverage_mask)
+
     if ~isfield(config, 'channels')
         config = resolve_signal_channels(config);
     end
@@ -817,9 +830,6 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
     idx_lungs = config.channels.lungs_idx;
     idx_diaph = config.channels.diaph_idx;
 
-    fh = figure('Units', 'pixels', 'Position', near_fullscreen_figure_position(), 'Visible', 'on', ...
-        'Name', 'Manual label event editor', 'NumberTitle', 'off');
-
     ax1 = subplot(2,1,1); hold(ax1, 'on');
     plot_trace_or_message(ax1, t_raw, data, idx_lungs, 'Resp-Lungs');
     title(ax1, 'Manual label editing: lungs');
@@ -833,9 +843,10 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
     set_global_ylim_from_channel(ax2, data, idx_diaph);
 
     artifacts = config.respiratory_artifact_state;
-    shade_respiratory_artifacts(ax1,artifacts.lungs,fs);
-    shade_respiratory_artifacts(ax2,artifacts.diaph,fs);
-    if ~isempty(artifacts.lungs) || ~isempty(artifacts.diaph) || artifacts.pending_reanalysis
+    for target_ax = [ax1 ax2]
+        shade_respiratory_artifacts(target_ax,artifacts.artifact_intervals_idx,fs);
+    end
+    if ~isempty(artifacts.artifact_intervals_idx) || artifacts.pending_reanalysis
         log_message(config,1,'Orange shading: excluded respiratory artifacts. To edit, set resp.recheck_cached=true and rerun a full analysis.');
         suffix = '';
         if artifacts.pending_reanalysis, suffix = ' (pending reanalysis)'; end
@@ -843,8 +854,11 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
         title(ax2,['Manual labels: diaphragm | edit artifacts via resp.recheck_cached' suffix]);
     end
     ax = [ax1 ax2];
+    % Full-recording ruler positions stay at absolute times while scrolling.
     for i = 1:numel(ax)
         set(ax(i), 'ButtonDownFcn', @(~,~) begin_drag(ax(i)));
+        set(ax(i), 'XTick', 0:200:t_end, 'XMinorTick', 'on');
+        ax(i).XAxis.MinorTickValues = setdiff(50:50:t_end, ax(i).XTick);
     end
     linkaxes(ax, 'x');
     xlim(ax1, [0 min(window_sec, t_end)]);
@@ -908,11 +922,9 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
 
     refresh_event_patches();
     mark_current_view_reviewed();
-    if ~finished, uiwait(fh); end
+    if ~finished && isgraphics(fh), uiwait(fh); end
     if committed, mark_current_view_reviewed(); end
-    if isgraphics(fh)
-        delete(fh);
-    end
+    delete_editor_figure(fh);
     reviewed_fields = {label_defs(reviewed).field};
 
     function steps = slider_step(total_sec, visible_sec)
@@ -1141,7 +1153,13 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
         end
         title(ax1, sprintf('Manual label editing: lungs | %s', label_defs(current_label_idx).name));
         title(ax2, sprintf('Manual label editing: diaphragm | %s', label_defs(current_label_idx).name));
-        align_axes_x_widths(ax);
+        try
+            align_axes_x_widths(ax);
+        catch err
+            % Closing during layout's drawnow can delete the axes.
+            if isgraphics(fh), rethrow(err); end
+            return;
+        end
         drawnow;
     end
 
@@ -1281,6 +1299,15 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
         finished = true;
         drag_active = false;
         if isgraphics(fh), uiresume(fh); end
+        delete_editor_figure(fh);
+    end
+end
+
+function delete_editor_figure(fh)
+% DELETE_EDITOR_FIGURE Destroy the GUI without invoking its close callback.
+
+    if isgraphics(fh)
+        delete(fh);
     end
 end
 

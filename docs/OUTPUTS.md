@@ -54,7 +54,7 @@ continues to hold the current automatic/reviewed bundle. HDF5 preserves these im
 label-mask figure naming is unchanged.
 
 The MAT file is the authoritative MATLAB result. The HDF5 file uses schema
-`magma_ml_hdf5_v18` as a portable recording-level representation.
+`magma_ml_hdf5_v19` as a portable recording-level representation.
 
 ## Recording-level thoracic observation
 
@@ -257,6 +257,10 @@ The public hierarchy is:
         /source_channel_indices
         /source
         /resampling_method
+        /resampling_filter_half_support_sec
+        /source_valid_mask
+        /channel_valid_mask
+        /respiratory_artifact_valid_mask
 /time
 
 /breaths
@@ -270,6 +274,7 @@ The public hierarchy is:
         /available
         /availability_reason
         /assessable_mask
+        /ml_training_valid_mask
         /burden
         /overlap
         /evidence
@@ -279,6 +284,7 @@ The public hierarchy is:
         /availability_reason
         /assessable_mask
         /coverage_mask
+        /ml_training_valid_mask
         /status
         /burden
         /overlap
@@ -309,6 +315,7 @@ The public hierarchy is:
 /review
 /config
 /meta
+/qc/respiratory_artifacts
 ```
 
 Schema v17 provides two signal levels. `/signals/preprocessed` remains the
@@ -327,6 +334,23 @@ interpolated and leading/trailing gaps use the nearest finite value on a
 temporary export copy. MATLAB's anti-aliased polyphase FIR `resample` operation
 then uses endpoint-value padding so non-zero baselines such as SpO2 do not
 acquire zero-extension boundary excursions.
+
+Schema v19 adds validity on the same ML time grid. Respiratory artifact
+exclusion includes the full FIR half-support on either side of each marked
+interval (1 second for the default 200-to-10-Hz resampling). Contaminated ML
+values are NaN; native waveforms remain unchanged. `source_valid_mask` records
+finite-source/filter support before artifact exclusion, while
+`channel_valid_mask` also excludes respiratory artifacts from both belts.
+SpO2 validity does not depend on respiratory artifacts. The shared
+`respiratory_artifact_valid_mask` describes artifact-free filter support.
+
+Use `/labels/<automatic|reviewed>/ml_training_valid_mask` when constructing
+training examples: it conservatively projects native assessability, intersects
+reviewed coverage where relevant, and excludes stale respiratory revisions.
+Physiological label masks remain native-grid, 11-column arrays. A false label
+bit with false validity is unknown, not an assessed negative. Current shared
+ranges are at `/breaths/artifact_intervals_idx`; annotation provenance and
+current versus analysis revisions are described below.
 
 ML values retain the preprocessed signal units and scale: respiratory belts
 remain in their existing belt units and SpO2 remains a percentage. No
@@ -430,8 +454,21 @@ recordings before rehabilitation. No hypothesis tests or clustering are run.
 ## Respiratory artifact annotations
 
 The additive version-9 feature-cache fields, artifact revision/provenance,
-analysis revision, and HDF5 v18 observation datasets are documented in
+analysis revision, and HDF5 v19 QC/observation datasets are documented in
 [Rechecking respiratory features](RESPIRATORY_ARTIFACTS.md). Raw waveforms and
 reviewed landmark positions remain intact. Artifact-contaminated samples are
 excluded through `label_assessable_mask`; a false label bit there is not an
 assessed physiological negative.
+
+The group recording table and `/qc/respiratory_artifacts` expose
+`respiratory_artifact_duration_sec`, `respiratory_artifact_fraction`,
+`respiratory_artifact_n_intervals`, `respiratory_artifact_revision`,
+`analysis_respiratory_artifact_revision`, and
+`respiratory_artifact_pending_reanalysis`. Duration counts the inclusive union
+once. Explicitly empty annotations have zero coverage; missing legacy metadata
+has NaN coverage/count/revision and `respiratory_artifact_annotation_known=false`.
+These are recording QC fields, outside the fixed 24 phenotype features.
+`automatic_respiratory_training_eligible` requires known annotation metadata
+and a current analysis revision. Pending recordings warn and retain QC rows,
+but their respiratory cohort values/events are excluded until reanalysis;
+SpO2 and the clinician observation remain independent.

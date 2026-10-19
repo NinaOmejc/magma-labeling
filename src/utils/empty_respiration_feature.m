@@ -19,7 +19,6 @@ function b = empty_respiration_feature(basename)
     b.trough_t = [];
     b.trough_val = [];
     b.trough_overrides = zeros(0, 3);
-    b.artifact_intervals_idx = zeros(0, 2);
     b.amp = [];
     b.amp_exp = [];
     b.amp_insp = [];

@@ -62,8 +62,8 @@ function belt = build_belt_evidence(source, reference, ignored, t_grid, cfg, con
     % Preserve cycle alignment from resp_cycles: selected amp(i) belongs to
     % peak i, with method-specific NaNs at undefined boundaries; trough i lies
     % between peaks i and i+1, and ibi(i)/rr_bpm(i) span those same peaks.
-    masks = respiratory_artifact_masks(source,N,config.fs);
-    belt.artifact_intervals_idx = masks.evidence_intervals_idx;
+    masks = respiratory_artifact_masks(source,N,config.fs,config.respiratory_artifact_state.artifact_intervals_idx);
+    belt.artifact_intervals_idx = config.respiratory_artifact_state.evidence_intervals_idx;
     belt.artifact_fs = config.fs;
     belt.peak_idx = get_field(source, 'peak_idx', []);
     belt.peak_t = get_field(source, 'peak_t', []);
@@ -185,8 +185,7 @@ function balance = build_thoracoabdominal_balance(lungs, diaph, t_grid, cfg)
             continue;
         end
 
-        if ~respiratory_artifact_window_valid(lungs.artifact_intervals_idx,window_end,cfg.thoracic_balance_win_sec,lungs.artifact_fs) || ...
-                ~respiratory_artifact_window_valid(diaph.artifact_intervals_idx,window_end,cfg.thoracic_balance_win_sec,diaph.artifact_fs)
+        if ~respiratory_artifact_window_valid(lungs.artifact_intervals_idx,window_end,cfg.thoracic_balance_win_sec,lungs.artifact_fs)
             continue;
         end
         thoracic_values = values_in_window( ...

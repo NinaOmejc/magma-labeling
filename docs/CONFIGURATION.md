@@ -527,5 +527,7 @@ assertSuccess(results);
 `config.resp.recheck_cached = false` reuses compatible caches as before. Set it
 to `true` with `overwrite_results=true`, `overwrite_features=false`, analyze
 mode, and `execution.selected_labels={}` to reopen existing saved landmarks
-and artifact intervals. Cancel skips that recording without replacing the
-cache. See [the safe recheck workflow](RESPIRATORY_ARTIFACTS.md).
+and artifact intervals. Reviewed validates and atomically replaces the original
+cache without creating a persistent backup. Cancel skips that recording without
+replacing the cache. Existing backup folders are left untouched.
+See [the recheck workflow](RESPIRATORY_ARTIFACTS.md).

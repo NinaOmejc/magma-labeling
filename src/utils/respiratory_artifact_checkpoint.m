@@ -14,23 +14,34 @@ function state = respiratory_artifact_checkpoint(action,config,varargin)
     state = respiratory_artifact_state(struct(),defaults_config,0);
     cached = struct();
     if isfile(cache_file)
-        names = who('-file',cache_file);
-        if ismember('respiratory_artifact_state',names)
-            saved = load(cache_file,'respiratory_artifact_state','feature_cache_meta');
-            if isfield(saved,'feature_cache_meta') && ...
-                    (saved.feature_cache_meta.subject ~= config.subject || ...
-                     saved.feature_cache_meta.measurement ~= config.measure)
-                error('MAGMA:Respiration:ArtifactIdentity','Artifact cache identity mismatch: %s',cache_file);
-            end
-            state = saved.respiratory_artifact_state;
+        cached = load(cache_file);
+        if isfield(cached,'feature_cache_meta') && ...
+                all(isfield(cached.feature_cache_meta,{'subject','measurement'})) && ...
+                (cached.feature_cache_meta.subject ~= config.subject || ...
+                 cached.feature_cache_meta.measurement ~= config.measure)
+            error('MAGMA:Respiration:ArtifactIdentity','Artifact cache identity mismatch: %s',cache_file);
+        end
+        if isfield(cached,'respiratory_artifact_state')
+            state = cached.respiratory_artifact_state;
             if state.subject ~= config.subject || state.measurement ~= config.measure
                 error('MAGMA:Respiration:ArtifactIdentity','Artifact identity mismatch: %s',cache_file);
             end
-        elseif ~strcmp(action,'load')
-            cached = load(cache_file);
-            state = respiratory_artifact_state(cached.resp_cycles,config);
+        end
+    else
+        result_file = fullfile(folder,result_name);
+        if isfile(result_file)
+            names = intersect(who('-file',result_file),{'resp_cycles','respiratory_artifact_state'});
+            if ~isempty(names), cached = load(result_file,names{:}); end
+            if isfield(cached,'respiratory_artifact_state'), state = cached.respiratory_artifact_state; end
         end
     end
+    state_config = defaults_config; state_config.respiratory_artifact_state = state;
+    cycles = struct();
+    if isfield(cached,'resp_cycles'), cycles = cached.resp_cycles; end
+    legacy = ~isfield(state,'artifact_intervals_idx') || ...
+        (isfield(cached,'resp_cycles') && ~isfield(cycles,'artifact_intervals_idx'));
+    state = respiratory_artifact_state(cycles,state_config);
+    if legacy && ~isempty(state.artifact_intervals_idx), state.pending_reanalysis = true; end
     if strcmp(action,'load'), return; end
     if strcmp(action,'complete')
         if state.revision ~= varargin{1}
@@ -40,18 +51,41 @@ function state = respiratory_artifact_checkpoint(action,config,varargin)
         if isempty(fieldnames(cached)) && isfile(cache_file), cached = load(cache_file); end
         state.pending_reanalysis = false;
         if isfield(cached,'resp_cycles')
+            cached.resp_cycles = migrate_respiratory_artifacts(cached.resp_cycles,[],state);
             cached.resp_cycles.artifact_annotation = annotation_metadata(state);
             cached.respiratory_artifact_state = state;
         end
     elseif strcmp(action,'publish')
-        if ~isempty(varargin), state = varargin{1}; end
+        if ~isempty(varargin)
+            state_config.respiratory_artifact_state = varargin{1};
+            state = respiratory_artifact_state(struct(),state_config);
+        end
     else
         error('MAGMA:Respiration:ArtifactAction','Unknown artifact action: %s',action);
     end
-    % Only compact current metadata changes here: no labels or historical edits.
+    % Mirror current annotations; physiological labels and history stay unchanged.
     result_file = fullfile(folder,result_name);
     if isfile(result_file)
         mirror = struct('respiratory_artifact_state',state);
+        names = who('-file',result_file);
+        selected = intersect(names,{'resp_cycles','analysis_respiratory_artifact_revision'});
+        previous = struct();
+        if ~isempty(selected), previous = load(result_file,selected{:}); end
+        if isfield(previous,'resp_cycles')
+            previous.resp_cycles.artifact_intervals_idx = state.artifact_intervals_idx;
+            mirror.resp_cycles = migrate_respiratory_artifacts(previous.resp_cycles);
+            mirror.resp_cycles.artifact_annotation = annotation_metadata(state);
+        end
+        context = previous; context.respiratory_artifact_state = state;
+        N = 0;
+        if isfield(cached,'feature_cache_meta') && isfield(cached.feature_cache_meta,'n_samples')
+            N = cached.feature_cache_meta.n_samples;
+        end
+        if N == 0
+            variables = whos('-file',result_file,'mask_automatic');
+            if ~isempty(variables), N = variables.size(1); end
+        end
+        mirror.respiratory_artifact_qc = respiratory_artifact_qc(context,N,config.fs);
         save(result_file,'-struct','mirror','-append');
     end
     h5 = fullfile(folder,[stem get_config_value(config,'HDF5','filename_suffix','_results.h5')]);
@@ -59,11 +93,12 @@ function state = respiratory_artifact_checkpoint(action,config,varargin)
         write_respiratory_artifact_hdf5(h5,state);
     end
     % Clear cache pending only after every enabled output mirror succeeds.
-    if strcmp(action,'complete') && isfield(cached,'resp_cycles')
+    if strcmp(action,'complete') && isfile(cache_file) && isfield(cached,'resp_cycles')
         atomic_save_mat(cache_file,cached);
     end
 end
 
 function metadata = annotation_metadata(state)
-    metadata = rmfield(state,{'subject','measurement','lungs','diaph','lungs_evidence','diaph_evidence'});
+    metadata = rmfield(state,{'subject','measurement','artifact_intervals_idx','evidence_intervals_idx', ...
+        'lungs','diaph','lungs_evidence','diaph_evidence'});
 end

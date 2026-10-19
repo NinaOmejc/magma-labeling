@@ -49,11 +49,22 @@ function [group_table, cohort] = build_group_label_table(config_or_results_path,
         group_table = struct2table([rows{:}], 'AsArray', true);
     end
 
+    if ~isempty(group_table) && any(~group_table.automatic_respiratory_results_current)
+        warning('MAGMA:Group:StaleRespiratoryArtifacts', ...
+            '%d recording(s) have stale respiratory results; respiratory cohort statistics exclude them. QC rows are retained.', ...
+            nnz(~group_table.automatic_respiratory_results_current));
+    end
     cohort = struct();
     cohort.phenotypes = build_group_phenotype_tables(group_table);
     cohort.measure_comparability = build_measure_comparability_table();
     event_duration_table = build_group_event_duration_table(files);
     candidate_event_qc = build_group_candidate_event_table(files);
+    if ~isempty(group_table)
+        stale = ~group_table.automatic_respiratory_results_current;
+        ids = [group_table.subject(stale) group_table.measure(stale)];
+        event_duration_table = exclude_stale_respiratory_rows(event_duration_table,ids);
+        candidate_event_qc = exclude_stale_respiratory_rows(candidate_event_qc,ids);
+    end
     cohort_qc = build_cohort_qc_summary( ...
         group_table, canonical_labels, event_duration_table, candidate_event_qc);
     cohort.qc = cohort_qc;
@@ -66,6 +77,12 @@ function [group_table, cohort] = build_group_label_table(config_or_results_path,
         paths = write_group_workbooks(results_path, group_table, cohort);
         log_message(config, 1, 'Saved group label summary: %s', paths{1});
     end
+end
+
+function records = exclude_stale_respiratory_rows(records,ids)
+    if isempty(records) || isempty(ids), return; end
+    stale = ismember([records.subject records.measurement],ids,'rows');
+    records(stale & records.label ~= "desat",:) = [];
 end
 
 function row = result_file_to_summary_row(result_file, config, canonical_labels)
@@ -118,27 +135,42 @@ function row = result_file_to_summary_row(result_file, config, canonical_labels)
     row.thoracic_respiratory_rhythmicity_missing_reason = thoracic.missing_reason{1};
     row.minimal_thoracic_excursion_clinician = thoracic.values(2);
     row.minimal_thoracic_excursion_status = 'not_assessed';
-    row.respiratory_artifact_revision = 0; row.analysis_respiratory_artifact_revision = 0;
-    row.respiratory_artifact_pending_reanalysis = false;
-    if isfield(loaded,'respiratory_artifact_state')
-        row.respiratory_artifact_revision = loaded.respiratory_artifact_state.revision;
-        row.respiratory_artifact_pending_reanalysis = loaded.respiratory_artifact_state.pending_reanalysis;
-    end
+    artifact_context = loaded;
     feature_file = fullfile(fileparts(result_file),[row.recording_id '_features.mat']);
-    if isfile(feature_file) && ismember('respiratory_artifact_state',who('-file',feature_file))
-        current = load(feature_file,'respiratory_artifact_state');
-        state = current.respiratory_artifact_state;
-        if state.subject ~= row.subject || state.measurement ~= row.measure
+    if isfile(feature_file)
+        requested = intersect(who('-file',feature_file),{'resp_cycles','respiratory_artifact_state','feature_cache_meta'});
+        current = struct();
+        if ~isempty(requested), current = load(feature_file,requested{:}); end
+        if isfield(current,'respiratory_artifact_state') && ...
+                (current.respiratory_artifact_state.subject ~= row.subject || current.respiratory_artifact_state.measurement ~= row.measure)
             error('MAGMA:Respiration:ArtifactIdentity','Artifact identity mismatch: %s',feature_file);
         end
-        row.respiratory_artifact_revision = state.revision;
-        row.respiratory_artifact_pending_reanalysis = state.pending_reanalysis;
+        if isfield(current,'resp_cycles'), artifact_context.resp_cycles = current.resp_cycles; end
+        if isfield(current,'respiratory_artifact_state')
+            artifact_context.respiratory_artifact_state = current.respiratory_artifact_state;
+        elseif isfield(artifact_context,'respiratory_artifact_state')
+            artifact_context = rmfield(artifact_context,'respiratory_artifact_state');
+        end
     end
-    if isfield(loaded,'analysis_respiratory_artifact_revision')
-        row.analysis_respiratory_artifact_revision = loaded.analysis_respiratory_artifact_revision;
+    N = size(get_saved_mask(loaded,'mask_automatic'),1);
+    qc = respiratory_artifact_qc(artifact_context,N,get_results_fs(loaded,config));
+    names = fieldnames(qc);
+    for k = 1:numel(names), row.(names{k}) = qc.(names{k}); end
+    if ~row.automatic_respiratory_results_current
+        % Retain desaturation summaries; respiratory values await reanalysis.
+        names = fieldnames(row);
+        for k = 1:numel(names)
+            name = names{k};
+            if (startsWith(name,'label_') || startsWith(name,'events_') || ...
+                    startsWith(name,'evidence_') || startsWith(name,'trace_') || ...
+                    startsWith(name,'overlap_') || startsWith(name,'thoracic_respiratory_rhythmicity')) && ...
+                    ~contains(name,'desat') && ~contains(name,'reviewed_coverage')
+                if isnumeric(row.(name)), row.(name) = NaN; end
+                if islogical(row.(name)), row.(name) = false; end
+            end
+        end
+        row.thoracic_respiratory_rhythmicity_missing_reason = 'respiratory_artifact_pending_reanalysis';
     end
-    row.respiratory_artifact_pending_reanalysis = row.respiratory_artifact_pending_reanalysis || ...
-        row.respiratory_artifact_revision ~= row.analysis_respiratory_artifact_revision;
     row.recording_observation_pending_reanalysis = false;
     if isfield(loaded,'recording_observations')
         row.minimal_thoracic_excursion_status = loaded.recording_observations.status;

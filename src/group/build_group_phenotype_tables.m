@@ -17,6 +17,16 @@ function outputs = build_group_phenotype_tables(group_table)
         loaded = load_phenotypes(char(result_files(i)));
         auto = read_layer(auto, i, loaded, 'automatic', schema);
         reviewed = read_layer(reviewed, i, loaded, 'reviewed', schema);
+        if ismember('automatic_respiratory_results_current',group_table.Properties.VariableNames) && ...
+                ~group_table.automatic_respiratory_results_current(i)
+            respiratory = ~ismember(schema.feature_names, ...
+                {'pattern_desaturation_fraction','minimal_thoracic_excursion_clinician'});
+            auto.values(i,respiratory) = NaN; auto.available(i,respiratory) = false;
+            reviewed.values(i,respiratory) = NaN; reviewed.available(i,respiratory) = false;
+            auto.coverage(i,respiratory) = NaN; reviewed.coverage(i,respiratory) = NaN;
+            auto.missing_reason(i,respiratory) = {'respiratory_artifact_pending_reanalysis'};
+            reviewed.missing_reason(i,respiratory) = {'respiratory_artifact_pending_reanalysis'};
+        end
     end
 
     identifiers = table(recording_id, subject, measure, subject_group, analysis_id);

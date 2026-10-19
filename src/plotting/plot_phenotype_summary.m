@@ -5,6 +5,7 @@ function fig = plot_phenotype_summary(phenotypes, config, review_history, record
 %   phenotypes - Completed phenotype bundle from build_recording_results.
 %   config     - Pipeline settings supplying figure and output options.
 %   review_history - Optional immutable rounds; each gets a numeric column.
+%   recording_context - Optional recording-level reference QC and warning state.
 %
 % Output:
 %   fig - Figure handle while plotting; empty after save_figure or when disabled.
@@ -99,8 +100,10 @@ function fig = plot_phenotype_summary(phenotypes, config, review_history, record
     end
 
     y = y + 0.4;
-    text(ax,0.025,y,'Rhythmicity is shared recording-level spectral QC; label review does not recalculate it.', ...
-        'Interpreter','none','Color',[0.35 0.35 0.35]);
+    text(ax, 0.025, y, sprintf('Reference QC | Thoracic: %s | Abdominal: %s', ...
+        reference_quality_text(recording_context, 'lungs'), ...
+        reference_quality_text(recording_context, 'diaph')), ...
+        'Interpreter', 'none', 'FontSize', 9, 'Color', [0.35 0.35 0.35]);
     artifacts_pending = isfield(recording_context,'respiratory_artifact_state') && ...
         recording_context.respiratory_artifact_state.pending_reanalysis;
     if artifacts_pending || (isfield(recording_context,'recording_observations') && ...
@@ -108,14 +111,25 @@ function fig = plot_phenotype_summary(phenotypes, config, review_history, record
         text(ax,0.5,1.3,'PENDING REANALYSIS: automatic results retain their original analysis evidence.', ...
             'HorizontalAlignment','center','Color',[0.75 0.2 0.05],'Interpreter','none');
     end
-    if ~automatic.available(23)
-        text(ax,0.025,y+1,['Thoracic rhythmicity: ' strrep(automatic.missing_reason{23},'_',' ')], ...
-            'Interpreter','none','Color',[0.35 0.35 0.35]);
-    end
     hold(ax, 'off');
     figure(fig);
     save_figure(config, 'phenotype_summary');
     fig = [];
+end
+
+function quality = reference_quality_text(recording_context, belt_name)
+% REFERENCE_QUALITY_TEXT Display saved QC categories without reclassifying them.
+
+    quality = 'Unavailable';
+    if ~isfield(recording_context, 'resp_ref') || ...
+            ~isfield(recording_context.resp_ref, belt_name) || ...
+            ~isfield(recording_context.resp_ref.(belt_name), 'reference_quality')
+        return;
+    end
+    saved_quality = char(string(recording_context.resp_ref.(belt_name).reference_quality));
+    if ~isempty(saved_quality)
+        quality = strrep(saved_quality, '_', ' ');
+    end
 end
 
 function summary = require_numeric_summary(phenotypes, layer_name)

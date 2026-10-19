@@ -17,6 +17,7 @@ function resp_cycles = extract_respiration_features(data, config)
     thoracic_suppressed = minimal_thoracic_excursion(config);
     % ---- breath series (peaks + per-breath amplitudes) ----
     resp_cycles = struct();
+    resp_cycles.artifact_intervals_idx = zeros(0,2);
     if ~isempty(idx_lungs) && ~thoracic_suppressed
         resp_cycles.lungs = extract_respiration_feature(data(:, idx_lungs), config, 'lungs');
     else
@@ -42,19 +43,21 @@ function resp_cycles = extract_respiration_features(data, config)
         if edit_lungs || edit_diaph || thoracic_present || abdominal_trace_present
             lungs_before = resp_cycles.lungs;
             diaph_before = resp_cycles.diaph;
-            [edited_lungs, edited_diaph, review_confirmed, observation] = ...
-                manual_edit_respiration_features(data, resp_cycles.lungs, resp_cycles.diaph, config);
+            [edited_lungs, edited_diaph, review_confirmed, observation, artifacts] = ...
+                manual_edit_respiration_features(data, resp_cycles.lungs, resp_cycles.diaph, config, ...
+                [], '', resp_cycles.artifact_intervals_idx);
             if review_confirmed
                 config.recording_observations = observation;
                 resp_cycles.lungs = edited_lungs;
                 resp_cycles.diaph = edited_diaph;
+                resp_cycles.artifact_intervals_idx = artifacts;
                 manual_review_performed = true;
                 manual_edits_made = ...
                     (edit_lungs && respiration_breath_landmarks_changed( ...
                         lungs_before, resp_cycles.lungs)) || ...
                     (edit_diaph && respiration_breath_landmarks_changed( ...
                         diaph_before, resp_cycles.diaph)) || ...
-                    ~isempty(edited_lungs.artifact_intervals_idx) || ~isempty(edited_diaph.artifact_intervals_idx);
+                    ~isempty(artifacts);
                 if manual_edits_made
                     review_status = 'manual_reviewed_edited';
                 else

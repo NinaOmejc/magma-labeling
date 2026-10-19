@@ -1,7 +1,7 @@
-function masks = respiratory_artifact_masks(belt,N,fs)
+function masks = respiratory_artifact_masks(belt,N,fs,ranges)
 % RESPIRATORY_ARTIFACT_MASKS Derive validity without changing saved landmarks.
-    ranges = zeros(0,2);
-    if isfield(belt,'artifact_intervals_idx'), ranges = belt.artifact_intervals_idx; end
+% Explicit shared ranges take precedence over a legacy/derived belt alias.
+    if nargin < 4, ranges = shared_respiratory_artifacts(belt,N); end
     ranges = normalize_respiratory_artifacts(ranges,N);
     bad = false(N,1);
     for i = 1:size(ranges,1), bad(ranges(i,1):ranges(i,2)) = true; end

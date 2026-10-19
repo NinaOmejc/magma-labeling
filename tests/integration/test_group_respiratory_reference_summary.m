@@ -132,6 +132,47 @@ function testSavedRespiratoryReferenceIsSummarized(testCase)
         dictionary.comparability == "not_safely_comparable_across_subjects"));
 end
 
+function testSharedArtifactQcAndStaleRespiratorySummaries(testCase)
+    root = tempname; folder = fullfile(root,'Sub5_M2'); mkdir(folder);
+    cleanup = onCleanup(@() rmdir(root,'s')); %#ok<NASGU>
+    saved = struct('subject',5,'measure',2,'config',struct('fs',10), ...
+        'label_names',{get_labels('short')},'label_available',true(1,11), ...
+        'mask_automatic',true(100,11));
+    saved.resp_cycles = struct('artifact_intervals_idx',[21 30;30 40]);
+    state = respiratory_artifact_state(saved.resp_cycles, ...
+        struct('subject',5,'measure',2,'fs',10),100);
+    state.revision = 2;
+    saved.respiratory_artifact_state = state;
+    saved.analysis_respiratory_artifact_revision = 1;
+    schema = get_phenotype_feature_schema();
+    summary = struct('version','magma_phenotype_numeric_summary_v4', ...
+        'schema_version',schema.version,'n_features',24, ...
+        'feature_names',{schema.feature_names},'values',ones(1,24), ...
+        'available',true(1,24),'coverage_fraction',ones(1,24), ...
+        'missing_reason',{repmat({''},1,24)}, ...
+        'phenotype_group',{schema.phenotype_group}, ...
+        'feature_role',{schema.feature_role},'units',{schema.units});
+    saved.phenotypes.automatic.numeric_summary = summary;
+    save(fullfile(folder,'Sub5_M2_results.mat'),'-struct','saved');
+    warning_id = 'MAGMA:Group:StaleRespiratoryArtifacts';
+    old_warning = warning('off',warning_id);
+    cleanup_warning = onCleanup(@() warning(old_warning)); %#ok<NASGU>
+    [recordings,cohort] = build_group_label_table(root,false);
+    verifyEqual(testCase,recordings.respiratory_artifact_duration_sec,2);
+    verifyEqual(testCase,recordings.respiratory_artifact_fraction,0.2);
+    verifyEqual(testCase,recordings.respiratory_artifact_n_intervals,1);
+    verifyEqual(testCase,recordings.respiratory_artifact_revision,2);
+    verifyEqual(testCase,recordings.analysis_respiratory_artifact_revision,1);
+    verifyTrue(testCase,recordings.respiratory_artifact_pending_reanalysis);
+    verifyTrue(testCase,isnan(recordings.label_rapid_fraction));
+    verifyEqual(testCase,recordings.label_desat_fraction,1);
+    values = cohort.phenotypes.summary_automatic;
+    verifyTrue(testCase,isnan(values.thoracic_respiratory_rhythmicity));
+    verifyEqual(testCase,values.pattern_desaturation_fraction,1);
+    verifyEqual(testCase,values.minimal_thoracic_excursion_clinician,1);
+    verifyEqual(testCase,width(values)-5,24);
+end
+
 function testHistoricalPeriodicNamesMapToCanonicalGroupOutputs(testCase)
     results_root = tempname;
     subject_dir = fullfile(results_root, 'Sub9_M1');

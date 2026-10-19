@@ -28,6 +28,7 @@ function plot_reviewed_label_masks(results, config)
     names = {'reviewed', 'comparison'};
     for i = 1:2
         view = config;
+        view.LabelMask.artifact_context = results;
         view.LabelMask.basename = sprintf('label_mask_%s_round_%d', names{i}, round_id);
         view.LabelMask.title = sprintf('Label %s | Review round %d', names{i}, round_id);
         if i == 2

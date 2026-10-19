@@ -4,6 +4,7 @@ function [events, peak_t, panel_peaks] = build_sigh_breath_candidates(resp_cycle
     events = normalize_review_events(empty_events(), fs);
     peak_t = zeros(0, 1);
     panel_peaks = nan(0, 2);
+    artifacts = shared_respiratory_artifacts(resp_cycles,N);
     belt_names = {'lungs', 'diaph'};
     for i = 1:numel(belt_names)
         name = belt_names{i};
@@ -27,7 +28,7 @@ function [events, peak_t, panel_peaks] = build_sigh_breath_candidates(resp_cycle
             amplitude = belt.amp(:);
             valid = valid & isfinite(amplitude) & amplitude > 0;
         end
-        masks = respiratory_artifact_masks(belt,N,fs);
+        masks = respiratory_artifact_masks(belt,N,fs,artifacts);
         if numel(masks.breath_valid) == numel(valid), valid = valid & masks.breath_valid; end
         belt_peaks = belt_peaks(valid);
         belt_peaks = unique(sort(belt_peaks));

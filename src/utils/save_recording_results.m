@@ -20,6 +20,12 @@ function results = save_recording_results(results, data_raw, data, config)
     if full_analysis && results.analysis_respiratory_artifact_revision ~= results.respiratory_artifact_state.revision
         error('MAGMA:Respiration:ArtifactRevisionChanged','Feature annotations changed during analysis; rerun this recording.');
     end
+    if full_analysis
+        % These labels were computed at this revision; cache pending clears
+        % only after every required output has been saved successfully.
+        results.respiratory_artifact_state.pending_reanalysis = false;
+    end
+    results.respiratory_artifact_qc = respiratory_artifact_qc(results,size(data,1),config.fs);
     save(fullfile(config.sub_results_path, config.sub_results_filename), ...
         '-struct', 'results');
     if get_config_value(config, 'HDF5', 'enabled', true)

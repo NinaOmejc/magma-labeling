@@ -53,13 +53,13 @@ function [events, diagnostics, candidate_events] = detect_apnea( ...
     artifact_config = config;
     if isfield(resp_features,'respiratory_artifact_state'), artifact_config.respiratory_artifact_state = resp_features.respiratory_artifact_state; end
     artifacts = respiratory_artifact_state(struct(),artifact_config,N);
+    clean = respiratory_artifact_window_valid(artifacts.artifact_intervals_idx,t_grid,min_dur_sec,config.fs);
     for key = {'lungs','diaph'}
         name = key{1};
-        clean = respiratory_artifact_window_valid(artifacts.(name),t_grid,min_dur_sec,config.fs);
         raw_excursion.(name).evaluable_endpoint_mask = raw_excursion.(name).evaluable_endpoint_mask & clean;
         raw_excursion.(name).pass_endpoint_mask = raw_excursion.(name).pass_endpoint_mask & clean;
         raw_excursion.(name).excursion_ratio(~clean) = NaN;
-        if ~isempty(artifacts.(name))
+        if ~isempty(artifacts.artifact_intervals_idx)
             raw_excursion.(name).valid = raw_excursion.(name).valid && any(raw_excursion.(name).evaluable_endpoint_mask);
         end
     end

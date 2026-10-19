@@ -136,7 +136,7 @@ function [resp_cycles, cancelled] = load_or_extract_respiratory_cycles(data, con
     end
 
     state = respiratory_artifact_state(resp_cycles,config,size(data,1));
-    if replacing_cache || ~isempty(state.lungs) || ~isempty(state.diaph)
+    if replacing_cache || ~isempty(state.artifact_intervals_idx)
         state.revision = previous_state.revision+1; state.pending_reanalysis = true;
         state.timestamp = char(datetime('now','TimeZone','UTC','Format','yyyy-MM-dd HH:mm:ss.SSS XXX'));
         state.reviewer_role = get_config_value(config,'LabelEdit','reviewer_role','researcher');
@@ -159,59 +159,51 @@ function [cycles,cancelled] = accept_cached_features(cycles,cached,meta,data,con
     original = cached.resp_cycles;
     cancelled = false;
     N = size(data,1);
-    for key = {'lungs','diaph'}
-        name = key{1};
-        if ~isfield(cycles.(name),'artifact_intervals_idx')
-            cycles.(name).artifact_intervals_idx = zeros(0,2); dirty = true;
-        end
-        cycles.(name).artifact_intervals_idx = normalize_respiratory_artifacts(cycles.(name).artifact_intervals_idx,N);
-    end
+    legacy = ~isfield(cycles,'artifact_intervals_idx');
+    legacy_state = struct();
+    if isfield(cached,'respiratory_artifact_state'), legacy_state = cached.respiratory_artifact_state; end
+    [cycles,migrated] = migrate_respiratory_artifacts(cycles,N,legacy_state);
+    dirty = dirty || legacy || migrated;
+    shared_semantics_changed = legacy && ~isempty(cycles.artifact_intervals_idx);
     state = respiratory_artifact_state(cycles,config,N);
     cycles.artifact_annotation = artifact_metadata(state);
     if get_config_value(config,'resp','recheck_cached',false)
-        backup_dir = fullfile(fileparts(filename),'feature_review_backups');
-        ensure_output_directory(backup_dir);
-        [~,base] = fileparts(filename);
-        [~,unique_name] = fileparts(tempname(backup_dir));
-        backup = fullfile(backup_dir,[base '_' unique_name '.mat']);
-        [ok,message] = copyfile(filename,backup);
-        if ~ok || ~isequaln(load(filename),load(backup))
-            error('MAGMA:Respiration:BackupFailed','Cannot verify feature backup %s: %s',backup,message);
-        end
-        log_message(config,1,'Respiratory feature backup: %s',backup);
+        % Reviewed atomically replaces this cache; Cancel leaves it untouched.
         [~,~,accepted] = manual_edit_respiration_features(data,cycles.lungs,cycles.diaph, ...
-            config,@commit_review,filename);
+            config,@commit_review,filename,cycles.artifact_intervals_idx);
         if ~accepted, cycles = original; cancelled = true; return; end
         % The cache callback ran within the observation transaction.
         saved = load(filename); cycles = saved.resp_cycles;
         respiratory_artifact_checkpoint('publish',config,saved.respiratory_artifact_state);
     elseif dirty || ~isfield(cached,'respiratory_artifact_state')
+        if shared_semantics_changed
+            state = advance_artifact_revision(state,config);
+            state.reviewer_role = 'system'; state.annotation_source = 'respiratory_artifact_migration';
+            cycles.artifact_annotation = artifact_metadata(state);
+        end
         cached.resp_cycles = cycles; cached.feature_cache_meta = meta;
         cached.recording_observations = config.recording_observations;
         cached.respiratory_artifact_state = state;
         atomic_save_mat(filename,cached);
+        if shared_semantics_changed, respiratory_artifact_checkpoint('publish',config,state); end
     end
 
-    function result = commit_review(lungs,diaph,observation)
+    function result = commit_review(lungs,diaph,observation,artifacts)
         current = respiratory_artifact_checkpoint('load',config);
         if current.revision ~= state.revision
             error('MAGMA:Respiration:ChangedDuringReview','Respiratory features changed in another session; reopen before saving.');
         end
-        changed = respiration_breath_landmarks_changed(cycles.lungs,lungs) || ...
+        changed = shared_semantics_changed || respiration_breath_landmarks_changed(cycles.lungs,lungs) || ...
             respiration_breath_landmarks_changed(cycles.diaph,diaph) || ...
-            ~isequal(cycles.lungs.artifact_intervals_idx,lungs.artifact_intervals_idx) || ...
-            ~isequal(cycles.diaph.artifact_intervals_idx,diaph.artifact_intervals_idx);
+            ~isequal(cycles.artifact_intervals_idx,artifacts);
         cycles.lungs = lungs; cycles.diaph = diaph;
+        cycles.artifact_intervals_idx = artifacts;
         cycles.provenance.manual_review_performed = true;
         cycles.provenance.manual_edits_made = cycles.provenance.manual_edits_made || changed;
         cycles.provenance.review_status = 'manual_reviewed_unchanged';
         if cycles.provenance.manual_edits_made, cycles.provenance.review_status = 'manual_reviewed_edited'; end
         if changed
-            state.revision = state.revision + 1;
-            state.timestamp = char(datetime('now','TimeZone','UTC','Format','yyyy-MM-dd HH:mm:ss.SSS XXX'));
-            state.reviewer_role = get_config_value(config,'LabelEdit','reviewer_role','researcher');
-            state.annotation_source = 'respiration_feature_gui';
-            state.pending_reanalysis = true;
+            state = advance_artifact_revision(state,config);
         end
         cycles.artifact_annotation = artifact_metadata(state);
         state = respiratory_artifact_state(cycles,config,N);
@@ -224,7 +216,16 @@ function [cycles,cancelled] = accept_cached_features(cycles,cached,meta,data,con
 end
 
 function metadata = artifact_metadata(state)
-    metadata = rmfield(state,{'subject','measurement','lungs','diaph','lungs_evidence','diaph_evidence'});
+    metadata = rmfield(state,{'subject','measurement','artifact_intervals_idx','evidence_intervals_idx', ...
+        'lungs','diaph','lungs_evidence','diaph_evidence'});
+end
+
+function state = advance_artifact_revision(state,config)
+    state.revision = state.revision + 1;
+    state.timestamp = char(datetime('now','TimeZone','UTC','Format','yyyy-MM-dd HH:mm:ss.SSS XXX'));
+    state.reviewer_role = get_config_value(config,'LabelEdit','reviewer_role','researcher');
+    state.annotation_source = 'respiration_feature_gui';
+    state.pending_reanalysis = true;
 end
 
 function ok = is_amplitude_method_only_cache_mismatch( ...

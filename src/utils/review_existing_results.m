@@ -43,6 +43,7 @@ function [results, cancelled] = review_existing_results(data, existing, config)
 
     results = existing;
     results.respiratory_artifact_state = respiratory_artifact_checkpoint('load',config);
+    results.resp_cycles = migrate_respiratory_artifacts(results.resp_cycles,size(data,1),results.respiratory_artifact_state);
     if ~isfield(results,'analysis_respiratory_artifact_revision'), results.analysis_respiratory_artifact_revision = 0; end
     results.events_reviewed = annotations.events_reviewed;
     results.mask_reviewed = annotations.mask_reviewed;

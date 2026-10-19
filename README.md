@@ -90,10 +90,10 @@ Reviewed coverage is stored explicitly, so unreviewed data are not interpreted a
 In respiratory review, blue dots are editable trough landmarks between red
 peaks. They are not explicit hold boundaries.
 
-Respiratory review also supports independent per-belt **Mark artifact** intervals.
+Respiratory review supports shared **Mark artifact** intervals that exclude both belts.
 Use `config.resp.recheck_cached = true` to reopen saved reviewed landmarks.
 See [Rechecking respiratory features](docs/RESPIRATORY_ARTIFACTS.md) for the
-backup, cancellation, reanalysis, and revision workflow.
+in-place atomic save, cancellation, reanalysis, and revision workflow.
 
 ## Tests
 

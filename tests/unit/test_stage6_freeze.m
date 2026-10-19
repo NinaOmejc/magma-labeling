@@ -748,7 +748,7 @@ function testHdf5RoundTripPreservesOrderMasksNaNsAndRespiration(testCase)
     verifyFalse(testCase, hdf5_path_exists(filename, ...
         '/respiration/diagnostic_signals'));
     verifyEqual(testCase, read_hdf5_text(filename, ...
-        '/meta/export_schema_version'), {'magma_ml_hdf5_v18'});
+        '/meta/export_schema_version'), {'magma_ml_hdf5_v19'});
     layers = {'automatic', 'reviewed'};
     canonical_phenotypes = {'hyperventilation_like', ...
         'periodic_deep_sighing', 'thoracic_dominant_breathing', ...
@@ -943,6 +943,41 @@ function testHdf5MlExportKeepsNativeAndAddsFilteredCanonicalBundle(testCase)
     verifyTrue(testCase, isequaln(preprocessed, original_preprocessed));
 end
 
+function testHdf5ArtifactsAlignWithMlAndInvalidateStaleTraining(testCase)
+    config = make_test_config(); N = 2001;
+    raw = ones(N,numel(config.data_columns)); raw(:,config.channels.spo2_idx) = 96;
+    results = export_fixture(config,N);
+    results.resp_cycles.artifact_intervals_idx = [801 1000];
+    state = respiratory_artifact_state(results.resp_cycles,config,N); state.revision = 1;
+    results.respiratory_artifact_state = state; results.analysis_respiratory_artifact_revision = 1;
+    filename = [tempname '.h5']; cleanup = onCleanup(@() delete_if_present(filename)); %#ok<NASGU>
+    export_results_hdf5(filename,results,raw,raw);
+    time = h5read(filename,'/signals/ml/time');
+    valid = logical(h5read(filename,'/signals/ml/respiratory_artifact_valid_mask'));
+    expected = respiratory_artifact_ml_validity(state,N,config.fs,time,1);
+    verifyEqual(testCase,valid,expected); verifyNumElements(testCase,valid,numel(time));
+    data = h5read(filename,'/signals/ml/data');
+    verifyTrue(testCase,all(isnan(data(~valid,1:2)),'all'));
+    verifyTrue(testCase,all(isfinite(data(:,3))));
+    verifyEqual(testCase,h5read(filename,'/signals/preprocessed'),single(raw));
+    verifyEqual(testCase,h5read(filename,'/qc/respiratory_artifacts/respiratory_artifact_duration_sec'),1);
+    native_labels = h5read(filename,'/labels/automatic/mask');
+    assessable = h5read(filename,'/labels/automatic/assessable_mask');
+    original_training = logical(h5read(filename,'/labels/automatic/ml_training_valid_mask'));
+    state.revision = 2; state.pending_reanalysis = true; state.artifact_intervals_idx = [1201 1600];
+    write_respiratory_artifact_hdf5(filename,state);
+    verifyEqual(testCase,h5read(filename,'/breaths/artifact_intervals_idx'),[1201 1600]);
+    verifyEqual(testCase,h5read(filename,'/breaths/artifact_annotation/revision'),2);
+    verifyEqual(testCase,h5read(filename,'/breaths/artifact_annotation/pending_reanalysis'),uint8(1));
+    verifyEqual(testCase,h5read(filename,'/observations/analysis_respiratory_artifact_revision'),1);
+    verifyEqual(testCase,h5read(filename,'/qc/respiratory_artifacts/automatic_respiratory_training_eligible'),uint8(0));
+    training = logical(h5read(filename,'/labels/automatic/ml_training_valid_mask'));
+    verifyFalse(testCase,any(training(:,1:10),'all'));
+    verifyEqual(testCase,training(:,11),original_training(:,11));
+    verifyEqual(testCase,h5read(filename,'/labels/automatic/mask'),native_labels);
+    verifyEqual(testCase,h5read(filename,'/labels/automatic/assessable_mask'),assessable);
+end
+
 function testHdf5MlExportUsesConfiguredFiveHertzRate(testCase)
     config = make_test_config();
     config.HDF5.ml_sampling_hz = 5;
@@ -1011,7 +1046,10 @@ function testHdf5MlExportFillsGapsAndOmitsUnusableChannels(testCase)
 
     ml_data = h5read(filename, '/signals/ml/data');
     verifySize(testCase, ml_data, [51 2]);
-    verifyTrue(testCase, all(isfinite(ml_data(:))));
+    source_valid = logical(h5read(filename,'/signals/ml/source_valid_mask'));
+    verifyTrue(testCase,all(isfinite(ml_data(source_valid))));
+    verifyTrue(testCase,all(isnan(ml_data(~source_valid))));
+    verifyFalse(testCase,all(source_valid(:)));
     verifyEqual(testCase, read_hdf5_text(filename, ...
         '/signals/ml/channel_roles'), {'diaph', 'spo2'});
     verifyTrue(testCase, isequaln(preprocessed, original_preprocessed));
@@ -1344,6 +1382,7 @@ function results = export_fixture(config, N)
         'manual_review_performed', false, ...
         'manual_edits_made', false, ...
         'loaded_from_cache', false));
+    results.resp_cycles.artifact_intervals_idx = zeros(0,2); % Explicit known empty annotation.
     results.session_reference = get_session_reference_interval(N, config);
     raw_reference = struct('available', true, 'quality', 'good', ...
         'n_samples', 20, 'finite_fraction', 1, 'excursion', 2);

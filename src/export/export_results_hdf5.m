@@ -9,7 +9,7 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
 %   signals_raw          - Nsample x Nchannel raw physiological signal matrix.
 %   signals_preprocessed - Nsample x Nchannel processed signal matrix.
 %
-% The v17 file stores native signals/time under /signals and /time, plus an
+% The v19 file stores native signals/time under /signals and /time, plus an
 % export-only lower-rate ML signal bundle under /signals/ml; reviewed breath
 % cycles under /breaths; derived respiration under /respiration; detector
 % evidence under /diagnostics; automatic/reviewed label layers under /labels;
@@ -19,7 +19,7 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
 
     filename = char(string(filename));
     validate_export_inputs(filename, results, signals_raw, signals_preprocessed);
-    export_schema_version = 'magma_ml_hdf5_v18';
+    export_schema_version = 'magma_ml_hdf5_v19';
     out_dir = fileparts(filename);
     if ~isempty(out_dir) && ~isfolder(out_dir)
         mkdir(out_dir);
@@ -31,6 +31,14 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
     fs = results.config.fs;
     N = size(signals_preprocessed, 1);
     options = hdf5_export_options(results.config);
+    [artifact_qc,artifact_state] = respiratory_artifact_qc(results,N,fs);
+    if ~artifact_qc.automatic_respiratory_results_current
+        warning('MAGMA:HDF5:StaleRespiratoryArtifacts', ...
+            'Respiratory results are stale; exported ML respiratory training masks exclude them.');
+    elseif ~artifact_qc.respiratory_artifact_annotation_known
+        warning('MAGMA:HDF5:MissingArtifactMetadata', ...
+            'Legacy artifact metadata are missing; respiratory ML validity is unknown and training masks exclude it.');
+    end
     if options.include_raw_signals
         write_numeric(filename, '/signals/raw', ...
             cast_export_signal(signals_raw, options.signal_datatype), options);
@@ -43,12 +51,16 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
     write_numeric(filename, '/time', (0:N-1)' / fs, options);
     if options.include_ml_signals
         ml = build_ml_signal_export(signals_preprocessed, results.config, ...
-            options.ml_sampling_hz);
+            options.ml_sampling_hz,artifact_state);
         write_numeric(filename, '/signals/ml/data', ...
             cast_export_signal(ml.data, options.signal_datatype), options);
         write_numeric(filename, '/signals/ml/time', ml.time, options);
         write_numeric(filename, '/signals/ml/fs', ml.fs, options);
         write_numeric(filename, '/signals/ml/source_fs', ml.source_fs, options);
+        write_numeric(filename,'/signals/ml/resampling_filter_half_support_sec',ml.filter_half_support_sec,options);
+        write_numeric(filename,'/signals/ml/source_valid_mask',uint8(ml.source_valid_mask),options);
+        write_numeric(filename,'/signals/ml/channel_valid_mask',uint8(ml.channel_valid_mask),options);
+        write_numeric(filename,'/signals/ml/respiratory_artifact_valid_mask',uint8(ml.artifact_valid_mask),options);
         write_text(filename, '/signals/ml/channel_names', ml.channel_names);
         write_text(filename, '/signals/ml/channel_roles', ml.channel_roles);
         write_numeric(filename, '/signals/ml/source_channel_indices', ...
@@ -58,7 +70,10 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
             ml.resampling_method);
     end
 
-    write_value(filename, '/breaths', results.resp_cycles, options);
+    legacy_state = struct();
+    if isfield(results,'respiratory_artifact_state'), legacy_state = results.respiratory_artifact_state; end
+    export_cycles = migrate_respiratory_artifacts(results.resp_cycles,[],legacy_state);
+    write_value(filename, '/breaths', export_cycles, options);
     write_value(filename, '/respiration', results.resp_features, options);
     write_value(filename, '/diagnostics', ...
         results.detector_diagnostics, options);
@@ -143,12 +158,8 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
     observation_config.subject = results.subject; observation_config.measure = results.measure;
     observation = recording_observation('default', observation_config);
     analysis = observation;
-    if isfield(results,'respiratory_artifact_state')
-        write_respiratory_artifact_hdf5(filename,results.respiratory_artifact_state);
-    end
-    if isfield(results,'analysis_respiratory_artifact_revision')
-        write_numeric(filename,'/observations/analysis_respiratory_artifact_revision',results.analysis_respiratory_artifact_revision,options);
-    end
+    write_numeric(filename,'/observations/analysis_respiratory_artifact_revision',artifact_qc.analysis_respiratory_artifact_revision,options);
+    write_respiratory_artifact_hdf5(filename,artifact_state);
     if isfield(results, 'recording_observations'), observation = results.recording_observations; end
     if isfield(results, 'analysis_recording_observations'), analysis = results.analysis_recording_observations; end
     write_recording_observation_hdf5(filename, observation, analysis);
@@ -657,7 +668,7 @@ function options = hdf5_export_options(config)
     options.ml_sampling_hz = double(ml_sampling_hz);
 end
 
-function ml = build_ml_signal_export(preprocessed, config, target_fs)
+function ml = build_ml_signal_export(preprocessed, config, target_fs,artifact_state)
 % BUILD_ML_SIGNAL_EXPORT Construct the export-only lower-rate signal bundle.
 % Only resolved diaphragm, lungs, and SpO2 channels are considered. A channel
 % with fewer than two finite samples is omitted; other non-finite gaps are
@@ -670,11 +681,16 @@ function ml = build_ml_signal_export(preprocessed, config, target_fs)
     [p, q] = rat(ratio, 1e-12);
     output_count = floor((size(preprocessed, 1) - 1) * p / q) + 1;
     output_count = max(0, output_count);
+    time = (0:output_count-1)'/target_fs;
+    filter_half_support_sec = 10*max(p,q)/p/source_fs;
+    if p == q, filter_half_support_sec = 0; end
+    artifact_valid = respiratory_artifact_ml_validity(artifact_state,size(preprocessed,1),source_fs,time,filter_half_support_sec);
 
     data = zeros(output_count, 0);
     kept_names = cell(0, 1);
     kept_roles = cell(0, 1);
     kept_indices = zeros(0, 1);
+    source_valid = false(output_count,0); channel_valid = false(output_count,0);
     for i = 1:numel(indices)
         [prepared, usable] = prepare_channel_for_resampling( ...
             preprocessed(:, indices(i)));
@@ -683,6 +699,14 @@ function ml = build_ml_signal_export(preprocessed, config, target_fs)
         end
         data(:, end+1) = resample_ml_channel( ...
             prepared, p, q, output_count); %#ok<AGROW>
+        bad = ~isfinite(preprocessed(:,indices(i)));
+        edges = diff([false;bad;false]);
+        missing = struct('artifact_intervals_idx',[find(edges==1),find(edges==-1)-1]);
+        clean = respiratory_artifact_ml_validity(missing,size(preprocessed,1),source_fs,time,filter_half_support_sec);
+        source_valid(:,end+1) = clean; %#ok<AGROW>
+        if ismember(roles{i},{'lungs','diaph'}), clean = clean & artifact_valid; end
+        channel_valid(:,end+1) = clean; %#ok<AGROW>
+        data(~clean,end) = NaN;
         kept_names{end+1, 1} = names{i}; %#ok<AGROW>
         kept_roles{end+1, 1} = roles{i}; %#ok<AGROW>
         kept_indices(end+1, 1) = indices(i); %#ok<AGROW>
@@ -690,12 +714,15 @@ function ml = build_ml_signal_export(preprocessed, config, target_fs)
 
     ml = struct();
     ml.data = data;
-    ml.time = (0:output_count-1)' / target_fs;
+    ml.time = time;
     ml.fs = target_fs;
     ml.source_fs = source_fs;
     ml.channel_names = kept_names;
     ml.channel_roles = kept_roles;
     ml.source_channel_indices = kept_indices;
+    ml.source_valid_mask = source_valid; ml.channel_valid_mask = channel_valid;
+    ml.artifact_valid_mask = artifact_valid;
+    ml.filter_half_support_sec = filter_half_support_sec;
     ml.source = 'signals/preprocessed';
     ml.resampling_method = ...
         'MATLAB resample polyphase FIR with endpoint-value padding';
