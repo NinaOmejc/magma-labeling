@@ -2,9 +2,9 @@
 
 MAGMA separates two analysis levels:
 
-1. **Level 1 — time-resolved physiological labels and evidence.** Labels,
+1. **Level 1 â€” time-resolved physiological labels and evidence.** Labels,
    events, assessability masks, breath evidence, and detector diagnostics.
-2. **Level 2 — recording-level phenotype and respiratory-pattern evidence.**
+2. **Level 2 â€” recording-level phenotype and respiratory-pattern evidence.**
    Detailed profiles and a fixed 24-value numeric summary are provided for
    automatic and reviewed annotation layers.
 
@@ -231,10 +231,12 @@ Their AUREA nonperiodic-power algorithm is different; the present ratio is not
 their published exact metric and has no claimed clinical validation.
 
 `minimal_thoracic_excursion_clinician` reuses the authoritative observation:
-`observed=1`, explicitly `not_observed=0`, and `not_assessed=NaN`. The two-state
-GUI defaults visually to Not observed; acceptance records that assessment with
-timestamp, actual configured reviewer role, source and revision. Cancel/X leaves
-metadata unchanged. Set `config.LabelEdit.reviewer_role = 'clinician'` for a
+`observed=1`, explicitly `not_observed=0`, and `not_assessed=NaN`. Both GUIs
+offer Not assessed / Not observed / Observed and preserve the saved status
+unless explicitly changed. Accepting a peak/trough or label review alone does
+not assess thoracic excursion or increment its observation revision. Explicit
+changes retain timestamp, reviewer role, source, revision, and reanalysis handling.
+Cancel/X leaves metadata unchanged. Set `config.LabelEdit.reviewer_role = 'clinician'` for a
 clinician's session. Legacy/never-assessed records and disabled controls for a
 technically missing belt do not silently become assessed negatives.
 

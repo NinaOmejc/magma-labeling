@@ -25,7 +25,8 @@ function [b_l, b_d, review_confirmed, recording_observations] = manual_edit_resp
     pre_session_lungs = b_l;
     pre_session_diaph = b_d;
     review_confirmed = false;
-    observation_value = strcmp(recording_observations.status, 'observed');
+    observation_states = {'not_assessed','not_observed','observed'};
+    observation_value = recording_observations.status;
     if ~isfield(b_l,'artifact_intervals_idx'), b_l.artifact_intervals_idx = zeros(0,2); end
     if ~isfield(b_d,'artifact_intervals_idx'), b_d.artifact_intervals_idx = zeros(0,2); end
     b_l.artifact_intervals_idx = normalize_respiratory_artifacts(b_l.artifact_intervals_idx,N);
@@ -79,9 +80,9 @@ function [b_l, b_d, review_confirmed, recording_observations] = manual_edit_resp
         'String','Minimal or absent thoracic excursion');
     observation_selector = uicontrol(fh, 'Style', 'popupmenu', ...
         'Units', 'normalized', 'Position', [0.65 0.078 0.31 0.028], ...
-        'String', {'Not observed','Observed'}, ...
+        'String', {'Not assessed','Not observed','Observed'}, ...
         'Tag', 'minimal_thoracic_excursion', ...
-        'Value', 1+strcmp(recording_observations.status, 'observed'), ...
+        'Value', find(strcmp(observation_states,recording_observations.status),1), ...
         'Callback', @(~,~) observation_changed());
     if ~thoracic_present, set(observation_selector, 'Enable', 'off'); end
     status_text = uicontrol(fh, 'Style', 'text', 'Units', 'normalized', ...
@@ -183,8 +184,10 @@ function [b_l, b_d, review_confirmed, recording_observations] = manual_edit_resp
     end
 
     function observation_changed()
-        if get(observation_selector, 'Value') == 2
+        if get(observation_selector, 'Value') == 3
             show_status('Thoracic breath evidence will be excluded; valid abdominal evidence remains usable.', false);
+        elseif get(observation_selector,'Value') == 1
+            show_status('Thoracic excursion is not assessed. Changing a saved assessment requires reanalysis.',false);
         else
             show_status('Thoracic evidence will be eligible after re-extraction. Existing results require reanalysis.', false);
         end
@@ -208,7 +211,7 @@ function [b_l, b_d, review_confirmed, recording_observations] = manual_edit_resp
 
         b_l.artifact_intervals_idx = normalize_respiratory_artifacts(b_l.artifact_intervals_idx,N);
         b_d.artifact_intervals_idx = normalize_respiratory_artifacts(b_d.artifact_intervals_idx,N);
-        observation_value = get(observation_selector, 'Value') == 2;
+        observation_value = observation_states{get(observation_selector,'Value')};
         review_confirmed = true;
         if isgraphics(fh)
             uiresume(fh);
@@ -223,7 +226,7 @@ function [b_l, b_d, review_confirmed, recording_observations] = manual_edit_resp
         message = '';
         issue = struct();
         belt_name = '';
-        if edit_lungs && get(observation_selector, 'Value') ~= 2
+        if edit_lungs && get(observation_selector, 'Value') ~= 3
             [valid, message, issue] = ...
                 validate_respiration_cycle_landmarks(b_l);
             belt_name = 'Resp-Lungs';
@@ -257,7 +260,7 @@ function [b_l, b_d, review_confirmed, recording_observations] = manual_edit_resp
     % CANCEL_REVIEW Reject this editing session and close the review figure.
 
         review_confirmed = false;
-        observation_value = strcmp(recording_observations.status, 'observed');
+        observation_value = recording_observations.status;
         if isgraphics(fh)
             uiresume(fh);
             delete(fh);
@@ -317,7 +320,7 @@ function [b_l, b_d, review_confirmed, recording_observations] = manual_edit_resp
             artifact_drag = struct('belt',belt,'ax',ax,'start',get_click_time(evt,ax));
             return;
         end
-        if strcmp(belt, 'lungs') && get(observation_selector, 'Value') == 2, return; end
+        if strcmp(belt, 'lungs') && get(observation_selector, 'Value') == 3, return; end
         if ~strcmp(get(fh, 'SelectionType'), 'normal')
             return;
         end
@@ -438,7 +441,7 @@ function [b_l, b_d, review_confirmed, recording_observations] = manual_edit_resp
     function select_trough(evt, ax, belt)
     % SELECT_TROUGH Select the existing trough and its surrounding peak samples.
 
-        if strcmp(belt, 'lungs') && get(observation_selector, 'Value') == 2, return; end
+        if strcmp(belt, 'lungs') && get(observation_selector, 'Value') == 3, return; end
         if ~strcmp(edit_mode, 'trough') || ...
                 ~strcmp(get(fh, 'SelectionType'), 'normal')
             return;

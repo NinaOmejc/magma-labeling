@@ -117,7 +117,7 @@ function testFeatureGuiWorksWithNoPeaksAndCancelDoesNotSave(testCase)
     verifyEqual(testCase, recording_observation('load', config).status, 'observed');
 end
 
-function testGuiDefaultNegativeIsExplicitlyCommittedOnlyOnAcceptance(testCase)
+function testExplicitGuiNegativeIsCommittedOnlyOnAcceptance(testCase)
     [config,cleanup] = fixture(); %#ok<ASGLU>
     config.execution.mode = 'review_only';
     cycles = struct('lungs',empty_respiration_feature('lungs'),'diaph',empty_respiration_feature('diaph'));
@@ -133,10 +133,50 @@ function testGuiDefaultNegativeIsExplicitlyCommittedOnlyOnAcceptance(testCase)
     driver = gui_driver(false,false,'Done');
     cleanup_timer = onCleanup(@() stop_driver(driver)); %#ok<NASGU>
     [~,info] = manual_edit_label_events(data,cycles,config,sets);
-    verifyEqual(testCase,reshape(driver.UserData.options,1,[]),{'Not observed','Observed'});
+    verifyEqual(testCase,reshape(driver.UserData.options,1,[]),{'Not assessed','Not observed','Observed'});
     verifyEqual(testCase,info.recording_observations.status,'not_observed');
     verifyEqual(testCase,info.review_history(end).recording_observation_change.before.status,'not_assessed');
     verifyEqual(testCase,info.review_history(end).recording_observation_change.after.status,'not_observed');
+end
+
+function testAcceptFeatureGuiWithoutAssessingPreservesUnassessed(testCase)
+    [config,cleanup] = fixture(); %#ok<ASGLU>
+    t = (0:200)'/config.fs; data = zeros(numel(t),6);
+    data(:,4) = sin(2*pi*.25*t); data(:,6) = data(:,4);
+    lungs = extract_respiration_feature(data(:,4),config,'lungs');
+    diaph = extract_respiration_feature(data(:,6),config,'diaph');
+    lungs = set_respiration_trough_override(lungs,lungs.peak_idx(2),lungs.peak_idx(3),lungs.trough_idx(2)+1,config);
+    lungs.artifact_intervals_idx = [40 60];
+    before = recording_observation('load',config);
+    driver = gui_driver('not_assessed',[],'Reviewed');
+    cleanup_timer = onCleanup(@() stop_driver(driver)); %#ok<NASGU>
+    [after_lungs,after_diaph,accepted,observation] = manual_edit_respiration_features(data,lungs,diaph,config);
+    verifyTrue(testCase,accepted); verifyEqual(testCase,driver.UserData.status,'not_assessed');
+    verifyEqual(testCase,observation,before); verifyEqual(testCase,recording_observation('load',config),before);
+    verifyEqual(testCase,after_lungs,lungs); verifyEqual(testCase,after_diaph,diaph);
+    phenotype = build_thoracic_excursion_phenotype(struct('recording_observations',observation));
+    verifyTrue(testCase,isnan(phenotype.values(2))); verifyFalse(testCase,phenotype.available(2));
+end
+
+function testAcceptLabelGuiWithoutAssessingPreservesUnassessed(testCase)
+    [config,cleanup] = fixture(); %#ok<ASGLU>
+    config.execution.mode = 'review_only';
+    cycles = struct('lungs',empty_respiration_feature('lungs'),'diaph',empty_respiration_feature('diaph'));
+    defs = manual_label_definitions(); sets = struct();
+    for i = 1:numel(defs), sets.(defs(i).field) = empty_events(); end
+    before = recording_observation('load',config);
+    driver = gui_driver('not_assessed',[],'Done');
+    cleanup_timer = onCleanup(@() stop_driver(driver)); %#ok<NASGU>
+    [~,info] = manual_edit_label_events(zeros(40,6),cycles,config,sets);
+    verifyFalse(testCase,info.cancelled); verifyEqual(testCase,driver.UserData.status,'not_assessed');
+    verifyEqual(testCase,info.recording_observations,before);
+    verifyEqual(testCase,recording_observation('load',config),before);
+    verifyEqual(testCase,info.review_history(end).recording_observations,before);
+    verifyEmpty(testCase,info.review_history(end).recording_observation_change);
+    checkpoint = load(info.edit_file);
+    verifyEqual(testCase,checkpoint.manual_label_review_history,info.review_history);
+    phenotype = build_thoracic_excursion_phenotype(struct('recording_observations',info.recording_observations));
+    verifyTrue(testCase,isnan(phenotype.values(2))); verifyFalse(testCase,phenotype.available(2));
 end
 
 function testLabelGuiSharesFlagAndRecordsOnlyAcceptedChanges(testCase)
@@ -182,6 +222,24 @@ function testLabelGuiSharesFlagAndRecordsOnlyAcceptedChanges(testCase)
     verifyEqual(testCase, change.after.status, 'not_observed');
     checkpoint = load(info.edit_file);
     verifyEqual(testCase, checkpoint.manual_label_review_history, info.review_history);
+end
+
+function testLabelGuiCanExplicitlyReturnToUnassessed(testCase)
+    [config,cleanup] = fixture(); %#ok<ASGLU>
+    config.execution.mode = 'review_only';
+    before = recording_observation('set',config,true,'respiration_feature_gui',0);
+    cycles = struct('lungs',empty_respiration_feature('lungs'),'diaph',empty_respiration_feature('diaph'));
+    defs = manual_label_definitions(); sets = struct();
+    for i = 1:numel(defs), sets.(defs(i).field) = empty_events(); end
+    driver = gui_driver('observed','not_assessed','Done');
+    cleanup_timer = onCleanup(@() stop_driver(driver)); %#ok<NASGU>
+    [~,info] = manual_edit_label_events(zeros(40,6),cycles,config,sets);
+    verifyFalse(testCase,info.cancelled); verifyEqual(testCase,info.recording_observations.status,'not_assessed');
+    verifyEqual(testCase,info.recording_observations.revision,before.revision+1);
+    verifyTrue(testCase,info.recording_observations.pending_reanalysis);
+    verifyEqual(testCase,info.review_history(end).recording_observation_change.before,before);
+    phenotype = build_thoracic_excursion_phenotype(struct('recording_observations',info.recording_observations));
+    verifyTrue(testCase,isnan(phenotype.values(2)));
 end
 
 function testPendingClearsOnlyForSavedFullAnalysisAtCurrentRevision(testCase)
@@ -298,12 +356,20 @@ function drive_gui(driver, expected, target, button)
         finish = findall(fig, 'Style', 'pushbutton', 'String', button);
         if isempty(finish), return; end
     end
-    state.seen = get(control, 'Value') == 2;
+    states = {'not_assessed','not_observed','observed'};
+    state.status = states{get(control,'Value')};
+    state.seen = strcmp(state.status,'observed');
     state.options = get(control,'String'); driver.UserData = state;
-    if state.seen ~= expected || ~strcmp(get(control, 'Enable'), 'on')
+    matches = isequal(state.seen,expected);
+    if ischar(expected), matches = strcmp(state.status,expected); end
+    if ~matches || ~strcmp(get(control, 'Enable'), 'on')
         stop(driver); close(fig); return; % Fail the outer assertions without hanging uiwait.
     end
-    set(control, 'Value', 1+target); callback = get(control, 'Callback'); callback(control, []);
+    if ~isempty(target)
+        if ischar(target), value = find(strcmp(states,target),1);
+        else, value = 2+target; end
+        set(control,'Value',value); callback = get(control,'Callback'); callback(control,[]);
+    end
     stop(driver);
     if strcmp(button, 'Cancel')
         close(fig);

@@ -35,12 +35,9 @@ function result = estimate_matrix_pencil_modulation(envelope, fs)
         result.failure_reason = 'too_short';
         return;
     end
-    y0 = zeros(pencil_rows, pencil_columns);
-    y1 = zeros(pencil_rows, pencil_columns);
-    for column = 1:pencil_columns
-        y0(:, column) = x(column:column + pencil_rows - 1);
-        y1(:, column) = x(column + 1:column + pencil_rows);
-    end
+    % Identical overlapping samples; Hankel construction performs no arithmetic.
+    y0 = hankel(x(1:pencil_rows),x(pencil_rows:n_samples-1));
+    y1 = hankel(x(2:pencil_rows+1),x(pencil_rows+1:n_samples));
 
     try
         [u, s, v] = svd(y0, 'econ');

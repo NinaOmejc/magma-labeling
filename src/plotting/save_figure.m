@@ -90,7 +90,7 @@ function save_figure(config, base_name, save_matfig, output_path)
     save_fig_sidecar = (contains(base_name, 'lungs') && ~contains(base_name, 'normality')) || ...
                        (contains(base_name, 'diaph') && ~contains(base_name, 'normality')) || ...
                        save_matfig;
-    if save_fig_sidecar
+    if save_fig_sidecar && ~strcmpi(plot_format,'fig')
         save_fig_for_direct_open(fig, fig_sidecar_path);
     end
 

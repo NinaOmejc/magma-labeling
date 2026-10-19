@@ -51,16 +51,30 @@ function qc = compute_thoracic_respiratory_rhythmicity(data, cycles, config)
     starts = 1:step:(size(data,1)-n+1);
     qc.n_windows = numel(starts);
     if isempty(starts), qc.missing_reason = 'recording_shorter_than_window'; return; end
+    % Recording-invariant setup; keep the original resample/Welch operations.
+    reference.left = peaks(1:end-1); reference.right = peaks(2:end);
+    reference.ibi = (reference.right-reference.left)/fs;
+    reference.frequency = 1./reference.ibi;
+    reference.valid = reference.ibi >= 1/p.power_band_hz(2) & ...
+        reference.ibi <= 1/p.power_band_hz(1);
+    spectral.fs = min(fs,p.analysis_fs);
+    [spectral.up,spectral.down] = rat(spectral.fs/fs,1e-10);
+    segment = min(n,round(p.welch_segment_sec*spectral.fs));
+    spectral.window = hamming(segment);
+    spectral.overlap = floor(segment*p.welch_overlap_fraction);
+    spectral.nfft = max(512,2^nextpow2(4*segment));
+    clean_windows = respiratory_artifact_window_valid( ...
+        [artifacts.lungs_evidence;artifacts.diaph_evidence], ...
+        (starts+n-2)/fs,(n-1)/fs,fs);
     values = nan(size(starts)); reasons = cell(size(starts));
     valid_time = false(size(data,1),1);
     for w = 1:numel(starts)
         idx = starts(w):starts(w)+n-1;
-        window_end = (idx(end)-1)/fs;
-        if ~respiratory_artifact_window_valid([artifacts.lungs_evidence;artifacts.diaph_evidence],window_end,(n-1)/fs,fs)
+        if ~clean_windows(w)
             reasons{w} = 'manually_marked_respiratory_artifact';
         else
             [values(w),reasons{w}] = window_value( ...
-                data(idx,il),data(idx,ia),peaks,idx(1),n,fs,p);
+                data(idx,il),data(idx,ia),reference,idx(1),n,fs,p,spectral);
         end
         if isfinite(values(w)), valid_time(idx) = true; end
         if ~isempty(reasons{w})
@@ -83,40 +97,34 @@ function qc = compute_thoracic_respiratory_rhythmicity(data, cycles, config)
     end
 end
 
-function [q,reason] = window_value(thoracic,abdominal,peaks,start,n,fs,p)
+function [q,reason] = window_value(thoracic,abdominal,reference,start,n,fs,p,spectral)
     q = NaN;
     [x,reason] = usable_trace(thoracic,fs,p,'thoracic');
     if ~isempty(reason), return; end
     [~,reason] = usable_trace(abdominal,fs,p,'abdominal');
     if ~isempty(reason), return; end
-    left = peaks(1:end-1); right = peaks(2:end);
-    ibi = (right-left)/fs;
-    overlap = max(0,min(right,start+n)-max(left,start));
+    overlap = max(0,min(reference.right,start+n)-max(reference.left,start));
     candidates = overlap > 0;
-    good = candidates & ibi >= 1/p.power_band_hz(2) & ibi <= 1/p.power_band_hz(1);
+    good = candidates & reference.valid;
     if nnz(good) < p.min_reference_intervals || ...
             nnz(good)/max(1,nnz(candidates)) < p.min_valid_ibi_fraction || ...
             sum(overlap(good))/n < p.min_reference_coverage
         reason = 'insufficient_abdominal_reference'; return;
     end
-    frequencies = 1./ibi(good);
+    frequencies = reference.frequency(good);
     f0 = median(frequencies);
     if iqr(frequencies)/f0 > p.max_reference_relative_iqr
         reason = 'unstable_abdominal_reference'; return;
     end
-    target_fs = min(fs,p.analysis_fs);
     magnitude = max(abs(x));
     x = detrend(x,'linear');
     if max(abs(x)) <= 10*eps(magnitude)
         reason = 'thoracic_flatline_after_detrending'; return;
     end
-    if target_fs ~= fs
-        [up,down] = rat(target_fs/fs,1e-10);
-        x = resample(x,up,down); % FIR anti-alias filter; local copy only.
+    if spectral.fs ~= fs
+        x = resample(x,spectral.up,spectral.down); % Same FIR anti-alias filter, per window.
     end
-    segment = min(numel(x),round(p.welch_segment_sec*target_fs));
-    [psd,f] = pwelch(x,hamming(segment),floor(segment*p.welch_overlap_fraction), ...
-        max(512,2^nextpow2(4*segment)),target_fs);
+    [psd,f] = pwelch(x,spectral.window,spectral.overlap,spectral.nfft,spectral.fs);
     total = band_power(psd,f,p.power_band_hz);
     tolerance = max(p.tolerance_min_hz,p.tolerance_fraction*f0);
     near = [max(p.power_band_hz(1),f0-tolerance),min(p.power_band_hz(2),f0+tolerance)];
@@ -136,7 +144,9 @@ function [x,reason] = usable_trace(x,fs,p,belt)
         reason = [belt '_insufficient_finite_coverage']; return;
     end
     % Only short isolated gaps are interpolated; longer gaps reject the window.
-    x(~finite) = interp1(find(finite),x(finite),find(~finite),'linear','extrap');
+    if any(~finite)
+        x(~finite) = interp1(find(finite),x(finite),find(~finite),'linear','extrap');
+    end
     centered = x-median(x);
     if max(abs(centered)) <= 10*eps(max(abs(x)))
         reason = [belt '_flatline']; return;

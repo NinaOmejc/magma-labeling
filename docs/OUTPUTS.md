@@ -61,10 +61,11 @@ The MAT file is the authoritative MATLAB result. The HDF5 file uses schema
 Both manual editors share **Minimal or absent thoracic excursion**.
 This recording observation is not a diagnosis, missing sensor, or new time-resolved
 label. It supplies the clinician feature of the new recording-level phenotype.
-The GUI offers **Not observed** (default) and **Observed**. Acceptance stores
-`not_observed` or `observed`, including an explicit negative from a previously
-`not_assessed` recording. Cancel/X preserves the old metadata. Legacy or never
-assessed recordings retain `not_assessed`; their clinician numeric value stays NaN. No valid thoracic peaks are needed to annotate it.
+The GUI offers **Not assessed**, **Not observed**, and **Observed**, with the
+saved status selected. Accepting ordinary landmark or label review leaves an
+unassessed observation unchanged. An explicit assessment stores `not_observed`
+(0) or `observed` (1); `not_assessed` remains NaN. Cancel/X preserves the old
+metadata. Selecting Not assessed also allows reversing a previous assessment. No valid thoracic peaks are needed to annotate it.
 
 `results.mat` and the feature cache store top-level `recording_observations`:
 
@@ -390,7 +391,7 @@ Each workbook starts with an Index sheet describing its tables and row counts.
 
 | Workbook | Worksheets | Meaning |
 |---|---|---|
-| `group_summary.xlsx` | Label_burden | One recording and label per row, automatic and reviewed burdens, availability, review coverage, and event counts. Fractions remain 0Ã¢â‚¬â€œ1. |
+| `group_summary.xlsx` | Label_burden | One recording and label per row, automatic and reviewed burdens, availability, review coverage, and event counts. Fractions remain 0ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“1. |
 | | Phenotypes | The 24 schema-ordered raw features per recording, with an explicit automatic/reviewed layer column. |
 | | Descriptive | Labels and features together, with variable type, annotation layer, units, measurement, sample count, median, IQR, and quantiles. |
 | | Paired_summary | Labels and features together, with both measurement IDs and valid-pair counts. Label changes use percentage points; feature changes retain their units. |

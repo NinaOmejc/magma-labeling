@@ -141,7 +141,7 @@ function testLateObservationDoesNotOverwriteSavedSpectralValues(testCase)
     verifyEqual(testCase,saved.analysis_recording_observations,original.analysis_recording_observations);
 end
 
-function testTwoStateDefaultRequiresAcceptanceAndCancellationRemainsSafe(testCase)
+function testExplicitNegativeAssessmentAndMissingBeltPolicy(testCase)
     [config,~,~,cleanup] = fixture(); %#ok<ASGLU>
     before = recording_observation('load',config);
     verifyEqual(testCase,before.status,'not_assessed');
