@@ -158,11 +158,12 @@ function config = get_config_defaults()
 
     %---- LABEL 7 - sigh - DETECTION SETTINGS
     config.sigh = struct();                      % sigh detection settings
-    config.sigh.method = 'rolling_median_2x';    % options: 'rolling_median_2x' (default), 'global_ratio_outlier', or 'legacy_60s'
+    config.sigh.method = 'session_reference_2x'; % fixed session reference (default); alternatives: 'rolling_median_2x', 'global_ratio_outlier', 'legacy_60s'
+    config.sigh.session_ratio_threshold = 2.0;  % canonical breath amplitude / existing fixed session reference
     config.sigh.rolling_window_breaths = 15;     % complete centered window; first/last complete baselines extend unchanged to the edges
     config.sigh.rolling_min_valid_breaths = 3;   % minimum finite positive canonical amplitudes within the full window
     config.sigh.rolling_ratio_threshold = 2.0;   % selected breath amplitude must be at least twice its local rolling median
-    config.sigh.compare_methods = false;         % report/plot rolling_median_2x versus global_ratio_outlier diagnostics
+    config.sigh.compare_methods = false;         % report/plot session_reference_2x versus rolling_median_2x, on jointly evaluable breaths
     config.sigh.ratio_prctile = 98;              % top 2% normalized breaths are sigh candidates
     config.sigh.min_abs_ratio = 2.0;             % minimum amplitude/reference ratio for sigh candidates
     config.sigh.iqr_k = 3.5;                     % IQR multiplier for outlier-based sigh detection

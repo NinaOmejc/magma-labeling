@@ -22,7 +22,7 @@ The canonical label set is defined in `src/get_labels.m`.
 | `rapid` | Rapid breathing | Respiratory rate | `RR >= 20 breaths/min`, 60-s estimate, localized state >= 30 s |
 | `irregular` | Irregular breathing | Inter-breath-interval variability | 60-s `CV_IBI >= 0.40` |
 | `apnea` | Apnea-like respiratory pause | Very-low respiratory movement | <= 10% of reference excursion for >= 10 s |
-| `sigh` | Sigh | Local breath excursion | Breath amplitude >= 2 x centered 15-breath median |
+| `sigh` | Sigh | Session-normalized breath excursion | Breath amplitude / fixed session reference >= 2.0 |
 | `periodic` | Periodic breathing / Cheyne-Stokes-like pattern | eAMI by default | eAMI >= 0.60 with sustained periodic modulation |
 | `thoracic` | Thoracic-dominant breathing | Relative thoracic/abdominal excursion | Normalized thoracic-to-abdominal ratio >= 1.5 for >= 30 s |
 | `async` | Respiratory asynchrony | Thoracoabdominal phase offset | Reliable absolute phase offset >= 30 degrees for a sustained period |
@@ -60,11 +60,38 @@ Because airflow is not measured directly, this label should be interpreted as an
 
 ### Sigh
 
-The primary method uses a local rolling-median criterion:
+The default method, `session_reference_2x`, uses the existing fixed per-belt
+session respiratory reference:
 
-`A_i >= 2 x median(A_(i-7), ..., A_(i+7))`
+`A_i / A_session >= 2.0`
 
-The same canonical breath amplitude selected by `config.resp.amp_method` is used by all sigh methods.
+The threshold is configurable with `config.sigh.session_ratio_threshold`
+(default `2.0`). Detection reads `resp_features.<belt>.amp_ratio_session`,
+`session_reference_value`, and `session_amplitude_available`; it does not
+estimate another reference. All methods use the canonical breath amplitude
+selected by `config.resp.amp_method`.
+
+Each available belt is assessed independently, retaining the existing event
+merging. Missing or invalid session references leave that belt unavailable;
+there is no local/global fallback. Missing per-breath ratio evidence is
+unassessable rather than a negative sigh classification. Respiratory artifacts
+and contaminated breath support remain excluded. The fixed-reference method
+does not add a centered 15-breath exclusion around artifacts. Reference QC
+categories, including `step_candidate` and `gradual_or_complex`, remain in
+diagnostics without changing the reference-quality rules.
+
+`rolling_median_2x` remains an alternative:
+`A_i >= 2 x median(A_(i-7), ..., A_(i+7))`, using the existing complete-window
+and boundary conventions. `global_ratio_outlier` and `legacy_60s` also remain
+available. With `config.sigh.compare_methods = true`, diagnostics report fixed
+session versus rolling counts, overlap, method-only counts, and agreement on
+jointly evaluable, artifact-clean belt-breath observations. This comparison
+does not change the selected method's events.
+
+Diagnostic figures show raw signals and per-breath ratios, a horizontal
+threshold, and the selected method in their titles. Saved per-belt diagnostics
+retain method, threshold, session reference value and quality, ratios, and
+evaluable-breath masks. Respiratory caches and reviewed landmarks are unchanged.
 
 ### Periodic breathing
 

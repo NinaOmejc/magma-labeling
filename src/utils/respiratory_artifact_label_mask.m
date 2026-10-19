@@ -14,7 +14,11 @@ function mask = respiratory_artifact_label_mask(features,labels,N,config,diagnos
         before = 0; after = 0; field = 'available';
         switch label
             case {'shallow','deep','thoracic'}, field = 'session_amplitude_available';
-            case 'sigh', field = 'amplitude_available';
+            case 'sigh'
+                field = 'amplitude_available';
+                if strcmp(get_config_value(config,'sigh','method','session_reference_2x'),'session_reference_2x')
+                    field = 'session_amplitude_available';
+                end
         end
         switch label
             case 'slow', after = features.rate_windows_sec.slow;
@@ -56,14 +60,14 @@ function mask = respiratory_artifact_label_mask(features,labels,N,config,diagnos
                 % A centered baseline uses the configured number of original
                 % breath positions, including invalid positions at the gap.
                 t = belt.peak_t(:); half = floor(get_config_value(config,'sigh','rolling_window_breaths',15)/2);
-                if strcmp(get_config_value(config,'sigh','method','rolling_median_2x'),'rolling_median_2x')
+                if strcmp(get_config_value(config,'sigh','method','session_reference_2x'),'rolling_median_2x')
                     for k = 1:size(ranges,1)
                         left = find(t*config.fs+1 <= ranges(k,1),1,'last');
                         right = find(t*config.fs+1 >= ranges(k,2),1,'first');
                         if ~isempty(left), ranges(k,1) = min(ranges(k,1),round(t(max(1,left-half))*config.fs)+1); end
                         if ~isempty(right), ranges(k,2) = max(ranges(k,2),round(t(min(numel(t),right+half))*config.fs)+1); end
                     end
-                elseif strcmp(get_config_value(config,'sigh','method','rolling_median_2x'),'legacy_60s')
+                elseif strcmp(get_config_value(config,'sigh','method','session_reference_2x'),'legacy_60s')
                     after = get_config_value(config,'sigh','legacy_prev_win_sec',60);
                 end
             end

@@ -74,10 +74,21 @@ function [label_available, reason] = compute_label_availability( ...
                 end
             case 'sigh'
                 label_available(i) = diagnostic_available(sigh);
+                session_method = isfield(sigh, 'sigh_method') && ...
+                    strcmp(sigh.sigh_method, 'session_reference_2x');
+                if session_method
+                    label_available(i) = label_available(i) && session_amp;
+                end
                 if label_available(i)
                     reason{i} = 'available';
                 elseif ~any_resp
                     reason{i} = 'no_respiratory_belt';
+                elseif session_method && ~session_amp
+                    reason{i} = 'no_session_reference';
+                elseif session_method && isfield(sigh, 'lungs') && isfield(sigh, 'diaph') && ...
+                        all(ismember({sigh.lungs.status, sigh.diaph.status}, ...
+                        {'no_session_reference', 'invalid_session_reference', 'belt_unavailable', 'belt_ignored'}))
+                    reason{i} = 'no_session_reference';
                 else
                     reason{i} = 'insufficient_resp_features';
                 end

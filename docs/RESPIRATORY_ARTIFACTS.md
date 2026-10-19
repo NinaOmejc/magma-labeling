@@ -152,8 +152,10 @@ Analysis uses disposable signal/feature copies; stored signals are never
 zeroed or permanently filled with NaNs. A breath's trough-to-trough support
 and a peak-to-peak IBI must avoid marked artifacts. Invalid amplitudes/IBIs
 are unavailable in the analysis view. Rate, variability, apnea-amplitude and
-thoracoabdominal windows cannot bridge the contaminated support. Sigh local
-baselines also reject crossing windows. Session/global respiratory reference
+thoracoabdominal windows cannot bridge the contaminated support. The default
+fixed-session sigh method excludes contaminated breath/artifact support without
+an additional centered 15-breath guard. Alternative sigh local baselines also
+reject crossing windows. Session/global respiratory reference
 calculations exclude contaminated breaths and raw artifact samples.
 
 Shared artifacts invalidate thoracic, abdominal, and two-belt evidence alike.

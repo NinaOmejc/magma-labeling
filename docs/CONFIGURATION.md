@@ -214,10 +214,25 @@ See [LABELS.md](LABELS.md) for the primary conditions.
 ### Sigh
 
 ```matlab
-config.sigh.method = 'rolling_median_2x';
+config.sigh.method = 'session_reference_2x';
+config.sigh.session_ratio_threshold = 2.0;
+config.sigh.compare_methods = false;
 ```
 
-The primary sigh criterion compares each breath with a centered 15-breath local median.
+The default classifies a breath when its existing per-belt
+`amp_ratio_session >= session_ratio_threshold`. It requires a valid fixed
+session reference and `session_amplitude_available`; unavailable evidence is
+not a negative classification and never triggers a local/global fallback.
+Reference QC flags remain visible in diagnostics. Canonical amplitudes still
+follow `config.resp.amp_method`.
+
+For methodological comparison, select `config.sigh.method = 'rolling_median_2x'`
+to use the existing centered 15-breath median instead. Its separate threshold
+remains `config.sigh.rolling_ratio_threshold = 2.0`. Setting
+`config.sigh.compare_methods = true` reports fixed-session versus rolling counts
+and overlap on jointly evaluable, artifact-clean breaths and overlays the
+other method in ratio plots. The fixed method excludes contaminated breath
+support without the rolling method's extra centered-window artifact guard.
 
 ### Periodic breathing
 

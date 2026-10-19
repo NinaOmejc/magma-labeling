@@ -5,7 +5,8 @@ function [assessable_mask, info] = compute_label_assessable_mask( ...
 % grid. Most labels are assessable for the full recording when available.
 % Desaturation follows finite native SpO2 samples; asynchrony projects valid
 % coherence-grid evidence to master samples. info documents schema version,
-% partial_labels, and the desat/async/other-label rules.
+% partial_labels, and the desat/async/other-label rules. Fixed-reference sighs
+% additionally require session amplitude and per-breath evaluability.
 
     label_names = cellstr(string(label_names));
     label_available = logical(label_available(:)');
@@ -61,11 +62,55 @@ function [assessable_mask, info] = compute_label_assessable_mask( ...
     if nargin >= 7
         assessable_mask = assessable_mask & respiratory_artifact_label_mask(resp_features,label_names,N,config,diagnostics);
     end
+    sigh_idx = find(strcmp(label_names, 'sigh'), 1);
+    session_sigh = nargin >= 7 && ...
+        strcmp(get_config_value(config, 'sigh', 'method', 'session_reference_2x'), 'session_reference_2x');
+    if session_sigh && ~isempty(sigh_idx)
+        assessable_mask(:, sigh_idx) = assessable_mask(:, sigh_idx) & ...
+            session_sigh_assessability(resp_features, diagnostics, N, config.fs);
+    end
     info = struct( ...
         'version', 'label_assessability_v3', ...
         'partial_labels', {{'desat', 'async'}}, ...
         'async_projection', async_projection, ...
         'respiratory_artifact_model', 'shared_breath_ibi_window_support_v1');
+    if session_sigh
+        info.partial_labels{end+1} = 'sigh';
+        info.sigh_projection = 'session_reference_evaluable_breaths_nearest';
+    end
+end
+
+function mask = session_sigh_assessability(features, diagnostics, N, fs)
+% SESSION_SIGH_ASSESSABILITY Missing reference/ratios are never negative evidence.
+% Nearest-breath projection follows the detector's midpoint-bounded events.
+    mask = false(N, 1);
+    master_t = (0:N-1)' / fs;
+    for name = {'lungs', 'diaph'}
+        key = name{1}; belt = features.(key);
+        required = {'available', 'session_amplitude_available', 'session_reference_value', ...
+            'amp_ratio_session', 'amp', 'peak_t'};
+        if ~all(isfield(belt, required)) || ~belt.available || ...
+                ~isequal(belt.session_amplitude_available, true) || ...
+                ~isnumeric(belt.session_reference_value) || ~isreal(belt.session_reference_value) || ...
+                ~isscalar(belt.session_reference_value) || ...
+                ~isfinite(belt.session_reference_value) || belt.session_reference_value <= 0
+            continue;
+        end
+        t = belt.peak_t(:);
+        evaluable = isfinite(belt.amp_ratio_session(:)) & belt.amp_ratio_session(:) > 0 & ...
+            isfinite(belt.amp(:)) & belt.amp(:) > 0;
+        if isfield(diagnostics, 'sigh') && isfield(diagnostics.sigh, key)
+            evaluable = evaluable & diagnostics.sigh.(key).evaluable_mask(:);
+        end
+        finite_t = isfinite(t);
+        t = t(finite_t); evaluable = evaluable(finite_t);
+        if isempty(t), continue; end
+        if numel(t) == 1
+            mask = mask | evaluable;
+        else
+            mask = mask | (interp1(t, double(evaluable), master_t, 'nearest', 'extrap') ~= 0);
+        end
+    end
 end
 
 function master_mask = grid_to_master_mask(grid_mask, t_grid, N, fs)

@@ -1,17 +1,210 @@
 function tests = test_sigh_detection_methods
-% Focused tests for canonical-amplitude and centered-window sigh detection.
+% Focused tests for fixed-reference and alternative sigh detection methods.
 
     tests = functiontests(localfunctions);
 end
 
-function testRollingMedianIsTheConfiguredDefault(testCase)
+function testSessionReferenceIsTheConfiguredDefault(testCase)
     config = get_config_defaults();
 
-    verifyEqual(testCase, config.sigh.method, 'rolling_median_2x');
+    verifyEqual(testCase, config.sigh.method, 'session_reference_2x');
+    verifyEqual(testCase, config.sigh.session_ratio_threshold, 2.0);
     verifyEqual(testCase, config.sigh.rolling_window_breaths, 15);
     verifyEqual(testCase, config.sigh.rolling_min_valid_breaths, 3);
     verifyEqual(testCase, config.sigh.rolling_ratio_threshold, 2.0);
     verifyFalse(testCase, config.sigh.compare_methods);
+end
+
+function testSessionReferenceUsesSavedRatiosAndInclusiveConfigurableThreshold(testCase)
+    [data, features, cycles, config] = sigh_fixture([1; 2; 4; NaN]);
+    config.sigh.method = 'session_reference_2x';
+    features.lungs.session_reference_value = 2;
+    features.lungs.amp_ratio_session = [0.5; 1; 2; NaN];
+    before = cycles;
+    [events, diagnostics] = detect_sigh(data, features, cycles, config);
+    verifyNotEmpty(testCase, events);
+    verifyEqual(testCase, diagnostics.lungs.sigh_flags, [false; false; true; false]);
+    verifyEqual(testCase, diagnostics.lungs.evaluable_mask, [true; true; true; false]);
+    verifyEqual(testCase, diagnostics.lungs.sigh_ratio, features.lungs.amp_ratio_session);
+    verifyEqual(testCase, diagnostics.lungs.session_reference_value, 2);
+    verifyEqual(testCase, diagnostics.lungs.sigh_baseline, 2 * ones(4, 1));
+    verifyEqual(testCase, diagnostics.lungs.decision_threshold, 2);
+    verifyFalse(testCase, any(diagnostics.lungs.boundary_extrapolation_mask));
+    verifyEqual(testCase, cycles, before);
+
+    config.sigh.session_ratio_threshold = 1;
+    [~, diagnostics] = detect_sigh(data, features, cycles, config);
+    verifyEqual(testCase, diagnostics.lungs.sigh_flags, [false; true; true; false]);
+    verifyEqual(testCase, diagnostics.lungs.decision_threshold, 1);
+end
+
+function testSessionReferenceTreatsBeltsIndependentlyAndRetainsQCWarnings(testCase)
+    [data, features, cycles, config] = sigh_fixture([1; 2; 4]);
+    config.sigh.method = 'session_reference_2x';
+    features.diaph = features.lungs;
+    features.diaph.session_reference_value = 2;
+    features.diaph.amp_ratio_session = features.diaph.amp / 2;
+    features.lungs.reference_quality = 'step_candidate';
+    features.diaph.reference_quality = 'gradual_or_complex';
+    [events, diagnostics] = detect_sigh(data, features, cycles, config);
+    verifyEqual(testCase, diagnostics.lungs.sigh_flags, [false; true; true]);
+    verifyEqual(testCase, diagnostics.diaph.sigh_flags, [false; false; true]);
+    verifyEqual(testCase, diagnostics.lungs.reference_quality, 'step_candidate');
+    verifyEqual(testCase, diagnostics.diaph.reference_quality, 'gradual_or_complex');
+    verifyTrue(testCase, diagnostics.lungs.available && diagnostics.diaph.available);
+    % Keep the existing within-belt merge and separate belt event types.
+    verifyNumElements(testCase, events, 2);
+    verifyEqual(testCase, sort({events.type}), {'sigh_diaph', 'sigh_lungs'});
+    features.diaph.available = false;
+    expected = detect_sigh(data, features, cycles, config);
+    thoracic = events(strcmp({events.type}, 'sigh_lungs'));
+    verifyEqual(testCase, thoracic, expected);
+end
+
+function testSessionReferenceNeverFallsBackAndMarksSighUnassessable(testCase)
+    [data, features, cycles, config] = sigh_fixture([1; 4; 1]);
+    config.sigh.method = 'session_reference_2x';
+    config.channels = struct('lungs_idx', 4, 'diaph_idx', 6, 'spo2_idx', 3);
+    for reference = [NaN 0 -1 Inf]
+        features.lungs.session_reference_value = reference;
+        [events, diagnostics] = detect_sigh(data, features, cycles, config);
+        verifyEmpty(testCase, events);
+        verifyFalse(testCase, diagnostics.available);
+        verifyFalse(testCase, any(diagnostics.lungs.evaluable_mask));
+        verifyTrue(testCase, all(isnan(diagnostics.lungs.sigh_ratio)));
+        verifyEqual(testCase, diagnostics.lungs.status, 'invalid_session_reference');
+        mask = compute_label_assessable_mask(data, {'sigh', 'desat'}, ...
+            [true true], struct(), [], config, features, struct('sigh', diagnostics));
+        verifyFalse(testCase, any(mask(:, 1)));
+        verifyTrue(testCase, all(mask(:, 2)));
+    end
+    features.lungs.session_reference_value = 1;
+    features.lungs.session_amplitude_available = false;
+    [events, diagnostics] = detect_sigh(data, features, cycles, config);
+    verifyEmpty(testCase, events);
+    verifyEqual(testCase, diagnostics.lungs.status, 'no_session_reference');
+    verifyFalse(testCase, diagnostics.available);
+    features.lungs.session_amplitude_available = true;
+    features.lungs = rmfield(features.lungs, 'amp_ratio_session');
+    [~, diagnostics] = detect_sigh(data, features, cycles, config);
+    verifyFalse(testCase, diagnostics.available);
+    verifyEqual(testCase, diagnostics.lungs.status, 'missing_session_amplitude_ratio');
+end
+
+function testSessionSighUnavailableReasonAndPartialAssessability(testCase)
+    config = make_test_config();
+    [~, features, cycles, ~] = sigh_fixture([1; NaN; 4]);
+    config.sigh.method = 'session_reference_2x';
+    N = ceil((features.lungs.peak_t(end) + 2) * config.fs);
+    data = ones(N, 6);
+    % The unavailable middle breath is not a reviewed or automatic negative.
+    [~, diagnostics] = detect_sigh(data, features, cycles, config);
+    mask = compute_label_assessable_mask(data, {'sigh', 'desat'}, ...
+        [true true], struct(), [], config, features, struct('sigh', diagnostics));
+    indices = round(features.lungs.peak_t * config.fs) + 1;
+    verifyEqual(testCase, mask(indices, 1), [true; false; true]);
+    verifyTrue(testCase, all(mask(:, 2)));
+
+    features.lungs.session_amplitude_available = false;
+    [~, diagnostics] = detect_sigh(data, features, cycles, config);
+    features.lungs.rate_slow_window_bpm = [];
+    features.diaph.rate_slow_window_bpm = [];
+    features.lungs.rate_rapid_window_bpm = [];
+    features.diaph.rate_rapid_window_bpm = [];
+    features.lungs.irregularity.cov = [];
+    features.diaph.irregularity.cov = [];
+    [available, reason] = compute_label_availability({'sigh'}, features, ...
+        struct(), struct(), struct(), diagnostics, struct());
+    verifyFalse(testCase, available);
+    verifyEqual(testCase, reason, {'no_session_reference'});
+end
+
+function testSessionArtifactsDoNotExpandIntoRollingBaselineWindow(testCase)
+    amplitude = ones(35, 1);
+    amplitude([10 18 26]) = 4;
+    [data, features, cycles, config] = sigh_fixture(amplitude);
+    config.sigh.method = 'session_reference_2x';
+    config.sigh.compare_methods = true;
+    features.diaph = features.lungs;
+    bad_sample = round(features.lungs.peak_t(18) * config.fs) + 1;
+    features.lungs.artifact_intervals_idx = [bad_sample bad_sample];
+    features.diaph.artifact_intervals_idx = [bad_sample bad_sample];
+    [~, fixed] = detect_sigh(data, features, cycles, config);
+    config.channels = struct('lungs_idx', 4, 'diaph_idx', 6, 'spo2_idx', 3);
+    features.respiratory_artifact_state = struct( ...
+        'artifact_intervals_idx', [bad_sample bad_sample]);
+    mask = compute_label_assessable_mask(data, {'sigh', 'desat'}, [true true], ...
+        struct(), [], config, features, struct('sigh', fixed));
+    verifyFalse(testCase, mask(bad_sample, 1));
+    nearby = round(features.lungs.peak_t([17 19]) * config.fs) + 1;
+    verifyTrue(testCase, all(mask(nearby, 1)));
+    verifyTrue(testCase, all(mask(:, 2)));
+    config.sigh.method = 'rolling_median_2x';
+    [~, rolling] = detect_sigh(data, features, cycles, config);
+    for name = {'lungs', 'diaph'}
+        key = name{1};
+        verifyFalse(testCase, fixed.(key).evaluable_mask(18));
+        verifyFalse(testCase, fixed.(key).sigh_flags(18));
+        verifyTrue(testCase, all(fixed.(key).evaluable_mask([17 19])));
+        verifyFalse(testCase, any(rolling.(key).evaluable_mask(11:25)));
+        verifyEqual(testCase, fixed.comparison.(key).both_count, 2);
+        verifyEqual(testCase, fixed.comparison.(key).session_reference_2x_count, 2);
+        verifyEqual(testCase, fixed.comparison.(key).rolling_median_2x_count, 2);
+        verifyEqual(testCase, fixed.comparison.(key).valid_breath_count, 20);
+    end
+end
+
+function testSessionComparisonReportsCountDifferencesAndOverlap(testCase)
+    [data, features, cycles, config] = sigh_fixture([ones(12, 1); 3; ones(12, 1)]);
+    config.sigh.method = 'session_reference_2x';
+    config.sigh.compare_methods = true;
+    features.lungs.session_reference_value = 2;
+    features.lungs.amp_ratio_session = features.lungs.amp / 2;
+    [~, diagnostics] = detect_sigh(data, features, cycles, config);
+    verifyEqual(testCase, diagnostics.comparison.lungs.session_reference_2x_count, 0);
+    verifyEqual(testCase, diagnostics.comparison.lungs.rolling_median_2x_count, 1);
+    verifyEqual(testCase, diagnostics.comparison.lungs.both_count, 0);
+    verifyEqual(testCase, diagnostics.comparison.lungs.rolling_median_2x_only_count, 1);
+    verifyEqual(testCase, diagnostics.comparison.total.valid_breath_count, 25);
+end
+
+function testSessionThresholdAndRatioAlignmentValidation(testCase)
+    [data, features, cycles, config] = sigh_fixture(ones(3, 1));
+    config.sigh.method = 'session_reference_2x';
+    config.sigh.session_ratio_threshold = 0;
+    verifyError(testCase, @() detect_sigh(data, features, cycles, config), ...
+        'MAGMA:Sigh:InvalidSessionThreshold');
+    config.sigh.session_ratio_threshold = 2;
+    features.lungs.amp_ratio_session(end) = [];
+    verifyError(testCase, @() detect_sigh(data, features, cycles, config), ...
+        'MAGMA:Sigh:BreathAlignmentMismatch');
+end
+
+function testSessionDiagnosticPlotShowsSelectedMethodRatiosAndThreshold(testCase)
+    output_dir = tempname;
+    mkdir(output_dir);
+    cleanup_dir = onCleanup(@() rmdir(output_dir, 's')); %#ok<NASGU>
+    [data, features, cycles, config] = sigh_fixture([1; 2; 4]);
+    config.sigh.method = 'session_reference_2x';
+    config.sigh.do_plot = true;
+    config.sigh.compare_methods = true;
+    config.sub_results_path = output_dir;
+    config.plot_format = 'fig';
+    config.channels = struct('lungs_idx', 4, 'diaph_idx', 6, 'spo2_idx', 3);
+    existing_figures = findall(groot, 'Type', 'figure');
+    cleanup = onCleanup(@() close_new_figures(existing_figures)); %#ok<NASGU>
+    detect_sigh(data, features, cycles, config);
+    saved_figure = openfig(fullfile(output_dir, 'Sub999_M1_sigh.fig'), 'invisible');
+    saved_figure.Visible = 'off';
+    axes_handles = findall(saved_figure, 'Type', 'axes');
+    ratio_axes = axes_handles(arrayfun(@(ax) ...
+        strcmp(ax.YLabel.String, 'Amplitude / session reference'), axes_handles));
+    verifyNumElements(testCase, ratio_axes, 2);
+    for ax = ratio_axes(:)'
+        verifyTrue(testCase, contains(ax.Title.String, 'session_reference_2x'));
+    end
+    lines = findall(ratio_axes, 'Type', 'constantline');
+    verifyTrue(testCase, any(arrayfun(@(line) line.Value == 2, lines)));
 end
 
 function testCanonicalAmplitudeIgnoresContradictoryAuxiliaryFields(testCase)
@@ -28,7 +221,7 @@ function testCanonicalAmplitudeIgnoresContradictoryAuxiliaryFields(testCase)
     no_aux_cycles = contradictory_cycles;
     no_aux_cycles.lungs = rmfield(no_aux_cycles.lungs, ...
         {'amp_exp', 'amp_insp', 'amp_sym'});
-    methods = {'rolling_median_2x', 'global_ratio_outlier', 'legacy_60s'};
+    methods = {'session_reference_2x', 'rolling_median_2x', 'global_ratio_outlier', 'legacy_60s'};
 
     for i = 1:numel(methods)
         config.sigh.method = methods{i};
@@ -60,7 +253,7 @@ end
 
 function testEveryMethodUsesEachConfiguredCanonicalAmplitude(testCase)
     methods = {'expiratory', 'inspiratory', 'symmetric'};
-    sigh_methods = {'rolling_median_2x', 'global_ratio_outlier', 'legacy_60s'};
+    sigh_methods = {'session_reference_2x', 'rolling_median_2x', 'global_ratio_outlier', 'legacy_60s'};
     [signal, peak_idx] = synthetic_reviewed_breaths(25);
     expected_peak_idx = peak_idx;
     expected_trough_idx = [];
@@ -273,7 +466,11 @@ function testStaleGlobalRatioRaisesClearError(testCase)
 end
 
 function testRatioPlotHandlesValidEvidenceWithZeroDetectedSighs(testCase)
+    output_dir = tempname;
+    mkdir(output_dir);
+    cleanup_dir = onCleanup(@() rmdir(output_dir, 's')); %#ok<NASGU>
     [data, features, cycles, config] = sigh_fixture(ones(25, 1));
+    config.sub_results_path = output_dir;
     config.sigh.do_plot = true;
     config.sigh.compare_methods = true;
     config.channels = struct( ...
@@ -290,7 +487,7 @@ function testRatioPlotHandlesValidEvidenceWithZeroDetectedSighs(testCase)
     verifyEqual(testCase, ...
         diagnostics.comparison.lungs.rolling_median_2x_count, 0);
     verifyEqual(testCase, ...
-        diagnostics.comparison.lungs.global_ratio_outlier_count, 0);
+        diagnostics.comparison.lungs.session_reference_2x_count, 0);
     verifyEmpty(testCase, events);
 end
 
@@ -347,6 +544,9 @@ function [data, features, cycles, config] = sigh_fixture(amplitude)
         'ignored', false, ...
         'peak_t', peak_t, ...
         'amp', amplitude, ...
+        'amp_ratio_session', amplitude, ...
+        'session_reference_value', 1, ...
+        'session_amplitude_available', true, ...
         'amp_ratio_global', amplitude, ...
         'global_reference_value', 1, ...
         'global_amplitude_available', true, ...
@@ -356,6 +556,9 @@ function [data, features, cycles, config] = sigh_fixture(amplitude)
         'ignored', false, ...
         'peak_t', zeros(0, 1), ...
         'amp', zeros(0, 1), ...
+        'amp_ratio_session', zeros(0, 1), ...
+        'session_reference_value', NaN, ...
+        'session_amplitude_available', false, ...
         'amp_ratio_global', zeros(0, 1), ...
         'global_reference_value', NaN, ...
         'global_amplitude_available', false, ...
@@ -384,6 +587,7 @@ function config = minimal_sigh_config()
     config.resp = struct('amp_method', 'expiratory');
     config.sigh = struct( ...
         'method', 'rolling_median_2x', ...
+        'session_ratio_threshold', 2, ...
         'rolling_window_breaths', 15, ...
         'rolling_min_valid_breaths', 3, ...
         'rolling_ratio_threshold', 2, ...

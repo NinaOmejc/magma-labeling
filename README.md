@@ -77,6 +77,15 @@ Amplitude-dependent labels use a fixed recording-specific reference:
 
 Respiratory-belt amplitudes are relative, not calibrated tidal volume. Thoracic and abdominal belts are therefore normalized independently.
 
+Sigh detection defaults to `config.sigh.method = 'session_reference_2x'`:
+the existing per-belt breath amplitude / session reference must be at least
+`config.sigh.session_ratio_threshold` (default `2.0`). Missing references make
+sigh evidence unavailable, with no local/global fallback. Reference QC flags
+and respiratory artifact exclusions are preserved. The existing
+`rolling_median_2x` alternative remains available; enable
+`config.sigh.compare_methods` for fixed-versus-rolling counts and overlap.
+See [Label definitions](docs/LABELS.md#sigh) for details.
+
 ## Manual review
 
 Automatic annotations are always preserved.
