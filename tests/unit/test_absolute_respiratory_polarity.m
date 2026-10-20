@@ -3,6 +3,25 @@ function tests = test_absolute_respiratory_polarity
     tests = functiontests(localfunctions);
 end
 
+function testAbsoluteFlagCanBeDisabledIndependently(testCase)
+    [data,config] = dwell_fixture(-1,50);
+    config.preprocessing.check_absolute_belt_polarity = false;
+    [actual,result] = preprocess_data(data,config);
+    verifyEqual(testCase,actual,data);
+    verifyTrue(testCase,result.preprocessing.belt_polarity_qc.checked);
+    verifyFalse(testCase,result.preprocessing.absolute_polarity_qc.absolute_polarity_checked);
+end
+
+function testAbsoluteFlagCanBeEnabledWithoutRelativeCheck(testCase)
+    [data,config] = dwell_fixture(-1,50);
+    config.preprocessing.check_relative_belt_polarity = false;
+    [actual,result] = preprocess_data(data,config);
+    verifyEqual(testCase,actual(:,1:2),-data(:,1:2));
+    verifyFalse(testCase,result.preprocessing.belt_polarity_qc.checked);
+    verifyTrue(testCase,result.preprocessing.absolute_polarity_qc.absolute_polarity_checked);
+    verifyTrue(testCase,result.preprocessing.absolute_polarity_qc.absolute_polarity_flipped);
+end
+
 function testNarrowHighPeaksAreKept(testCase)
     [data, config] = dwell_fixture(1, 50);
     [actual, result] = preprocess_data(data, config);
@@ -12,9 +31,9 @@ function testNarrowHighPeaksAreKept(testCase)
     verifyEqual(testCase, qc.absolute_polarity_decision, 'kept');
     verifyFalse(testCase, qc.absolute_polarity_flipped);
     verifyLessThan(testCase, qc.shared_high_dwell_fraction, ...
-        config.preprocessing.absolute_polarity.high_dwell_lower);
+        result.preprocessing.absolute_polarity.high_dwell_lower);
     verifyGreaterThanOrEqual(testCase, qc.shared_fraction_narrow_high, ...
-        config.preprocessing.absolute_polarity.majority_threshold);
+        result.preprocessing.absolute_polarity.majority_threshold);
     verifyEqual(testCase, numel(qc.channels_used), 2);
 end
 
@@ -29,11 +48,11 @@ function testBroadHighPeaksFlipDespiteMisleadingIERatio(testCase)
     verifyEqual(testCase, qc.absolute_polarity_decision, 'flipped');
     verifyTrue(testCase, qc.absolute_polarity_flipped);
     verifyGreaterThan(testCase, qc.shared_high_dwell_fraction, ...
-        config.preprocessing.absolute_polarity.high_dwell_upper);
+        result.preprocessing.absolute_polarity.high_dwell_upper);
     verifyGreaterThanOrEqual(testCase, qc.shared_fraction_broad_high, ...
-        config.preprocessing.absolute_polarity.majority_threshold);
+        result.preprocessing.absolute_polarity.majority_threshold);
     verifyLessThan(testCase, qc.shared_ie_ratio, ...
-        config.preprocessing.absolute_polarity.ratio_lower);
+        result.preprocessing.absolute_polarity.ratio_lower);
     verifyTrue(testCase, all(final_cycles.lungs.peak_val(2:end-1) > ...
         final_cycles.lungs.trough_val(1:end-1)));
 end
@@ -75,9 +94,9 @@ function testBroadHighPeaksNeedBreathMajority(testCase)
     verifyEqual(testCase, actual, data);
     verifyEqual(testCase, qc.absolute_polarity_decision, 'ambiguous');
     verifyGreaterThan(testCase, qc.shared_high_dwell_fraction, ...
-        config.preprocessing.absolute_polarity.high_dwell_upper);
+        result.preprocessing.absolute_polarity.high_dwell_upper);
     verifyLessThan(testCase, qc.shared_fraction_broad_high, ...
-        config.preprocessing.absolute_polarity.majority_threshold);
+        result.preprocessing.absolute_polarity.majority_threshold);
 
     config.preprocessing.absolute_polarity.majority_threshold = 0.55;
     [flipped, relaxed] = preprocess_data(data, config);
@@ -148,8 +167,8 @@ function [data, config] = polarity_fixture(rise_fraction, relative_sign, n_cycle
     config.data_columns = {'Resp-Lungs', 'Resp-Diaphragm', 'Auxiliary'};
     config = resolve_signal_channels(config);
     config.detrend.method = 'none';
-    config.preprocessing.check_belt_polarity = true;
-    config.preprocessing.absolute_polarity.enabled = true;
+    config.preprocessing.check_relative_belt_polarity = true;
+    config.preprocessing.check_absolute_belt_polarity = true;
     config.resp.qc.enabled = false;
 
     period = 4;

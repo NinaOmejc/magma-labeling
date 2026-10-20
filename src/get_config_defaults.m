@@ -37,16 +37,9 @@ function config = get_config_defaults()
 
     %---- PREPROCESSING ----                
     config.preprocessing = struct();
-    config.preprocessing.check_belt_polarity = true;            % conservatively correct persistent acquisition-level diaphragm-belt inversion
-    config.preprocessing.absolute_polarity = struct();
-    config.preprocessing.absolute_polarity.enabled = true;      % infer the common belt orientation from inspiration/expiration timing
-    config.preprocessing.absolute_polarity.ratio_lower = 0.90;
-    config.preprocessing.absolute_polarity.ratio_upper = 1.10;
-    config.preprocessing.absolute_polarity.majority_threshold = 0.65;
-    config.preprocessing.absolute_polarity.high_dwell_lower = 0.45;
-    config.preprocessing.absolute_polarity.high_dwell_upper = 0.55;
-    config.preprocessing.absolute_polarity.min_valid_breaths = 10;
-    config.detrend.method = 'none';                         % 'hpfilter': Butterworth high-pass filter with filtfilt, 'moving_detrend': moving-average trend subtraction, or 'none': no additional detrending.
+    config.preprocessing.check_relative_belt_polarity = false;   % conservatively correct persistent acquisition-level diaphragm-belt inversion
+    config.preprocessing.check_absolute_belt_polarity = false;   % infer the common belt orientation from inspiration/expiration timing
+    config.detrend.method = 'none';                             % 'hpfilter': Butterworth high-pass filter with filtfilt, 'moving_detrend': moving-average trend subtraction, or 'none': no additional detrending.
     config.detrend.signals = {'Resp-Lungs', 'Resp-Diaphragm'};  % *** signals to additionally detrend before feature extraction (in general, all signals are already detrended, this is just additional moving detrend, that can be useful for some noisier data)
     config.detrend.highpass_cutoff = 0.01;                      % high-pass cutoff frequency in Hz
     config.detrend.hp_edge_pad_sec = 100;                       % reflection padding before filtfilt to reduce edge artifacts
@@ -80,7 +73,7 @@ function config = get_config_defaults()
     % manual control of respiratory cycles (independent of execution.mode)
     config.resp.manual_control = true;          % allow peak edits and independent movement of existing troughs before label detection
     config.resp.recheck_cached = true;          % reopen saved landmarks/artifacts; Cancel skips this recording
-    config.resp.manual_window_sec = 300;        % visible time span for manual breath GUI scrolling
+    config.resp.manual_window_sec = 600;        % visible time span for manual breath GUI scrolling
     
     %---- SESSION PHYSIOLOGICAL REFERENCE ----
     config.reference.pre_start_min = 3;          % M1/M3 common reference start ( in minutes! )
@@ -103,7 +96,7 @@ function config = get_config_defaults()
     %---- LABEL 1 - shallow - DETECTION SETTINGS 
     config.shallow = struct();                  % shallow breathing settings
     config.shallow.amp_ratio_low    = 0.10;     % lower amplitude ratio bound relative to the per-belt session reference (so only 10 % of the reference). What is lower than 10 %, is considered apnea
-    config.shallow.amp_ratio_high   = 0.80;     % upper amplitude ratio bound relative to the per-belt session reference (80 % of the reference)
+    config.shallow.amp_ratio_high   = 0.70;     % upper amplitude ratio bound relative to the per-belt session reference (80 % of the reference)
     config.shallow.min_dur_sec      = 30;       % minimum merged trough-to-trough shallow-state duration
     config.shallow.do_plot           = true;    % save shallow breathing diagnostic plot
 
@@ -111,7 +104,7 @@ function config = get_config_defaults()
     % Relative increased excursion of an uncalibrated belt. This is a
     % within-record state, not an absolute tidal-volume measurement.
     config.deep = struct();
-    config.deep.amp_ratio_thr = 1.20;              % breath excursion / fixed per-belt session reference
+    config.deep.amp_ratio_thr = 1.30;              % breath excursion / fixed per-belt session reference
     config.deep.min_dur_sec = 30;                  % minimum merged trough-to-trough deep-state duration
     config.deep.do_plot = true;                    % save deep breathing diagnostic plot
 
@@ -169,18 +162,15 @@ function config = get_config_defaults()
     config.periodic.primary_method = 'eami';     % explicit source of the canonical periodic event set: 'eami' or 'guyot'
     config.periodic.do_plot = true;              % save the two-method comparison figure
 
-    % Fernandez Tellez et al., Sleep 2015 (DOI 10.5665/sleep.4494).
-    % The signal-processing structure follows the eAMI method. The 0.60
-    % threshold and 60-s energy window are MAGMA-adapted settings; the paper
-    % reports relative insensitivity once the window exceeds about 40 s.
+    % Fernandez Tellez et al., Sleep 2015 (DOI 10.5665/sleep.4494). 
     config.periodic.eami = struct();
-    config.periodic.eami.resp_band_hz = [0.125 0.40];
-    config.periodic.eami.bandpass_order = 12;
-    config.periodic.eami.resample_hz = 5;
-    config.periodic.eami.envelope_lowpass_hz = 0.125;
-    config.periodic.eami.envelope_lowpass_order = 6;
-    config.periodic.eami.energy_win_sec = 60;
-    config.periodic.eami.threshold = 0.40;
+    config.periodic.eami.resp_band_hz = [0.125 0.40];   % Respiratory frequency band in Hz. 0.125-0.40 Hz corresponds to approximately 7.5-24 breaths/min.
+    config.periodic.eami.bandpass_order = 12;           % Overall Butterworth band-pass filter order. (Higher orders produce sharper frequency cutoffs, but also more edge artefacts)
+    config.periodic.eami.resample_hz = 5;               % Sampling rate (Hz) after respiratory band-pass filtering.
+    config.periodic.eami.envelope_lowpass_hz = 0.125;   % Low-pass cutoff (Hz) applied to the rectified respiratory signal. Produces a smooth amplitude envelope representing changes in breathing amplitude over time rather than individual breaths.
+    config.periodic.eami.envelope_lowpass_order = 6;    % Butterworth low-pass filter order for amplitude-envelope extraction.
+    config.periodic.eami.energy_win_sec = 60;           % Length (seconds) of the centered sliding window used to calculate the locally mean-removed energies of the respiratory signal and its amplitude envelope. The paper reports relative insensitivity once the window exceeds about 40 s.
+    config.periodic.eami.threshold = 0.40;              % *** Minimum eAMI value indicating periodic amplitude modulation. A window is positive when eAMI >= threshold.
 
     % Guyot et al., PLOS ONE 2020 (DOI 10.1371/journal.pone.0221191).
     % The centered window/overlap and Matrix Pencil structure follow the paper.
@@ -188,13 +178,13 @@ function config = get_config_defaults()
     % uses a 1-Hz reconstruction and reviewed canonical breath amplitudes
     % instead of the paper's change-point breath front-end.
     config.periodic.guyot = struct();
-    config.periodic.guyot.resample_hz = 1;
-    config.periodic.guyot.window_sec = 120;
-    config.periodic.guyot.overlap_fraction = 0.90;
-    config.periodic.guyot.h_threshold = 0.5;
-    config.periodic.guyot.fm_band_hz = [0.008 0.050];
-    config.periodic.guyot.min_zone_sec = 60;
-    config.periodic.guyot.gap_factor = 3;
+    config.periodic.guyot.resample_hz = 1;                  % Sampling rate (Hz) of the reconstructed breath-amplitude envelope. Individual breath amplitudes are interpolated onto a 1-Hz timeline.
+    config.periodic.guyot.window_sec = 120;                 % Duration (seconds) of each analysis window, for the Matrix Pencil method.
+    config.periodic.guyot.overlap_fraction = 0.50;          % Fractional overlap between consecutive analysis windows.  0.90 means 90% overlap
+    config.periodic.guyot.h_threshold = 0.5;                % *** h > 0.5 is required for a positive window.
+    config.periodic.guyot.fm_band_hz = [0.008 0.050];       % Accepted modulation-frequency range in Hz. 0.008-0.050 Hz corresponds to modulation periods of approximately 125-20 seconds
+    config.periodic.guyot.min_zone_sec = 60;                % Minimum duration (seconds) of a continuous positive interval.
+    config.periodic.guyot.gap_factor = 3;                   % Threshold for identifying unusually long gaps between breath peaks.
 
     %---- LABEL 9 - thoracic - DETECTION SETTINGS
     % Relative thoracoabdominal excursion dominance after normalizing each
@@ -207,51 +197,31 @@ function config = get_config_defaults()
     config.thoracic.min_breaths = 3;                    % minimum finite positive breaths per belt/window
     config.thoracic.do_plot = true;                     % save relative-balance diagnostic plot
 
-    %---- LABEL 10 - async - DETECTION SETTINGS
-    config.async = struct();                  % respiratory asynchrony settings
-    config.async.primary_method = 'wavelet_phase_offset'; % canonical async label source: 'wavelet_coherence_drop' or 'wavelet_phase_offset'
-    config.async.compare_methods = true;      % store complementary method evidence; never combines or replaces the selected primary method
-    config.async.analysis_fs = 20;            % local anti-aliased analysis rate; master data and indices remain at config.fs
-    config.async.f0 = 1;                      % wavelet resolution parameter from Tomislav's script
-    config.async.fmin = 0.052;                % lower WT frequency bound from Tomislav's script
-    config.async.low_mid_cut_hz = 0.145;      % low vs respiratory-band split
-    config.async.mid_high_cut_hz = 0.6;       % respiratory-band vs high split
-    config.async.fmax = 2.0;                  % upper WT frequency bound from Tomislav's script
-    config.async.tlphcoh_cycles = 10;         % time-localized phase coherence window in cycles
-    config.async.min_dur_sec = 30;            % sustained low-coherence deviation duration
-    config.async.reference_mad_k = 3;         % robust spread multiplier for session-reference-relative threshold
-    config.async.min_abs_drop = 0.15;         % minimum coherence drop from session reference median
-    config.async.min_deviating_bins = 1;      % number of frequency bins that must deviate
-    config.async.plot_step_sec = 5;           % display coherence as held medians at this step (in seconds)
-    config.async.do_plot          = true;     % save respiratory asynchrony diagnostic plot
-    config.async.plot_legacy_coherence = false; % add the legacy mid-band coherence comparison as the bottom plot panel
+    %---- LABEL 10 - RESPIRATORY ASYNCHRONY
+    config.async = struct();
+
+    % Method selection
+    config.async.primary_method = 'wavelet_phase_offset'; % method supplying the canonical asynchrony events
+    config.async.compare_methods = true;                 % compare legacy coherence evidence without combining event decisions
+
+    % Minimum sustained event duration
+    config.async.min_dur_sec = 30;                        % minimum continuous qualifying evidence, in seconds
+
+    % Plotting
+    config.async.do_plot = true;                          % save phase-offset and phase-consistency diagnostics
+
+    % Primary method: wavelet phase offset
     config.async.phase_offset = struct();
-    config.async.phase_offset.angle_threshold_deg = 30;    % operational research cutoff; not a validated clinical threshold
-    config.async.phase_offset.summary_cycles = 5;          % centered circular-summary support in respiratory cycles
-    config.async.phase_offset.min_resultant_length = 0.80; % minimum circular consistency for an assessable phase mean
-    config.async.phase_offset.min_valid_fraction = 0.80;   % minimum valid coefficient fraction within the full summary window
-    config.async.phase_offset.min_magnitude_fraction = 0.05; % per-belt wavelet-magnitude floor relative to recording median
-    config.async.phase_offset.frequency_min_hz = 0.052;    % phase-offset-only lower bound; includes slow respiratory fundamentals
-    config.async.phase_offset.frequency_max_hz = 0.60;     % phase-offset-only upper bound; legacy coherence bands are unchanged
-    config.async.phase_offset.frequency_tolerance_fraction = 0.30; % breath-guided shared ridge neighborhood, approximately 0.70-1.30 times the reviewed rate
-    config.async.phase_offset.frequency_ratio_qc_range = [0.5 1.5]; % descriptive selected/expected frequency-ratio QC; never creates events
-    config.async.phase_offset.lungs_polarity_multiplier = 1; % fixed acquisition correction only: +1 or -1; never optimized per recording
-    config.async.phase_offset.diaph_polarity_multiplier = 1; % fixed acquisition correction only: +1 or -1; never optimized per recording
-    config.async.phase_offset.edge_exclusion_cycles = 1;    % conservative explicit block-edge exclusion at the lowest locally eligible frequency
+    config.async.phase_offset.angle_threshold_deg = 30;    % minimum absolute mean belt phase offset; research cutoff, not clinically validated
+    config.async.phase_offset.summary_cycles = 5;          % centered circular-summary window in respiratory cycles
+    config.async.phase_offset.min_resultant_length = 0.80; % minimum circular consistency for an assessable phase mean (0-1)
 
     %---- LABEL 11 - desat - DETECTION SETTINGS
     config.desat = struct();
     config.desat.spo2_floor = 90;             % absolute SpO2 threshold for desaturation
     config.desat.drop_thr = 3;                % drop in percentage points from the session SpO2 reference
     config.desat.min_dur_sec = 10;            % minimum desaturation duration in seconds
-    config.desat.association_delay_sec = 5;   % downstream pulse-ox association allowance in seconds; never modifies respiratory labels
     config.desat.do_plot = true;              % save desaturation diagnostic plot
-    config.desat.metrics = struct();
-    config.desat.metrics.pre_event_lookback_sec = 30;    % descriptive local baseline only; does not affect event detection
-    config.desat.metrics.min_pre_event_valid_sec = 10;   % contiguous usable non-event support required for a local baseline
-    config.desat.metrics.recovery_tolerance_pp = 1;      % recovery target is local baseline minus this many percentage points
-    config.desat.metrics.recovery_hold_sec = 5;          % continuous target support required for observed recovery
-    config.desat.metrics.max_recovery_search_sec = 120;  % descriptive recovery-search censoring horizon
 
     % HOW TO REPRESENT RESULTS
     config.LabelMask = struct();                 % label-mask heatmap figure

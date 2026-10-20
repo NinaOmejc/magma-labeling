@@ -100,29 +100,27 @@ extraction or detectors. Recording results use the filenames
 
 ## Respiratory-cycle extraction
 
-Preprocessing first aligns the diaphragm belt with the lung belt, then checks
-their common orientation using a temporary average of the separately
+When enabled, preprocessing first aligns the diaphragm belt with the lung belt,
+then checks their common orientation using a temporary average of the separately
 standardized belts. Within each complete breath, time above the midpoint
 between its peak and neighboring troughs measures whether high peaks are
 narrow or broad. Narrow highs in at least 65% of breaths keep the orientation;
 broad highs in at least 65% flip both belts. A 0.45Ã¢â‚¬â€œ0.55 midpoint-dwell band
 leaves near-symmetric shapes unchanged. The shared I:E ratio remains a
-diagnostic; one usable belt falls back to its own I:E ratio. The settings are:
+diagnostic; one usable belt falls back to its own I:E ratio.
 
 The relative correction flips the diaphragm when the median informative-window
 correlation is at most `-0.65`, at least 80% of informative windows are
 negative, and at least 60% of windows are informative.
 
 ```matlab
-config.preprocessing.check_belt_polarity = true;
-config.preprocessing.absolute_polarity.enabled = true;
-config.preprocessing.absolute_polarity.ratio_lower = 0.90;
-config.preprocessing.absolute_polarity.ratio_upper = 1.10;
-config.preprocessing.absolute_polarity.majority_threshold = 0.65;
-config.preprocessing.absolute_polarity.high_dwell_lower = 0.45;
-config.preprocessing.absolute_polarity.high_dwell_upper = 0.55;
-config.preprocessing.absolute_polarity.min_valid_breaths = 10;
+config.preprocessing.check_relative_belt_polarity = false;
+config.preprocessing.check_absolute_belt_polarity = false;
 ```
+
+These two independent flags are the user-facing polarity settings. Both default
+to `false`; set either to `true` to enable its check. Algorithm tuning parameters
+remain internal, with their existing thresholds unchanged.
 
 The separate relative and absolute decisions are saved under
 `config.preprocessing.belt_polarity_qc` and
@@ -258,29 +256,47 @@ the full analysis window, before the 60-second persistence rule is applied.
 
 ### Respiratory asynchrony
 
-For the final analysis:
+The default configuration exposes the method, sustained event duration,
+plotting switch, and three primary scientific controls:
 
 ```matlab
 config.async.primary_method = 'wavelet_phase_offset';
 config.async.compare_methods = true;
-config.async.plot_legacy_coherence = false;
-```
-
-The older wavelet-coherence method remains available as complementary evidence.
-Its respiratory-band comparison subplot is hidden by default and can be added
-at the bottom of the diagnostic figure independently of `compare_methods`.
-
-Important phase-offset settings include:
-
-```matlab
+config.async.min_dur_sec = 30;
+config.async.do_plot = true;
 config.async.phase_offset.angle_threshold_deg = 30;
 config.async.phase_offset.summary_cycles = 5;
 config.async.phase_offset.min_resultant_length = 0.80;
-config.async.phase_offset.min_valid_fraction = 0.80;
+```
 
+The angle is the minimum absolute mean belt phase offset, an operational
+research cutoff rather than a validated clinical threshold. The summary spans
+five respiratory cycles, and resultant length measures circular phase
+consistency on a 0–1 scale. Qualifying evidence must persist for 30 seconds.
+
+Advanced processing and descriptive QC defaults live in
+`src/label_detection/resolve_respiratory_asynchrony_settings.m`, shared by both
+detectors and the diagnostic panel selector. These retain the existing
+20 Hz analysis ceiling, wavelet resolution, legacy coherence bands and
+thresholds, phase-frequency selection and validity controls, fixed polarity
+multipliers, edge exclusions, and plotting settings. The analysis rate never
+exceeds the native sampling rate. Effective numerical detector settings remain
+recorded in the method diagnostics.
+
+Explicit advanced overrides remain supported at the same configuration paths;
+only missing fields receive internal defaults. For example:
+
+```matlab
 config.async.phase_offset.frequency_min_hz = 0.052;
 config.async.phase_offset.frequency_max_hz = 0.60;
+config.async.plot_legacy_coherence = true;
 ```
+
+The older `wavelet_coherence_drop` method remains selectable as the primary
+method or available as complementary evidence through `compare_methods`.
+Comparison never combines event decisions or replaces an unavailable primary
+method. Its respiratory-band subplot is hidden by default
+(`plot_legacy_coherence = false`) and can be added independently of comparison.
 
 Reviewed breath timing guides selection of the shared respiratory fundamental when available. Joint thoracic/abdominal wavelet magnitude is used within the allowed neighborhood or as a fallback.
 

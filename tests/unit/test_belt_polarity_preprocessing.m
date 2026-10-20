@@ -3,9 +3,17 @@ function tests = test_belt_polarity_preprocessing
     tests = functiontests(localfunctions);
 end
 
+function testDefaultsExposeOnlyTwoDisabledPolarityFlags(testCase)
+    config = get_config_defaults();
+    verifyEqual(testCase,fieldnames(config.preprocessing), ...
+        {'check_relative_belt_polarity';'check_absolute_belt_polarity'});
+    verifyFalse(testCase,config.preprocessing.check_relative_belt_polarity);
+    verifyFalse(testCase,config.preprocessing.check_absolute_belt_polarity);
+end
+
 function testDisabledLeavesDataUnchanged(testCase)
     [data, config] = polarity_fixture(-1);
-    config.preprocessing.check_belt_polarity = false;
+    config.preprocessing.check_relative_belt_polarity = false;
 
     [actual, config_out] = preprocess_data(data, config);
 
@@ -114,7 +122,7 @@ function testDiaphragmTrendUsesCorrectedPolarity(testCase)
     [data, config] = polarity_fixture(-1);
     config.detrend.method = 'hpfilter';
     disabled = config;
-    disabled.preprocessing.check_belt_polarity = false;
+    disabled.preprocessing.check_relative_belt_polarity = false;
 
     [uncorrected, ~, uncorrected_trend] = preprocess_data(data, disabled);
     [corrected, config_out, corrected_trend] = preprocess_data(data, config);
@@ -147,8 +155,8 @@ function [data, config, t] = polarity_fixture(relative_sign)
     config.detrend.method = 'none';
     config.detrend.signals = {'Resp-Lungs', 'Resp-Diaphragm'};
     config.detrend.do_plot = false;
-    config.preprocessing.check_belt_polarity = true;
-    config.preprocessing.absolute_polarity.enabled = false;
+    config.preprocessing.check_relative_belt_polarity = true;
+    config.preprocessing.check_absolute_belt_polarity = false;
     config.problems.missing_lung_belt = zeros(0, 2);
     config = resolve_signal_channels(config);
 

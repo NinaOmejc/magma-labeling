@@ -13,22 +13,21 @@ function run_magma(base_config)
     base_config.execution.selected_labels = selected_labels;
     mode = execution_mode(base_config);
     if strcmp(mode, 'review_only') && ~isempty(selected_labels)
-        error('MAGMA:Execution:SelectedLabelsReviewOnly', ...
-            ['config.execution.selected_labels cannot be used with ' ...
-             'execution.mode = review_only.']);
+        error('MAGMA:Execution:SelectedLabelsReviewOnly', ['config.execution.selected_labels cannot be used with execution.mode = review_only.']);
     end
 
     if get_config_value(base_config,'resp','recheck_cached',false) && ...
             (~isempty(selected_labels) || (isfield(base_config,'overwrite_features') && base_config.overwrite_features))
-        error('MAGMA:Respiration:RecheckConfiguration', ...
-            'Cached feature recheck requires selected_labels={} and overwrite_features=false.');
+        error('MAGMA:Respiration:RecheckConfiguration', 'Cached feature recheck requires selected_labels={} and overwrite_features=false.');
     end
     recording_results('begin_run');
     ensure_output_directory(base_config.path_results_out);
-    config = base_config;
-    save(fullfile(base_config.path_results_out, ...
-        'analysis_configuration.mat'), 'config');
 
+    % Save configs
+    config = base_config;
+    save(fullfile(base_config.path_results_out, 'analysis_configuration.mat'), 'config');
+    
+    % Go over all subjects & measurements
     for isub = 1:length(base_config.subjects)
         for imeasure = 1:length(base_config.measurements)
             config = base_config;
@@ -39,8 +38,7 @@ function run_magma(base_config)
             config.sub_results_filename = [stem '_results.mat'];
             config.sub_features_filename = [stem '_features.mat'];
             if ismember([config.subject config.measure], excluded_recordings, 'rows')
-                log_message(config, 1, 'Skipping excluded recording: Sub %d | Measurement: %d', ...
-                    config.subject, config.measure);
+                log_message(config, 1, 'Skipping excluded recording: Sub %d | Measurement: %d', config.subject, config.measure);
                 continue;
             end
 
@@ -53,6 +51,8 @@ function run_magma(base_config)
                 error('MAGMA:Observation:FullReanalysisRequired', ...
                     'Pending thoracic observation requires a full respiratory reanalysis; clear selected_labels.');
             end
+
+            % Load data
             [data_raw, config, do_analysis] = load_raw_data(config);
             if ~do_analysis
                 if config.respiratory_artifact_state.pending_reanalysis
@@ -64,8 +64,7 @@ function run_magma(base_config)
                 continue;
             end
 
-            result_file = fullfile( ...
-                config.sub_results_path, config.sub_results_filename);
+            result_file = fullfile(config.sub_results_path, config.sub_results_filename);
             result_exists = isfile(result_file);
             if strcmp(mode, 'review_only')
                 existing_results = recording_results('load',result_file);
@@ -77,8 +76,7 @@ function run_magma(base_config)
                 review_config.detrend.do_plot = false;
                 [data, review_config] = preprocess_data(data_raw, review_config);
                 config.times = review_config.times;
-                [results, review_cancelled] = review_existing_results( ...
-                    data, existing_results, config);
+                [results, review_cancelled] = review_existing_results(data, existing_results, config);
                 if review_cancelled
                     log_message(config, 1, 'Manual review cancelled; existing results were not saved over.');
                     continue;
@@ -86,20 +84,15 @@ function run_magma(base_config)
                 plot_reviewed_label_masks(results, config);
                 results = save_recording_results(results, data_raw, data, config);
                 plot_phenotype_summary(results.phenotypes, config, results.review_history, results);
-                log_message(config, 1, ...
-                    ['Successfully finished manual review for: Sub %d | ' ...
-                     'Measurement: %d'], config.subject, config.measure);
+                log_message(config, 1, ['Successfully finished manual review for: Sub %d | Measurement: %d'], config.subject, config.measure);
                 continue;
             end
 
             selective = ~isempty(selected_labels);
             existing_results = struct();
             if selective && result_exists
-                log_message(config, 1, ...
-                    'Selective label rerun for Sub %d | Measurement %d', ...
-                    config.subject, config.measure);
-                log_message(config, 1, 'Selected labels: %s', ...
-                    strjoin(selected_labels, ', '));
+                log_message(config, 1, 'Selective label rerun for Sub %d | Measurement %d', config.subject, config.measure);
+                log_message(config, 1, 'Selected labels: %s', strjoin(selected_labels, ', '));
                 existing_results = recording_results('load',result_file);
             elseif selective
                 log_message(config, 1, ...

@@ -15,8 +15,8 @@ config = get_config_defaults();
 % INPUT / OUTPUT
 config.path_data_in = 'D:\Projects\MAGMA\raw_data';
 config.path_results_out = 'D:\Projects\MAGMA\data_analysis\statistical_labeling';
-config.subjects = [21];
-config.measurements = [1];
+config.subjects = [33];
+config.measurements = [1 2];
 config.exclude_recordings = [ ...                   % [subject, measurement]; omit only these recordings
       3 1;   3 2; ...
      30 1;  30 2; ...
@@ -26,8 +26,8 @@ config.exclude_recordings = [ ...                   % [subject, measurement]; om
 
 % EXECUTION
 config.overwrite_results = true;       % If true, recompute even if "*_results.mat" output already exists.
-config.overwrite_features = false;      % If true, recompute respiratory features even if "*_features.mat" already exists.
-config.resp.recheck_cached = true;      % reopen saved landmarks/artifacts; Cancel skips this recording
+config.overwrite_features = true;      % If true, recompute respiratory features even if "*_features.mat" already exists.
+config.resp.recheck_cached = false;      % reopen saved landmarks/artifacts; Cancel skips this recording
 config.execution.mode = 'analyze';      % 'analyze', 'analyze_and_review', or 'review_only'.
 
 % LABEL SELECTION

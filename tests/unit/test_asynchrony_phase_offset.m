@@ -4,6 +4,119 @@ function tests = test_asynchrony_phase_offset
     tests = functiontests(localfunctions);
 end
 
+function testPublicDefaultsAndInternalNumericalDefaults(testCase)
+    config = get_config_defaults();
+    verifyEqual(testCase, fieldnames(config.async), ...
+        {'primary_method'; 'compare_methods'; 'min_dur_sec'; ...
+         'do_plot'; 'phase_offset'});
+    verifyEqual(testCase, fieldnames(config.async.phase_offset), ...
+        {'angle_threshold_deg'; 'summary_cycles'; 'min_resultant_length'});
+    verifyEqual(testCase, config.async.primary_method, 'wavelet_phase_offset');
+    verifyTrue(testCase, config.async.compare_methods);
+    verifyTrue(testCase, config.async.do_plot);
+
+    % This explicit fixture preserves the complete pre-refactor defaults.
+    [~, previous] = phase_fixture(0, 1);
+    expected = rmfield(previous.async, ...
+        {'primary_method', 'compare_methods', 'do_plot'});
+    expected.min_dur_sec = 30;
+    expected.plot_legacy_coherence = false;
+    settings = resolve_respiratory_asynchrony_settings(config);
+    verifyEqual(testCase, settings, expected);
+    verifyEqual(testCase, resolve_respiratory_asynchrony_settings(struct()), ...
+        expected);
+end
+
+function testCompactAndExplicitSettingsGiveIdenticalMethodEvidence(testCase)
+    [data, explicit] = phase_fixture(90, 1);
+    compact = explicit;
+    defaults = get_config_defaults();
+    compact.async = defaults.async;
+    compact.async.min_dur_sec = explicit.async.min_dur_sec;
+    compact.async.do_plot = false;
+    reference = struct('available', true, 'complete', true, ...
+        'reference_start_t', 0, 'reference_end_t', 120);
+    cycles = reviewed_cycles(0.25, 120, true, true);
+
+    for method = {'wavelet_phase_offset', 'wavelet_coherence_drop'}
+        explicit.async.primary_method = method{1};
+        compact.async.primary_method = method{1};
+        [expected_events, expected] = detect_respiratory_asynchrony( ...
+            data, reference, cycles, explicit);
+        [events, actual] = detect_respiratory_asynchrony( ...
+            data, reference, cycles, compact);
+        verifyTrue(testCase, actual.methods.wavelet_phase_offset.available);
+        verifyTrue(testCase, actual.methods.wavelet_coherence_drop.available);
+        verifyEqual(testCase, events, expected_events);
+        verifyEqual(testCase, actual, expected);
+    end
+end
+
+function testAdvancedOverridesReachBothMethodDiagnostics(testCase)
+    [data, config] = phase_fixture(90, 1);
+    config.async.analysis_fs = 10;
+    config.async.f0 = 1.1;
+    config.async.fmin = 0.06;
+    config.async.fmax = 1.8;
+    config.async.low_mid_cut_hz = 0.16;
+    config.async.mid_high_cut_hz = 0.55;
+    config.async.tlphcoh_cycles = 8;
+    config.async.reference_mad_k = 2.5;
+    config.async.min_abs_drop = 0.20;
+    config.async.min_deviating_bins = 2;
+    config.async.plot_step_sec = 7;
+    config.async.plot_legacy_coherence = true;
+    config.async.phase_offset = struct( ...
+        'angle_threshold_deg', 35, 'summary_cycles', 4, ...
+        'min_resultant_length', 0.75, 'min_valid_fraction', 0.70, ...
+        'min_magnitude_fraction', 0.03, 'frequency_min_hz', 0.07, ...
+        'frequency_max_hz', 0.50, 'frequency_tolerance_fraction', 0.20, ...
+        'frequency_ratio_qc_range', [0.6 1.4], ...
+        'lungs_polarity_multiplier', -1, 'diaph_polarity_multiplier', 1, ...
+        'edge_exclusion_cycles', 1.25);
+    settings = resolve_respiratory_asynchrony_settings(config);
+    expected = rmfield(config.async, ...
+        {'primary_method', 'compare_methods', 'do_plot'});
+    verifyEqual(testCase, settings, expected);
+
+    reference = struct('available', true, 'complete', true, ...
+        'reference_start_t', 0, 'reference_end_t', 120);
+    cycles = reviewed_cycles(0.25, 120, true, true);
+    [~, diagnostics] = detect_respiratory_asynchrony( ...
+        data, reference, cycles, config);
+    phase = diagnostics.methods.wavelet_phase_offset;
+    for name = fieldnames(config.async.phase_offset)'
+        verifyEqual(testCase, phase.(name{1}), ...
+            config.async.phase_offset.(name{1}));
+    end
+    verifyEqual(testCase, phase.analysis_fs, config.async.analysis_fs);
+    verifyEqual(testCase, phase.f0, config.async.f0);
+    verifyEqual(testCase, phase.min_dur_sec, config.async.min_dur_sec);
+    legacy = diagnostics.methods.wavelet_coherence_drop.settings;
+    verifyEqual(testCase, legacy, struct( ...
+        'analysis_fs', config.async.analysis_fs, ...
+        'frequency_min_hz', config.async.fmin, ...
+        'frequency_max_hz', config.async.fmax, ...
+        'wavelet_resolution_f0', config.async.f0, ...
+        'low_mid_cut_hz', config.async.low_mid_cut_hz, ...
+        'mid_high_cut_hz', config.async.mid_high_cut_hz, ...
+        'tlphcoh_cycles', config.async.tlphcoh_cycles, ...
+        'minimum_duration_sec', config.async.min_dur_sec, ...
+        'reference_mad_k', config.async.reference_mad_k, ...
+        'minimum_absolute_drop', config.async.min_abs_drop, ...
+        'minimum_deviating_bins', config.async.min_deviating_bins));
+    verifyEqual(testCase, respiratory_asynchrony_plot_panels(config), ...
+        {'belts', 'phase_offset', 'phase_consistency', 'legacy_coherence'});
+
+    % A partial nested override fills missing fields without replacing it.
+    partial = struct('async', struct('phase_offset', ...
+        struct('frequency_min_hz', 0.08)));
+    settings = resolve_respiratory_asynchrony_settings(partial);
+    verifyEqual(testCase, settings.phase_offset.frequency_min_hz, 0.08);
+    verifyEqual(testCase, settings.phase_offset.frequency_max_hz, 0.60);
+    verifyEqual(testCase, settings.analysis_fs, 20);
+end
+
 function testKnownStablePhaseOffsets(testCase)
     angles = [0 30 90 180];
     tolerance_deg = 2;
@@ -182,7 +295,8 @@ end
 
 function testAsynchronyDiagnosticPlotUsesOptionalBottomLegacyPanel(testCase)
     config = get_config_defaults();
-    verifyFalse(testCase, config.async.plot_legacy_coherence);
+    settings = resolve_respiratory_asynchrony_settings(config);
+    verifyFalse(testCase, settings.plot_legacy_coherence);
     verifyEqual(testCase, respiratory_asynchrony_plot_panels(config), ...
         {'belts', 'phase_offset', 'phase_consistency'});
 
