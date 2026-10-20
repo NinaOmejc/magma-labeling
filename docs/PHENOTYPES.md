@@ -248,6 +248,20 @@ Technical absence returns NaN with `thoracic_belt_technically_missing` or
 coverage and transient-artifact failures have separate reasons. Zero remains a
 finite, available concentration value, never a missing-sensor marker.
 
+With `config.PhenotypeSummary.do_plot`, full analyses also save
+`Sub<subject>_M<measurement>_thoracic_rhythmicity_diagnostic.png`. Its three
+panels show both preprocessed belts in the same valid 120-s window, their Welch
+spectral shapes, and individual window concentrations with recording medians
+on a common 0-1 scale. The representative window has thoracic Q23 closest to
+the recording median. Signal units and numerical ticks are retained; absolute
+amplitudes between belts are not calibrated against each other. Each PSD is
+divided by its own total 0.05-2 Hz power, removing absolute power information.
+Both concentrations use the same validated abdominal frequency and Q23 band.
+The abdominal concentration is transient plotting evidence only; it is not
+saved as a phenotype feature. Window counts/coverage and clinician observation
+status are shown separately. Without a valid Q23 window, the figure explains
+the missing reason and shows available signal evidence without a score.
+
 These two features are recording-scoped independently of manual label coverage.
 Automatic feature 24 uses `analysis_recording_observations`; Review N uses that
 round's saved observation. The same saved signal QC supplies feature 23 in both

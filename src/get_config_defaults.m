@@ -1,6 +1,6 @@
 function config = get_config_defaults()
-% GET_CONFIG_DEFAULTS Define the complete MAGMA configuration defaults.
-% This file contains the complete user-facing scientific and export defaults.
+% GET_CONFIG_DEFAULTS Define MAGMA recording-analysis configuration defaults.
+% Group-analysis settings are defined in main_group.m.
 %
 % Outputs:
 %   config - Scalar pipeline configuration struct.
@@ -21,17 +21,6 @@ function config = get_config_defaults()
     config.data_columns = {'ECG1', 'ECG2', 'SpO₂', 'Resp-Lungs', 'Blood Pressure', 'Resp-Diaphragm'};  % column names in raw data
     config.input_filename_pattern = 'ECG1_ECG2_SpO2_RespL_BP_RespD_fs200_Sub{subject}_Pom{measure}_DeTr_Norm.dat'; % The generic name of the data files
     config.labels = get_labels();
-    
-    % Group analysis reads saved results only. Empty subjects discovers all saved IDs.
-    config.group = struct();
-    config.group.subjects = [];
-    config.group.measurements = [1 2];
-    config.group.control_subjects = [];
-    config.group.patient_subjects = [];
-    config.group.paired_measurements = [1 2];
-    config.group.plot_layer = 'automatic';
-    config.group.plot_label_histograms = true;
-    config.group.plot_stratified_histograms = true;
     
     % execution
     config.overwrite_results = false;                                      % *** Recompute even if label output already exists

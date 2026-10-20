@@ -34,9 +34,12 @@ function testRegenerationReviewCancellationAndSelectedRerun(testCase)
     result_file = fullfile(folder,config.sub_results_filename);
     obsolete_marker = true; save(result_file,'obsolete_marker');
     config = rmfield(config,{'sub_results_path','sub_features_filename','sub_results_filename'});
-    old_warning = warning('off','MAGMA:Results:Regenerate');
-    cleanup_warning = onCleanup(@() warning(old_warning)); %#ok<NASGU>
-    run_magma(config);
+    config.verbosity = 1;
+    output = evalc('run_magma(config);');
+    verifyEqual(testCase,count(output, ...
+        'Regenerating old-format results from saved feature cache: Sub999_M1'),1);
+    verifyFalse(testCase,contains(output,'MAGMA:Results:Regenerate'));
+    config.verbosity = 0;
     verifyEqual(testCase,who('-file',result_file),{'results'});
     automatic = recording_results('load',result_file);
     verifySize(testCase,automatic.mask_automatic,[2001 11]);

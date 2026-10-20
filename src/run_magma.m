@@ -23,6 +23,7 @@ function run_magma(base_config)
         error('MAGMA:Respiration:RecheckConfiguration', ...
             'Cached feature recheck requires selected_labels={} and overwrite_features=false.');
     end
+    recording_results('begin_run');
     ensure_output_directory(base_config.path_results_out);
     config = base_config;
     save(fullfile(base_config.path_results_out, ...
@@ -166,8 +167,14 @@ function run_magma(base_config)
                 config.resp.recheck_cached = recheck_requested;
             end
             [resp_cycles, ~] = apply_thoracic_observation(resp_cycles, data, config);
-            signal_qc = struct('thoracic', ...
-                compute_thoracic_respiratory_rhythmicity(data, resp_cycles, config));
+            plot_rhythmicity = ~selective && get_config_value(config,'PhenotypeSummary','do_plot',true);
+            signal_qc = struct();
+            if plot_rhythmicity
+                [signal_qc.thoracic,rhythmicity_diagnostic] = ...
+                    compute_thoracic_respiratory_rhythmicity(data, resp_cycles, config);
+            else
+                signal_qc.thoracic = compute_thoracic_respiratory_rhythmicity(data, resp_cycles, config);
+            end
             session_reference = get_session_reference_interval( ...
                 size(data, 1), config);
             resp_ref = compute_respiratory_reference( ...
@@ -216,6 +223,12 @@ function run_magma(base_config)
             plot_reviewed_label_masks(results, config);
             results = save_recording_results(results, data_raw, data, config);
             plot_phenotype_summary(results.phenotypes, config, results.review_history, results);
+            if plot_rhythmicity
+                rhythmicity_config = config;
+                rhythmicity_config.recording_observations = results.recording_observations;
+                plot_thoracic_rhythmicity_diagnostic(data,signal_qc.thoracic, ...
+                    rhythmicity_diagnostic,rhythmicity_config);
+            end
             log_message(config, 1, ...
                 ['Successfully finished label detection for: Sub %d | ' ...
                  'Measurement: %d'], config.subject, config.measure);

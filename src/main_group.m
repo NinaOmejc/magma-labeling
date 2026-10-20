@@ -1,10 +1,21 @@
 
 % MAIN_GROUP Run cohort analysis using saved *_results.mat files only.
-% Set config before run('src/main_group.m') to override the defaults.
+% Edit the group defaults below, or supply config before running this script.
 src_root = fileparts(mfilename('fullpath'));
 if ~isempty(src_root)
     addpath(genpath(src_root));
 end
+
+% Group settings: explicitly supplied config.group fields take precedence.
+group_defaults = struct( ...
+    'subjects', [], ...                     % empty discovers all saved subject IDs
+    'measurements', [1 2], ...              % measurements to include
+    'control_subjects', [], ...             % optional explicit group membership
+    'patient_subjects', [], ...
+    'paired_measurements', [1 2], ...       % before/after measurement pair
+    'plot_layer', 'automatic', ...          % 'automatic' or 'reviewed'
+    'plot_label_histograms', true, ...
+    'plot_stratified_histograms', true);
 
 if ~exist('config', 'var') || ~isstruct(config)
     config = get_config_defaults();
@@ -12,14 +23,11 @@ end
 if ~isfield(config, 'group')
     config.group = struct();
 end
-if ~isfield(config.group, 'subjects'), config.group.subjects = []; end
-if ~isfield(config.group, 'measurements'), config.group.measurements = [1 2]; end
-if ~isfield(config.group, 'control_subjects'), config.group.control_subjects = []; end
-if ~isfield(config.group, 'patient_subjects'), config.group.patient_subjects = []; end
-if ~isfield(config.group, 'paired_measurements'), config.group.paired_measurements = [1 2]; end
-if ~isfield(config.group, 'plot_layer'), config.group.plot_layer = 'automatic'; end
-if ~isfield(config.group, 'plot_label_histograms'), config.group.plot_label_histograms = true; end
-if ~isfield(config.group, 'plot_stratified_histograms'), config.group.plot_stratified_histograms = true; end
+for group_field = fieldnames(group_defaults)'
+    if ~isfield(config.group, group_field{1})
+        config.group.(group_field{1}) = group_defaults.(group_field{1});
+    end
+end
 
 config = resolve_group_metadata(config);
 [group_table, cohort] = build_group_label_table(config, false);

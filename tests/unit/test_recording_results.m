@@ -63,13 +63,76 @@ function testObsoleteResultsAndTwentyTwoFeatureVectorsAreRejected(testCase)
     save(filename,'-struct','original');
     verifyError(testCase,@() recording_results('load',filename),'MAGMA:Results:ObsoleteSchema');
     config = original.config; config.overwrite_results = true; config.overwrite_features = false;
-    old = warning('off','MAGMA:Results:Regenerate');
-    restore_warning = onCleanup(@() warning(old)); %#ok<NASGU>
     verifyEmpty(testCase,fieldnames(recording_results('existing',filename,config)));
     config.execution.mode = 'review_only';
     verifyError(testCase,@() recording_results('existing',filename,config),'MAGMA:Results:ObsoleteSchema');
     original.phenotypes.automatic.numeric_summary.n_features = 22;
     verifyError(testCase,@() recording_results('pack',original),'MAGMA:PhenotypeFeatures:InvalidCompactFeatures');
+end
+
+function testRegenerationLogsOnceAcrossMetadataLookupsAndResetsEachRun(testCase)
+    [original,cleanup] = fixture(); %#ok<ASGLU>
+    config = original.config;
+    config.overwrite_results = true; config.overwrite_features = false; config.verbosity = 1;
+    filename = fullfile(config.sub_results_path,'Sub999_M1_results.mat');
+    save(filename,'-struct','original');
+    resp_cycles = original.resp_cycles;
+    recording_observations = original.recording_observations;
+    respiratory_artifact_state = original.respiratory_artifact_state;
+    cache_file = fullfile(config.sub_results_path,config.sub_features_filename);
+    save(cache_file,'resp_cycles','recording_observations','respiratory_artifact_state');
+    result_before = read_bytes(filename); cache_before = read_bytes(cache_file);
+    recording_results('begin_run');
+    output = evalc("observation = recording_observation('load',config); " + ...
+        "existing = recording_results('existing',filename,config); " + ...
+        "state = respiratory_artifact_checkpoint('load',config); " + ...
+        "recording_observation('load',config);");
+    message = 'Regenerating old-format results from saved feature cache: Sub999_M1';
+    verifyEqual(testCase,strtrim(output),message);
+    verifyEmpty(testCase,fieldnames(existing));
+    verifyEqual(testCase,observation,recording_observations);
+    verifyEqual(testCase,state.revision,respiratory_artifact_state.revision);
+    verifyEqual(testCase,state.artifact_intervals_idx,resp_cycles.artifact_intervals_idx);
+    verifyEqual(testCase,read_bytes(filename),result_before);
+    verifyEqual(testCase,read_bytes(cache_file),cache_before);
+
+    other = config; other.measure = 2;
+    other_filename = fullfile(config.sub_results_path,'Sub999_M2_results.mat');
+    save(other_filename,'-struct','original');
+    output = evalc("recording_results('existing',other_filename,other); " + ...
+        "recording_results('existing',other_filename,other);");
+    verifyEqual(testCase,strtrim(output), ...
+        'Regenerating old-format results from saved feature cache: Sub999_M2');
+    verifyEmpty(testCase,evalc("recording_results('existing',filename,config);"));
+    recording_results('begin_run');
+    verifyEqual(testCase,strtrim(evalc("recording_results('existing',filename,config);")),message);
+end
+
+function testRegenerationLoggingHonorsVerbosityAndNeverBypassesRejection(testCase)
+    [original,cleanup] = fixture(); %#ok<ASGLU>
+    config = original.config;
+    filename = fullfile(config.sub_results_path,'obsolete.mat');
+    save(filename,'-struct','original');
+    config.overwrite_results = true; config.overwrite_features = false; config.verbosity = 0;
+    recording_results('begin_run');
+    verifyEmpty(testCase,evalc("recording_results('existing',filename,config);"));
+    % Even a previously reported file must still pass the permission check.
+    for mode = {'review_only','analyze_and_review'}
+        rejected = config; rejected.execution.mode = mode{1};
+        verifyError(testCase,@() recording_results('existing',filename,rejected), ...
+            'MAGMA:Results:ObsoleteSchema');
+    end
+    rejected = config; rejected.overwrite_results = false;
+    verifyError(testCase,@() recording_results('existing',filename,rejected), ...
+        'MAGMA:Results:ObsoleteSchema');
+    rejected = config; rejected.overwrite_features = true;
+    verifyError(testCase,@() recording_results('existing',filename,rejected), ...
+        'MAGMA:Results:ObsoleteSchema');
+    rejected = config; rejected.execution.selected_labels = {'rapid'};
+    verifyError(testCase,@() recording_results('existing',filename,rejected), ...
+        'MAGMA:Results:ObsoleteSchema');
+    verifyError(testCase,@() recording_results('load',filename), ...
+        'MAGMA:Results:ObsoleteSchema');
 end
 
 function testHdf5ScientificExportMatchesReopenedMat(testCase)

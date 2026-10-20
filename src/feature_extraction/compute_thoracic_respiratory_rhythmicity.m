@@ -1,8 +1,13 @@
-function qc = compute_thoracic_respiratory_rhythmicity(data, cycles, config)
+function [qc, diagnostic] = compute_thoracic_respiratory_rhythmicity(data, cycles, config)
 % COMPUTE_THORACIC_RESPIRATORY_RHYTHMICITY Exploratory RIP spectral concentration.
 % Pure calculation: no cache access/writes, peak extraction, or signal changes.
 % MAGMA adaptation, not Robles-Rubio et al.'s published NPP metric:
 % https://doi.org/10.1371/journal.pone.0238402
+% Optional diagnostic evidence is transient plotting data, not phenotype/cache state.
+    diagnostic = struct('window_start_idx',[],'thoracic_values',[], ...
+        'abdominal_values',[],'reference_frequency_hz',[],'window_reasons',{{}}, ...
+        'representative_window',[],'representative',struct());
+    collect_diagnostic = nargout > 1;
     p = struct('window_sec',120,'overlap_fraction',0.5,'analysis_fs',10, ...
         'power_band_hz',[0.05 2],'tolerance_min_hz',0.03,'tolerance_fraction',0.2, ...
         'welch_segment_sec',40,'welch_overlap_fraction',0.5, ...
@@ -67,11 +72,21 @@ function qc = compute_thoracic_respiratory_rhythmicity(data, cycles, config)
         artifacts.evidence_intervals_idx, ...
         (starts+n-2)/fs,(n-1)/fs,fs);
     values = nan(size(starts)); reasons = cell(size(starts));
+    if collect_diagnostic
+        diagnostic.window_start_idx = starts(:);
+        diagnostic.abdominal_values = nan(numel(starts),1);
+        diagnostic.reference_frequency_hz = nan(numel(starts),1);
+    end
     valid_time = false(size(data,1),1);
     for w = 1:numel(starts)
         idx = starts(w):starts(w)+n-1;
         if ~clean_windows(w)
             reasons{w} = 'manually_marked_respiratory_artifact';
+        elseif collect_diagnostic
+            [values(w),reasons{w},detail] = window_value( ...
+                data(idx,il),data(idx,ia),reference,idx(1),n,fs,p,spectral);
+            diagnostic.abdominal_values(w) = detail.abdominal_value;
+            diagnostic.reference_frequency_hz(w) = detail.reference_frequency_hz;
         else
             [values(w),reasons{w}] = window_value( ...
                 data(idx,il),data(idx,ia),reference,idx(1),n,fs,p,spectral);
@@ -95,13 +110,30 @@ function qc = compute_thoracic_respiratory_rhythmicity(data, cycles, config)
         counts = cellfun(@(name) qc.window_rejection_counts.(name),names);
         [~,i] = max(counts); qc.missing_reason = names{i};
     end
+    if collect_diagnostic
+        diagnostic.thoracic_values = values(:);
+        diagnostic.window_reasons = reasons(:);
+        if any(valid)
+            candidates = find(valid);
+            [~,nearest] = min(abs(values(valid)-qc.thoracic_respiratory_rhythmicity));
+            w = candidates(nearest);
+            diagnostic.representative_window = w;
+            idx = starts(w):starts(w)+n-1;
+            [~,~,diagnostic.representative] = window_value( ...
+                data(idx,il),data(idx,ia),reference,idx(1),n,fs,p,spectral);
+        end
+    end
 end
 
-function [q,reason] = window_value(thoracic,abdominal,reference,start,n,fs,p,spectral)
+function [q,reason,detail] = window_value(thoracic,abdominal,reference,start,n,fs,p,spectral)
     q = NaN;
+    detail = struct('abdominal_value',NaN,'reference_frequency_hz',NaN, ...
+        'integration_band_hz',[],'frequency_hz',[], ...
+        'thoracic_normalized_psd',[],'abdominal_normalized_psd',[], ...
+        'abdominal_missing_reason','no_valid_q23_window');
     [x,reason] = usable_trace(thoracic,fs,p,'thoracic');
     if ~isempty(reason), return; end
-    [~,reason] = usable_trace(abdominal,fs,p,'abdominal');
+    [y,reason] = usable_trace(abdominal,fs,p,'abdominal');
     if ~isempty(reason), return; end
     overlap = max(0,min(reference.right,start+n)-max(reference.left,start));
     candidates = overlap > 0;
@@ -116,10 +148,24 @@ function [q,reason] = window_value(thoracic,abdominal,reference,start,n,fs,p,spe
     if iqr(frequencies)/f0 > p.max_reference_relative_iqr
         reason = 'unstable_abdominal_reference'; return;
     end
+    [q,reason,thoracic_psd,f,near] = spectral_concentration(x,f0,fs,p,spectral,'thoracic');
+    if nargout < 3 || ~isempty(reason), return; end
+    [detail.abdominal_value,detail.abdominal_missing_reason,abdominal_psd] = ...
+        spectral_concentration(y,f0,fs,p,spectral,'abdominal');
+    detail.reference_frequency_hz = f0;
+    detail.integration_band_hz = near;
+    detail.frequency_hz = f;
+    detail.thoracic_normalized_psd = thoracic_psd;
+    detail.abdominal_normalized_psd = abdominal_psd;
+end
+
+function [q,reason,normalized_psd,f,near] = spectral_concentration(x,f0,fs,p,spectral,belt)
+% SPECTRAL_CONCENTRATION Same detrending, Welch and band integration for either belt.
+    q = NaN; normalized_psd = []; f = []; near = [];
     magnitude = max(abs(x));
     x = detrend(x,'linear');
     if max(abs(x)) <= 10*eps(magnitude)
-        reason = 'thoracic_flatline_after_detrending'; return;
+        reason = [belt '_flatline_after_detrending']; return;
     end
     if spectral.fs ~= fs
         x = resample(x,spectral.up,spectral.down); % Same FIR anti-alias filter, per window.
@@ -129,9 +175,10 @@ function [q,reason] = window_value(thoracic,abdominal,reference,start,n,fs,p,spe
     tolerance = max(p.tolerance_min_hz,p.tolerance_fraction*f0);
     near = [max(p.power_band_hz(1),f0-tolerance),min(p.power_band_hz(2),f0+tolerance)];
     if ~isfinite(total) || total <= realmin
-        reason = 'thoracic_zero_band_power'; return;
+        reason = [belt '_zero_band_power']; return;
     end
     q = max(0,min(1,band_power(psd,f,near)/total));
+    normalized_psd = psd/total;
     reason = '';
 end
 

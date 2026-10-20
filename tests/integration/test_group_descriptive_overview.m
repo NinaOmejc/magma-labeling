@@ -183,6 +183,7 @@ function config = cohort_config(root)
     config.group.control_subjects = 2;
     config.group.patient_subjects = 1;
     config.group.paired_measurements = [1 2];
+    config.group.plot_layer = 'automatic';
 end
 
 function [root, cleanup] = saved_cohort()

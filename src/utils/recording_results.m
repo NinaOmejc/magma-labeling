@@ -4,7 +4,13 @@ function value = recording_results(action, varargin)
 % save atomically writes one v7.3 variable, results. update skips unchanged
 % patches. existing permits explicitly requested regeneration of obsolete MATs
 % without importing any historical result fields; feature caches are separate.
+% begin_run resets the in-memory, once-per-recording regeneration log.
+    persistent regeneration_reported
+    if isempty(regeneration_reported), regeneration_reported = {}; end
     switch action
+        case 'begin_run'
+            regeneration_reported = {};
+            value = [];
         case 'pack'
             value = pack(varargin{1});
         case 'unpack'
@@ -23,8 +29,12 @@ function value = recording_results(action, varargin)
             if current
                 value = unpack(saved.results);
             elseif regeneration_allowed(config)
-                warning('MAGMA:Results:Regenerate', ...
-                    'Ignoring obsolete results for regeneration from feature caches: %s', filename);
+                if ~ismember(filename, regeneration_reported)
+                    log_message(config, 1, ...
+                        'Regenerating old-format results from saved feature cache: Sub%d_M%d', ...
+                        config.subject, config.measure);
+                    regeneration_reported{end+1} = filename;
+                end
                 value = struct();
             else
                 obsolete_result(filename);

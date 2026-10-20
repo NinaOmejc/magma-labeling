@@ -1,10 +1,12 @@
 # Configuration
 
-The main configuration file is:
+The recording-analysis configuration file is:
 
 ```text
 src/get_config_defaults.m
 ```
+
+Group-analysis settings are defined only in `src/main_group.m`.
 
 Only the most important settings are summarized here.
 
@@ -318,8 +320,11 @@ Automatic and manually reviewed annotations remain separate.
 ## Saved-result cohort analysis
 
 `run('src/main_group.m')` uses `config.group` and reads saved
-`*_results.mat` files only. To override the defaults, define `config`
-before calling `run`:
+`*_results.mat` files only. Edit its `group_defaults` block to change group
+settings. `get_config_defaults.m` does not initialize `config.group`.
+Alternatively, define `config` before calling `run`; the script fills only
+missing group fields, preserving explicit values, including empty selections
+and disabled plot flags:
 
 ```matlab
 config = get_config_defaults();

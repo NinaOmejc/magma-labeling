@@ -26,7 +26,13 @@ bundle is also presented as:
 Sub<subject>_M<measurement>_phenotype_summary.png
 ```
 
-This single figure is refreshed after each successful review. It displays
+Full analyses with the same plot setting also save
+`Sub<subject>_M<measurement>_thoracic_rhythmicity_diagnostic.png`, comparing
+thoracic and abdominal oscillations, normalized Welch PSDs and window-level
+concentrations. Abdominal concentrations are supplementary plotting evidence;
+the 24-feature phenotype schema and saved Q23 values are unchanged.
+
+The phenotype-summary figure is refreshed after each successful review. It displays
 Automatic plus Review 1, Review 2, etc. using immutable review-round snapshots
 in round order; the latest round is the last review column. No round-specific
 phenotype image is created. Units are included in measure labels, literature
