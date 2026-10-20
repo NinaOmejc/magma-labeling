@@ -15,7 +15,7 @@ config = get_config_defaults();
 % INPUT / OUTPUT
 config.path_data_in = 'D:\Projects\MAGMA\raw_data';
 config.path_results_out = 'D:\Projects\MAGMA\data_analysis\statistical_labeling';
-config.subjects = [33];
+config.subjects = [52 80 86];
 config.measurements = [1 2];
 config.exclude_recordings = [ ...                   % [subject, measurement]; omit only these recordings
       3 1;   3 2; ...
@@ -26,9 +26,13 @@ config.exclude_recordings = [ ...                   % [subject, measurement]; om
 
 % EXECUTION
 config.overwrite_results = true;       % If true, recompute even if "*_results.mat" output already exists.
-config.overwrite_features = true;      % If true, recompute respiratory features even if "*_features.mat" already exists.
-config.resp.recheck_cached = false;      % reopen saved landmarks/artifacts; Cancel skips this recording
-config.execution.mode = 'analyze';      % 'analyze', 'analyze_and_review', or 'review_only'.
+config.overwrite_features = false;     % If true, recompute respiratory features even if "*_features.mat" already exists.
+config.resp.recheck_cached = true;    % reopen saved landmarks/artifacts; Cancel skips this recording
+config.execution.mode = 'analyze';     % 'analyze', 'analyze_and_review', or 'review_only'.
+
+config.preprocessing.check_relative_belt_polarity = true;   % review persistent negative thoracoabdominal correlation
+config.preprocessing.relative_belt_polarity_mode = 'manual'; % 'manual' prompts; 'auto' retains legacy diaphragm-only correction
+config.preprocessing.check_absolute_belt_polarity = false;  % infer the common belt orientation from inspiration/expiration timing
 
 % LABEL SELECTION
 config.execution.selected_labels = {};

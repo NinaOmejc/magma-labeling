@@ -74,7 +74,8 @@ function run_magma(base_config)
                     review_config.detrend = existing_results.config.detrend;
                 end
                 review_config.detrend.do_plot = false;
-                [data, review_config] = preprocess_data(data_raw, review_config);
+                [data, review_config, polarity_deferred] = preprocess_recording(data_raw, review_config);
+                if polarity_deferred, continue; end
                 config.times = review_config.times;
                 [results, review_cancelled] = review_existing_results(data, existing_results, config);
                 if review_cancelled
@@ -113,7 +114,8 @@ function run_magma(base_config)
             config.execution.partial_rerun = selective && result_exists;
             config.execution.updated_labels = selected_labels;
 
-            [data, config] = preprocess_data(data_raw, config);
+            [data, config, polarity_deferred] = preprocess_recording(data_raw, config);
+            if polarity_deferred, continue; end
 
             feature_cancelled = false;
             cache_file = fullfile(config.sub_results_path, config.sub_features_filename);
@@ -154,7 +156,12 @@ function run_magma(base_config)
                 config.overwrite_features = false; % The just-reviewed cache is already fresh.
                 recheck_requested = get_config_value(config,'resp','recheck_cached',false);
                 config.resp.recheck_cached = false;
-                [data, config] = preprocess_data(data_raw, config);
+                relative_review = [];
+                if strcmp(config.preprocessing.belt_polarity_qc.mode, 'manual')
+                    relative_review = config.preprocessing.belt_polarity_qc;
+                end
+                [data, config, polarity_deferred] = preprocess_recording(data_raw, config, relative_review);
+                if polarity_deferred, continue; end
                 resp_cycles = load_or_extract_respiratory_cycles(data, config);
                 config.overwrite_features = requested_overwrite;
                 config.resp.recheck_cached = recheck_requested;
@@ -226,6 +233,24 @@ function run_magma(base_config)
                 ['Successfully finished label detection for: Sub %d | ' ...
                  'Measurement: %d'], config.subject, config.measure);
         end
+    end
+end
+
+function [data, config, deferred] = preprocess_recording(data_raw, config, relative_review)
+% PREPROCESS_RECORDING Treat an explicit polarity deferral as a recording skip.
+    if nargin < 3, relative_review = []; end
+    deferred = false;
+    data = [];
+    try
+        [data, config] = preprocess_data(data_raw, config, relative_review);
+    catch failure
+        if ~strcmp(failure.identifier, 'MAGMA:Respiration:PolarityReviewDeferred')
+            rethrow(failure);
+        end
+        deferred = true;
+        log_message(config, 1, ...
+            ['Respiratory belt polarity decision deferred; skipping Sub%d_M%d ' ...
+             'without saving results or feature caches.'], config.subject, config.measure);
     end
 end
 
@@ -319,15 +344,8 @@ end
 function state = polarity_state(config)
 % POLARITY_STATE Read relative and absolute preprocessing provenance safely.
 
-    state = [false false false];
-    if isfield(config, 'preprocessing') && ...
-            isstruct(config.preprocessing) && ...
-            isfield(config.preprocessing, 'belt_polarity_qc') && ...
-            isstruct(config.preprocessing.belt_polarity_qc) && ...
-            isfield(config.preprocessing.belt_polarity_qc, 'flipped') && ...
-            isscalar(config.preprocessing.belt_polarity_qc.flipped)
-        state(1) = logical(config.preprocessing.belt_polarity_qc.flipped);
-    end
+    [~, thoracic_flipped, diaphragm_flipped] = respiratory_belt_polarity_state(config);
+    state = [thoracic_flipped diaphragm_flipped false false];
     if isfield(config, 'preprocessing') && ...
             isstruct(config.preprocessing) && ...
             isfield(config.preprocessing, 'absolute_polarity_qc') && ...
@@ -335,11 +353,11 @@ function state = polarity_state(config)
         qc = config.preprocessing.absolute_polarity_qc;
         if isfield(qc, 'absolute_polarity_checked') && ...
                 isscalar(qc.absolute_polarity_checked)
-            state(2) = logical(qc.absolute_polarity_checked);
+            state(3) = logical(qc.absolute_polarity_checked);
         end
         if isfield(qc, 'absolute_polarity_flipped') && ...
                 isscalar(qc.absolute_polarity_flipped)
-            state(3) = logical(qc.absolute_polarity_flipped);
+            state(4) = logical(qc.absolute_polarity_flipped);
         end
     end
 end

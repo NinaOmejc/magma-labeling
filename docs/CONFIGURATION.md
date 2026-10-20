@@ -100,8 +100,8 @@ extraction or detectors. Recording results use the filenames
 
 ## Respiratory-cycle extraction
 
-When enabled, preprocessing first aligns the diaphragm belt with the lung belt,
-then checks their common orientation using a temporary average of the separately
+When enabled, preprocessing reviews relative belt polarity before the independent
+absolute-polarity check. That check uses a temporary average of the separately
 standardized belts. Within each complete breath, time above the midpoint
 between its peak and neighboring troughs measures whether high peaks are
 narrow or broad. Narrow highs in at least 65% of breaths keep the orientation;
@@ -109,31 +109,55 @@ broad highs in at least 65% flip both belts. A 0.45Ã¢â‚¬â€œ0.55 midpoi
 leaves near-symmetric shapes unchanged. The shared I:E ratio remains a
 diagnostic; one usable belt falls back to its own I:E ratio.
 
-The relative correction flips the diaphragm when the median informative-window
+The relative check flags persistent inverse correlation when the median informative-window
 correlation is at most `-0.65`, at least 80% of informative windows are
-negative, and at least 60% of windows are informative.
+negative, and at least 60% of windows are informative. At least three
+informative windows are required. Correlation alone cannot identify which
+sensor has reversed polarity, and genuine paradoxical movement can also
+produce this pattern.
 
 ```matlab
-config.preprocessing.check_relative_belt_polarity = false;
+config.preprocessing.check_relative_belt_polarity = true;
+config.preprocessing.relative_belt_polarity_mode = 'manual';
 config.preprocessing.check_absolute_belt_polarity = false;
 ```
 
-These two independent flags are the user-facing polarity settings. Both default
-to `false`; set either to `true` to enable its check. Algorithm tuning parameters
-remain internal, with their existing thresholds unchanged.
+Both check flags default to `false`; set either to `true` independently. The
+relative mode defaults to `'manual'`. When flagged, the MATLAB command line
+shows the recording, median correlation, and negative-window percentage, then
+asks for `1` (flip thoracic only), `2` (flip abdominal only), `0` (keep both), or
+`3` (defer and skip this recording). Invalid input repeats the question. A flip
+also changes the matching detrending trend. Deferral skips feature extraction
+and result saving, preserving existing recording results and feature caches.
+The next recording can still proceed. Direct calls to `preprocess_data` raise
+`MAGMA:Respiration:PolarityReviewDeferred` when deferred.
+
+Use `relative_belt_polarity_mode = 'auto'` for the legacy automatic
+diaphragm-only correction. Disabling the relative check prevents prompts and
+relative corrections in either mode. Absolute-polarity behavior and all
+correlation thresholds are unchanged.
 
 The separate relative and absolute decisions are saved under
 `config.preprocessing.belt_polarity_qc` and
 `config.preprocessing.absolute_polarity_qc`. Final breath landmarks are
 detected after both polarity steps, before manual review.
 
-With `config.overwrite_features = false`, an existing compatible
+With `config.overwrite_features = false` in legacy automatic mode, an existing compatible
 `*_features.mat` keeps the respiratory signal orientation used when its peaks
 and troughs were reviewed, even if the current polarity heuristic chooses a
 different orientation. The current heuristic's QC is retained in
 `config.preprocessing.computed_polarity_qc`. Set `overwrite_features = true`
 for recordings whose polarity and landmarks should be recomputed and reviewed
-again. An incompatible manually reviewed cache is never silently overwritten.
+again. Manual decisions and a disabled relative check take precedence over
+relative cache alignment. A cached common-sign flip also cannot override an
+explicit manual choice. Cached landmarks on different belt orientations are
+incompatible. Each belt's flip is tracked separately in QC and cache
+metadata. New caches use version 10; compatible version-9 caches without a
+thoracic-flip field remain readable and imply no thoracic flip.
+An incompatible manually reviewed cache is never silently overwritten. To
+change its orientation, explicitly set `overwrite_features = true` and review
+the newly extracted landmarks. An internal preprocessing rerun after landmark
+review reapplies the recording's manual decision without asking again.
 
 ```matlab
 config.resp.manual_control
@@ -300,7 +324,9 @@ method. Its respiratory-band subplot is hidden by default
 
 Reviewed breath timing guides selection of the shared respiratory fundamental when available. Joint thoracic/abdominal wavelet magnitude is used within the allowed neighborhood or as a fallback.
 
-Sensor polarity is fixed by configuration/acquisition and must never be optimized separately for each recording.
+Phase analysis uses the belt orientation established during preprocessing,
+including any explicit manual correction. It never optimizes polarity to
+improve the asynchrony score.
 
 Missing-data blocks are not bridged during phase analysis.
 

@@ -25,7 +25,7 @@ function testOldTwentyHertzCacheIsRejected(testCase)
     saved = load(cache_file, 'feature_cache_meta');
 
     verifyNotEqual(testCase, actual.lungs.peak_idx, resp_feat.lungs.peak_idx);
-    verifyEqual(testCase, saved.feature_cache_meta.cache_version, 9);
+    verifyEqual(testCase, saved.feature_cache_meta.cache_version, 10);
     verifyEqual(testCase, saved.feature_cache_meta.fs, 200);
     verifyEqual(testCase, saved.feature_cache_meta.measurement, config.measure);
     verifyEqual(testCase, saved.feature_cache_meta.n_samples, size(data,1));
@@ -54,6 +54,25 @@ function testCompatibleMasterRateCacheIsReused(testCase)
         expected.provenance.review_status);
     verifyFalse(testCase, expected.provenance.loaded_from_cache);
     verifyTrue(testCase, actual.provenance.loaded_from_cache);
+end
+
+function testVersionTenRequiresExplicitThoracicPolarityMetadata(testCase)
+    output_dir = tempname;
+    mkdir(output_dir);
+    cleanup_dir = onCleanup(@() rmdir(output_dir, 's'));
+    config = make_test_config(output_dir);
+    data = make_synthetic_master_data(10001, config.fs);
+    load_or_extract_respiratory_cycles(data, config);
+    cache_file = fullfile(output_dir, config.sub_features_filename);
+    cached = load(cache_file);
+    cached.feature_cache_meta = rmfield(cached.feature_cache_meta, 'thoracic_polarity_flipped');
+    save(cache_file, '-struct', 'cached');
+
+    recomputed = load_or_extract_respiratory_cycles(data, config);
+    saved = load(cache_file, 'feature_cache_meta');
+    verifyFalse(testCase, recomputed.provenance.loaded_from_cache);
+    verifyEqual(testCase, saved.feature_cache_meta.cache_version, 10);
+    verifyFalse(testCase, saved.feature_cache_meta.thoracic_polarity_flipped);
 end
 
 function testAmplitudeMethodChangeReselectsWithoutLosingReviewedBreaths(testCase)
@@ -183,7 +202,7 @@ function testVersionEightPrePolarityCacheIsRejected(testCase)
     saved = load(cache_file, 'feature_cache_meta');
 
     verifyFalse(testCase, recomputed.provenance.loaded_from_cache);
-    verifyEqual(testCase, saved.feature_cache_meta.cache_version, 9);
+    verifyEqual(testCase, saved.feature_cache_meta.cache_version, 10);
     verifyFalse(testCase, saved.feature_cache_meta.belt_polarity_checked);
     verifyFalse(testCase, saved.feature_cache_meta.diaphragm_polarity_flipped);
 end

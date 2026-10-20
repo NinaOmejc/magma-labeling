@@ -168,6 +168,7 @@ function [data, config] = polarity_fixture(rise_fraction, relative_sign, n_cycle
     config = resolve_signal_channels(config);
     config.detrend.method = 'none';
     config.preprocessing.check_relative_belt_polarity = true;
+    config.preprocessing.relative_belt_polarity_mode = 'auto';
     config.preprocessing.check_absolute_belt_polarity = true;
     config.resp.qc.enabled = false;
 

@@ -81,6 +81,7 @@ function testFlagExcludesThoracicButPreservesAbdomenAndRawTrace(testCase)
     verifyTrue(testCase, eami.diaph.available);
     guyot = compute_guyot_periodic_breathing(data, cycles, config);
     verifyFalse(testCase, guyot.lungs.available);
+    config.preprocessing.check_relative_belt_polarity = true;
     [oriented, ~, oriented_config] = correct_respiratory_belt_polarity(data, [], config, config.fs);
     verifyEqual(testCase, oriented, data);
     verifyEqual(testCase, oriented_config.preprocessing.belt_polarity_qc.reason, 'minimal_thoracic_excursion');

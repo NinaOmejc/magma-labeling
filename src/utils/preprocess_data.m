@@ -1,9 +1,11 @@
-function [output, config, trend] = preprocess_data(t_series, config)
+function [output, config, trend] = preprocess_data(t_series, config, relative_polarity_qc)
 % PREPROCESS_DATA Detrend configured respiratory channels on the native timeline.
 % t_series is a signal vector or Nsample-by-Nchannel matrix. config selects
 % channels, fs, and high-pass, moving-detrend, or no-op settings. output preserves
 % input size/orientation and untouched channels; trend is shape-matched, with NaN
 % outside processed columns for matrix input. config.times is updated in seconds.
+% An optional relative_polarity_qc reapplies the manual decision already made
+% for this recording during the same run, without asking again after review.
 
     method = 'hpfilter';
     sampl_freq = 200;
@@ -125,6 +127,24 @@ function [output, config, trend] = preprocess_data(t_series, config)
         trend(:, signal_cols)  = trend_data;
     end
 
+    % Review polarity before any preprocessing plots or downstream saves.
+    if nargin < 3 || isempty(relative_polarity_qc) || ...
+            ~get_config_value(config, 'preprocessing', 'check_relative_belt_polarity', false)
+        [output, trend, config] = correct_respiratory_belt_polarity( ...
+            output, trend, config, sampl_freq);
+    else
+        config.preprocessing.belt_polarity_qc = relative_polarity_qc;
+        [~, flip_lungs, flip_diaph] = respiratory_belt_polarity_state(config);
+        flip_cols = [config.channels.lungs_idx(flip_lungs) ...
+            config.channels.diaph_idx(flip_diaph)];
+        output(:, flip_cols) = -output(:, flip_cols);
+        trend(:, flip_cols) = -trend(:, flip_cols);
+    end
+    [output, trend, config] = determine_absolute_respiratory_polarity( ...
+        output, trend, config, sampl_freq);
+    [output, trend, config] = align_respiration_to_feature_cache( ...
+        output, trend, config);
+
     % -----------------------------
     % Optional plotting
     % -----------------------------
@@ -187,15 +207,6 @@ function [output, config, trend] = preprocess_data(t_series, config)
         save_figure(config, 'data_detrend_comparison_in_amplitude')
         
     end
-
-    % Standardize only clear, persistent acquisition-level belt inversion.
-    % This is deliberately independent of respiratory-asynchrony detection.
-    [output, trend, config] = correct_respiratory_belt_polarity( ...
-        output, trend, config, sampl_freq);
-    [output, trend, config] = determine_absolute_respiratory_polarity( ...
-        output, trend, config, sampl_freq);
-    [output, trend, config] = align_respiration_to_feature_cache( ...
-        output, trend, config);
 
     if isvector(output)
         n_master_samples = numel(output);
