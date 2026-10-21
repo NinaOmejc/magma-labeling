@@ -135,7 +135,7 @@ Implementation file map (under `src/` unless stated otherwise):
 | Shared state and analysis gate | `utils/recording_observation.m`, `utils/minimal_thoracic_excursion.m` |
 | Cycle cache and evidence | `feature_extraction/apply_thoracic_observation.m`, `extract_respiration_features.m`, `load_or_extract_respiratory_cycles.m`, `compute_respiratory_features.m`, `compute_respiratory_reference.m` |
 | Raw and two-belt detector gates | `label_detection/detect_apnea.m`, `compute_eami_periodic_breathing.m`, `compute_guyot_periodic_breathing.m`, `compute_respiratory_asynchrony_metrics.m`, `compute_respiratory_phase_offset_metrics.m` |
-| Polarity evidence | `utils/correct_respiratory_belt_polarity.m`, `utils/determine_absolute_respiratory_polarity.m` |
+| Polarity evidence | `utils/correct_respiratory_belt_polarity.m` |
 | Execution and result/review persistence | `run_magma.m`, `utils/build_recording_results.m`, `utils/save_recording_results.m`, `utils/review_existing_results.m`, `utils/create_manual_review_round.m` |
 | New spectral descriptor | `feature_extraction/compute_thoracic_respiratory_rhythmicity.m` |
 | Phenotype schema and recording features | `utils/get_phenotype_feature_schema.m`, `build_compact_phenotype_features.m`, `build_db_phenotype_evidence.m`, `build_db_phenotype_evidence_bundle.m`, `build_thoracic_excursion_phenotype.m`, `attach_thoracic_excursion_phenotype.m`, `align_phenotype_numeric_summary.m` |

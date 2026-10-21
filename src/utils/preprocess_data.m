@@ -127,23 +127,35 @@ function [output, config, trend] = preprocess_data(t_series, config, relative_po
         trend(:, signal_cols)  = trend_data;
     end
 
-    % Review polarity before any preprocessing plots or downstream saves.
-    if nargin < 3 || isempty(relative_polarity_qc) || ...
-            ~get_config_value(config, 'preprocessing', 'check_relative_belt_polarity', false)
-        [output, trend, config] = correct_respiratory_belt_polarity( ...
-            output, trend, config, sampl_freq);
-    else
-        config.preprocessing.belt_polarity_qc = relative_polarity_qc;
-        [~, flip_lungs, flip_diaph] = respiratory_belt_polarity_state(config);
-        flip_cols = [config.channels.lungs_idx(flip_lungs) ...
-            config.channels.diaph_idx(flip_diaph)];
-        output(:, flip_cols) = -output(:, flip_cols);
-        trend(:, flip_cols) = -trend(:, flip_cols);
+    % A cached-feature recheck must keep the orientation of its landmarks.
+    reused_polarity = false;
+    if get_config_value(config, 'resp', 'recheck_cached', false) || ...
+            get_config_value(config, 'preprocessing', 'feature_cache_polarity_used', false)
+        [output, trend, config, reused_polarity] = align_respiration_to_feature_cache( ...
+            output, trend, config, true);
     end
-    [output, trend, config] = determine_absolute_respiratory_polarity( ...
-        output, trend, config, sampl_freq);
-    [output, trend, config] = align_respiration_to_feature_cache( ...
-        output, trend, config);
+    if ~reused_polarity
+        % Review polarity before any preprocessing plots or downstream saves.
+        if nargin < 3 || isempty(relative_polarity_qc) || ...
+                ~get_config_value(config, 'preprocessing', 'check_relative_belt_polarity', false)
+            [output, trend, config] = correct_respiratory_belt_polarity( ...
+                output, trend, config, sampl_freq);
+        else
+            config.preprocessing.belt_polarity_qc = relative_polarity_qc;
+            [~, flip_lungs, flip_diaph] = respiratory_belt_polarity_state(config);
+            flip_cols = [config.channels.lungs_idx(flip_lungs) ...
+                config.channels.diaph_idx(flip_diaph)];
+            output(:, flip_cols) = -output(:, flip_cols);
+            trend(:, flip_cols) = -trend(:, flip_cols);
+        end
+        % Retain legacy sign metadata for cache compatibility; no inference.
+        config.preprocessing.absolute_polarity_qc = struct( ...
+            'absolute_polarity_checked', false, ...
+            'absolute_polarity_flipped', false, ...
+            'absolute_polarity_decision', 'not_performed');
+        [output, trend, config] = align_respiration_to_feature_cache( ...
+            output, trend, config);
+    end
 
     % -----------------------------
     % Optional plotting

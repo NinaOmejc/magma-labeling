@@ -15,8 +15,8 @@ config = get_config_defaults();
 % INPUT / OUTPUT
 config.path_data_in = 'D:\Projects\MAGMA\raw_data';
 config.path_results_out = 'D:\Projects\MAGMA\data_analysis\statistical_labeling';
-config.subjects = [52 80 86];
-config.measurements = [1 2];
+config.subjects = [1];
+config.measurements = [2];
 config.exclude_recordings = [ ...                   % [subject, measurement]; omit only these recordings
       3 1;   3 2; ...
      30 1;  30 2; ...
@@ -27,19 +27,15 @@ config.exclude_recordings = [ ...                   % [subject, measurement]; om
 % EXECUTION
 config.overwrite_results = true;       % If true, recompute even if "*_results.mat" output already exists.
 config.overwrite_features = false;     % If true, recompute respiratory features even if "*_features.mat" already exists.
-config.resp.recheck_cached = true;    % reopen saved landmarks/artifacts; Cancel skips this recording
+config.resp.recheck_cached = false;    % reopen saved landmarks/artifacts; Cancel skips this recording
 config.execution.mode = 'analyze';     % 'analyze', 'analyze_and_review', or 'review_only'.
 
-config.preprocessing.check_relative_belt_polarity = true;   % review persistent negative thoracoabdominal correlation
-config.preprocessing.relative_belt_polarity_mode = 'manual'; % 'manual' prompts; 'auto' retains legacy diaphragm-only correction
-config.preprocessing.check_absolute_belt_polarity = false;  % infer the common belt orientation from inspiration/expiration timing
+config.preprocessing.check_relative_belt_polarity = true;   % automatically open manual review for persistent negative belt correlation
 
 % LABEL SELECTION
 config.execution.selected_labels = {};
 % Empty = normal behavior: new recordings analyze all labels; existing recordings obey config.overwrite_results.
-% To calculate or rerun only selected labels, for example:
-% config.execution.selected_labels = {'irregular'};
-% config.execution.selected_labels = {'irregular', 'slow'};
+% To calculate or rerun only selected labels, for example: config.execution.selected_labels = {'irregular', 'slow'};
 
 % RESPIRATORY REPRESENTATION
 config.resp.amp_method = 'symmetric';  % Selected breath amplitude: 'expiratory' (peak to following trough), 'inspiratory' (peak to preceding trough), or 'symmetric' (peak to the mean of both troughs)
@@ -48,19 +44,7 @@ config.resp.plot_amp_method_comparison = false; % save an optional comparison of
 % PLOTTING
 config.plot_raw_data = false;                               % save an overview plot of raw signals
 config.reference.do_plot = true;                            % save respiratory-reference QC figure
-config.shallow.do_plot = true;                              % save shallow breathing diagnostic plot
-config.deep.do_plot = true;                                 % save deep breathing diagnostic plot
-config.slow.do_plot  = true;                                % save slow breathing diagnostic plot
-config.rapid.do_plot = true;                                % save rapid breathing diagnostic plot
-config.irregular.do_plot = true;                            % save irregular breathing diagnostic plot
-config.apnea.do_plot = true;                                % save apnea diagnostic plot
-config.sigh.do_plot = true;                                 % save sigh diagnostic plot
-config.periodic.do_plot = true;                             % save the two-method comparison figure
-config.thoracic.do_plot = true;                             % save relative-balance diagnostic plot
-config.async.do_plot = true;                                % save respiratory asynchrony diagnostic plot
-config.async.plot_legacy_coherence = false;                 % optionally add legacy mid-band coherence as the bottom panel
-config.desat.do_plot = true;                                % save desaturation diagnostic plot
-config.LabelMask.do_plot = true;                            % generate a label-mask summary figure
+config.resp.do_plot = false;                                % save breath extraction diagnostic plots
 
 % MANUAL REVIEW
 config.resp.manual_control = true;                          % separately review respiratory peaks/troughs before label detection; cached after confirmation

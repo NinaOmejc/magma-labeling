@@ -5,6 +5,7 @@ function reference = get_session_reference_interval(N, config)
 % start/end indices, times, and durations; protocol_phase and measurement;
 % available/complete/truncated flags; quality and truncation_reason; and
 % reference_schema_version. Actual bounds truncate safely at recording end.
+% M2 recordings ending before the requested baseline use their final 3 minutes.
 
     validate_inputs(N, config);
     cfg = reference_config(config);
@@ -51,25 +52,39 @@ function reference = get_session_reference_interval(N, config)
         'truncation_reason', '', ...
         'reference_schema_version', 'session_physiological_reference_v1');
 
-    if N < requested_start_idx
+    fallback = config.measure == 2 && N > 0 && N < requested_start_idx;
+    if N < requested_start_idx && ~fallback
         reference.truncated = true;
         reference.quality = 'recording_ends_before_reference_start';
         reference.truncation_reason = 'recording_ends_before_reference_start';
         return;
     end
 
-    start_idx = requested_start_idx;
-    end_idx = min(N, requested_end_idx);
+    if fallback
+        end_idx = N;
+        start_idx = max(1, N - max(1, round(180 * fs)) + 1);
+    else
+        start_idx = requested_start_idx;
+        end_idx = min(N, requested_end_idx);
+    end
     reference.reference_start_idx = start_idx;
     reference.reference_end_idx = end_idx;
     reference.reference_start_t = (start_idx - 1) / fs;
     reference.reference_end_t = end_idx / fs;
     reference.reference_duration_sec = (end_idx - start_idx + 1) / fs;
     reference.available = end_idx >= start_idx;
-    reference.complete = end_idx == requested_end_idx;
+    reference.complete = ~fallback && end_idx == requested_end_idx;
     reference.truncated = ~reference.complete;
 
-    if reference.complete
+    if fallback
+        reference.quality = 'fallback_last_3_minutes';
+        reference.truncation_reason = 'recording_ends_before_reference_start';
+        log_message(config, 1, ...
+            ['Session reference: M2 ends before the configured baseline; ' ...
+             'using the final %.2f minutes (%.2f-%.2f min).'], ...
+            reference.reference_duration_sec / 60, ...
+            reference.reference_start_t / 60, reference.reference_end_t / 60);
+    elseif reference.complete
         reference.quality = 'good';
     else
         reference.quality = 'truncated_recording';

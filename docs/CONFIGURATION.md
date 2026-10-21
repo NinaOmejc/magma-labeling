@@ -100,14 +100,8 @@ extraction or detectors. Recording results use the filenames
 
 ## Respiratory-cycle extraction
 
-When enabled, preprocessing reviews relative belt polarity before the independent
-absolute-polarity check. That check uses a temporary average of the separately
-standardized belts. Within each complete breath, time above the midpoint
-between its peak and neighboring troughs measures whether high peaks are
-narrow or broad. Narrow highs in at least 65% of breaths keep the orientation;
-broad highs in at least 65% flip both belts. A 0.45Ã¢â‚¬â€œ0.55 midpoint-dwell band
-leaves near-symmetric shapes unchanged. The shared I:E ratio remains a
-diagnostic; one usable belt falls back to its own I:E ratio.
+When enabled, preprocessing reviews relative belt polarity before respiratory
+feature extraction. All new polarity decisions are manual.
 
 The relative check flags persistent inverse correlation when the median informative-window
 correlation is at most `-0.65`, at least 80% of informative windows are
@@ -118,37 +112,34 @@ produce this pattern.
 
 ```matlab
 config.preprocessing.check_relative_belt_polarity = true;
-config.preprocessing.relative_belt_polarity_mode = 'manual';
-config.preprocessing.check_absolute_belt_polarity = false;
 ```
 
-Both check flags default to `false`; set either to `true` independently. The
-relative mode defaults to `'manual'`. When flagged, the MATLAB command line
-shows the recording, median correlation, and negative-window percentage, then
-asks for `1` (flip thoracic only), `2` (flip abdominal only), `0` (keep both), or
-`3` (defer and skip this recording). Invalid input repeats the question. A flip
+The relative check defaults to `false`; enabling it automatically opens manual
+review when flagged. Manual review is the only correction method. The existing respiratory
+review GUI shows both belt signals and the polarity question, together with
+the recording, median correlation, and negative-window percentage. Select
+`1` (flip thoracic only), `2` (flip abdominal only), `0` (keep both), or
+`3` (defer and skip this recording), then click **Confirm decision**.
+Closing the window also defers. A flip
 also changes the matching detrending trend. Deferral skips feature extraction
 and result saving, preserving existing recording results and feature caches.
 The next recording can still proceed. Direct calls to `preprocess_data` raise
 `MAGMA:Respiration:PolarityReviewDeferred` when deferred.
 
-Use `relative_belt_polarity_mode = 'auto'` for the legacy automatic
-diaphragm-only correction. Disabling the relative check prevents prompts and
-relative corrections in either mode. Absolute-polarity behavior and all
-correlation thresholds are unchanged.
+Disabling the relative check prevents new prompts and relative corrections.
+Decisions are saved under `config.preprocessing.belt_polarity_qc`. Legacy
+absolute-polarity metadata are retained only to interpret saved cache signs;
+automatic absolute-polarity inference has been removed.
 
-The separate relative and absolute decisions are saved under
-`config.preprocessing.belt_polarity_qc` and
-`config.preprocessing.absolute_polarity_qc`. Final breath landmarks are
-detected after both polarity steps, before manual review.
+With `overwrite_features = false` and `resp.recheck_cached = true`, preprocessing
+reuses the polarity saved in the feature cache before manual polarity review.
+The polarity question is not repeated, and neither belt's saved orientation
+changes during the cached-landmark review. Changing polarity requires
+`overwrite_features = true` and `resp.recheck_cached = false` so landmarks can
+be extracted again. Missing or incompatible saved polarity metadata stops the
+recheck without changing the cache or asking for a replacement decision.
 
-With `config.overwrite_features = false` in legacy automatic mode, an existing compatible
-`*_features.mat` keeps the respiratory signal orientation used when its peaks
-and troughs were reviewed, even if the current polarity heuristic chooses a
-different orientation. The current heuristic's QC is retained in
-`config.preprocessing.computed_polarity_qc`. Set `overwrite_features = true`
-for recordings whose polarity and landmarks should be recomputed and reviewed
-again. Manual decisions and a disabled relative check take precedence over
+Manual decisions and a disabled relative check take precedence over
 relative cache alignment. A cached common-sign flip also cannot override an
 explicit manual choice. Cached landmarks on different belt orientations are
 incompatible. Each belt's flip is tracked separately in QC and cache
@@ -211,7 +202,13 @@ Thus:
 - M1/M3 use 3Ã¢â‚¬â€œ6 min;
 - M2/M4 use 19Ã¢â‚¬â€œ22 min.
 
-The interval is never automatically moved to a different part of the recording.
+If a nonempty M2 recording ends before its configured reference starts, the
+reference uses the final 3 minutes instead (all available samples if the
+recording is shorter than 3 minutes). The fallback is logged and saved as
+`quality = 'fallback_last_3_minutes'`, with the original requested bounds retained.
+Existing breath-count and signal-validity requirements still apply. Other
+measurements and recordings reaching the configured reference retain their
+existing interval behavior.
 
 ## Label-specific configuration
 

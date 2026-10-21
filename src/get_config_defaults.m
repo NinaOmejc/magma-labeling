@@ -38,8 +38,6 @@ function config = get_config_defaults()
     %---- PREPROCESSING ----                
     config.preprocessing = struct();
     config.preprocessing.check_relative_belt_polarity = false;   % review persistent negative thoracoabdominal correlation
-    config.preprocessing.relative_belt_polarity_mode = 'manual'; % 'manual': choose a belt or keep/defer; 'auto': legacy diaphragm-only correction
-    config.preprocessing.check_absolute_belt_polarity = false;   % infer the common belt orientation from inspiration/expiration timing
     config.detrend.method = 'none';                             % 'hpfilter': Butterworth high-pass filter with filtfilt, 'moving_detrend': moving-average trend subtraction, or 'none': no additional detrending.
     config.detrend.signals = {'Resp-Lungs', 'Resp-Diaphragm'};  % *** signals to additionally detrend before feature extraction (in general, all signals are already detrended, this is just additional moving detrend, that can be useful for some noisier data)
     config.detrend.highpass_cutoff = 0.01;                      % high-pass cutoff frequency in Hz

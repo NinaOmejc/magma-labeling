@@ -1,4 +1,4 @@
-function [b_l, b_d, review_confirmed, recording_observations, artifact_intervals_idx] = manual_edit_respiration_features(data, b_l, b_d, config, commit_callback, checkpoint_file, artifact_intervals_idx)
+function [b_l, b_d, review_confirmed, recording_observations, artifact_intervals_idx, polarity_choice] = manual_edit_respiration_features(data, b_l, b_d, config, commit_callback, checkpoint_file, artifact_intervals_idx, polarity_qc)
 % MANUAL_EDIT_RESPIRATION_FEATURES Edit respiratory cycles and explicitly confirm review.
 %
 % Inputs:
@@ -18,6 +18,7 @@ function [b_l, b_d, review_confirmed, recording_observations, artifact_intervals
 
     if nargin < 5, commit_callback = []; end
     if nargin < 6, checkpoint_file = ''; end
+    if nargin < 8, polarity_qc = []; end
     if nargin < 7
         artifact_intervals_idx = shared_respiratory_artifacts(struct('lungs',b_l,'diaph',b_d),size(data,1));
     end
@@ -25,13 +26,14 @@ function [b_l, b_d, review_confirmed, recording_observations, artifact_intervals
         'Visible', 'off', 'Tag','respiration_feature_review');
     % Keep cleanup outside the workspace retained by nested GUI callbacks.
     figure_cleanup = onCleanup(@() delete_editor_figure(fh)); %#ok<NASGU>
-    [b_l, b_d, review_confirmed, recording_observations, artifact_intervals_idx] = ...
-        run_editor(fh, data, b_l, b_d, config, commit_callback, checkpoint_file, artifact_intervals_idx);
+    [b_l, b_d, review_confirmed, recording_observations, artifact_intervals_idx, polarity_choice] = ...
+        run_editor(fh, data, b_l, b_d, config, commit_callback, checkpoint_file, artifact_intervals_idx, polarity_qc);
 end
 
-function [b_l, b_d, review_confirmed, recording_observations, artifact_intervals_idx] = ...
-    run_editor(fh, data, b_l, b_d, config, commit_callback, checkpoint_file, artifact_intervals_idx)
+function [b_l, b_d, review_confirmed, recording_observations, artifact_intervals_idx, polarity_choice] = ...
+    run_editor(fh, data, b_l, b_d, config, commit_callback, checkpoint_file, artifact_intervals_idx, polarity_qc)
 
+    polarity_choice = 3;
     recording_observations = recording_observation('load', config);
     resolved = resolve_signal_channels(config);
     thoracic_present = ~isempty(resolved.channels.lungs_idx) && ~is_lung_belt_ignored(config);
@@ -71,13 +73,23 @@ function [b_l, b_d, review_confirmed, recording_observations, artifact_intervals
     figure(fh);
 
     ax1 = subplot(2,1,1); hold(ax1, 'on');
-    [pL, pkL, trL] = plot_belt_panel(ax1, t_raw, b_l, ...
-        'GUI breath landmark review (lungs)', 'Resp-Lungs', edit_lungs, lungs_unavailable_message(config));
+    if isempty(polarity_qc)
+        [pL, pkL, trL] = plot_belt_panel(ax1, t_raw, b_l, ...
+            'GUI breath landmark review (lungs)', 'Resp-Lungs', edit_lungs, lungs_unavailable_message(config));
+    else
+        plot(ax1, t_raw, b_l.x0, 'k');
+        title(ax1, 'Thoracic belt (Resp-Lungs)'); ylabel(ax1, 'Resp-Lungs'); grid(ax1, 'on');
+    end
 
     ax2 = subplot(2,1,2); hold(ax2, 'on');
-    [pD, pkD, trD] = plot_belt_panel(ax2, t_raw, b_d, ...
-        'GUI breath landmark review (diaphragm)', 'Resp-Diaphragm', edit_diaph, ...
-        'No editable Resp-Diaphragm signal');
+    if isempty(polarity_qc)
+        [pD, pkD, trD] = plot_belt_panel(ax2, t_raw, b_d, ...
+            'GUI breath landmark review (diaphragm)', 'Resp-Diaphragm', edit_diaph, ...
+            'No editable Resp-Diaphragm signal');
+    else
+        plot(ax2, t_raw, b_d.x0, 'k');
+        title(ax2, 'Abdominal belt (Resp-Diaphragm)'); ylabel(ax2, 'Resp-Diaphragm'); grid(ax2, 'on');
+    end
 
     sgtitle(['GUI RESPIRATORY LANDMARK REVIEW' newline ...
         'Subject: ' num2str(config.subject) ' | Measurement: ' num2str(config.measure) ...
@@ -92,7 +104,7 @@ function [b_l, b_d, review_confirmed, recording_observations, artifact_intervals
 
     ax2.Position(2) = ax2.Position(2) + 0.045;
     ax2.Position(4) = ax2.Position(4) - 0.045;
-    uicontrol(fh, 'Style','text','Units','normalized', ...
+    observation_label = uicontrol(fh, 'Style','text','Units','normalized', ...
         'Position',[0.05 0.078 0.58 0.028], 'HorizontalAlignment','left', ...
         'String','Minimal or absent thoracic excursion');
     observation_selector = uicontrol(fh, 'Style', 'popupmenu', ...
@@ -110,6 +122,25 @@ function [b_l, b_d, review_confirmed, recording_observations, artifact_intervals
         'Min',0, 'Max',max(0,t_raw(end)-window_sec), 'Value',0, ...
         'SliderStep',[min(1/max(1,t_raw(end)-window_sec),0.05) 0.2], ...
         'Callback', @(src,~) set_xlim(src.Value));
+    if ~isempty(polarity_qc)
+        sgtitle(sprintf(['RESPIRATORY BELT POLARITY REVIEW | Sub%d_M%d\n' ...
+            'Median r = %.2f | Negative informative windows: %.0f%%'], ...
+            config.subject, config.measure, polarity_qc.median_window_corr, ...
+            100*polarity_qc.negative_window_fraction));
+        set(observation_label, 'String', 'Which respiratory belt should be flipped?');
+        set(observation_selector, 'String', { ...
+            '0 = Keep both belts unchanged', '1 = Flip THORACIC belt only', ...
+            '2 = Flip ABDOMINAL belt only', '3 = Defer / skip this recording'}, ...
+            'Value', 1, 'Enable', 'on', 'Callback', [], 'Tag', 'respiration_polarity_choice');
+        set(status_text, 'String', ...
+            'Either flip aligns the belts; correlation cannot identify the inverted sensor. Genuine paradoxical movement is possible.');
+        uicontrol(fh, 'Style', 'pushbutton', 'String', 'Confirm decision', ...
+            'Units', 'normalized', 'Position', [0.72 0.008 0.24 0.038], ...
+            'Tag', 'respiration_polarity_done', 'Callback', @(~,~) confirm_polarity());
+        if isgraphics(fh), uiwait(fh); end
+        delete_editor_figure(fh);
+        return; % Polarity review does not edit or save landmarks/observations.
+    end
     uicontrol(fh, 'Style', 'popupmenu', ...
         'String', {'Edit peaks', 'Move trough', 'Mark artifact'}, 'Tag','respiration_edit_mode', ...
         'Units', 'normalized', 'Position', [0.50 0.008 0.20 0.038], ...
@@ -208,6 +239,12 @@ function [b_l, b_d, review_confirmed, recording_observations, artifact_intervals
         else
             result = commit_callback(b_l,b_d,observation,artifact_intervals_idx);
         end
+    end
+
+    function confirm_polarity()
+        polarity_choice = get(observation_selector, 'Value') - 1;
+        review_confirmed = true;
+        if isgraphics(fh), uiresume(fh); end
     end
 
     function observation_changed()
