@@ -19,7 +19,7 @@ function [data, trend, config, reused] = align_respiration_to_feature_cache(data
     end
     if isfield(config, 'execution') && isstruct(config.execution) && ...
             isfield(config.execution, 'mode') && ...
-            strcmpi(char(string(config.execution.mode)), 'review_only')
+            strcmpi(char(string(config.execution.mode)), 'review')
         return;
     end
 

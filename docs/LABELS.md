@@ -14,19 +14,27 @@ Neither Level 1 nor Level 2 should be interpreted as a clinical diagnosis. Label
 
 The canonical label set is defined in `src/get_labels.m`.
 
-| Label | Long name | Primary evidence | Primary operational condition |
-|---|---|---|---|
-| `shallow` | Shallow breathing | Belt excursion | `0.10 < A/A_ref <= 0.80`, sustained >= 30 s |
-| `deep` | Deep breathing | Belt excursion | `A/A_ref >= 1.20`, sustained >= 30 s |
-| `slow` | Slow breathing | Respiratory rate | `RR <= 10 breaths/min`, 60-s estimate, localized state >= 30 s |
-| `rapid` | Rapid breathing | Respiratory rate | `RR >= 20 breaths/min`, 60-s estimate, localized state >= 30 s |
-| `irregular` | Irregular breathing | Inter-breath-interval variability | 60-s `CV_IBI >= 0.40` |
-| `apnea` | Apnea-like respiratory pause | Very-low respiratory movement | <= 10% of reference excursion for >= 10 s |
-| `sigh` | Sigh | Session-normalized breath excursion | Breath amplitude / fixed session reference >= 2.0 |
-| `periodic` | Periodic breathing / Cheyne-Stokes-like pattern | eAMI by default | eAMI >= 0.60 with sustained periodic modulation |
-| `thoracic` | Thoracic-dominant breathing | Relative thoracic/abdominal excursion | Normalized thoracic-to-abdominal ratio >= 1.5 for >= 30 s |
-| `async` | Respiratory asynchrony | Thoracoabdominal phase offset | Reliable absolute phase offset >= 30 degrees for a sustained period |
-| `desat` | Oxygen desaturation | SpO2 | SpO2 < 90% or >= 3 percentage-point drop from reference for >= 10 s |
+The table uses the current defaults in `src/get_config_defaults.m`. Timing
+distinguishes the evidence-analysis window from the minimum final event duration;
+both are configurable where applicable.
+
+| Label | Long name | Primary evidence | Primary operational condition | Timing |
+|---|---|---|---|---|
+| `shallow` | Shallow breathing | Belt excursion | `0.10 <= A/A_ref <= 0.70` | Per-breath amplitude; touching qualifying trough-to-trough cycles are merged; final interval >= 30 s. |
+| `deep` | Deep breathing | Belt excursion | `A/A_ref >= 1.30` | Per-breath amplitude; touching qualifying trough-to-trough cycles are merged; final interval >= 30 s. |
+| `slow` | Slow breathing | Respiratory rate | `RR <= 10 breaths/min` | Trailing 60-s rate estimate; localized final state >= 30 s. |
+| `rapid` | Rapid breathing | Respiratory rate | `RR >= 20 breaths/min` | Trailing 60-s rate estimate; localized final state >= 30 s. |
+| `irregular` | Irregular breathing | Inter-breath-interval variability | `CV_IBI >= 0.40` | Trailing 120-s IBI-variability window; label covers the union of qualifying windows, with no separate minimum-duration filter. |
+| `apnea` | Apnea-like respiratory pause | Very-low respiratory movement | <= 10% of reference excursion | Trailing 10-s breath-amplitude or raw-excursion evidence window; final pause >= 10 s. |
+| `sigh` | Sigh | Session-normalized breath excursion | Breath amplitude / fixed session reference >= 2.0 | Individual breath event at its peak; no minimum sustained duration or sliding baseline for the default method. |
+| `periodic` | Periodic breathing / Cheyne-Stokes-like pattern | eAMI by default | eAMI >= 0.40 | Centered 60-s eAMI energy window; continuous positive interval >= 120 s (twice the energy-window duration). |
+| `thoracic` | Thoracic-dominant breathing | Relative thoracic/abdominal excursion | Normalized thoracic-to-abdominal ratio >= 1.5 | Trailing 30-s amplitude-balance window; at least 3 breaths per belt per window; sustained final state >= 30 s. |
+| `async` | Respiratory asynchrony | Thoracoabdominal phase offset | Reliable absolute phase offset >= 30 degrees | Centered summary over 5 respiratory cycles (duration varies with respiratory rate); sustained qualifying phase offset >= 30 s. |
+| `desat` | Oxygen desaturation | SpO2 | SpO2 < 90% or >= 3 percentage-point drop from reference | Sample-wise SpO2 criteria; continuous qualifying interval >= 10 s. |
+
+These timings are distinct from artifact-related exclusions. Respiratory artifacts
+first invalidate intersecting breath/IBI support; label-specific window guards can
+extend the resulting unassessable intervals. See [Respiratory artifacts](RESPIRATORY_ARTIFACTS.md).
 
 Unless explicitly literature-derived, thresholds above are **operational MAGMA research criteria** rather than validated clinical diagnostic cutoffs.
 
@@ -48,7 +56,7 @@ The primary measure is the coefficient of variation of inter-breath intervals:
 
 `CV_IBI = SD(IBI) / mean(IBI)`
 
-The current operational threshold is `CV_IBI >= 0.40` over the configured 60-s analysis window. Other nonlinear variability measures are not part of the current binary label.
+The current operational threshold is `CV_IBI >= 0.40` over the configured trailing 120-s analysis window. Other nonlinear variability measures are not part of the current binary label.
 
 ### Apnea-like respiratory pauses
 
@@ -97,7 +105,7 @@ evaluable-breath masks. Respiratory caches and reviewed landmarks are unchanged.
 
 The default primary detector is the estimated amplitude modulation index (eAMI). The Guyot demodulation/Matrix-Pencil implementation is retained as complementary evidence and can be selected as the primary method with `config.periodic.primary_method = 'guyot'`.
 
-MAGMA currently uses an adapted eAMI threshold of `0.60` and a configured Guyot modulation-frequency band of `0.008-0.050 Hz`. These are MAGMA settings rather than exact published diagnostic thresholds.
+MAGMA currently uses an adapted eAMI threshold of `0.40` and a configured Guyot modulation-frequency band of `0.008-0.050 Hz`. These are MAGMA settings rather than exact published diagnostic thresholds.
 
 The output represents **periodic or Cheyne-Stokes-like respiratory-effort modulation**, not a clinical diagnosis of Cheyne-Stokes respiration.
 

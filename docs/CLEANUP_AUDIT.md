@@ -20,7 +20,7 @@ tests; candidate testing also excludes unrelated local configuration edits.
 | `align_phenotype_numeric_summary`, `validate_compact_phenotype_features` | Phenotype attachment, plotting, group and HDF5 validation | 22-feature padding/validation alternatives | Keep useful functions; remove obsolete branches and require 24 | Low | Phenotype, stage-6, group |
 | `manual_edit_label_events/load_manual_event_sets` | Current manual label workflow | Pre-schema-6 field remapping, invented first rounds and missing-history migration | Keep current loader/validation; reject obsolete checkpoints | Low | Multi-round, observation, stage-6 |
 | `assemble_annotation_layers/generic_review_coverage` | Annotation finalization | Former full-record review expansion without explicit sample mask | Remove expansion; retain explicit coverage | Low | Review/annotation |
-| `review_existing_results` | `review_only` | Rebuilding old automatic summaries and synthesizing missing analysis identity | Remove historical repair; retain saved automatic evidence/profile | Low | New workflow check |
+| `review_existing_results` | `review` | Rebuilding old automatic summaries and synthesizing missing analysis identity | Remove historical repair; retain saved automatic evidence/profile | Low | New workflow check |
 | Flat result loads and annotation appends | Runner, group readers, observation/artifact mirrors | Superseded by requested hierarchical storage | Centralize with `recording_results`; reject obsolete results | Moderate; isolated by one boundary | Storage, workflow, group, HDF5 |
 | Artifact checkpoint result fallback | Cache-missing metadata lookup | Baseline exposed importing another recording's result via a copied config | Ignore mismatched result identity; retain cache identity errors | Low | Artifact identity regression |
 | Version/identity/cache compatibility, optional trough overrides and polarity flags | Cache loader and preprocessing | Protect existing reviewed feature caches | Keep unchanged | High if removed | Cache/polarity/amplitude/artifact |
@@ -96,7 +96,7 @@ Pre-existing failures identified separately from cleanup regressions:
 
 The candidate also adds lightweight storage/scientific round-trip and complete
 single-recording workflow checks: automatic regeneration from reviewed caches,
-`analyze_and_review`, `review_only`, cancellation, selected reanalysis,
+`analyze_and_review`, `review`, cancellation, selected reanalysis,
 immutable history, annotation revisions and MAT/HDF5 consistency. All generated
 recordings, outputs and workbooks are synthetic and temporary. No full cohort
 or real recording analysis is run.

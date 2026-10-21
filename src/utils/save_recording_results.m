@@ -18,7 +18,7 @@ function results = save_recording_results(results, data_raw, data, config)
     end
     results.respiratory_artifact_state = respiratory_artifact_checkpoint('load',config);
     if ~isfield(results,'analysis_respiratory_artifact_revision'), results.analysis_respiratory_artifact_revision = 0; end
-    full_analysis = ~strcmp(execution_mode(config),'review_only') && isempty(resolve_selected_labels(config));
+    full_analysis = ~strcmp(execution_mode(config),'review') && isempty(resolve_selected_labels(config));
     if full_analysis && results.analysis_respiratory_artifact_revision ~= results.respiratory_artifact_state.revision
         error('MAGMA:Respiration:ArtifactRevisionChanged','Feature annotations changed during analysis; rerun this recording.');
     end
@@ -37,7 +37,7 @@ function results = save_recording_results(results, data_raw, data, config)
             sprintf('Sub%d_M%d%s', config.subject, config.measure, hdf5_suffix));
         export_results_hdf5(hdf5_filename, results, data_raw, data);
     end
-    if ~strcmp(execution_mode(config), 'review_only') && isempty(resolve_selected_labels(config))
+    if ~strcmp(execution_mode(config), 'review') && isempty(resolve_selected_labels(config))
         recording_observation('complete', config, results.analysis_recording_observations.revision);
         results.respiratory_artifact_state = respiratory_artifact_checkpoint('complete',config,results.analysis_respiratory_artifact_revision);
     end

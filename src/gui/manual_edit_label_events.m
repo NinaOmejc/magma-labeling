@@ -1,5 +1,5 @@
 function [reviewed_event_sets, edit_info] = manual_edit_label_events( ...
-    data, resp_cycles, config, automatic_event_sets)
+    data, resp_cycles, config, automatic_event_sets, label_editable)
 % MANUAL_EDIT_LABEL_EVENTS Load, create, and persist provenance-aware label reviews.
 %
 % Inputs:
@@ -8,6 +8,8 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events( ...
 %   config               - Recording, channel, sampling, and LabelEdit settings.
 %   automatic_event_sets - Scalar struct with one canonical event array per
 %                          editable label field from manual_label_definitions.
+%   label_editable       - Optional logical vector in canonical label order;
+%                          labels with no assessable evidence are hidden.
 %
 % Outputs:
 %   reviewed_event_sets - Same per-label schema, containing the active reviewed
@@ -21,10 +23,17 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events( ...
     config.recording_observations = observation;
     config.respiratory_artifact_state = respiratory_artifact_checkpoint('load',config);
     label_defs = manual_label_definitions();
+    if nargin < 5, label_editable = true(1, numel(label_defs)); end
+    if ~islogical(label_editable) || ~isvector(label_editable) || ...
+            numel(label_editable) ~= numel(label_defs)
+        error('MAGMA:ManualLabelEdit:AvailabilityAlignment', ...
+            'label_editable must be a logical vector in canonical label order.');
+    end
     N = size(data, 1);
     fs = config.fs;
     automatic_event_sets = ensure_event_sets(automatic_event_sets, label_defs, fs, N);
     cfg = label_edit_config(config);
+    cfg.editable_labels = label_editable(:)';
     do_manual_review = manual_review_enabled(config);
     edit_file = manual_edit_file(config, cfg);
     edit_info = init_edit_info(edit_file);
@@ -82,10 +91,12 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events( ...
     end
 
     edited_event_sets = start_event_sets;
-    [sigh_candidates, ~, sigh_panel_peaks] = build_sigh_breath_candidates(resp_cycles, N, fs);
-    start_event_sets.sigh = sigh_events_at_peaks( ...
-        start_event_sets.sigh, sigh_candidates, sigh_panel_peaks, fs);
-    edited_event_sets.sigh = start_event_sets.sigh;
+    if cfg.editable_labels(strcmp({label_defs.field}, 'sigh'))
+        [sigh_candidates, ~, sigh_panel_peaks] = build_sigh_breath_candidates(resp_cycles, N, fs);
+        start_event_sets.sigh = sigh_events_at_peaks( ...
+            start_event_sets.sigh, sigh_candidates, sigh_panel_peaks, fs);
+        edited_event_sets.sigh = start_event_sets.sigh;
+    end
     new_coverage = false(N, numel(label_defs));
     [edited_event_sets, ~, new_coverage, committed, observation_status] = run_editor( ...
         data, resp_cycles, config, edited_event_sets, automatic_event_sets, ...
@@ -565,6 +576,13 @@ function save_manual_event_sets(edit_file, automatic_event_sets, reviewed_event_
     end
 
     manual_label_automatic_event_sets = ensure_event_sets(automatic_event_sets, label_defs, fs, N);
+    if isfile(edit_file)
+        snapshot = load(edit_file, 'manual_label_automatic_event_sets');
+        if isfield(snapshot, 'manual_label_automatic_event_sets')
+            % This is a historical snapshot, not the current automatic layer.
+            manual_label_automatic_event_sets = snapshot.manual_label_automatic_event_sets;
+        end
+    end
     manual_label_event_sets = ensure_event_sets(reviewed_event_sets, label_defs, fs, N);
     active_index = find([review_history.round_id] == active_round_id, 1, 'last');
     if isempty(active_index)
@@ -648,9 +666,20 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
     t_raw = (0:N-1)' / fs;
     t_end = t_raw(end);
     window_sec = min(max(30, cfg.window_sec), max(30, t_end));
-    % Keep the complete event/coverage schema, but do not offer desaturation review.
-    editable_label_indices = find(~strcmp({label_defs.field}, 'desat'));
-    current_label_idx = editable_label_indices(1);
+    % Preserve all saved fields while offering only assessable respiratory labels.
+    respiratory_labels = ~strcmp({label_defs.field}, 'desat');
+    editable_label_indices = find(cfg.editable_labels & respiratory_labels);
+    current_label_idx = [];
+    label_editing_enabled = 'off';
+    if ~isempty(editable_label_indices)
+        current_label_idx = editable_label_indices(1);
+        label_editing_enabled = 'on';
+    end
+    hidden_labels = respiratory_labels & ~cfg.editable_labels;
+    if any(hidden_labels)
+        log_message(config, 1, 'Manual label review: unavailable labels hidden: %s.', ...
+            strjoin({label_defs(hidden_labels).name}, ', '));
+    end
     reviewed = ismember({label_defs.field}, reviewed_fields);
     drag_start_t = NaN;
     drag_active = false;
@@ -718,8 +747,10 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
         'Position', [0.10 0.085 0.86 0.028], 'HorizontalAlignment', 'left');
     update_observation_notice();
     label_names = {label_defs(editable_label_indices).name};
+    if isempty(label_names), label_names = {'No assessable respiratory labels'}; end
     uicontrol(fh, 'Style', 'popupmenu', 'String', label_names, ...
         'Units', 'normalized', 'Position', [0.01 0.955 0.24 0.035], ...
+        'Enable', label_editing_enabled, ...
         'Value', 1, 'Callback', @(src,~) change_label(src.Value));
     uicontrol(fh, 'Style', 'slider', 'Units', 'normalized', ...
         'Position', [0.10 0.01 0.55 0.03], 'Min', 0, ...
@@ -728,9 +759,11 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
         'Callback', @(src,~) set_xlim(src.Value));
     uicontrol(fh, 'Style', 'pushbutton', 'String', 'Reset label to start', ...
         'Units', 'normalized', 'Position', [0.67 0.01 0.10 0.035], ...
+        'Enable', label_editing_enabled, ...
         'Callback', @(~,~) reset_current_label());
     uicontrol(fh, 'Style', 'pushbutton', 'String', 'Reset all to start', ...
         'Units', 'normalized', 'Position', [0.78 0.01 0.10 0.035], ...
+        'Enable', label_editing_enabled, ...
         'Callback', @(~,~) reset_all_labels());
     uicontrol(fh, 'Style', 'pushbutton', 'String', 'Done', ...
         'Units', 'normalized', 'Position', [0.89 0.01 0.10 0.035], ...
@@ -780,7 +813,8 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
         x0 = max(0, min(x0, max(0, t_end - window_sec)));
         xlim(ax1, [x0 min(x0 + window_sec, t_end)]);
         mark_current_view_reviewed();
-        if strcmp(label_defs(current_label_idx).edit_mode, 'breath_event')
+        if ~isempty(current_label_idx) && ...
+                strcmp(label_defs(current_label_idx).edit_mode, 'breath_event')
             refresh_event_patches();
         end
     end
@@ -796,6 +830,7 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
     function reset_current_label()
     % RESET_CURRENT_LABEL Restore the active label to the configured starting set.
 
+        if isempty(current_label_idx), return; end
         field = label_defs(current_label_idx).field;
         mark_current_view_reviewed();
         event_sets.(field) = start_event_sets.(field);
@@ -805,7 +840,10 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
     function reset_all_labels()
     % RESET_ALL_LABELS Restore every editable label to its starting event set.
 
-        event_sets = start_event_sets;
+        for index = editable_label_indices
+            field = label_defs(index).field;
+            event_sets.(field) = start_event_sets.(field);
+        end
         mark_current_view_reviewed();
         refresh_event_patches();
     end
@@ -813,7 +851,7 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
     function mark_current_view_reviewed()
     % MARK_CURRENT_VIEW_REVIEWED Add the visible samples to active-label coverage.
 
-        if ~isgraphics(ax1), return; end
+        if isempty(current_label_idx) || ~isgraphics(ax1), return; end
         limits = xlim(ax1);
         start_idx = max(1, min(N, floor(limits(1) * fs) + 1));
         end_idx = max(start_idx, min(N, ceil(limits(2) * fs)));
@@ -824,7 +862,8 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
     function begin_drag(clicked_ax)
     % BEGIN_DRAG Start a candidate event interval at the clicked time in seconds.
 
-        if strcmp(label_defs(current_label_idx).edit_mode, 'breath_event') || ...
+        if isempty(current_label_idx) || ...
+                strcmp(label_defs(current_label_idx).edit_mode, 'breath_event') || ...
                 ~strcmp(get(fh, 'SelectionType'), 'normal')
             return;
         end
@@ -893,10 +932,12 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
         candidate = sigh_breath_events(breath_index);
         field = label_defs(current_label_idx).field;
         events = event_sets.(field);
-        peak_index = candidate.start_idx;
+        identity_indices = round(sigh_panel_peaks(breath_index, :) * fs) + 1;
+        identity_indices = identity_indices(isfinite(identity_indices));
         remove = false(size(events));
         if ~isempty(events)
-            remove = [events.start_idx] == peak_index & [events.end_idx] == peak_index;
+            remove = [events.start_idx] == [events.end_idx] & ...
+                ismember([events.start_idx], identity_indices);
         end
         if any(remove)
             events(remove) = [];
@@ -904,7 +945,7 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
         else
             event_sets.(field) = sort_events_by_time([events; candidate]);
         end
-        review_coverage_mask(peak_index, current_label_idx) = true;
+        review_coverage_mask(identity_indices, current_label_idx) = true;
         reviewed(current_label_idx) = true;
         refresh_event_patches();
     end
@@ -967,6 +1008,7 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
         delete(findall(fh, 'Tag', 'ManualSighPeak'));
         delete_temp_patches();
 
+        if isempty(current_label_idx), return; end
         field = label_defs(current_label_idx).field;
         is_sigh = strcmp(label_defs(current_label_idx).edit_mode, 'breath_event');
         if is_sigh
@@ -1003,7 +1045,10 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
     % DRAW_SIGH_PEAKS Draw each panel's actual peak at the shared breath identity.
         channels = {idx_lungs, idx_diaph};
         selected = event_sets.sigh;
-        selected_indices = [selected.start_idx];
+        [~, selected_candidates] = sigh_events_at_peaks( ...
+            selected, sigh_breath_events, sigh_panel_peaks, fs);
+        [~, automatic_candidates] = sigh_events_at_peaks( ...
+            auto_event_sets.sigh, sigh_breath_events, sigh_panel_peaks, fs);
         limits = xlim(ax1);
         for panel = 1:2
             channel = channels{panel};
@@ -1014,7 +1059,14 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
                 y_peak = interp1(t_raw, data(:, channel), t_peak, 'linear');
                 if ~isfinite(y_peak), continue; end
                 face = 'none'; edge = [0.35 0.35 0.35];
-                if ismember(sigh_breath_events(breath).start_idx, selected_indices)
+                if automatic_candidates(breath)
+                    line(ax(panel), t_peak, y_peak, 'LineStyle', 'none', ...
+                        'Marker', 'o', 'MarkerSize', 8, 'MarkerFaceColor', 'none', ...
+                        'MarkerEdgeColor', [0.20 0.45 0.90], 'LineWidth', 1.4, ...
+                        'Tag', 'ManualSighPeak', 'HitTest', 'off', 'PickableParts', 'none');
+                    edge = [0.20 0.45 0.90];
+                end
+                if selected_candidates(breath)
                     face = [0.85 0.10 0.12]; edge = face;
                 end
                 line(ax(panel), t_peak, y_peak, 'LineStyle', 'none', ...

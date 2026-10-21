@@ -64,7 +64,7 @@ function testObsoleteResultsAndTwentyTwoFeatureVectorsAreRejected(testCase)
     verifyError(testCase,@() recording_results('load',filename),'MAGMA:Results:ObsoleteSchema');
     config = original.config; config.overwrite_results = true; config.overwrite_features = false;
     verifyEmpty(testCase,fieldnames(recording_results('existing',filename,config)));
-    config.execution.mode = 'review_only';
+    config.execution.mode = 'review';
     verifyError(testCase,@() recording_results('existing',filename,config),'MAGMA:Results:ObsoleteSchema');
     original.phenotypes.automatic.numeric_summary.n_features = 22;
     verifyError(testCase,@() recording_results('pack',original),'MAGMA:PhenotypeFeatures:InvalidCompactFeatures');
@@ -117,7 +117,7 @@ function testRegenerationLoggingHonorsVerbosityAndNeverBypassesRejection(testCas
     recording_results('begin_run');
     verifyEmpty(testCase,evalc("recording_results('existing',filename,config);"));
     % Even a previously reported file must still pass the permission check.
-    for mode = {'review_only','analyze_and_review'}
+    for mode = {'review','analyze_and_review'}
         rejected = config; rejected.execution.mode = mode{1};
         verifyError(testCase,@() recording_results('existing',filename,rejected), ...
             'MAGMA:Results:ObsoleteSchema');

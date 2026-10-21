@@ -3,6 +3,7 @@ function sub_events = merge_events(event_lists, merge_gap_sec)
 % event_lists is a cell array of canonical event arrays. Events are sorted by
 % type/start_t and joined when the gap is at most merge_gap_sec (default zero);
 % sample/time bounds expand to the union.
+% Sighs are discrete breath identities and are never joined by interval gaps.
 
     if nargin < 2 || isempty(merge_gap_sec)
         merge_gap_sec = 0;
@@ -38,7 +39,9 @@ function sub_events = merge_events(event_lists, merge_gap_sec)
         same_type = strcmp(curr.type, last.type);
         close_enough = curr.start_t <= (last.end_t + merge_gap_sec);
 
-        if same_type && close_enough
+        type_key = strrep(strrep(curr.type, '-', '_'), ' ', '_');
+        is_sigh = ~isempty(regexpi(type_key, '^(sigh|sig)(_(lungs|diaph|both))?$', 'once'));
+        if same_type && close_enough && ~is_sigh
             sub_events(end).start_t = min(last.start_t, curr.start_t);
             sub_events(end).start_idx = min(last.start_idx, curr.start_idx);
             sub_events(end).end_t   = max(last.end_t, curr.end_t);

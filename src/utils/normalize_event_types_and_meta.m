@@ -3,7 +3,8 @@ function events = normalize_event_types_and_meta(raw_events, fs)
 % raw_events must provide type and sample bounds plus time bounds when fs is
 % omitted. With fs, times/duration are recomputed from inclusive indices.
 % Output fields are type, start_idx/end_idx, start_t/end_t (s), duration (s),
-% and belt; overlapping same-type events are merged across belt sources.
+% and belt; overlapping non-sigh events are merged across belt sources.
+% Sighs retain their individual bounds; only identical sigh rows deduplicate.
 
     if nargin < 2
         fs = [];
@@ -191,7 +192,13 @@ function events = merge_normalized_belt_events(events, fs)
     for i = 2:numel(events)
         current = events(i);
         previous = out(end);
-        if strcmp(current.type, previous.type) && current.start_t <= previous.end_t
+        same_type = strcmp(current.type, previous.type);
+        merge = current.start_t <= previous.end_t;
+        if strcmp(current.type, 'sigh')
+            merge = current.start_idx == previous.start_idx && ...
+                current.end_idx == previous.end_idx;
+        end
+        if same_type && merge
             out(end).start_idx = min(previous.start_idx, current.start_idx);
             out(end).end_idx = max(previous.end_idx, current.end_idx);
             if isempty(fs)

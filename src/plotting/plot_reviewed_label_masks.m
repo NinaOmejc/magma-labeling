@@ -7,12 +7,15 @@ function plot_reviewed_label_masks(results, config)
     end
     round_id = results.review_provenance.latest_round_id;
     automatic_plot_events = results.events_automatic;
-    if isfield(results, 'resp_cycles')
+    legacy_sigh = strcmp({automatic_plot_events.type}, 'sigh') & ...
+        [automatic_plot_events.start_idx] ~= [automatic_plot_events.end_idx];
+    if any(legacy_sigh) && isfield(results, 'resp_cycles')
         [candidates, ~, panel_peaks] = build_sigh_breath_candidates( ...
             results.resp_cycles, size(results.mask_automatic, 1), config.fs);
-        automatic_sighs = automatic_plot_events(strcmp({automatic_plot_events.type}, 'sigh'));
-        automatic_plot_events = sigh_events_at_peaks( ...
-            automatic_sighs, candidates, panel_peaks, config.fs);
+        historical_peaks = sigh_events_at_peaks( ...
+            automatic_plot_events(legacy_sigh), candidates, panel_peaks, config.fs);
+        automatic_plot_events = normalize_review_events( ...
+            {automatic_plot_events(~legacy_sigh), historical_peaks}, config.fs);
     end
     reviewed_events = results.events_reviewed;
     if isfield(results, 'review_coverage_mask')

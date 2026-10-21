@@ -120,7 +120,7 @@ end
 
 function testExplicitGuiNegativeIsCommittedOnlyOnAcceptance(testCase)
     [config,cleanup] = fixture(); %#ok<ASGLU>
-    config.execution.mode = 'review_only';
+    config.execution.mode = 'review';
     cycles = struct('lungs',empty_respiration_feature('lungs'),'diaph',empty_respiration_feature('diaph'));
     data = zeros(40,6);
     cycles.lungs.x0 = data(:,4); cycles.diaph.x0 = data(:,6);
@@ -162,7 +162,7 @@ end
 
 function testAcceptLabelGuiWithoutAssessingPreservesUnassessed(testCase)
     [config,cleanup] = fixture(); %#ok<ASGLU>
-    config.execution.mode = 'review_only';
+    config.execution.mode = 'review';
     cycles = struct('lungs',empty_respiration_feature('lungs'),'diaph',empty_respiration_feature('diaph'));
     defs = manual_label_definitions(); sets = struct();
     for i = 1:numel(defs), sets.(defs(i).field) = empty_events(); end
@@ -183,7 +183,7 @@ end
 
 function testLabelGuiSharesFlagAndRecordsOnlyAcceptedChanges(testCase)
     [config, cleanup] = fixture(); %#ok<ASGLU>
-    config.execution.mode = 'review_only';
+    config.execution.mode = 'review';
     config.LabelEdit.reviewer_role = 'clinician';
     recording_observation('set', config, true, 'respiration_feature_gui', 0);
     cycles = struct('lungs', empty_respiration_feature('lungs'), 'diaph', empty_respiration_feature('diaph'));
@@ -228,7 +228,7 @@ end
 
 function testLabelGuiCanExplicitlyReturnToUnassessed(testCase)
     [config,cleanup] = fixture(); %#ok<ASGLU>
-    config.execution.mode = 'review_only';
+    config.execution.mode = 'review';
     before = recording_observation('set',config,true,'respiration_feature_gui',0);
     cycles = struct('lungs',empty_respiration_feature('lungs'),'diaph',empty_respiration_feature('diaph'));
     defs = manual_label_definitions(); sets = struct();
@@ -255,7 +255,7 @@ function testPendingClearsOnlyForSavedFullAnalysisAtCurrentRevision(testCase)
     save_recording_results(results, [], [], config);
     verifyTrue(testCase, recording_observation('load', config).pending_reanalysis);
     results.analysis_recording_observations = observed;
-    config.execution.mode = 'review_only';
+    config.execution.mode = 'review';
     save_recording_results(results, [], [], config);
     verifyTrue(testCase, recording_observation('load', config).pending_reanalysis);
     config.execution.mode = 'analyze';

@@ -12,8 +12,8 @@ function run_magma(base_config)
     selected_labels = resolve_selected_labels(base_config);
     base_config.execution.selected_labels = selected_labels;
     mode = execution_mode(base_config);
-    if strcmp(mode, 'review_only') && ~isempty(selected_labels)
-        error('MAGMA:Execution:SelectedLabelsReviewOnly', ['config.execution.selected_labels cannot be used with execution.mode = review_only.']);
+    if strcmp(mode, 'review') && ~isempty(selected_labels)
+        error('MAGMA:Execution:SelectedLabelsReviewOnly', ['config.execution.selected_labels cannot be used with execution.mode = review.']);
     end
 
     if get_config_value(base_config,'resp','recheck_cached',false) && ...
@@ -66,7 +66,7 @@ function run_magma(base_config)
 
             result_file = fullfile(config.sub_results_path, config.sub_results_filename);
             result_exists = isfile(result_file);
-            if strcmp(mode, 'review_only')
+            if strcmp(mode, 'review')
                 existing_results = recording_results('load',result_file);
                 review_config = config;
                 if isfield(existing_results, 'config') && ...
@@ -114,11 +114,16 @@ function run_magma(base_config)
             config.execution.partial_rerun = selective && result_exists;
             config.execution.updated_labels = selected_labels;
 
+            cache_file = fullfile(config.sub_results_path, config.sub_features_filename);
+            if selective && result_exists && ismember('sigh', selected_labels) && ...
+                    ~config.overwrite_features && isfile(cache_file)
+                % Refresh sigh representation on the saved landmark orientation.
+                config.preprocessing.feature_cache_polarity_used = true;
+            end
             [data, config, polarity_deferred] = preprocess_recording(data_raw, config);
             if polarity_deferred, continue; end
 
             feature_cancelled = false;
-            cache_file = fullfile(config.sub_results_path, config.sub_features_filename);
             if get_config_value(config,'resp','recheck_cached',false) && ~isfile(cache_file)
                 error('MAGMA:Respiration:RecheckCacheMissing','Restore the reviewed feature cache before rechecking: %s',cache_file);
             end
@@ -215,7 +220,7 @@ function run_magma(base_config)
             plot_config.LabelMask.assessable_mask = label_results.assessable_mask;
             plot_label_mask( ...
                 label_results.mask_automatic, label_results.label_names, ...
-                plot_config, label_results.availability_reason);
+                plot_config, label_results.availability_reason, label_results.events_automatic);
 
             results = build_recording_results( ...
                 config, resp_cycles, resp_ref, session_reference, ...

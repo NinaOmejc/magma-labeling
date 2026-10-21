@@ -33,7 +33,8 @@ function [results, cancelled] = review_existing_results(data, existing, config)
     config.execution.analysis_id = existing.analysis_id;
     automatic_event_sets = split_automatic_events(existing.events_automatic);
     [reviewed_event_sets, manual_edit_info] = manual_edit_label_events( ...
-        data, existing.resp_cycles, config, automatic_event_sets);
+        data, existing.resp_cycles, config, automatic_event_sets, ...
+        logical(existing.label_available(:)') & any(existing.label_assessable_mask, 1));
     if isfield(manual_edit_info, 'cancelled') && manual_edit_info.cancelled
         results = existing;
         cancelled = true;

@@ -52,13 +52,14 @@ function testSessionReferenceTreatsBeltsIndependentlyAndRetainsQCWarnings(testCa
     verifyEqual(testCase, diagnostics.lungs.reference_quality, 'step_candidate');
     verifyEqual(testCase, diagnostics.diaph.reference_quality, 'gradual_or_complex');
     verifyTrue(testCase, diagnostics.lungs.available && diagnostics.diaph.available);
-    % Keep the existing within-belt merge and separate belt event types.
+    % Consecutive breaths stay separate; shared detections retain provenance.
     verifyNumElements(testCase, events, 2);
-    verifyEqual(testCase, sort({events.type}), {'sigh_diaph', 'sigh_lungs'});
+    verifyEqual(testCase, {events.type}, {'sigh', 'sigh'});
+    verifyEqual(testCase, {events.belt}, {'lungs', 'both'});
     features.diaph.available = false;
     expected = detect_sigh(data, features, cycles, config);
-    thoracic = events(strcmp({events.type}, 'sigh_lungs'));
-    verifyEqual(testCase, thoracic, expected);
+    verifyEqual(testCase, [events.start_idx], [expected.start_idx]);
+    verifyEqual(testCase, {expected.belt}, {'lungs', 'lungs'});
 end
 
 function testSessionReferenceNeverFallsBackAndMarksSighUnassessable(testCase)
@@ -579,6 +580,7 @@ end
 
 function config = minimal_sigh_config()
     config = struct();
+    config.data_columns = {'ECG1','ECG2','SpO2','Resp-Lungs','Blood Pressure','Resp-Diaphragm'};
     config.fs = 10;
     config.subject = 999;
     config.measure = 1;

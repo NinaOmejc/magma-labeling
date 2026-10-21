@@ -62,7 +62,9 @@ end
 function testReviewedMaskUsesDotsAndNoSighDurationBlocks(testCase)
     config = make_test_config(); config.fs = 10;
     config.make_figs_visible = 'off'; config.LabelMask.do_plot = true;
-    config.sub_results_path = '';
+    config.plot_format = 'fig';
+    plot_file = fullfile(config.sub_results_path,'Sub999_M1_label_mask.fig');
+    file_cleanup = onCleanup(@() delete_test_plot(plot_file)); %#ok<NASGU>
     labels = get_labels('short'); row = find(strcmp(labels,'sigh'));
     config.LabelMask.review_coverage = true(30,numel(labels));
     config.LabelMask.review_coverage(21:end,:) = false;
@@ -70,13 +72,13 @@ function testReviewedMaskUsesDotsAndNoSighDurationBlocks(testCase)
     mask = events_to_time_mask(events,30,config);
     warning_state = warning('off','all'); warning_cleanup = onCleanup(@() warning(warning_state));
     plot_label_mask(mask,labels,config,[],events,mask,events);
-    fig = gcf; cleanup = onCleanup(@() close(fig));
+    fig = openfig(plot_file,'invisible'); cleanup = onCleanup(@() close(fig));
     raster = findall(fig,'Type','image');
     verifyEqual(testCase,raster.CData(row,:),[zeros(1,20) 2*ones(1,10)]);
     markers = findall(fig,'Tag','SighEventMarkers');
     verifyEqual(testCase,numel(markers),2);
     for i = 1:numel(markers), verifyEqual(testCase,markers(i).XData,[0.9 1]); end
-    verifyEqual(testCase,numel(findall(fig,'Type','rectangle')),0);
+    verifyEqual(testCase,numel(findall(fig,'Tag','AutomaticDetectionOutline')),0);
 end
 
 function testPairedMarkersUseActualPeaksAndOneSharedIdentity(testCase)
@@ -106,4 +108,10 @@ end
 function event = peak_event(index,belt,fs)
     event = struct('type','sigh','start_idx',index,'end_idx',index, ...
         'start_t',(index-1)/fs,'end_t',index/fs,'duration',1/fs,'belt',belt);
+end
+
+function delete_test_plot(filename)
+    if isfile(filename), delete(filename); end
+    folder = fileparts(filename);
+    if isfolder(folder), rmdir(folder); end
 end

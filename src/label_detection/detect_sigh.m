@@ -5,7 +5,7 @@ function [events, diagnostics] = detect_sigh( ...
 % selected canonical amplitude, and saved session/global-normalized evidence;
 % config selects the fixed session reference (default), centered rolling-median,
 % global-outlier, or legacy criterion plus plotting.
-% events are midpoint-bounded breath events. diagnostics stores compact per-belt
+% events are paired, discrete breath-peak identities. diagnostics stores compact per-belt
 % breath amplitude/baseline/ratio evidence and decision thresholds.
 % Manual editing is handled only by the unified label-review GUI.
 
@@ -195,9 +195,7 @@ function [events, diagnostics] = detect_sigh( ...
              'respiratory belt with usable breath amplitudes.'], method);
         return;
     end
-    events_L = sigh_flags_to_events(lungs.peak_t, sigh_lungs, N, fs, 'lungs');
-    events_D = sigh_flags_to_events(diaph.peak_t, sigh_diaph, N, fs, 'diaph');
-    events = merge_events({events_L, events_D});
+    events = sigh_flags_to_events(lungs, diaph, sigh_lungs, sigh_diaph, N, fs);
 
     if do_plot
         if ~isfield(config, 'channels')
@@ -1038,74 +1036,53 @@ end
 
 % rest unchanged
 
-function events = sigh_flags_to_events(peak_t, flags, N, fs, belt)
-% SIGH_FLAGS_TO_EVENTS Convert selected breaths to midpoint-bounded events.
-% peak_t is seconds and flags is an aligned breath-level mask. N/fs clamp
-% canonical sample/time bounds; belt is appended to the sigh event type.
+function events = sigh_flags_to_events(lungs, diaph, flags_lungs, flags_diaph, N, fs)
+% SIGH_FLAGS_TO_EVENTS Reuse review breath pairing, then select detected peaks.
+% Pair the full valid breath trains, not just sighs: adjacent different breaths
+% must not become a pair simply because they are the nearest two sighs.
+% Flags have already passed the selected method and artifact rules above.
 
-    events = empty_events();
-    peak_t = peak_t(:);
-    flags  = logical(flags(:));
-    if numel(peak_t) ~= numel(flags)
-        error('MAGMA:Sigh:BreathAlignmentMismatch', ...
-            'Sigh event flags must align one-to-one with breath peak times.');
-    end
-    L = numel(peak_t);
-
-    n_events = sum(flags);
-    if n_events == 0
-        return;
-    end
-    template = struct( ...
-        'type', '', ...
-        'start_idx', 0, ...
-        'end_idx', 0, ...
-        'start_t', 0, ...
-        'end_t', 0, ...
-        'duration', 0);
-    events = repmat(template, n_events, 1);
-    out = 0;
-
-    for i = 1:L
-        if ~flags(i), continue; end
-
-        t0 = peak_t(i);
-        if i == 1 && L >= 2
-            dt = peak_t(i+1) - peak_t(i);
-            start_t = max(0, t0 - 0.5*dt);
-        elseif i > 1
-            start_t = 0.5*(peak_t(i-1) + peak_t(i));
-        else
-            start_t = max(0, t0 - 0.5); % fallback
+    belts = {lungs, diaph};
+    flags = {flags_lungs, flags_diaph};
+    names = {'lungs', 'diaph'};
+    pairing = struct();
+    selected = cell(1, 2);
+    for i = 1:2
+        peaks = belts{i}.peak_t(:);
+        if numel(peaks) ~= numel(flags{i})
+            error('MAGMA:Sigh:BreathAlignmentMismatch', ...
+                'Sigh event flags must align one-to-one with breath peak times.');
         end
-
-        if i == L && L >= 2
-            dt = peak_t(i) - peak_t(i-1);
-            end_t = min(N/fs, t0 + 0.5*dt);
-        elseif i < L
-            end_t = 0.5*(peak_t(i) + peak_t(i+1));
-        else
-            end_t = min(N/fs, t0 + 0.5); % fallback
-        end
-
-        s = max(1, min(N, round(start_t*fs) + 1));
-        e = max(s, min(N, round(end_t*fs)));
-
-        start_t = (s-1)/fs;
-        end_t   = e/fs;
-
-        out = out + 1;
-        events(out) = struct( ...
-            'type', ['sigh_' belt], ...
-            'start_idx', s, ...
-            'end_idx', e, ...
-            'start_t', start_t, ...
-            'end_t', end_t, ...
-            'duration', (e - s + 1) / fs );
-
+        pairing.(names{i}) = struct('peak_t', peaks, ...
+            'amp', belts{i}.amp, 'available', belts{i}.available);
+        selected{i} = round(peaks(logical(flags{i}(:))) * fs) + 1;
     end
-
-    events = events(1:out);
+    [candidates, ~, panel_peaks] = build_sigh_breath_candidates(pairing, N, fs);
+    detected = [ismember(round(panel_peaks(:, 1) * fs) + 1, selected{1}), ...
+        ismember(round(panel_peaks(:, 2) * fs) + 1, selected{2})];
+    keep = any(detected, 2);
+    events = candidates(keep);
+    detected = detected(keep, :);
+    panel_peaks = panel_peaks(keep, :);
+    for i = 1:numel(events)
+        panel = 1;
+        if all(detected(i, :))
+            events(i).belt = 'both';
+        elseif detected(i, 1)
+            events(i).belt = 'lungs';
+        else
+            panel = 2;
+            events(i).belt = 'diaph';
+        end
+        % Use an actually selected peak; paired detections use the lung peak.
+        peak = round(panel_peaks(i, panel) * fs) + 1;
+        events(i).start_idx = peak;
+        events(i).end_idx = peak;
+        events(i).start_t = (peak - 1) / fs;
+        events(i).end_t = peak / fs;
+        events(i).duration = 1 / fs;
+    end
+    events = normalize_review_events(events, fs);
 end
 
 function flags_out = enforce_min_gap_by_strength(flags_in, peak_t, strength, min_gap_sec)

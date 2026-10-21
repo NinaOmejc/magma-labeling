@@ -57,7 +57,7 @@ function testRegenerationReviewCancellationAndSelectedRerun(testCase)
     first = recording_results('load',result_file);
     verifyNumElements(testCase,first.review_history,1);
     verifyEqual(testCase,first.mask_automatic,automatic.mask_automatic);
-    config.execution.mode = 'review_only'; config.LabelEdit.start_from = 'latest_reviewed';
+    config.execution.mode = 'review'; config.LabelEdit.start_from = 'latest_reviewed';
     driver = label_driver(false); cleanup_driver = onCleanup(@() stop_driver(driver));
     run_magma(config); verifyTrue(testCase,driver.UserData.acted); clear cleanup_driver;
     second = recording_results('load',result_file);

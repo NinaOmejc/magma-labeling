@@ -79,7 +79,7 @@ detector progress. Warnings and errors are always shown.
 ```matlab
 config.execution.mode = 'analyze';            % automatic analysis only
 config.execution.mode = 'analyze_and_review'; % analyze, then review
-config.execution.mode = 'review_only';        % load automatic results, then review
+config.execution.mode = 'review';        % load automatic results, then review
 ```
 
 `config.execution.selected_labels = {}` keeps normal behavior. A non-empty
@@ -89,9 +89,9 @@ replaced and all non-selected automatic and reviewed annotations are preserved;
 `overwrite_results` does not need to be enabled for this selective update. On a
 new recording, unselected labels retain their canonical columns and are marked
 unavailable with reason `not_computed`. Label selection is not valid with
-`review_only`; review the saved merged result in a separate review-only run.
+`review`; review the saved merged result in a separate review-only run.
 
-`review_only` requires an existing recording result. It loads the saved
+`review` requires an existing recording result. It loads the saved
 automatic annotations and respiratory cycles without rerunning feature
 extraction or detectors. Recording results use the filenames
 `Sub<subject>_M<measurement>_results.mat` and
@@ -247,6 +247,45 @@ not a negative classification and never triggers a local/global fallback.
 Reference QC flags remain visible in diagnostics. Canonical amplitudes still
 follow `config.resp.amp_method`.
 
+Each detected sigh breath is one canonical point event at a selected belt's
+actual peak: `start_idx == end_idx`, `start_t = (start_idx - 1) / fs`,
+`end_t = end_idx / fs`, and `duration = 1 / fs`. The one-sample duration is a
+MAT/HDF5 representation, not physiological sigh duration. Counts, rates,
+inter-sigh intervals and event-based overlaps use the event list, not connected
+mask runs. The existing full-breath pairing groups detections of the same breath
+across belts and records `lungs`, `diaph`, or `both`; consecutive breaths stay
+separate. No classification threshold, amplitude, or artifact rule changes.
+
+To refresh automatic sigh results after this representation correction, first
+back up the recording outputs and retain the reviewed feature cache. For
+recordings with compatible existing results and cache metadata, a sigh-only
+rerun is sufficient; a full detector run or new manual review is not required:
+
+```matlab
+config.execution.mode = 'analyze';
+config.execution.selected_labels = {'sigh'};
+config.overwrite_results = true;
+config.overwrite_features = false;
+config.resp.recheck_cached = false;
+config.resp.manual_control = false;
+```
+
+This refresh uses the cached belt orientation, regenerates current automatic
+sigh events/masks and derived summaries, and preserves active accepted/rejected
+sigh reviews, coverage, round IDs and immutable history. Other selected labels
+retain their normal review-invalidation rules. Do not use this shortcut while
+feature/artifact or observation edits require full reanalysis. Unsupported older
+result schemas still require the existing result-regeneration workflow.
+
+Historical interval-based sigh annotations remain readable. The review GUI may
+expand them to known breath peaks in a new working view; saved rounds and
+unmatched annotations are retained. New automatic point events are plotted
+directly, without interval expansion. Existing round-specific figures remain
+unchanged. `manual_label_automatic_event_sets` in an existing manual checkpoint
+remains its historical snapshot; the refreshed automatic layer is in the current
+`*_results.mat` (and `*_results.h5` when HDF5 export is enabled). Only an explicit
+new review appends a review round.
+
 For methodological comparison, select `config.sigh.method = 'rolling_median_2x'`
 to use the existing centered 15-breath median instead. Its separate threshold
 remains `config.sigh.rolling_ratio_threshold = 2.0`. Setting
@@ -332,8 +371,14 @@ Missing-data blocks are not bridged during phase analysis.
 The unified 11-label reviewer is enabled only when:
 
 ```matlab
-ismember(config.execution.mode, {'analyze_and_review', 'review_only'})
+ismember(config.execution.mode, {'analyze_and_review', 'review'})
 ```
+
+The label dropdown only offers respiratory labels with assessable evidence for
+the current recording. For example, a missing lung belt hides thoracic dominance
+and asynchrony. Labels with zero detected events remain editable when assessable.
+If none are assessable, label editing is disabled while recording observations
+and signal navigation remain available. Existing saved annotations are retained.
 
 Sighs are edited in the same reviewer and snap to respiratory breaths. There
 are no separate sigh/final-label manual-control, apply-saved, or save-review
@@ -349,7 +394,7 @@ config.LabelEdit.reviewer_role
 For example, a clinician can review the frozen automatic analysis with:
 
 ```matlab
-config.execution.mode = 'review_only';
+config.execution.mode = 'review';
 config.LabelEdit.start_from = 'automatic';
 config.LabelEdit.reviewer_role = 'clinician';
 ```

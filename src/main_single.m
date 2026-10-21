@@ -15,27 +15,28 @@ config = get_config_defaults();
 % INPUT / OUTPUT
 config.path_data_in = 'D:\Projects\MAGMA\raw_data';
 config.path_results_out = 'D:\Projects\MAGMA\data_analysis\statistical_labeling';
-config.subjects = [1];
-config.measurements = [2];
-config.exclude_recordings = [ ...                   % [subject, measurement]; omit only these recordings
+config.subjects = [6:10];
+config.measurements = [1 2];
+config.exclude_recordings = [ ...                   % [subject, measurement];
       3 1;   3 2; ...
+             5 2; ...
      30 1;  30 2; ...
      91 1;  91 2; ...
     135 1; 135 2; ...
     ];
 
 % EXECUTION
-config.overwrite_results = true;       % If true, recompute even if "*_results.mat" output already exists.
-config.overwrite_features = false;     % If true, recompute respiratory features even if "*_features.mat" already exists.
-config.resp.recheck_cached = false;    % reopen saved landmarks/artifacts; Cancel skips this recording
-config.execution.mode = 'analyze';     % 'analyze', 'analyze_and_review', or 'review_only'.
+config.overwrite_results = true;                    % If true, recompute even if "*_results.mat" output already exists.
+config.overwrite_features = false;                  % If true, recompute respiratory features even if "*_features.mat" already exists.
+config.resp.recheck_cached = false;                  % reopen saved landmarks/artifacts; Cancel skips this recording
+config.execution.mode = 'analyze';       % 'analyze', 'analyze_and_review', or 'review'.
 
-config.preprocessing.check_relative_belt_polarity = true;   % automatically open manual review for persistent negative belt correlation
+config.preprocessing.check_relative_belt_polarity = true;   % automatically open manual review when persistent negative belt correlation is present between the belts.
 
 % LABEL SELECTION
-config.execution.selected_labels = {};
 % Empty = normal behavior: new recordings analyze all labels; existing recordings obey config.overwrite_results.
 % To calculate or rerun only selected labels, for example: config.execution.selected_labels = {'irregular', 'slow'};
+config.execution.selected_labels = {};
 
 % RESPIRATORY REPRESENTATION
 config.resp.amp_method = 'symmetric';  % Selected breath amplitude: 'expiratory' (peak to following trough), 'inspiratory' (peak to preceding trough), or 'symmetric' (peak to the mean of both troughs)
@@ -51,7 +52,7 @@ config.resp.manual_control = true;                          % separately review 
 config.LabelEdit.start_from = 'automatic';
 config.LabelEdit.reviewer_role = 'researcher';
 config.LabelEdit.reviewer_id = '';                           % optional reviewer identifier; may remain empty
-config.LabelEdit.window_sec = 800;                           % visible time span for manual label GUI scrolling
+config.LabelEdit.window_sec = 1000;                           % visible time span for manual label GUI scrolling
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % RUN THE MAIN SCRIPT

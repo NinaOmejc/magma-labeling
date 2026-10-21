@@ -169,11 +169,15 @@ function fig = plot_label_mask(label_mask, label_names, config, availability_rea
         if reviewed_plot
             allowed_samples = display_mask(sigh_row, :) < 2;
         end
-        draw_sigh_event_markers(ax, events, sigh_row, cmap(2, :), true, ...
+        sigh_color = automatic_color;
+        if reviewed_plot, sigh_color = cmap(2, :); end
+        draw_sigh_event_markers(ax, events, sigh_row, sigh_color, reviewed_plot, ...
             config.fs, allowed_samples, 5);
+        face = 'none';
+        if reviewed_plot, face = sigh_color; end
         legend_handles(end+1) = plot(ax, nan, nan, 'o', 'LineStyle', 'none', ...
-            'MarkerSize', 5, 'MarkerEdgeColor', cmap(2, :), 'MarkerFaceColor', cmap(2, :));
-        legend_labels{end+1} = 'Automatic sigh (filled red dot)';
+            'MarkerSize', 5, 'MarkerEdgeColor', sigh_color, 'MarkerFaceColor', face);
+        legend_labels{end+1} = 'Automatic sigh (hollow blue dot)';
         if reviewed_plot
             legend_labels{end} = 'Reviewed sigh (filled red dot)';
         end

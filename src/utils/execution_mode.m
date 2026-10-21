@@ -12,9 +12,9 @@ function mode = execution_mode(config)
             'config.execution.mode must be a nonempty scalar value.');
     end
     mode = char(value);
-    if ~ismember(mode, {'analyze', 'analyze_and_review', 'review_only'})
+    if ~ismember(mode, {'analyze', 'analyze_and_review', 'review'})
         error('MAGMA:Execution:InvalidMode', ...
             ['config.execution.mode must be analyze, analyze_and_review, ' ...
-             'or review_only.']);
+             'or review.']);
     end
 end

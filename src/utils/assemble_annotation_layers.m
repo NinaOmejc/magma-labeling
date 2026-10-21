@@ -16,7 +16,8 @@ function annotations = assemble_annotation_layers( ...
     for i = 1:numel(defs)
         automatic_parts{i} = field_events(automatic_event_sets, defs(i).field);
     end
-    events_automatic = normalize_event_types_and_meta(merge_events(automatic_parts), config.fs);
+    % Automatic and reviewed sighs share the same discrete event convention.
+    events_automatic = normalize_review_events(automatic_parts, config.fs);
     [mask_automatic, mask_names] = events_to_time_mask(events_automatic, N, config);
     if ~isequal(mask_names, label_names)
         error('MAGMA:Annotations:LabelOrder', ...

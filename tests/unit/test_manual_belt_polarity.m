@@ -276,7 +276,7 @@ function testDeferSkipsRecordingsAndPreservesSavedFiles(testCase)
     verifyFalse(testCase, isfile(fullfile(root,'Sub86_M2','Sub86_M2_features.mat')));
 
     config.measurements = 1;
-    config.execution.mode = 'review_only';
+    config.execution.mode = 'review';
     queue_input('3');
     evalc('run_magma(config);');
     verifyEqual(testCase, read_bytes(result_file), before_result);

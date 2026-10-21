@@ -49,7 +49,7 @@ previous phenotype snapshots are retained.
 The manual label editor shows the same artifacts as noneditable orange
 shading. Its label editing and review coverage remain separate. If an artifact
 is discovered there, cancel/finish label review and use the feature recheck
-workflow above. `review_only` does not recalculate automatic evidence.
+workflow above. `review` does not recalculate automatic evidence.
 
 ## Stored schema and interrupted reruns
 

@@ -1,5 +1,5 @@
 function events = normalize_review_events(raw_events, fs)
-% NORMALIZE_REVIEW_EVENTS Keep each reviewed sigh identity, including touching breaths.
+% NORMALIZE_REVIEW_EVENTS Keep automatic/reviewed sigh identities, including touching breaths.
 % Other labels retain their ordinary interval normalization. A point sigh uses
 % start_idx=end_idx at its peak; start_t is the peak timestamp, and its one-
 % sample duration exists only for compatibility with the MAT/HDF5 event schema.

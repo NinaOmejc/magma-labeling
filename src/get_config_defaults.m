@@ -28,7 +28,7 @@ function config = get_config_defaults()
     config.verbosity = 2;                                                   % 1 = concise progress, 2 = detailed progress
     config.make_figs_visible = 'off';                                      % create figures hidden during batch runs, so they dont pop up (for faster run)
     config.execution = struct();
-    config.execution.mode = 'analyze';                                     % 'analyze', 'analyze_and_review', or 'review_only'
+    config.execution.mode = 'analyze';                                     % 'analyze', 'analyze_and_review', or 'review'
     config.execution.selected_labels = {};                                 % empty = normal full/overwrite behavior; non-empty = compute or rerun only these canonical labels
     
     % FIRST CHECK: plot [X1, X2] seconds of raw data

@@ -53,7 +53,7 @@ function summary = compute_recording_label_burden( ...
             selected = select_label_events(events, name);
             if strcmp(name, 'sigh') && ~isempty(selected) && ...
                     any([selected.start_idx] == [selected.end_idx])
-                % One sample encodes a discrete reviewed peak, not clinical
+                % One sample encodes a discrete breath peak, not clinical
                 % sigh duration. Counts and assessable-time rates remain valid.
                 entry.duration_sec = NaN;
                 entry.fraction = NaN;
