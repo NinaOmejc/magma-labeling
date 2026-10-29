@@ -31,7 +31,7 @@ config.overwrite_features = false;                  % If true, recompute respira
 config.resp.recheck_cached = false;                  % reopen saved landmarks/artifacts; Cancel skips this recording
 config.execution.mode = 'analyze';       % 'analyze', 'analyze_and_review', or 'review'.
 
-config.preprocessing.check_relative_belt_polarity = true;   % automatically open manual review when persistent negative belt correlation is present between the belts.
+config.preprocessing.check_relative_belt_polarity = false;  % keep checking disabled; reuse compatible feature caches
 
 % LABEL SELECTION
 % Empty = normal behavior: new recordings analyze all labels; existing recordings obey config.overwrite_results.

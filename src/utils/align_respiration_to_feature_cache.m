@@ -81,7 +81,7 @@ function [data, trend, config, reused] = align_respiration_to_feature_cache(data
 
     relative_qc = config.preprocessing.belt_polarity_qc;
     absolute_qc = config.preprocessing.absolute_polarity_qc;
-    [current_relative_checked, current_thoracic_flip, current_relative_flip] = ...
+    [~, current_thoracic_flip, current_relative_flip] = ...
         respiratory_belt_polarity_state(config);
     current_absolute_flip = logical(absolute_qc.absolute_polarity_flipped);
     cached_relative_checked = logical(meta.belt_polarity_checked);
@@ -89,8 +89,8 @@ function [data, trend, config, reused] = align_respiration_to_feature_cache(data
     cached_relative_flip = logical(meta.diaphragm_polarity_flipped);
     cached_thoracic_flip = cached_logical(meta, 'thoracic_polarity_flipped');
     cached_absolute_flip = cached_logical(meta, 'absolute_polarity_flipped');
-    relative_mismatch = current_relative_checked ~= cached_relative_checked || ...
-        current_thoracic_flip ~= cached_thoracic_flip || ...
+    % Whether checking ran is provenance, not a change in signal orientation.
+    relative_mismatch = current_thoracic_flip ~= cached_thoracic_flip || ...
         current_relative_flip ~= cached_relative_flip;
     if relative_mismatch
         % Keep manual choices (and a disabled relative check) authoritative.

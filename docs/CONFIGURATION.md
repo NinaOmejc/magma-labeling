@@ -141,9 +141,15 @@ recheck without changing the cache or asking for a replacement decision.
 
 Manual decisions and a disabled relative check take precedence over
 relative cache alignment. A cached common-sign flip also cannot override an
-explicit manual choice. Cached landmarks on different belt orientations are
-incompatible. Each belt's flip is tracked separately in QC and cache
-metadata. New caches use version 10; compatible version-9 caches without a
+explicit manual choice. Historical `belt_polarity_checked` and
+`absolute_polarity_checked` flags are retained as provenance and do not
+invalidate an otherwise compatible cache. Thus, leaving
+`check_relative_belt_polarity=false` can reuse previously checked but unflipped
+features without checking again or changing reviewed landmarks. Actual belt
+flip flags must still match; different signal orientations remain incompatible.
+Recording identity, sampling, channel layout, signal length and cache schema
+checks also remain in force. Each belt's flip is tracked separately in QC and
+cache metadata. New caches use version 10; compatible version-9 caches without a
 thoracic-flip field remain readable and imply no thoracic flip.
 An incompatible manually reviewed cache is never silently overwritten. To
 change its orientation, explicitly set `overwrite_features = true` and review
