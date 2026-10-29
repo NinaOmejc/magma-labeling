@@ -281,7 +281,7 @@ Historical interval-based sigh annotations remain readable. The review GUI may
 expand them to known breath peaks in a new working view; saved rounds and
 unmatched annotations are retained. New automatic point events are plotted
 directly, without interval expansion. Existing round-specific figures remain
-unchanged. `manual_label_automatic_event_sets` in an existing manual checkpoint
+unchanged. `manual_label_review.automatic_event_sets` in a manual checkpoint
 remains its historical snapshot; the refreshed automatic layer is in the current
 `*_results.mat` (and `*_results.h5` when HDF5 export is enabled). Only an explicit
 new review appends a review round.

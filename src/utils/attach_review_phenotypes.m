@@ -18,6 +18,7 @@ function results = attach_review_phenotypes(results)
             'The active review round is missing from review_history.');
     end
     changed = false;
+    original_history = results.review_history;
     if ~isfield(results.review_history, 'phenotypes_reviewed') || ...
             isempty(results.review_history(index).phenotypes_reviewed)
         results.review_history(index).phenotypes_reviewed = results.phenotypes.reviewed;
@@ -33,9 +34,14 @@ function results = attach_review_phenotypes(results)
         results.manual_label_edit.review_history = results.review_history;
         if changed && isfield(results.manual_label_edit, 'edit_file') && ...
                 isfile(results.manual_label_edit.edit_file)
-            % Replace only the existing history variable in the checkpoint.
-            manual_label_review_history = results.review_history;
-            save(results.manual_label_edit.edit_file, 'manual_label_review_history', '-append');
+            edit_file = results.manual_label_edit.edit_file;
+            manual_label_review = manual_label_checkpoint('load', edit_file);
+            if ~isequaln(manual_label_review.history, original_history)
+                error('MAGMA:PhenotypeHistory:CheckpointChanged', ...
+                    'Checkpoint history changed; no snapshots were overwritten: %s', edit_file);
+            end
+            manual_label_review.history = results.review_history;
+            manual_label_checkpoint('save', edit_file, manual_label_review);
         end
     end
 end

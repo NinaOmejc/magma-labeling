@@ -62,6 +62,45 @@ snapshot alias is reconstructed only for the internal API and HDF5.
 HDF5 preserves these immutable snapshots under each review round; existing
 label-mask figure naming is unchanged.
 
+Manual label checkpoints keep the existing filename
+`Sub<subject>_M<measurement>_manual_label_events.mat`, with exactly one top-level
+variable, `manual_label_review`:
+
+```matlab
+load('Sub24_M1_manual_label_events.mat')
+manual_label_review.automatic_event_sets
+manual_label_review.reviewed_event_sets
+manual_label_review.review_coverage_mask
+manual_label_review.active_round_id
+manual_label_review.provenance
+manual_label_review.metadata
+manual_label_review.history
+% Alternatively:
+S = load('Sub24_M1_manual_label_events.mat');
+R = S.manual_label_review;
+```
+
+`review_coverage_mask` is the explicit inspected-sample mask formerly named
+`manual_label_review_mask`; it is distinct from each round's positive label-state
+`mask`. `automatic_event_sets` retains the original historical automatic snapshot,
+including event identities, when later detector results or reviews change.
+New manual saves record configured and physiologically assessable accepted labels
+in `provenance.automatic_acceptance`, using the Task-1 policy and manual precedence;
+acceptance never adds manual coverage.
+Legacy checkpoints without that policy retain their original provenance until a
+new manual save, rather than inferring a historical policy.
+
+The existing schema-6 metadata and review validation remain in force. Both storage
+layouts are readable; reading or cancelling does not convert a legacy file. A
+successful save or active phenotype-snapshot update converts it in place, without
+retaining the seven old top-level variables. Extra legacy top-level variables are
+preserved under `metadata.legacy_top_level_variables`; unknown container,
+metadata, and provenance fields are retained. Ambiguous mixed layouts or a legacy
+metadata-name collision fail explicitly. A temporary MAT is verified against the
+complete intended structure before replacing the original; there is no second
+permanent checkpoint. Existing observation transaction backups and recovery also
+restore the original checkpoint after a failed or interrupted review save.
+
 The MAT file is the authoritative MATLAB result. The HDF5 file uses schema
 `magma_ml_hdf5_v19` as a portable recording-level representation.
 
