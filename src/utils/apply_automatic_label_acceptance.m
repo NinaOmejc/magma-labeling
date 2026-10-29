@@ -4,9 +4,11 @@ function annotations = apply_automatic_label_acceptance( ...
 % All masks are Nsample-by-11. Genuine active manual coverage takes precedence
 % for its entire label. Policy changes clear only previous policy-derived state;
 % immutable review rounds and automatic annotations are never changed.
+% Analyze mode creates no accepted review evidence; saved manual scope survives.
 
     labels = get_labels('short');
     configured = resolve_automatically_accepted_labels(config);
+    review_enabled = ~strcmp(execution_mode(config), 'analyze');
     accepted = false(1, numel(labels));
     for i = 1:numel(labels)
         if ~available(i) || ~any(assessable(:, i))
@@ -21,8 +23,8 @@ function annotations = apply_automatic_label_acceptance( ...
         end
         if any(annotations.review_coverage_mask(:, i)), continue; end
         was_accepted = strcmp(annotations.review_status{i}, 'automatically_accepted');
-        accept = ismember(labels{i}, configured);
-        if ~accept && ~was_accepted, continue; end
+        accept = review_enabled && ismember(labels{i}, configured);
+        if ~accept && ~was_accepted && review_enabled, continue; end
         annotations.mask_reviewed(:, i) = false;
         events = annotations.events_reviewed;
         annotations.events_reviewed = events(~strcmp({events.type}, labels{i}));
@@ -48,7 +50,7 @@ function annotations = apply_automatic_label_acceptance( ...
         annotations.review_status{i} = 'automatically_accepted';
     end
     annotations.automatic_acceptance = struct( ...
-        'version', 'automatic_label_acceptance_v1', ...
+        'version', 'automatic_label_acceptance_v1', 'enabled', review_enabled, ...
         'configured_labels', {configured}, 'accepted_labels', {labels(accepted)}, ...
         'source', 'saved_automatic_events_and_physiological_assessability', ...
         'manual_precedence', 'active_manual_coverage_for_entire_label');

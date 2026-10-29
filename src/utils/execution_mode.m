@@ -17,4 +17,8 @@ function mode = execution_mode(config)
             ['config.execution.mode must be analyze, analyze_and_review, ' ...
              'or review.']);
     end
+    if strcmp(mode, 'analyze') && get_config_value(config, 'LabelEdit', 'refresh_derived', false)
+        error('MAGMA:Execution:ReviewRefreshMode', ...
+            'LabelEdit.refresh_derived requires execution.mode = review or analyze_and_review.');
+    end
 end

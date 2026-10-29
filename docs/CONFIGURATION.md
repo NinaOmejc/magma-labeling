@@ -383,8 +383,12 @@ config.LabelEdit.review_automatically_accepted = {'desat', 'slow', 'rapid'};
 
 Use any subset of the canonical short names; unknown names and duplicates are
 errors (`rapid`, not `fast`). Use `{}` to make all assessable labels, including
-desaturation, available for manual review. Acceptance also applies in analyze
-mode without opening the GUI. Genuine saved manual coverage takes precedence
+desaturation, available for manual review. Automatic acceptance applies only in
+`review` and `analyze_and_review` modes. `analyze` produces automatic results and
+does not populate a new reviewed label layer or save reviewed/comparison figures.
+The fixed MAT/HDF5 schema retains empty, unavailable reviewed label fields when no manual
+review exists; genuine saved manual reviews and their history remain available.
+Genuine saved manual coverage takes precedence
 for that entire label, so existing manual edits and their limited coverage remain
 active when loading a review. Acceptance never adds manual inspection coverage.
 
@@ -426,9 +430,12 @@ desaturation descriptors are included only when their whole event is assessable
 within the active review scope.
 
 To apply a changed acceptance policy to saved automatic results without detectors
-or the manual GUI, set `config.LabelEdit.refresh_derived = true` and run MAGMA
-with `execution.selected_labels = {}`. This requires existing results and the raw
-recording, refreshes reviewed summaries/phenotypes and `*_current` review figures,
+or the manual GUI, set `config.execution.mode = 'review'`,
+`config.LabelEdit.refresh_derived = true`, and `execution.selected_labels = {}`.
+Combining `refresh_derived=true` with `mode='analyze'` is an error, so the flag
+cannot silently turn an analysis-only run into a review refresh. Refresh requires
+existing results and the raw recording, updates reviewed summaries/phenotypes and
+`*_current` review figures,
 and leaves automatic outputs, landmarks, pending reanalysis and historical round
 snapshots unchanged. Reset this option to false for normal analysis or review.
 Re-run `main_group` and any separate HDF5 export after refreshing saved results.

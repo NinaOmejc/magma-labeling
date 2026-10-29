@@ -1,6 +1,7 @@
 function plot_reviewed_label_masks(results, config)
 % PLOT_REVIEWED_LABEL_MASKS Refresh current views and preserve round figures.
-    if ~isfield(config, 'LabelMask') || ~config.LabelMask.do_plot
+    if strcmp(execution_mode(config), 'analyze') || ...
+            ~isfield(config, 'LabelMask') || ~config.LabelMask.do_plot
         return;
     end
     round_id = NaN;

@@ -441,9 +441,9 @@ group while retaining the native export.
 Automatic and reviewed annotation provenance remains explicit. Manual coverage is
 stored separately from effective accepted/reviewed assessability:
 
-`results.labels.reviewed.automatic_acceptance` records the configured subset,
-labels actually accepted and source/precedence rules. Accepted labels copy
-automatic positives only where physiological evidence is valid; missing signals
+`results.labels.reviewed.automatic_acceptance` records whether acceptance is
+enabled, the configured subset, labels actually accepted and source/precedence
+rules. Accepted labels copy automatic positives only where physiological evidence is valid; missing signals
 and not-computed labels remain unavailable. `coverage_mask` continues to mean
 manual inspection only; `assessable_mask` includes automatic acceptance or actual
 manual coverage. Burden, overlap, phenotype feature #22 and HDF5 use that effective
@@ -451,11 +451,16 @@ scope. Group manual-coverage fractions remain manual-only, and agreement with
 automatically accepted labels is NaN (not applicable).
 
 `label_mask_reviewed_current` and `label_mask_comparison_current` refresh current
-policy views, including runs with no manual rounds. Accepted/reviewed positive is
+policy views in `review` or `analyze_and_review` mode, including review refreshes
+with no manual rounds. Analyze mode creates no automatic acceptance or new review
+evidence and does not write these figures. Saved manual reviews/history are retained;
+when none exist, reviewed label fields remain empty/unavailable for schema compatibility.
+Previously generated figure files are left untouched. Accepted/reviewed positive is
 red, negative white, unreviewed grey, and invalid evidence retains the existing
 unassessable color. Existing round-specific figures and phenotype snapshots are
-preserved. Use `LabelEdit.refresh_derived=true` to refresh from saved automatic
-results without detectors or a GUI, then rebuild group summaries if needed.
+preserved. Use `execution.mode='review'` and `LabelEdit.refresh_derived=true`
+to refresh from saved automatic results without detectors or a GUI, then rebuild
+group summaries if needed.
 
 Explicit manual review coverage:
 

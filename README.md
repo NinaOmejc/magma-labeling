@@ -98,8 +98,10 @@ Three optional review stages are available:
 
 Reviewed coverage is stored explicitly, so unreviewed data are not interpreted as manually confirmed negatives.
 By default, `LabelEdit.review_automatically_accepted = {'desat','slow','rapid'}`
-accepts valid automatic evidence without manual inspection. Set it to `{}` to
-review all 11 assessable labels, including desaturation with an SpO2 panel.
+accepts valid automatic evidence in `review` and `analyze_and_review` modes.
+`analyze` does not create automatic acceptance or reviewed/comparison figures;
+saved manual reviews remain available. Set the subset to `{}` to review all 11
+assessable labels, including desaturation with an SpO2 panel.
 See [manual review configuration](docs/CONFIGURATION.md#manual-review) for policy
 refresh and saved-manual-review precedence. Current recording observations live
 in results or the existing feature cache; legacy observation sidecars can be
