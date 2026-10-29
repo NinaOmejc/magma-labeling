@@ -16,6 +16,7 @@ function [data, config, do_analysis] = load_raw_data(config)
     config.sub_features_filename = ['Sub' num2str(config.subject) '_M' num2str(config.measure) '_features.mat'];
 
     mode = execution_mode(config);
+    if get_config_value(config, 'LabelEdit', 'refresh_derived', false), mode = 'review'; end
     selected_labels = resolve_selected_labels(config);
     result_file = fullfile(config.sub_results_path, config.sub_results_filename);
     result_exists = isfile(result_file);

@@ -97,6 +97,13 @@ Three optional review stages are available:
 - final interval-label review.
 
 Reviewed coverage is stored explicitly, so unreviewed data are not interpreted as manually confirmed negatives.
+By default, `LabelEdit.review_automatically_accepted = {'desat','slow','rapid'}`
+accepts valid automatic evidence without manual inspection. Set it to `{}` to
+review all 11 assessable labels, including desaturation with an SpO2 panel.
+See [manual review configuration](docs/CONFIGURATION.md#manual-review) for policy
+refresh and saved-manual-review precedence. Current recording observations live
+in results or the existing feature cache; legacy observation sidecars can be
+reconciled without changing historical reviews (see [outputs](docs/OUTPUTS.md)).
 
 In respiratory review, blue dots are editable trough landmarks between red
 peaks. They are not explicit hold boundaries.

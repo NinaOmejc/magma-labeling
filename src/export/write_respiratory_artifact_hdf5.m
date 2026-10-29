@@ -43,6 +43,12 @@ function write_respiratory_artifact_hdf5(filename,state)
     if has_path(filename,'/observations/analysis_respiratory_artifact_revision')
         recording.analysis_respiratory_artifact_revision = double(h5read(filename,'/observations/analysis_respiratory_artifact_revision'));
     end
+    if has_path(filename, '/observations/recording_json')
+        text = read_hdf5_text(filename, '/observations/recording_json');
+        observations = jsondecode(text{1});
+        recording.recording_observations = observations.current;
+        recording.analysis_recording_observations = observations.analysis;
+    end
     qc = respiratory_artifact_qc(recording,N,fs);
     names = fieldnames(qc);
     for k = 1:numel(names)
@@ -81,9 +87,7 @@ function write_respiratory_artifact_hdf5(filename,state)
         path = ['/labels/' layers{k} '/assessable_mask'];
         if ~has_path(filename,path), continue; end
         native = logical(h5read(filename,path));
-        if strcmp(layers{k},'reviewed') && has_path(filename,'/labels/reviewed/coverage_mask')
-            native = native & logical(h5read(filename,'/labels/reviewed/coverage_mask'));
-        end
+        % Reviewed assessability already includes manual scope or automatic acceptance.
         training = ml_label_assessability(native,labels,time,fs,target_fs,signal_valid, ...
             qc.automatic_respiratory_training_eligible,spo2_valid);
         replace_numeric(filename,['/labels/' layers{k} '/ml_training_valid_mask'],training);

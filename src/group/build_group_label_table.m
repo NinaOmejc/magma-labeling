@@ -295,10 +295,14 @@ function row = add_annotation_provenance_summaries(row, loaded, config, canonica
                 idx > size(reviewed_mask, 2) || idx > size(review_mask, 2)
             continue;
         end
-        reviewed_scope = logical(review_mask(:, idx)) & assessable;
+        manual_scope = logical(review_mask(:, idx)) & assessable;
+        reviewed_scope = manual_scope;
+        if isfield(loaded, 'label_reviewed_assessable_mask')
+            reviewed_scope = logical(loaded.label_reviewed_assessable_mask(:, idx)) & assessable;
+        end
         if any(assessable)
             row.(['label_' field_label '_reviewed_coverage_fraction']) = ...
-                nnz(reviewed_scope) / nnz(assessable);
+                nnz(manual_scope) / nnz(assessable);
         end
         if ~any(reviewed_scope)
             continue;
@@ -308,8 +312,11 @@ function row = add_annotation_provenance_summaries(row, loaded, config, canonica
             nnz(reviewed_values & reviewed_scope) / fs;
         row.(['label_' field_label '_reviewed_fraction']) = ...
             nnz(reviewed_values & reviewed_scope) / nnz(reviewed_scope);
-        row.(['label_' field_label '_automatic_reviewed_disagreement_fraction']) = ...
-            nnz(xor(automatic_values, reviewed_values) & reviewed_scope) / nnz(reviewed_scope);
+        if any(manual_scope) && (~isfield(loaded, 'review_status') || ...
+                ~strcmp(loaded.review_status{idx}, 'automatically_accepted'))
+            row.(['label_' field_label '_automatic_reviewed_disagreement_fraction']) = ...
+                nnz(xor(automatic_values, reviewed_values) & manual_scope) / nnz(manual_scope);
+        end
         row.(['events_' field_label '_reviewed_count']) = ...
             count_events(reviewed_events, label);
     end

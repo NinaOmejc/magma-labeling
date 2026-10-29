@@ -113,6 +113,10 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
     write_numeric(filename, '/labels/reviewed/coverage_mask', ...
         uint8(results.review_coverage_mask), options);
     write_text(filename, '/labels/reviewed/status', results.review_status);
+    if isfield(results, 'automatic_acceptance')
+        write_text(filename, '/labels/reviewed/automatic_acceptance_json', ...
+            {jsonencode(results.automatic_acceptance)});
+    end
     if isfield(results, 'label_reviewed_available')
         write_numeric(filename, '/labels/reviewed/available', ...
             uint8(results.label_reviewed_available(:)'), options);
@@ -159,10 +163,10 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
     observation = recording_observation('default', observation_config);
     analysis = observation;
     write_numeric(filename,'/observations/analysis_respiratory_artifact_revision',artifact_qc.analysis_respiratory_artifact_revision,options);
-    write_respiratory_artifact_hdf5(filename,artifact_state);
     if isfield(results, 'recording_observations'), observation = results.recording_observations; end
     if isfield(results, 'analysis_recording_observations'), analysis = results.analysis_recording_observations; end
     write_recording_observation_hdf5(filename, observation, analysis);
+    write_respiratory_artifact_hdf5(filename,artifact_state);
     write_text(filename, '/meta/export_schema_version', export_schema_version);
     write_text(filename, '/meta/upstream_input_preprocessing', ...
         results.upstream_input_preprocessing);

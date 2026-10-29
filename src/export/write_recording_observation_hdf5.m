@@ -2,6 +2,8 @@ function write_recording_observation_hdf5(filename, observation, analysis)
 % WRITE_RECORDING_OBSERVATION_HDF5 Update compact metadata without rewriting signals.
 % UTF-8 JSON uses the existing zero-padded text-column convention. Unlimited
 % length allows reversible status/provenance changes without fixed string limits.
+% Existing respiratory ML eligibility is refreshed from the current/analysis
+% revisions; native signals, automatic labels and analysis snapshots stay intact.
     dataset = '/observations/recording_json';
     fid = H5F.open(filename, 'H5F_ACC_RDWR', 'H5P_DEFAULT');
     cleanup = onCleanup(@() H5F.close(fid));
@@ -30,4 +32,12 @@ function write_recording_observation_hdf5(filename, observation, analysis)
     end
     h5write(filename, dataset, bytes, [1 1], [numel(bytes) 1]);
     h5writeatt(filename, dataset, 'encoding', 'UTF-8');
+    fid = H5F.open(filename, 'H5F_ACC_RDONLY', 'H5P_DEFAULT');
+    cleanup = onCleanup(@() H5F.close(fid));
+    has_artifacts = H5L.exists(fid, '/observations/respiratory_artifacts_json', 'H5P_DEFAULT');
+    clear cleanup;
+    if has_artifacts
+        text = read_hdf5_text(filename, '/observations/respiratory_artifacts_json');
+        write_respiratory_artifact_hdf5(filename, jsondecode(text{1}));
+    end
 end

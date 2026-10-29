@@ -55,6 +55,7 @@ single pack/unpack/read/write boundary for all consumers.
 | `events_reviewed`, `mask_reviewed` | `labels.reviewed.events`, `labels.reviewed.mask` |
 | `label_reviewed_available`, `label_reviewed_availability_reason` | `labels.reviewed.available`, `labels.reviewed.availability_reason` |
 | `label_reviewed_assessable_mask`, `review_coverage_mask` | `labels.reviewed.assessable_mask`, `labels.reviewed.coverage_mask` |
+| `automatic_acceptance` | `labels.reviewed.automatic_acceptance` (configured subset, accepted labels, source and manual precedence) |
 | `review_status`, `review_scope` | `labels.reviewed.status`, `labels.reviewed.scope` |
 | `label_burden_reviewed`, `label_overlap_summary_reviewed`, `label_evidence_summary_reviewed` | `labels.reviewed.burden`, `labels.reviewed.overlap`, `labels.reviewed.evidence` |
 | `candidate_events` | `labels.candidates` |

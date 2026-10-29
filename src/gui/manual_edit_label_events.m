@@ -1,5 +1,5 @@
 function [reviewed_event_sets, edit_info] = manual_edit_label_events( ...
-    data, resp_cycles, config, automatic_event_sets, label_editable)
+    data, resp_cycles, config, automatic_event_sets, label_editable, review_evidence)
 % MANUAL_EDIT_LABEL_EVENTS Load, create, and persist provenance-aware label reviews.
 %
 % Inputs:
@@ -10,6 +10,8 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events( ...
 %                          editable label field from manual_label_definitions.
 %   label_editable       - Optional logical vector in canonical label order;
 %                          labels with no assessable evidence are hidden.
+%   review_evidence      - Optional saved session_reference, spo2_ref and desat
+%                          diagnostics; used only for display, never detection.
 %
 % Outputs:
 %   reviewed_event_sets - Same per-label schema, containing the active reviewed
@@ -33,7 +35,10 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events( ...
     fs = config.fs;
     automatic_event_sets = ensure_event_sets(automatic_event_sets, label_defs, fs, N);
     cfg = label_edit_config(config);
-    cfg.editable_labels = label_editable(:)';
+    if nargin < 6, review_evidence = struct(); end
+    cfg.review_evidence = review_evidence;
+    accepted = resolve_automatically_accepted_labels(config);
+    cfg.editable_labels = label_editable(:)' & ~ismember({label_defs.field}, accepted);
     do_manual_review = manual_review_enabled(config);
     edit_file = manual_edit_file(config, cfg);
     edit_info = init_edit_info(edit_file);
@@ -42,6 +47,7 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events( ...
     loaded_event_sets = [];
     review_history = empty_review_history();
     active_round_id = NaN;
+    loaded_active_layer = [];
 
     should_load = exist(edit_file, 'file') == 2;
     if should_load
@@ -58,12 +64,31 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events( ...
         end
     end
 
+    if isfield(review_evidence, 'active_review')
+        saved_active = review_evidence.active_review;
+        saved_id = saved_active.review_provenance.latest_round_id;
+        if isfinite(saved_id) && (~isfinite(active_round_id) || saved_id >= active_round_id)
+            review_history = validate_saved_review_history(saved_active.review_history, N, config);
+            if isempty(review_history)
+                error('MAGMA:ManualLabelEdit:InvalidSavedReview', 'Saved results contain an invalid review history.');
+            end
+            active_round_id = saved_id;
+            loaded_sets = struct();
+            for i = 1:numel(label_defs)
+                loaded_sets.(label_defs(i).field) = saved_active.events_reviewed( ...
+                    strcmp({saved_active.events_reviewed.type}, label_defs(i).type));
+            end
+            loaded_event_sets = ensure_event_sets(loaded_sets, label_defs, fs, N);
+            loaded_active_layer = saved_active;
+        end
+    end
+
     if ~do_manual_review
         if ~isempty(loaded_event_sets)
             reviewed_event_sets = loaded_event_sets;
             edit_info.applied_saved_edits = true;
             edit_info = apply_active_round_info(edit_info, review_history, ...
-                active_round_id, label_defs, N);
+                active_round_id, label_defs, N, loaded_active_layer);
         else
             edit_info.review_history = empty_review_history();
             edit_info.review_provenance = make_review_provenance( ...
@@ -108,7 +133,7 @@ function [reviewed_event_sets, edit_info] = manual_edit_label_events( ...
         if ~isempty(loaded_event_sets)
             reviewed_event_sets = loaded_event_sets;
             edit_info = apply_active_round_info(edit_info, review_history, ...
-                active_round_id, label_defs, N);
+                active_round_id, label_defs, N, loaded_active_layer);
         end
         return;
     end
@@ -238,7 +263,7 @@ function edit_info = init_edit_info(edit_file)
         edit_info.review_history, NaN);
 end
 
-function edit_info = apply_active_round_info(edit_info, history, active_round_id, defs, N)
+function edit_info = apply_active_round_info(edit_info, history, active_round_id, defs, N, active_layer)
 % APPLY_ACTIVE_ROUND_INFO Project one immutable review round into edit_info.
 % history is the review-round array, active_round_id selects its authoritative
 % state, defs maps editable fields to canonical labels, and N is sample count.
@@ -263,6 +288,11 @@ function edit_info = apply_active_round_info(edit_info, history, active_round_id
         edit_info.review_coverage_mask(:, i) = active.review_mask(:, label_index);
         reviewed(i) = any(edit_info.review_coverage_mask(:, i));
         status.(defs(i).field) = active.review_status{label_index};
+        if nargin >= 6 && ~isempty(active_layer)
+            edit_info.review_coverage_mask(:, i) = active_layer.review_coverage_mask(:, label_index);
+            reviewed(i) = any(edit_info.review_coverage_mask(:, i));
+            status.(defs(i).field) = active_layer.review_status{label_index};
+        end
         changed(i) = any(strcmp(active.changed_labels, defs(i).type));
     end
     edit_info.start_from = active.start_from;
@@ -666,18 +696,17 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
     t_raw = (0:N-1)' / fs;
     t_end = t_raw(end);
     window_sec = min(max(30, cfg.window_sec), max(30, t_end));
-    % Preserve all saved fields while offering only assessable respiratory labels.
-    respiratory_labels = ~strcmp({label_defs.field}, 'desat');
-    editable_label_indices = find(cfg.editable_labels & respiratory_labels);
+    % Preserve saved fields; policy and physiological availability govern eligibility.
+    editable_label_indices = find(cfg.editable_labels);
     current_label_idx = [];
     label_editing_enabled = 'off';
     if ~isempty(editable_label_indices)
         current_label_idx = editable_label_indices(1);
         label_editing_enabled = 'on';
     end
-    hidden_labels = respiratory_labels & ~cfg.editable_labels;
+    hidden_labels = ~cfg.editable_labels;
     if any(hidden_labels)
-        log_message(config, 1, 'Manual label review: unavailable labels hidden: %s.', ...
+        log_message(config, 1, 'Manual label review: accepted or unavailable labels hidden: %s.', ...
             strjoin({label_defs(hidden_labels).name}, ', '));
     end
     reviewed = ismember({label_defs.field}, reviewed_fields);
@@ -696,35 +725,15 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
     idx_diaph = config.channels.diaph_idx;
 
     ax1 = subplot(2,1,1); hold(ax1, 'on');
-    plot_trace_or_message(ax1, t_raw, data, idx_lungs, 'Resp-Lungs');
-    title(ax1, 'Manual label editing: lungs');
-    ylabel(ax1, 'Resp-Lungs'); grid(ax1, 'on');
-    set_global_ylim_from_channel(ax1, data, idx_lungs);
-
     ax2 = subplot(2,1,2); hold(ax2, 'on');
-    plot_trace_or_message(ax2, t_raw, data, idx_diaph, 'Resp-Diaphragm');
-    title(ax2, 'Manual label editing: diaphragm');
-    ylabel(ax2, 'Resp-Diaphragm'); xlabel(ax2, 'Time (s)'); grid(ax2, 'on');
-    set_global_ylim_from_channel(ax2, data, idx_diaph);
-
     artifacts = config.respiratory_artifact_state;
-    for target_ax = [ax1 ax2]
-        shade_respiratory_artifacts(target_ax,artifacts.artifact_intervals_idx,fs);
-    end
     if ~isempty(artifacts.artifact_intervals_idx) || artifacts.pending_reanalysis
         log_message(config,1,'Orange shading: excluded respiratory artifacts. To edit, set resp.recheck_cached=true and rerun a full analysis.');
         suffix = '';
         if artifacts.pending_reanalysis, suffix = ' (pending reanalysis)'; end
-        title(ax1,['Manual labels: lungs | orange = excluded artifacts' suffix]);
-        title(ax2,['Manual labels: diaphragm | edit artifacts via resp.recheck_cached' suffix]);
+        log_message(config,1,'Respiratory artifact state%s.', suffix);
     end
     ax = [ax1 ax2];
-    % Full-recording ruler positions stay at absolute times while scrolling.
-    for i = 1:numel(ax)
-        set(ax(i), 'ButtonDownFcn', @(~,~) begin_drag(ax(i)));
-        set(ax(i), 'XTick', 0:200:t_end, 'XMinorTick', 'on');
-        ax(i).XAxis.MinorTickValues = setdiff(50:50:t_end, ax(i).XTick);
-    end
     linkaxes(ax, 'x');
     xlim(ax1, [0 min(window_sec, t_end)]);
 
@@ -747,7 +756,7 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
         'Position', [0.10 0.085 0.86 0.028], 'HorizontalAlignment', 'left');
     update_observation_notice();
     label_names = {label_defs(editable_label_indices).name};
-    if isempty(label_names), label_names = {'No assessable respiratory labels'}; end
+    if isempty(label_names), label_names = {'No labels requiring manual review'}; end
     uicontrol(fh, 'Style', 'popupmenu', 'String', label_names, ...
         'Units', 'normalized', 'Position', [0.01 0.955 0.24 0.035], ...
         'Enable', label_editing_enabled, ...
@@ -789,6 +798,8 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
         cfg.start_from);
     log_message(config, 2, '  Done saves the review; X cancels without saving.\n');
 
+    belt_positions = [ax1.Position; ax2.Position];
+    refresh_signal_panels();
     refresh_event_patches();
     mark_current_view_reviewed();
     if ~finished && isgraphics(fh), uiwait(fh); end
@@ -823,6 +834,7 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
     % CHANGE_LABEL Select a label index and redraw its event intervals.
 
         current_label_idx = editable_label_indices(value);
+        refresh_signal_panels();
         mark_current_view_reviewed();
         refresh_event_patches();
     end
@@ -961,7 +973,11 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
             t0 = t1;
             t1 = tmp;
         end
-        if (t1 - t0) < cfg.min_interval_sec
+        minimum = cfg.min_interval_sec;
+        if strcmp(label_defs(current_label_idx).field, 'desat')
+            minimum = get_config_value(config, 'desat', 'min_dur_sec', 10);
+        end
+        if (t1 - t0) < minimum
             return;
         end
 
@@ -1013,7 +1029,7 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
         is_sigh = strcmp(label_defs(current_label_idx).edit_mode, 'breath_event');
         if is_sigh
             draw_sigh_peaks();
-        elseif strcmp(cfg.start_from, 'latest_reviewed')
+        elseif strcmp(cfg.start_from, 'latest_reviewed') || strcmp(field, 'desat')
             automatic_events = auto_event_sets.(field);
             for ie = 1:numel(automatic_events)
                 for ia = 1:numel(ax)
@@ -1029,8 +1045,12 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
                 end
             end
         end
-        title(ax1, sprintf('Manual label editing: lungs | %s', label_defs(current_label_idx).name));
-        title(ax2, sprintf('Manual label editing: diaphragm | %s', label_defs(current_label_idx).name));
+        if strcmp(field, 'desat')
+            title(ax1, 'Desaturation | dashed blue = automatic; red = editable; grey = invalid SpO2');
+        else
+            title(ax1, sprintf('Manual label editing: lungs | %s', label_defs(current_label_idx).name));
+            title(ax2, sprintf('Manual label editing: diaphragm | %s', label_defs(current_label_idx).name));
+        end
         try
             align_axes_x_widths(ax);
         catch err
@@ -1039,6 +1059,68 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
             return;
         end
         drawnow;
+    end
+
+    function refresh_signal_panels()
+    % REFRESH_SIGNAL_PANELS Reuse the belt viewport for saved SpO2 evidence.
+        limits = xlim(ax1);
+        cla(ax1); cla(ax2);
+        legend(ax1, 'off');
+        is_desat = ~isempty(current_label_idx) && ...
+            strcmp(label_defs(current_label_idx).field, 'desat');
+        if is_desat
+            ax = ax1;
+            ax1.Position = [belt_positions(1,1) belt_positions(2,2) ...
+                belt_positions(1,3) ...
+                sum(belt_positions(1,[2 4])) - belt_positions(2,2)];
+            set(ax2, 'Visible', 'off');
+            evidence = cfg.review_evidence;
+            session = struct(); reference = struct(); display_config = config;
+            if isfield(evidence, 'session_reference'), session = evidence.session_reference; end
+            if isfield(evidence, 'spo2_ref'), reference = evidence.spo2_ref; end
+            if isfield(reference, 'available') && ~reference.available, reference = struct(); end
+            if isfield(evidence, 'desat_config'), display_config.desat = evidence.desat_config; end
+            if isfield(evidence, 'desat') && isfield(evidence.desat, 'thresholds') && ...
+                    all(isfield(evidence.desat.thresholds, {'spo2_floor_percent','session_drop_pp'}))
+                display_config.desat.spo2_floor = evidence.desat.thresholds.spo2_floor_percent;
+                display_config.desat.drop_thr = evidence.desat.thresholds.session_drop_pp;
+            end
+            plot_spo2_diagnostic_panel(ax1, data, session, reference, ...
+                empty_events(), display_config, 'SpO2 desaturation');
+            legend(ax1, 'AutoUpdate', 'off');
+            set(ax1.Children, 'HitTest', 'off', 'PickableParts', 'none');
+            hold(ax1, 'on');
+            invalid = ~isfinite(data(:, config.channels.spo2_idx));
+            change = diff([false; invalid; false]);
+            starts = find(change == 1); stops = find(change == -1);
+            y = ylim(ax1);
+            for interval = 1:numel(starts)
+                x = ([starts(interval) stops(interval)]-1)/fs;
+                patch(ax1, x([1 2 2 1]), y([1 1 2 2]), [0.7 0.7 0.7], ...
+                    'FaceAlpha', 0.5, 'EdgeColor', 'none', 'HandleVisibility', 'off', ...
+                    'HitTest', 'off', 'PickableParts', 'none');
+            end
+        else
+            ax = [ax1 ax2];
+            set(ax2, 'Visible', 'on');
+            ax1.Position = belt_positions(1,:); ax2.Position = belt_positions(2,:);
+            channels = {idx_lungs, idx_diaph}; names = {'Resp-Lungs', 'Resp-Diaphragm'};
+            for panel = 1:2
+                hold(ax(panel), 'on');
+                plot_trace_or_message(ax(panel), t_raw, data, channels{panel}, names{panel});
+                set_global_ylim_from_channel(ax(panel), data, channels{panel});
+                ylabel(ax(panel), names{panel}); grid(ax(panel), 'on');
+                title(ax(panel), ['Manual label editing: ' names{panel}]);
+                shade_respiratory_artifacts(ax(panel), artifacts.artifact_intervals_idx, fs);
+            end
+            xlabel(ax2, 'Time (s)');
+        end
+        for panel = 1:numel(ax)
+            set(ax(panel), 'ButtonDownFcn', @(~,~) begin_drag(ax(panel)));
+            set(ax(panel), 'XTick', 0:200:t_end, 'XMinorTick', 'on');
+            ax(panel).XAxis.MinorTickValues = setdiff(50:50:t_end, ax(panel).XTick);
+        end
+        xlim(ax1, limits);
     end
 
     function draw_sigh_peaks()

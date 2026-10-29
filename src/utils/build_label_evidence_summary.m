@@ -45,6 +45,8 @@ function summary = build_label_evidence_summary( ...
     thoracic_mask = label_column(annotation_mask, label_names, 'thoracic');
     async_mask = label_column(annotation_mask, label_names, 'async');
     desat_mask = label_column(annotation_mask, label_names, 'desat');
+    desat_scope = label_column(layer_assessable_mask, label_names, 'desat');
+    desat_mask = desat_mask & desat_scope;
     deep_scope = label_column(layer_assessable_mask, label_names, 'deep');
     rapid_scope = label_column(layer_assessable_mask, label_names, 'rapid');
     irregular_scope = label_column( ...
@@ -288,7 +290,7 @@ function summary = build_label_evidence_summary( ...
             desat, 'relative_available', false);
         layer_metrics = matching_desaturation_metrics(optional_field( ...
             desat, 'event_metrics_automatic', struct([])), ...
-            annotation_events);
+            annotation_events, desat_scope);
         summary.desat = add_desaturation_metric_summary( ...
             summary.desat, layer_metrics);
     end
@@ -534,7 +536,7 @@ function values = logical_values_in_mask(values, mask)
     values = values(mask);
 end
 
-function selected = matching_desaturation_metrics(metrics, annotation_events)
+function selected = matching_desaturation_metrics(metrics, annotation_events, scope)
 % MATCHING_DESATURATION_METRICS Keep descriptors for unchanged layer events.
 % Manually changed or added events have no detector-derived event descriptor;
 % they are intentionally left without an automatic-event severity value.
@@ -550,6 +552,9 @@ function selected = matching_desaturation_metrics(metrics, annotation_events)
         if ~isfield(metrics, 'start_idx') || ~isfield(metrics, 'end_idx')
             return;
         end
+        first = max(1, round(metrics(i).start_idx));
+        last = min(numel(scope), round(metrics(i).end_idx));
+        if first > last || ~all(scope(first:last)), continue; end
         matches = arrayfun(@(event) ...
             round(event.start_idx) == round(metrics(i).start_idx) && ...
             round(event.end_idx) == round(metrics(i).end_idx), desat_events);

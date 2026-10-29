@@ -238,6 +238,8 @@ function config = get_config_defaults()
     config.LabelEdit.notes = '';                 % optional free-text review notes
     config.LabelEdit.window_sec = 800;           % visible time span for manual label GUI scrolling
     config.LabelEdit.min_interval_sec = 30;       % minimum drag interval accepted as a manual event
+    config.LabelEdit.review_automatically_accepted = {'desat', 'slow', 'rapid'};
+    config.LabelEdit.refresh_derived = false;    % refresh saved reviewed outputs without detectors or GUI
     config.LabelEdit.filename_suffix = '_manual_label_events.mat';
 
     %---- PER-RECORDING HDF5 EXCHANGE EXPORT

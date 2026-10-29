@@ -12,6 +12,9 @@ function run_magma(base_config)
     selected_labels = resolve_selected_labels(base_config);
     base_config.execution.selected_labels = selected_labels;
     mode = execution_mode(base_config);
+    base_config.LabelEdit.review_automatically_accepted = ...
+        resolve_automatically_accepted_labels(base_config);
+    if get_config_value(base_config, 'LabelEdit', 'refresh_derived', false), mode = 'review'; end
     if strcmp(mode, 'review') && ~isempty(selected_labels)
         error('MAGMA:Execution:SelectedLabelsReviewOnly', ['config.execution.selected_labels cannot be used with execution.mode = review.']);
     end
@@ -46,7 +49,7 @@ function run_magma(base_config)
             if config.respiratory_artifact_state.pending_reanalysis && ~isempty(selected_labels)
                 error('MAGMA:Respiration:FullReanalysisRequired','Respiratory feature edits require a full analysis; clear selected_labels.');
             end
-            config.recording_observations = recording_observation('load', config);
+            config.recording_observations = recording_observation('migrate', config);
             if config.recording_observations.pending_reanalysis && ~isempty(selected_labels)
                 error('MAGMA:Observation:FullReanalysisRequired', ...
                     'Pending thoracic observation requires a full respiratory reanalysis; clear selected_labels.');
@@ -74,7 +77,20 @@ function run_magma(base_config)
                     review_config.detrend = existing_results.config.detrend;
                 end
                 review_config.detrend.do_plot = false;
-                [data, review_config, polarity_deferred] = preprocess_recording(data_raw, review_config);
+                saved_polarity = [];
+                if get_config_value(config, 'LabelEdit', 'refresh_derived', false)
+                    % Refresh on the saved signal orientation without a new GUI decision.
+                    [~, lung_flip, diaph_flip] = respiratory_belt_polarity_state(existing_results.config);
+                    absolute = get_config_value(existing_results.config, 'preprocessing', ...
+                        'absolute_polarity_qc', struct());
+                    absolute_flip = isfield(absolute, 'absolute_polarity_flipped') && absolute.absolute_polarity_flipped;
+                    saved_polarity = struct('checked', true, ...
+                        'thoracic_polarity_flipped', xor(lung_flip, absolute_flip), ...
+                        'diaphragm_polarity_flipped', xor(diaph_flip, absolute_flip));
+                    review_config.execution.mode = 'review';
+                    review_config.preprocessing.check_relative_belt_polarity = true;
+                end
+                [data, review_config, polarity_deferred] = preprocess_recording(data_raw, review_config, saved_polarity);
                 if polarity_deferred, continue; end
                 config.times = review_config.times;
                 [results, review_cancelled] = review_existing_results(data, existing_results, config);

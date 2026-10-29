@@ -88,13 +88,27 @@ the unchanged feature-cache layout uses top-level `recording_observations`:
 | `revision` | Increasing annotation revision; unchanged saves do not increment it |
 | `pending_reanalysis`, `affected_labels`, `affected_outputs` | Explicit dependency invalidation after either establishing or clearing the observation |
 
-A compact `Sub<subject>_M<measurement>_recording_observations.mat` sidecar retains
-the shared state before results/cache creation. Keep it with the recording outputs.
+Current observations are authoritative in `results.qc.recording_observations` once
+results exist. Before that, the compatible respiratory feature cache persists the
+observation; before either file exists it remains in the current MATLAB session
+until the feature cache is saved. No permanent observation sidecar is created.
 Updates check recording identity and revision, synchronize existing MAT/HDF5
-mirrors, and roll back failed writes. A `.pending.mat` journal blocks loading after
+mirrors, and roll back failed writes. A temporary `.pending.mat` journal blocks loading after
 an interrupted update; close both editors, resolve file access, then recover with
 `recording_observation('recover', config)` using that recording's resolved config.
 Conflicting mirrors or stale open editors produce explicit errors.
+
+Legacy `*_recording_observations.mat` files are read alongside results and cache
+metadata. MAGMA reconciles them at recording startup, or explicitly with
+`recording_observation('migrate', config)`. Increasing revisions require consistent
+UTC timestamp order; equal revisions with conflicting status/provenance fail.
+Pending state survives unless results establish completed analysis at the current
+revision. Reconciliation warns before persisting the selected version to existing
+results/cache/HDF5. Legacy files are retained, including on failure. Remove a
+legacy sidecar manually only after verifying its state is durably present in the
+results or feature cache. If neither exists, first save a feature cache/full result;
+an in-memory state alone is not a durable migration. Migration never re-extracts
+reviewed landmarks or rewrites historical review rounds.
 
 `results.qc.analysis_recording_observations` records the observation actually used
 for automatic analysis. Cached cycles also retain their extraction snapshot.
@@ -385,7 +399,26 @@ group while retaining the native export.
 
 ## Automatic and reviewed annotations
 
-Automatic and reviewed annotations are not mixed. Review coverage is explicit:
+Automatic and reviewed annotation provenance remains explicit. Manual coverage is
+stored separately from effective accepted/reviewed assessability:
+
+`results.labels.reviewed.automatic_acceptance` records the configured subset,
+labels actually accepted and source/precedence rules. Accepted labels copy
+automatic positives only where physiological evidence is valid; missing signals
+and not-computed labels remain unavailable. `coverage_mask` continues to mean
+manual inspection only; `assessable_mask` includes automatic acceptance or actual
+manual coverage. Burden, overlap, phenotype feature #22 and HDF5 use that effective
+scope. Group manual-coverage fractions remain manual-only, and agreement with
+automatically accepted labels is NaN (not applicable).
+
+`label_mask_reviewed_current` and `label_mask_comparison_current` refresh current
+policy views, including runs with no manual rounds. Accepted/reviewed positive is
+red, negative white, unreviewed grey, and invalid evidence retains the existing
+unassessable color. Existing round-specific figures and phenotype snapshots are
+preserved. Use `LabelEdit.refresh_derived=true` to refresh from saved automatic
+results without detectors or a GUI, then rebuild group summaries if needed.
+
+Explicit manual review coverage:
 
 ```text
 unreviewed != negative
@@ -393,7 +426,11 @@ unavailable physiological evidence != negative
 ```
 
 Automatic summaries use the full physiologically assessable scope. Reviewed
-summaries use only explicitly reviewed and physiologically assessable regions.
+summaries use physiologically assessable regions that are automatically accepted
+or covered by the active manual review. HDF5 ML training validity follows this
+same effective scope. Pending observation revisions exclude respiratory group
+statistics and ML training until a successful full reanalysis; desaturation
+remains independent of respiratory observations and artifacts.
 
 ## Group-level outputs
 

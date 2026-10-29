@@ -48,6 +48,7 @@ function results = build_recording_results( ...
     results.mask_reviewed = label_results.mask_reviewed;
     results.review_coverage_mask = label_results.review_coverage_mask;
     results.review_status = label_results.review_status;
+    results.automatic_acceptance = label_results.automatic_acceptance;
     results.review_scope = label_results.review_scope;
     results.review_history = label_results.review_history;
     results.review_provenance = label_results.review_provenance;
@@ -90,7 +91,9 @@ function results = build_recording_results( ...
     results.phenotypes = attach_thoracic_excursion_phenotype(label_results.phenotypes, results);
     results.manual_label_edit = label_results.manual_label_edit;
     % A selected-label rerun must not fill an older round with changed evidence.
-    if ~get_config_value(config, 'execution', 'partial_rerun', false)
+    if ~get_config_value(config, 'execution', 'partial_rerun', false) && ...
+            isfield(label_results.manual_label_edit, 'editor_opened') && ...
+            label_results.manual_label_edit.editor_opened
         results = attach_review_phenotypes(results);
     end
     if ~isfield(config, 'execution') || ~isstruct(config.execution)

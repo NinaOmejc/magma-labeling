@@ -374,8 +374,21 @@ The unified 11-label reviewer is enabled only when:
 ismember(config.execution.mode, {'analyze_and_review', 'review'})
 ```
 
-The label dropdown only offers respiratory labels with assessable evidence for
-the current recording. For example, a missing lung belt hides thoracic dominance
+The label dropdown offers any of the 11 labels with assessable evidence unless
+the label is configured for automatic acceptance. The default is:
+
+```matlab
+config.LabelEdit.review_automatically_accepted = {'desat', 'slow', 'rapid'};
+```
+
+Use any subset of the canonical short names; unknown names and duplicates are
+errors (`rapid`, not `fast`). Use `{}` to make all assessable labels, including
+desaturation, available for manual review. Acceptance also applies in analyze
+mode without opening the GUI. Genuine saved manual coverage takes precedence
+for that entire label, so existing manual edits and their limited coverage remain
+active when loading a review. Acceptance never adds manual inspection coverage.
+
+For example, a missing lung belt hides thoracic dominance
 and asynchrony. Labels with zero detected events remain editable when assessable.
 If none are assessable, label editing is disabled while recording observations
 and signal navigation remain available. Existing saved annotations are retained.
@@ -400,6 +413,25 @@ config.LabelEdit.reviewer_role = 'clinician';
 ```
 
 Automatic and manually reviewed annotations remain separate.
+
+Selecting desaturation replaces the belt panels with SpO2, the saved session
+reference when available, and the saved detector thresholds (absolute floor and
+relative drop). Grey intervals identify invalid SpO2; dashed blue outlines show
+automatic events and red intervals remain editable. Use the existing drag,
+click-to-remove and reset interactions. Desaturation uses
+`config.desat.min_dur_sec` (default 10 seconds), independently of the generic
+30-second manual interval minimum. Respiratory artifacts do not exclude SpO2.
+Changed events do not inherit automatic event-level severity descriptors; unchanged
+desaturation descriptors are included only when their whole event is assessable
+within the active review scope.
+
+To apply a changed acceptance policy to saved automatic results without detectors
+or the manual GUI, set `config.LabelEdit.refresh_derived = true` and run MAGMA
+with `execution.selected_labels = {}`. This requires existing results and the raw
+recording, refreshes reviewed summaries/phenotypes and `*_current` review figures,
+and leaves automatic outputs, landmarks, pending reanalysis and historical round
+snapshots unchanged. Reset this option to false for normal analysis or review.
+Re-run `main_group` and any separate HDF5 export after refreshing saved results.
 
 ## Saved-result cohort analysis
 

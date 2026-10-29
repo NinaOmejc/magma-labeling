@@ -6,7 +6,7 @@ function fig = plot_label_mask(label_mask, label_names, config, availability_rea
 %   label_names - Nlabel cell array of canonical short label names.
 %   config      - Pipeline settings supplying fs, label metadata, and plot options.
 %   availability_reason - Original detector availability, independent of review.
-%   config.LabelMask.review_coverage - Optional explicit Nsample x Nlabel coverage.
+%   config.LabelMask.review_coverage - Optional effective accepted/reviewed scope.
 %   config.LabelMask.assessable_mask - Optional native-sample physiological support.
 %   config.LabelMask.artifact_context - Saved current artifact state/cycles.
 %
@@ -63,7 +63,7 @@ function fig = plot_label_mask(label_mask, label_names, config, availability_rea
             error('MAGMA:LabelMask:CoverageAlignment', ...
                 'review_coverage must align with label_mask.');
         end
-        % Zeros outside explicit coverage are unknown, never accepted negatives.
+        % Zeros outside accepted/manual scope are unknown, never confirmed negatives.
         display_mask(~logical(config.LabelMask.review_coverage')) = 2;
         unassessable = repmat(~ismember(availability_reason(:), ...
             {'available', 'unreviewed', 'not_computed'}), 1, n_samples);
