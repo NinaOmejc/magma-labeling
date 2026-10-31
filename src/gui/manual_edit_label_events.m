@@ -1080,10 +1080,13 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
     end
 
     function refresh_signal_panels()
-    % REFRESH_SIGNAL_PANELS Reuse the belt viewport for saved SpO2 evidence.
+    % REFRESH_SIGNAL_PANELS Show saved evidence and reference intervals per label.
         limits = xlim(ax1);
         cla(ax1); cla(ax2);
         legend(ax1, 'off');
+        evidence = cfg.review_evidence;
+        session = struct();
+        if isfield(evidence, 'session_reference'), session = evidence.session_reference; end
         is_desat = ~isempty(current_label_idx) && ...
             strcmp(label_defs(current_label_idx).field, 'desat');
         if is_desat
@@ -1092,9 +1095,7 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
                 belt_positions(1,3) ...
                 sum(belt_positions(1,[2 4])) - belt_positions(2,2)];
             set(ax2, 'Visible', 'off');
-            evidence = cfg.review_evidence;
-            session = struct(); reference = struct(); display_config = config;
-            if isfield(evidence, 'session_reference'), session = evidence.session_reference; end
+            reference = struct(); display_config = config;
             if isfield(evidence, 'spo2_ref'), reference = evidence.spo2_ref; end
             if isfield(reference, 'available') && ~reference.available, reference = struct(); end
             if isfield(evidence, 'desat_config'), display_config.desat = evidence.desat_config; end
@@ -1130,6 +1131,9 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
                 ylabel(ax(panel), names{panel}); grid(ax(panel), 'on');
                 title(ax(panel), ['Manual label editing: ' names{panel}]);
                 shade_respiratory_artifacts(ax(panel), artifacts.artifact_intervals_idx, fs);
+                reference_window = shade_session_reference_on_axis( ...
+                    ax(panel), session, 'common session-reference interval');
+                set(reference_window, 'HitTest', 'off', 'PickableParts', 'none');
             end
             xlabel(ax2, 'Time (s)');
         end
