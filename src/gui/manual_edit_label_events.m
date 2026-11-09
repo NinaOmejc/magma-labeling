@@ -741,6 +741,7 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
 
     idx_lungs = config.channels.lungs_idx;
     idx_diaph = config.channels.diaph_idx;
+    common_y_limits = compute_global_ylim(data(:, [idx_lungs idx_diaph]));
 
     ax1 = subplot(2,1,1); hold(ax1, 'on');
     ax2 = subplot(2,1,2); hold(ax2, 'on');
@@ -779,6 +780,11 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
         'Units', 'normalized', 'Position', [0.01 0.955 0.24 0.035], ...
         'Enable', label_editing_enabled, ...
         'Value', 1, 'Callback', @(src,~) change_label(src.Value));
+    scale_toggle = uicontrol(fh, 'Style', 'togglebutton', 'Units', 'normalized', ...
+        'Position', [0.78 0.955 0.21 0.035], 'String', 'Amplitude: Auto', ...
+        'Tag', 'respiration_amplitude_scale', 'Value', 0, ...
+        'TooltipString', 'Toggle independent belt ranges / one common full-recording range.', ...
+        'Callback', @(src,~) change_amplitude_scale(src));
     uicontrol(fh, 'Style', 'slider', 'Units', 'normalized', ...
         'Position', [0.10 0.01 0.55 0.03], 'Min', 0, ...
         'Max', max(0, t_end - window_sec), 'Value', 0, ...
@@ -854,6 +860,15 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
         current_label_idx = editable_label_indices(value);
         refresh_signal_panels();
         mark_current_view_reviewed();
+        refresh_event_patches();
+    end
+
+    function change_amplitude_scale(src)
+    % CHANGE_AMPLITUDE_SCALE Redraw belt ranges, shading, and label overlays.
+
+        modes = {'Amplitude: Auto', 'Amplitude: Common max'};
+        set(src, 'String', modes{1 + logical(get(src, 'Value'))});
+        refresh_signal_panels();
         refresh_event_patches();
     end
 
@@ -1090,6 +1105,7 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
         is_desat = ~isempty(current_label_idx) && ...
             strcmp(label_defs(current_label_idx).field, 'desat');
         if is_desat
+            set(scale_toggle, 'Enable', 'off');
             ax = ax1;
             ax1.Position = [belt_positions(1,1) belt_positions(2,2) ...
                 belt_positions(1,3) ...
@@ -1120,14 +1136,24 @@ function [event_sets, reviewed_fields, review_coverage_mask, committed, observat
                     'HitTest', 'off', 'PickableParts', 'none');
             end
         else
+            set(scale_toggle, 'Enable', 'on');
             ax = [ax1 ax2];
             set(ax2, 'Visible', 'on');
             ax1.Position = belt_positions(1,:); ax2.Position = belt_positions(2,:);
+            common_scale = logical(get(scale_toggle, 'Value'));
+            if common_scale
+                ax1.Position(4) = min(belt_positions(:,4));
+                ax2.Position(4) = min(belt_positions(:,4));
+            end
             channels = {idx_lungs, idx_diaph}; names = {'Resp-Lungs', 'Resp-Diaphragm'};
             for panel = 1:2
                 hold(ax(panel), 'on');
                 plot_trace_or_message(ax(panel), t_raw, data, channels{panel}, names{panel});
-                set_global_ylim_from_channel(ax(panel), data, channels{panel});
+                if common_scale
+                    ylim(ax(panel), common_y_limits);
+                else
+                    set_global_ylim_from_channel(ax(panel), data, channels{panel});
+                end
                 ylabel(ax(panel), names{panel}); grid(ax(panel), 'on');
                 title(ax(panel), ['Manual label editing: ' names{panel}]);
                 shade_respiratory_artifacts(ax(panel), artifacts.artifact_intervals_idx, fs);

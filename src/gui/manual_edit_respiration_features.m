@@ -104,9 +104,17 @@ function [b_l, b_d, review_confirmed, recording_observations, artifact_intervals
 
     ax2.Position(2) = ax2.Position(2) + 0.045;
     ax2.Position(4) = ax2.Position(4) - 0.045;
+    belt_positions = [ax1.Position; ax2.Position];
+    belt_y_limits = [ylim(ax1); ylim(ax2)];
+    common_y_limits = compute_global_ylim([b_l.x0(:); b_d.x0(:)]);
     observation_label = uicontrol(fh, 'Style','text','Units','normalized', ...
-        'Position',[0.05 0.078 0.58 0.028], 'HorizontalAlignment','left', ...
+        'Position',[0.05 0.078 0.35 0.028], 'HorizontalAlignment','left', ...
         'String','Minimal or absent thoracic excursion');
+    uicontrol(fh, 'Style', 'togglebutton', 'Units', 'normalized', ...
+        'Position', [0.41 0.075 0.22 0.035], 'String', 'Amplitude: Auto', ...
+        'Tag', 'respiration_amplitude_scale', 'Value', 0, ...
+        'TooltipString', 'Toggle independent belt ranges / one common full-recording range.', ...
+        'Callback', @(src,~) change_amplitude_scale(src));
     observation_selector = uicontrol(fh, 'Style', 'popupmenu', ...
         'Units', 'normalized', 'Position', [0.65 0.078 0.31 0.028], ...
         'String', {'Not assessed','Not observed','Observed'}, ...
@@ -338,6 +346,25 @@ function [b_l, b_d, review_confirmed, recording_observations, artifact_intervals
     % SET_XLIM Move the linked review viewport to start time x0 in seconds.
 
         xlim(ax1, [x0 min(x0+window_sec, t_raw(end))]);
+    end
+
+    function change_amplitude_scale(src)
+    % CHANGE_AMPLITUDE_SCALE Apply independent or common full-trace limits.
+
+        common_scale = logical(get(src, 'Value'));
+        modes = {'Amplitude: Auto', 'Amplitude: Common max'};
+        set(src, 'String', modes{1 + common_scale});
+        axes_handles = [ax1 ax2];
+        for panel = 1:2
+            position = belt_positions(panel,:);
+            limits = belt_y_limits(panel,:);
+            if common_scale
+                position(4) = min(belt_positions(:,4));
+                limits = common_y_limits;
+            end
+            set(axes_handles(panel), 'Position', position, 'YLim', limits);
+        end
+        if isempty(polarity_qc), refresh_artifacts(); end
     end
 
     function change_edit_mode(src)
