@@ -110,11 +110,11 @@ reconciled without changing historical reviews (see [outputs](docs/OUTPUTS.md)).
 In respiratory review, blue dots are editable trough landmarks between red
 peaks. They are not explicit hold boundaries.
 
-The landmark and label review windows have an **Amplitude: Auto** toggle.
-Click it for **Amplitude: Common max**: both respiratory plots use the same
-vertical limits, covering both full traces, and equal plot heights for amplitude
-comparison. Click again to restore independent per-belt scaling. The selected
-mode stays fixed while scrolling and switching labels; SpO2 keeps its own scale.
+The landmark and label review windows default to **Amplitude: Common max**.
+Both respiratory plots use the same vertical limits, covering both full traces,
+and equal plot heights for amplitude comparison. Click the toggle for
+**Amplitude: Auto** and independent per-belt scaling. The selected mode stays
+fixed while scrolling and switching labels; SpO2 keeps its own scale.
 
 Respiratory review supports shared **Mark artifact** intervals that exclude both belts.
 Use `config.resp.recheck_cached = true` to reopen saved reviewed landmarks.
