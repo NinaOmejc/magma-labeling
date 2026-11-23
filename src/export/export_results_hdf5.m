@@ -19,6 +19,7 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
 
     filename = char(string(filename));
     validate_export_inputs(filename, results, signals_raw, signals_preprocessed);
+    channel_reliability = read_channel_reliability(results.config, results.subject, results.measure);
     export_schema_version = 'magma_ml_hdf5_v19';
     out_dir = fileparts(filename);
     if ~isempty(out_dir) && ~isfolder(out_dir)
@@ -167,6 +168,7 @@ function export_results_hdf5(filename, results, signals_raw, signals_preprocesse
     if isfield(results, 'analysis_recording_observations'), analysis = results.analysis_recording_observations; end
     write_recording_observation_hdf5(filename, observation, analysis);
     write_respiratory_artifact_hdf5(filename,artifact_state);
+    write_text(filename, '/qc/channel_reliability/json', jsonencode(channel_reliability));
     write_text(filename, '/meta/export_schema_version', export_schema_version);
     write_text(filename, '/meta/upstream_input_preprocessing', ...
         results.upstream_input_preprocessing);

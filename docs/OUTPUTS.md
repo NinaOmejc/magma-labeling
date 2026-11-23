@@ -303,6 +303,25 @@ evidence; unavailable values remain `NaN` with `available=false`.
 
 ## HDF5 structure
 
+Python preprocessing uses a single `SubXXX_MX_results.h5` with schema
+`magma_ml_hdf5_v19`. Belts explicitly use `/breaths/lungs/x0` and
+`/breaths/diaph/x0`, the full-precision inputs for saved landmarks. These are
+already exported and can differ from the native `/signals/preprocessed` belt
+columns; readers must not silently interchange them. Other channels use the
+original-rate `/signals/preprocessed`; `/time` and `/meta/fs` define its grid.
+
+An additive v19 extension, `/qc/channel_reliability/json`, stores a
+`magma_manual_channel_reliability_v1` snapshot: recording identity, recording
+scope, authoritative flag, all original manual CSV row fields, row count,
+source CSV path/bytes/SHA-256 and UTC import time. `read_channel_reliability`
+validates and fingerprints this snapshot before the exporter replaces a file.
+`config.HDF5.manual_channel_reliability_csv` optionally overrides the default
+`D:\Projects\MAGMA\data_analysis\features\qc\channel_reliability.csv`.
+Five-minute QC is rejected. Empty ratings or zero rows remain unassessed.
+Only the MATLAB export step reads the CSV; Python preprocessing never does.
+Existing HDF5 files lacking the snapshot must be refreshed with this exporter
+before Stage 1. No existing signal, event, mask or landmark path is changed.
+
 The public hierarchy is:
 
 ```text
